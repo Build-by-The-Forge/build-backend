@@ -1,0 +1,29 @@
+services:
+  api:
+    build: .
+    container_name: build-backend-api
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENVIRONMENT: development
+      POSTGRES_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/build
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:17
+    container_name: build-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: build
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:8
+    container_name: build-redis
+    ports:
+      - "6379:6379"
