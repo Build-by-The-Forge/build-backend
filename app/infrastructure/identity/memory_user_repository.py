@@ -7,8 +7,11 @@ class InMemoryUserRepository(UserRepository):
         self._users: dict[str, User] = {}
 
     async def save(self, user: User) -> User:
-        self._users[user.email] = user
+        self._users[user.email.value] = user
         return user
 
     async def exists_by_email(self, email: str) -> bool:
-        return email in self._users
+        return email.lower() in self._users
+
+    async def get_by_email(self, email: str) -> User | None:
+        return self._users.get(email.lower())
