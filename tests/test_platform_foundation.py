@@ -1,9 +1,7 @@
-from fastapi.testclient import TestClient
-
 from app.bootstrap.container import build_container
 from app.events.event_bus import EventBus
 from app.main import app
-
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 

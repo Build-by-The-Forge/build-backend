@@ -5,7 +5,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.health import router as health_router
 from app.api.router import router as api_router
 from app.core.config import settings
-from app.core.exceptions import AppError, app_exception_handler, http_exception_handler, validation_exception_handler
+from app.core.exceptions import (
+    AppError,
+    app_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from app.core.logging import configure_logging
 from app.core.metrics import metrics_payload, requests_total
 from app.core.middleware import RequestContextMiddleware
