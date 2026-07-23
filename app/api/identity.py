@@ -2,14 +2,12 @@ from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
 from app.application.identity.user_service import UserService
+from app.bootstrap.container import build_container
 from app.core.exceptions import AppError
-from app.events.event_bus import EventBus
-from app.infrastructure.identity.memory_user_repository import InMemoryUserRepository
 
 router = APIRouter(prefix="/identity", tags=["identity"])
-repository = InMemoryUserRepository()
-event_bus = EventBus()
-service = UserService(repository=repository, event_bus=event_bus)
+container = build_container()
+service = container.get(UserService)
 
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)

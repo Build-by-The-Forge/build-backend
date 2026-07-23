@@ -22,11 +22,17 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
 
 
 async def validation_exception_handler(
-    _: Request, exc: RequestValidationError
+    request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors()},
+        content={
+            "success": False,
+            "data": {},
+            "meta": {"error": "validation failed", "details": exc.errors()},
+            **({"request_id": request_id} if request_id is not None else {}),
+        },
     )
 
 

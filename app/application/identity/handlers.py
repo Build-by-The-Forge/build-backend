@@ -1,4 +1,6 @@
 from app.application.identity.commands import AuthenticateUserCommand, RegisterUserCommand
+from app.application.identity.ports.password_hasher import PasswordHasher
+from app.application.identity.ports.token_service import TokenService
 from app.core.exceptions import AppError
 from app.domain.identity.user import Session, User
 from app.domain.identity.value_objects import (
@@ -6,7 +8,6 @@ from app.domain.identity.value_objects import (
     Email,
     Password,
     PasswordHash,
-    PasswordHasher,
     RefreshTokenHash,
     SessionId,
     UserId,
@@ -47,9 +48,17 @@ class RegisterUserHandler:
 
 
 class AuthenticateUserHandler:
-    def __init__(self, repository: UserRepository, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        repository: UserRepository,
+        event_bus: EventBus,
+        password_hasher: PasswordHasher,
+        token_service: TokenService,
+    ) -> None:
         self.repository = repository
         self.event_bus = event_bus
+        self.password_hasher = password_hasher
+        self.token_service = token_service
 
     async def handle(self, command: AuthenticateUserCommand) -> Session:
         email = Email(command.email)
@@ -58,7 +67,7 @@ class AuthenticateUserHandler:
             raise AppError("invalid credentials", status_code=401)
 
         password = Password(command.password)
-        if user.password_hash.value != PasswordHasher().hash(password).value:
+        if not self.password_hasher.verify(password, user.password_hash):
             raise AppError("invalid credentials", status_code=401)
 
         session = Session(
@@ -69,4 +78,6 @@ class AuthenticateUserHandler:
             user_agent=command.user_agent,
         )
         self.event_bus.publish("session.started", payload={"user_id": user.id.value, "session_id": session.id.value})
+        self.token_service.issue_access_token(user.id.value)
+        self.token_service.issue_refresh_token(user.id.value)
         return session

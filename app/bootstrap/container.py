@@ -1,4 +1,8 @@
+from app.application.identity.user_service import UserService
 from app.events.event_bus import EventBus
+from app.infrastructure.identity.memory_user_repository import InMemoryUserRepository
+from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
+from app.infrastructure.security.jwt_token_service import JWTTokenService
 
 
 class Container:
@@ -16,5 +20,22 @@ class Container:
 
 def build_container() -> Container:
     container = Container()
-    container.register(EventBus, EventBus())
+    event_bus = EventBus()
+    repository = InMemoryUserRepository()
+    password_hasher = Argon2PasswordHasher()
+    token_service = JWTTokenService()
+
+    container.register(EventBus, event_bus)
+    container.register(InMemoryUserRepository, repository)
+    container.register(Argon2PasswordHasher, password_hasher)
+    container.register(JWTTokenService, token_service)
+    container.register(
+        UserService,
+        UserService(
+            repository=repository,
+            event_bus=event_bus,
+            password_hasher=password_hasher,
+            token_service=token_service,
+        ),
+    )
     return container

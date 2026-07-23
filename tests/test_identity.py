@@ -69,6 +69,19 @@ def test_weak_password_is_rejected() -> None:
     assert response.json()["success"] is False
 
 
+def test_malformed_payload_returns_validation_error_shape() -> None:
+    response = client.post(
+        "/identity/users",
+        json={"email": 42, "password": "StrongPass123!"},
+    )
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["data"] == {}
+    assert "error" in payload["meta"] or "details" in payload["meta"]
+
+
 def test_user_aggregate_can_change_password_to_hash() -> None:
     user = User(
         id=UserId(""),
