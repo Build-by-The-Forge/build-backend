@@ -15,4 +15,6 @@ def test_health_live() -> None:
 def test_root_endpoint() -> None:
     response = client.get("/")
     assert response.status_code == 200
-    assert "BUILD backend is running" in response.json()["message"]
+    payload = response.json()
+    assert payload["success"] is True
+    assert "BUILD backend is running" in payload["data"]["message"]

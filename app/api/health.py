@@ -11,3 +11,8 @@ def live() -> dict[str, str]:
 @router.get("/ready")
 def ready() -> dict[str, str]:
     return {"status": "ready"}
+
+
+@router.get("/startup")
+def startup() -> dict[str, str]:
+    return {"status": "startup"}
