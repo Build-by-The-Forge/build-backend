@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -14,6 +14,7 @@ from app.domain.identity.value_objects import (
     SessionId,
     UserId,
 )
+from app.events.base import DomainEvent
 
 
 @dataclass(slots=True)
@@ -24,6 +25,7 @@ class User:
     is_active: bool = True
     created_at: datetime | None = None
     roles: list[Role] | None = None
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.id.value == "":
@@ -40,6 +42,14 @@ class User:
         if role not in self.roles:
             self.roles.append(role)
 
+    def record_event(self, event: DomainEvent) -> None:
+        self._events.append(event)
+
+    def pull_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
+
 
 @dataclass(slots=True)
 class Session:
@@ -53,6 +63,7 @@ class Session:
     expires_at: datetime | None = None
     last_seen_at: datetime | None = None
     revoked_at: datetime | None = None
+    _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.created_at is None:
@@ -67,6 +78,14 @@ class Session:
 
     def touch(self) -> None:
         self.last_seen_at = datetime.now(timezone.utc)
+
+    def record_event(self, event: DomainEvent) -> None:
+        self._events.append(event)
+
+    def pull_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
 
 
 @dataclass(slots=True)

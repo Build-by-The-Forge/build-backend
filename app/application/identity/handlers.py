@@ -12,14 +12,15 @@ from app.domain.identity.value_objects import (
     SessionId,
     UserId,
 )
+from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
-from app.events.event_bus import EventBus
+from app.events.base import DomainEvent
 
 
 class RegisterUserHandler:
-    def __init__(self, repository: UserRepository, event_bus: EventBus) -> None:
+    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
         self.repository = repository
-        self.event_bus = event_bus
+        self.password_hasher = password_hasher
 
     async def handle(self, command: RegisterUserCommand) -> User:
         try:
@@ -30,35 +31,39 @@ class RegisterUserHandler:
         if await self.repository.exists_by_email(email.value):
             raise AppError("User already exists", status_code=409)
 
-        if len(command.password) < 12:
-            raise AppError("Password must be at least 12 characters", status_code=422)
+        try:
+            password = Password(command.password)
+        except ValueError as exc:
+            raise AppError(str(exc), status_code=422) from exc
 
-        password_hash = PasswordHash(self._hash_password(command.password))
+        password_hash = self.password_hasher.hash(password)
         user = User(
             id=UserId(""),
             email=email,
             password_hash=password_hash,
         )
         saved_user = await self.repository.save(user)
-        self.event_bus.publish("user.registered", payload={"user_id": saved_user.id.value, "email": saved_user.email.value})
+        saved_user.record_event(
+            DomainEvent(
+                event_type="user.registered",
+                payload={"user_id": saved_user.id.value, "email": saved_user.email.value},
+            )
+        )
         return saved_user
-
-    def _hash_password(self, password: str) -> str:
-        return f"hashed:{password}"
 
 
 class AuthenticateUserHandler:
     def __init__(
         self,
         repository: UserRepository,
-        event_bus: EventBus,
         password_hasher: PasswordHasher,
         token_service: TokenService,
+        session_repository: SessionRepository | None = None,
     ) -> None:
         self.repository = repository
-        self.event_bus = event_bus
         self.password_hasher = password_hasher
         self.token_service = token_service
+        self.session_repository = session_repository
 
     async def handle(self, command: AuthenticateUserCommand) -> Session:
         email = Email(command.email)
@@ -66,7 +71,11 @@ class AuthenticateUserHandler:
         if user is None:
             raise AppError("invalid credentials", status_code=401)
 
-        password = Password(command.password)
+        try:
+            password = Password(command.password)
+        except ValueError as exc:
+            raise AppError(str(exc), status_code=422) from exc
+
         if not self.password_hasher.verify(password, user.password_hash):
             raise AppError("invalid credentials", status_code=401)
 
@@ -77,7 +86,15 @@ class AuthenticateUserHandler:
             refresh_token_hash=RefreshTokenHash("refresh-token"),
             user_agent=command.user_agent,
         )
-        self.event_bus.publish("session.started", payload={"user_id": user.id.value, "session_id": session.id.value})
+        if self.session_repository is not None:
+            await self.session_repository.save(session)
+
+        session.record_event(
+            DomainEvent(
+                event_type="session.started",
+                payload={"user_id": user.id.value, "session_id": session.id.value},
+            )
+        )
         self.token_service.issue_access_token(user.id.value)
         self.token_service.issue_refresh_token(user.id.value)
         return session

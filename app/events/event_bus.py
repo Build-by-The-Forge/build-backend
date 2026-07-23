@@ -24,3 +24,8 @@ class EventBus:
         event = DomainEvent(event_type=event_name, payload=payload)
         for handler in self._subscribers.get(event_name, []):
             handler(event)
+
+    def publish_all(self, events: list[DomainEvent]) -> None:
+        for event in events:
+            for handler in self._subscribers.get(event.event_type, []):
+                handler(event)
