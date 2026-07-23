@@ -1,6 +1,23 @@
 # build-backend
 
-This repository now contains a starter foundation for a modular monolith backend built with FastAPI, SQLAlchemy async, PostgreSQL, Redis, Alembic, Docker Compose, and a basic CI workflow.
+This repository now contains a completed backend foundation for a modular monolith backend built with FastAPI, SQLAlchemy async, PostgreSQL, Redis, Alembic, Docker Compose, and CI.
+
+## Milestones
+
+- v0.1.0-foundation: platform foundation complete
+- Phase 2: Identity & Access Management (IAM)
+
+## Current platform capabilities
+
+- Configuration management with typed settings
+- Structured logging and request context
+- Metrics and tracing hooks
+- Middleware for request context and security headers
+- Global exception handling
+- Async database session and unit-of-work foundation
+- Redis abstraction and AI gateway skeleton
+- Event bus and dependency container abstractions
+- ADR documentation for the architectural decisions
 
 ## Structure
 
@@ -8,7 +25,7 @@ This repository now contains a starter foundation for a modular monolith backend
 - app/application: use cases and application services
 - app/domain: business entities and domain rules
 - app/infrastructure: integrations and external service implementations
-- app/core: configuration and logging
+- app/core: configuration, logging, middleware, responses, security, and tracing
 - app/db: database session and persistence wiring
 - tests: automated tests
 
