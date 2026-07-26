@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.identity.user import Session
@@ -39,7 +39,7 @@ class SQLAlchemySessionRepository(SessionRepository):
         statement = select(SessionModel).where(
             SessionModel.user_id == user_id,
             SessionModel.revoked_at.is_(None),
-            SessionModel.expires_at >= datetime.now(timezone.utc),
+            or_(SessionModel.expires_at.is_(None), SessionModel.expires_at >= datetime.now(timezone.utc)),
         )
         result = await self._session.scalars(statement)
         return [session_model_to_domain(model) for model in result.all()]

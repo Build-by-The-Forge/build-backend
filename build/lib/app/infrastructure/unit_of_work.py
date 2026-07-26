@@ -8,6 +8,16 @@ class UnitOfWork:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def __aenter__(self) -> "UnitOfWork":
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback) -> None:
+        if exc_type is not None:
+            await self.rollback()
+        else:
+            await self.commit()
+        await self.close()
+
     async def commit(self) -> None:
         await self.session.commit()
 
@@ -20,12 +30,5 @@ class UnitOfWork:
 
 @asynccontextmanager
 async def unit_of_work(session: AsyncSession) -> AsyncIterator[UnitOfWork]:
-    uow = UnitOfWork(session)
-    try:
+    async with UnitOfWork(session) as uow:
         yield uow
-        await uow.commit()
-    except Exception:
-        await uow.rollback()
-        raise
-    finally:
-        await uow.close()

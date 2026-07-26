@@ -31,6 +31,7 @@ dev = [
   "ruff>=0.6.0",
   "mypy>=1.11.0",
   "pre-commit>=3.4.0",
+  "aiosqlite>=0.18.0",
 ]
 
 [tool.ruff]

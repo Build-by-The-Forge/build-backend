@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.domain.identity.user import User
 from app.domain.repositories.user import UserRepository
@@ -21,10 +22,12 @@ class SQLAlchemyUserRepository(UserRepository):
         else:
             model = domain_user_to_model(user, model=model)
         await self._session.flush()
+        # Refresh the model to get eager-loaded relationships
+        await self._session.refresh(model, ["roles"])
         return user_model_to_domain(model)
 
     async def get_by_email(self, email: str) -> User | None:
-        statement = select(UserModel).where(UserModel.email == email)
+        statement = select(UserModel).where(UserModel.email == email).options(selectinload(UserModel.roles))
         result = await self._session.scalars(statement)
         model = result.first()
         return user_model_to_domain(model) if model is not None else None

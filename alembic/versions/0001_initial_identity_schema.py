@@ -127,6 +127,17 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_table(
+        'audit_logs',
+        sa.Column('id', sa.String(length=36), nullable=False),
+        sa.Column('user_id', sa.String(length=36), nullable=True),
+        sa.Column('action', sa.String(), nullable=False),
+        sa.Column('meta_data', sa.String(), nullable=True),
+        sa.Column('ip_address', sa.String(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),
+        sa.PrimaryKeyConstraint('id'),
+    )
+    op.create_table(
         'login_events',
         sa.Column('id', sa.String(length=36), nullable=False),
         sa.Column('user_id', sa.String(length=36), nullable=True),
@@ -148,7 +159,7 @@ def upgrade() -> None:
         sa.Column('user_id', sa.String(length=36), nullable=True),
         sa.Column('event_type', sa.String(), nullable=False),
         sa.Column('action', sa.String(), nullable=False),
-        sa.Column('metadata', sa.String(), nullable=True),
+        sa.Column('meta_data', sa.String(), nullable=True),
         sa.Column('ip_address', sa.String(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='SET NULL'),
@@ -159,6 +170,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_table('security_events')
     op.drop_table('login_events')
+    op.drop_table('audit_logs')
     op.drop_table('password_reset_tokens')
     op.drop_table('verification_tokens')
     op.drop_table('refresh_tokens')
