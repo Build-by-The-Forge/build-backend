@@ -1,5 +1,17 @@
+"""Initial identity schema creation.
+
+Revision ID: 0001
+Create Date: 2026-07-25
+
+"""
 from alembic import op
 import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = '0001'
+down_revision = None
+branch_labels = None
+depends_on = None
 
 
 def upgrade() -> None:

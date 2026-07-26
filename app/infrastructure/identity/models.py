@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -43,6 +43,7 @@ class UserModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False
     )
+    version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     roles: Mapped[list["RoleModel"]] = relationship(
         "RoleModel",
         secondary="role_assignments",
@@ -152,6 +153,7 @@ class DeviceModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+    version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="devices")
     sessions: Mapped[list["SessionModel"]] = relationship(
@@ -176,6 +178,7 @@ class SessionModel(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="sessions")
     device: Mapped[Optional[DeviceModel]] = relationship("DeviceModel", back_populates="sessions")
