@@ -64,6 +64,7 @@ build_backend.egg-info/SOURCES.txt
 build_backend.egg-info/dependency_links.txt
 build_backend.egg-info/requires.txt
 build_backend.egg-info/top_level.txt
+tests/test_container.py
 tests/test_foundation.py
 tests/test_health.py
 tests/test_identity.py

@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
+from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -42,6 +43,7 @@ class UserModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False
     )
+    version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     roles: Mapped[list["RoleModel"]] = relationship(
         "RoleModel",
         secondary="role_assignments",
@@ -60,7 +62,7 @@ class UserModel(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    profile: Mapped["UserProfileModel" | None] = relationship(
+    profile: Mapped[Optional["UserProfileModel"]] = relationship(
         "UserProfileModel",
         back_populates="user",
         uselist=False,
@@ -109,13 +111,13 @@ class UserProfileModel(Base):
     __tablename__ = "profiles"
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
-    first_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    last_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    preferred_name: Mapped[str | None] = mapped_column(String, nullable=True)
-    avatar_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    bio: Mapped[str | None] = mapped_column(String, nullable=True)
-    matric_number: Mapped[str | None] = mapped_column(String, nullable=True)
-    phone: Mapped[str | None] = mapped_column(String, nullable=True)
+    first_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    preferred_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    bio: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    matric_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="profile")
 
@@ -124,15 +126,15 @@ class AuditLogModel(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action: Mapped[str] = mapped_column(String, nullable=False)
-    metadata: Mapped[str | None] = mapped_column(String, nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String, nullable=True)
+    meta_data: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    user: Mapped[UserModel | None] = relationship("UserModel", back_populates="audit_logs")
+    user: Mapped[Optional[UserModel]] = relationship("UserModel", back_populates="audit_logs")
 
 
 class DeviceModel(Base):
@@ -141,16 +143,17 @@ class DeviceModel(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     platform: Mapped[str] = mapped_column(String, nullable=False)
-    os: Mapped[str | None] = mapped_column(String, nullable=True)
-    browser: Mapped[str | None] = mapped_column(String, nullable=True)
-    model: Mapped[str | None] = mapped_column(String, nullable=True)
-    device_fingerprint: Mapped[str | None] = mapped_column(String, nullable=True)
-    push_token: Mapped[str | None] = mapped_column(String, nullable=True)
+    os: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    browser: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    device_fingerprint: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    push_token: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     trusted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
+    version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="devices")
     sessions: Mapped[list["SessionModel"]] = relationship(
@@ -165,19 +168,20 @@ class SessionModel(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    device_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
-    refresh_token_hash: Mapped[str | None] = mapped_column(String, nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String, nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
+    refresh_token_hash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="sessions")
-    device: Mapped[DeviceModel | None] = relationship("DeviceModel", back_populates="sessions")
+    device: Mapped[Optional[DeviceModel]] = relationship("DeviceModel", back_populates="sessions")
     refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(
         "RefreshTokenModel",
         back_populates="session",
@@ -245,9 +249,9 @@ class RefreshTokenModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rotated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     session: Mapped[SessionModel] = relationship("SessionModel", back_populates="refresh_tokens")
 
@@ -261,8 +265,8 @@ class VerificationTokenModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="verification_tokens")
 
@@ -276,8 +280,8 @@ class PasswordResetTokenModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[UserModel] = relationship("UserModel", back_populates="password_reset_tokens")
 
@@ -286,33 +290,33 @@ class LoginEventModel(Base):
     __tablename__ = "login_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    device_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String, nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
-    country: Mapped[str | None] = mapped_column(String, nullable=True)
-    city: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    device_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("devices.id", ondelete="SET NULL"), nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     successful: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    user: Mapped[UserModel | None] = relationship("UserModel", back_populates="login_events")
-    device: Mapped[DeviceModel | None] = relationship("DeviceModel")
+    user: Mapped[Optional[UserModel]] = relationship("UserModel", back_populates="login_events")
+    device: Mapped[Optional[DeviceModel]] = relationship("DeviceModel")
 
 
 class SecurityEventModel(Base):
     __tablename__ = "security_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     event_type: Mapped[str] = mapped_column(String, nullable=False)
     action: Mapped[str] = mapped_column(String, nullable=False)
-    metadata: Mapped[str | None] = mapped_column(String, nullable=True)
-    ip_address: Mapped[str | None] = mapped_column(String, nullable=True)
+    meta_data: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
 
-    user: Mapped[UserModel | None] = relationship("UserModel", back_populates="security_events")
+    user: Mapped[Optional[UserModel]] = relationship("UserModel", back_populates="security_events")
