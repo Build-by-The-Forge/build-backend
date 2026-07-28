@@ -61,6 +61,9 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
             },
         )
 
+    access_token = service.token_service.issue_access_token(session.user_id.value)
+    refresh_token = session.refresh_token_hash.value if session.refresh_token_hash else None
+
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -69,8 +72,69 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
                 "user_id": session.user_id.value,
                 "session_id": session.id.value,
                 "device_id": session.device_id.value if session.device_id else None,
+                "access_token": access_token,
+                "refresh_token": refresh_token,
             },
             "meta": {},
             "request_id": request_id,
         },
+    )
+
+
+@router.post("/refresh", status_code=status.HTTP_200_OK)
+async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResponse:
+    session_id = payload.get("session_id", "")
+    refresh_token = payload.get("refresh_token", "")
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        session = await service.refresh_session(session_id, refresh_token)
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    access_token = service.token_service.issue_access_token(session.user_id.value)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "user_id": session.user_id.value,
+                "session_id": session.id.value,
+                "access_token": access_token,
+            },
+            "meta": {},
+            "request_id": request_id,
+        },
+    )
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_session(request: Request, payload: dict[str, str]) -> JSONResponse:
+    session_id = payload.get("session_id", "")
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        await service.logout_session(session_id)
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"success": True, "data": {}, "meta": {}, "request_id": request_id},
     )

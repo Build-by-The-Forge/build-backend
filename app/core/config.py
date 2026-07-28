@@ -1,3 +1,5 @@
+import os
+
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -28,6 +30,12 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("request_timeout_seconds must be greater than 0")
         return value
+
+    @property
+    def effective_postgres_url(self) -> str:
+        if os.getenv("APP_ENVIRONMENT", "").lower() == "testing" or os.getenv("PYTEST_CURRENT_TEST"):
+            return "sqlite+aiosqlite:///:memory:"
+        return self.postgres_url
 
 
 settings = Settings()

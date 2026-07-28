@@ -1,7 +1,17 @@
 from collections.abc import AsyncIterator, Callable
 
-from app.application.identity.commands import AuthenticateUserCommand, RegisterUserCommand
-from app.application.identity.handlers import AuthenticateUserHandler, RegisterUserHandler
+from app.application.identity.commands import (
+    AuthenticateUserCommand,
+    LogoutSessionCommand,
+    RefreshSessionCommand,
+    RegisterUserCommand,
+)
+from app.application.identity.handlers import (
+    AuthenticateUserHandler,
+    LogoutSessionHandler,
+    RefreshSessionHandler,
+    RegisterUserHandler,
+)
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.domain.identity.user import Session, User
@@ -75,6 +85,31 @@ class UserService:
         session = await handler.handle(command)
         self._publish_events(session.pull_events())
         return session
+
+    async def refresh_session(self, session_id: str, refresh_token: str) -> Session:
+        command = RefreshSessionCommand(session_id=session_id, refresh_token=refresh_token)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                handler = RefreshSessionHandler(session_repository=uow.sessions, token_service=self.token_service)
+                session = await handler.handle(command)
+            self._publish_events(session.pull_events())
+            return session
+
+        handler = RefreshSessionHandler(session_repository=self.repository.sessions, token_service=self.token_service)
+        session = await handler.handle(command)
+        self._publish_events(session.pull_events())
+        return session
+
+    async def logout_session(self, session_id: str) -> None:
+        command = LogoutSessionCommand(session_id=session_id)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                handler = LogoutSessionHandler(session_repository=uow.sessions)
+                await handler.handle(command)
+            return
+
+        handler = LogoutSessionHandler(session_repository=self.repository.sessions)
+        await handler.handle(command)
 
     def _publish_events(self, events: list[DomainEvent]) -> None:
         self.event_bus.publish_all(events)

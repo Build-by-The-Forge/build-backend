@@ -139,6 +139,44 @@ def test_authenticate_user_returns_session_for_valid_credentials() -> None:
     assert payload["data"]["user_id"] == payload["data"]["user_id"]
 
 
+def test_refresh_and_logout_flow_round_trips_through_identity_api() -> None:
+    email = "refresh-flow@example.com"
+    client.post(
+        "/identity/users",
+        json={"email": email, "password": "StrongPass123!"},
+    )
+
+    auth_response = client.post(
+        "/identity/authenticate",
+        json={"email": email, "password": "StrongPass123!"},
+    )
+
+    assert auth_response.status_code == 200
+    auth_payload = auth_response.json()
+    assert auth_payload["success"] is True
+    assert auth_payload["data"]["refresh_token"]
+
+    refresh_response = client.post(
+        "/identity/refresh",
+        json={
+            "session_id": auth_payload["data"]["session_id"],
+            "refresh_token": auth_payload["data"]["refresh_token"],
+        },
+    )
+
+    assert refresh_response.status_code == 200
+    refresh_payload = refresh_response.json()
+    assert refresh_payload["success"] is True
+    assert refresh_payload["data"]["session_id"] == auth_payload["data"]["session_id"]
+
+    logout_response = client.post(
+        "/identity/logout",
+        json={"session_id": auth_payload["data"]["session_id"]},
+    )
+
+    assert logout_response.status_code == 200
+
+
 def test_session_can_be_revoked_and_touched() -> None:
     session = Session(
         id=SessionId("session-1"),

@@ -1,4 +1,11 @@
-from app.application.identity.commands import AuthenticateUserCommand, RegisterUserCommand
+from uuid import uuid4
+
+from app.application.identity.commands import (
+    AuthenticateUserCommand,
+    LogoutSessionCommand,
+    RefreshSessionCommand,
+    RegisterUserCommand,
+)
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.core.exceptions import AppError
@@ -79,11 +86,12 @@ class AuthenticateUserHandler:
         if not self.password_hasher.verify(password, user.password_hash):
             raise AppError("invalid credentials", status_code=401)
 
+        refresh_token = self.token_service.issue_refresh_token(user.id.value)
         session = Session(
-            id=SessionId("session-generated"),
+            id=SessionId(str(uuid4())),
             user_id=user.id,
             device_id=DeviceId(command.device_id) if command.device_id else None,
-            refresh_token_hash=RefreshTokenHash("refresh-token"),
+            refresh_token_hash=RefreshTokenHash(refresh_token),
             user_agent=command.user_agent,
         )
         if self.session_repository is not None:
@@ -96,5 +104,48 @@ class AuthenticateUserHandler:
             )
         )
         self.token_service.issue_access_token(user.id.value)
-        self.token_service.issue_refresh_token(user.id.value)
         return session
+
+
+class RefreshSessionHandler:
+    def __init__(self, session_repository: SessionRepository, token_service: TokenService) -> None:
+        self.session_repository = session_repository
+        self.token_service = token_service
+
+    async def handle(self, command: RefreshSessionCommand) -> Session:
+        session = await self.session_repository.get_by_id(command.session_id)
+        if session is None:
+            raise AppError("session not found", status_code=404)
+
+        if session.revoked_at is not None:
+            raise AppError("session revoked", status_code=401)
+
+        if session.refresh_token_hash is None:
+            raise AppError("invalid refresh token", status_code=401)
+
+        if command.refresh_token != session.refresh_token_hash.value:
+            raise AppError("invalid refresh token", status_code=401)
+
+        session.touch()
+        session.record_event(
+            DomainEvent(
+                event_type="session.refreshed",
+                payload={"session_id": session.id.value, "user_id": session.user_id.value},
+            )
+        )
+        self.token_service.issue_access_token(session.user_id.value)
+        self.token_service.issue_refresh_token(session.user_id.value)
+        return session
+
+
+class LogoutSessionHandler:
+    def __init__(self, session_repository: SessionRepository) -> None:
+        self.session_repository = session_repository
+
+    async def handle(self, command: LogoutSessionCommand) -> None:
+        session = await self.session_repository.get_by_id(command.session_id)
+        if session is None:
+            raise AppError("session not found", status_code=404)
+
+        session.revoke()
+        await self.session_repository.save(session)
