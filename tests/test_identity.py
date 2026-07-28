@@ -177,6 +177,32 @@ def test_refresh_and_logout_flow_round_trips_through_identity_api() -> None:
     assert logout_response.status_code == 200
 
 
+def test_current_user_endpoint_returns_authenticated_user() -> None:
+    email = "me@example.com"
+    client.post(
+        "/identity/users",
+        json={"email": email, "password": "StrongPass123!"},
+    )
+
+    auth_response = client.post(
+        "/identity/authenticate",
+        json={"email": email, "password": "StrongPass123!"},
+    )
+
+    assert auth_response.status_code == 200
+    access_token = auth_response.json()["data"]["access_token"]
+
+    me_response = client.get(
+        "/identity/me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert me_response.status_code == 200
+    payload = me_response.json()
+    assert payload["success"] is True
+    assert payload["data"]["email"] == email
+
+
 def test_session_can_be_revoked_and_touched() -> None:
     session = Session(
         id=SessionId("session-1"),

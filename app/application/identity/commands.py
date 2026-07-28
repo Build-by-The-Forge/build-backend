@@ -24,3 +24,8 @@ class RefreshSessionCommand:
 @dataclass(slots=True)
 class LogoutSessionCommand:
     session_id: str
+
+
+@dataclass(slots=True)
+class GetCurrentUserCommand:
+    user_id: str

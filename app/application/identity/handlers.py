@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from app.application.identity.commands import (
     AuthenticateUserCommand,
+    GetCurrentUserCommand,
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
@@ -149,3 +150,14 @@ class LogoutSessionHandler:
 
         session.revoke()
         await self.session_repository.save(session)
+
+
+class GetCurrentUserHandler:
+    def __init__(self, repository: UserRepository) -> None:
+        self.repository = repository
+
+    async def handle(self, command: GetCurrentUserCommand) -> User:
+        user = await self.repository.get_by_id(command.user_id)
+        if user is None:
+            raise AppError("user not found", status_code=404)
+        return user

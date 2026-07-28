@@ -2,12 +2,14 @@ from collections.abc import AsyncIterator, Callable
 
 from app.application.identity.commands import (
     AuthenticateUserCommand,
+    GetCurrentUserCommand,
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
 )
 from app.application.identity.handlers import (
     AuthenticateUserHandler,
+    GetCurrentUserHandler,
     LogoutSessionHandler,
     RefreshSessionHandler,
     RegisterUserHandler,
@@ -110,6 +112,16 @@ class UserService:
 
         handler = LogoutSessionHandler(session_repository=self.repository.sessions)
         await handler.handle(command)
+
+    async def get_current_user(self, user_id: str) -> User:
+        command = GetCurrentUserCommand(user_id=user_id)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                handler = GetCurrentUserHandler(repository=uow.users)
+                return await handler.handle(command)
+
+        handler = GetCurrentUserHandler(repository=self.repository)
+        return await handler.handle(command)
 
     def _publish_events(self, events: list[DomainEvent]) -> None:
         self.event_bus.publish_all(events)
