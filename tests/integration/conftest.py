@@ -4,12 +4,16 @@ import os
 from collections.abc import AsyncIterator
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
-
 from app.db.base import Base
 from app.db.session import engine as app_engine
 from app.main import app
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 os.environ["APP_ENVIRONMENT"] = "testing" # fixed typo
 

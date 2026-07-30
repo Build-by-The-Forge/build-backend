@@ -1,42 +1,117 @@
-# build-backend
+# BUILD Backend
 
-This repository now contains a completed backend foundation for a modular monolith backend built with FastAPI, SQLAlchemy async, PostgreSQL, Redis, Alembic, Docker Compose, and CI.
+Backend service for the BUILD AI CBT Platform.
 
-## Milestones
+This repository implements the core backend of the BUILD platform using a modular monolith architecture built with FastAPI, SQLAlchemy Async, PostgreSQL, Redis, Alembic, and Docker.
 
-- v0.1.0-foundation: platform foundation complete
-- Phase 2: Identity & Access Management (IAM)
+---
 
-## Current platform capabilities
+## Current Version
 
-- Configuration management with typed settings
-- Structured logging and request context
-- Metrics and tracing hooks
-- Middleware for request context and security headers
-- Global exception handling
-- Async database session and unit-of-work foundation
-- Redis abstraction and AI gateway skeleton
-- Event bus and dependency container abstractions
-- ADR documentation for the architectural decisions
+**v0.2.0 — Identity & Access Management (IAM)**
 
-## Structure
+### Completed
 
-- app/api: API routers and endpoints
-- app/application: use cases and application services
-- app/domain: business entities and domain rules
-- app/infrastructure: integrations and external service implementations
-- app/core: configuration, logging, middleware, responses, security, and tracing
-- app/db: database session and persistence wiring
-- tests: automated tests
+- Platform Foundation
+- Identity & Authentication
+- JWT Authentication
+- Password Hashing (Argon2)
+- Refresh Token Rotation
+- Password Reset Flow
+- User Session Management
+- SQLAlchemy Async Repository
+- Unit of Work Pattern
+- Dependency Injection Container
+- Event Bus
+- API Error Handling
+- Request Context Middleware
+- Security Headers
+- Metrics & Tracing
+- SQLite Test Environment
+- Automated Integration Tests
 
-## Run locally
+---
+
+## Tech Stack
+
+- FastAPI
+- SQLAlchemy 2.x (Async)
+- PostgreSQL
+- Redis
+- Alembic
+- Pydantic v2
+- Pytest
+- Docker Compose
+
+---
+
+## Project Structure
+
+```
+app/
+├── api/
+├── application/
+├── bootstrap/
+├── core/
+├── db/
+├── domain/
+├── events/
+└── infrastructure/
+
+tests/
+```
+
+---
+
+## Running Locally
+
+Create a virtual environment:
 
 ```bash
-python3 -m venv .venv
+python -m venv .venv
+```
+
+Activate it:
+
+Linux/macOS
+
+```bash
 source .venv/bin/activate
-pip install -e '.[dev]'
+```
+
+Windows
+
+```powershell
+.venv\Scripts\activate
+```
+
+Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the API
+
+```bash
 uvicorn app.main:app --reload
 ```
+
+---
+
+## Running Tests
+
+```bash
+pytest
+```
+
+or
+
+```bash
+pytest -v
+```
+
+---
 
 ## Docker
 
@@ -44,8 +119,54 @@ uvicorn app.main:app --reload
 docker compose up --build
 ```
 
-## Verification
+---
 
-```bash
-pytest -q
-```
+## Architecture
+
+The backend follows a Domain-Driven Design inspired modular monolith.
+
+Layers:
+
+- Domain
+- Application
+- Infrastructure
+- API
+- Bootstrap
+- Core
+
+Persistence uses:
+
+- SQLAlchemy Async
+- Repository Pattern
+- Unit of Work Pattern
+
+---
+
+## Roadmap
+
+### ✅ v0.1.0
+
+- Platform Foundation
+
+### ✅ v0.2.0
+
+- Identity & Access Management
+
+### 🚧 Next
+
+- Tenant Management
+- Course Management
+- CBT Engine
+- AI Integration
+- Study Analytics
+- Leaderboards
+- Group Collaboration
+- Notifications
+- Payments
+- Production Deployment
+
+---
+
+## License
+
+Private repository.

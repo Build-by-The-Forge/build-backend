@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Header, Request, status
 from fastapi.responses import JSONResponse
 
 from app.application.identity.user_service import UserService

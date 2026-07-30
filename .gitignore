@@ -1,19 +1,51 @@
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+
+# Virtual environments
 .venv/
 .venv*/
+venv/
+
+# Environment variables
 .env
+.env.*
+
+# Testing
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Type checking & linting
 .mypy_cache/
 .ruff_cache/
-.coverage
-htmlcov/
-.exit
-.log
-.db
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+*.exit
+
+# Build artifacts
 build/
-build_backend.egg-info/
-register-test.log
-register-test.exit
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+.python-version

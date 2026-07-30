@@ -1,13 +1,11 @@
-import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from contextlib import asynccontextmanager
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.health import router as health_router
-from app.db.base import Base
-from app.db.session import engine
 from app.api.identity import router as identity_router
 from app.api.router import router as api_router
 from app.core.config import settings
@@ -23,6 +21,8 @@ from app.core.middleware import RequestContextMiddleware
 from app.core.responses import ApiResponse
 from app.core.security import SecurityHeadersMiddleware
 from app.core.tracing import configure_tracing
+from app.db.base import Base
+from app.db.session import engine
 
 configure_logging()
 configure_tracing()
@@ -33,7 +33,7 @@ async def initialize_database() -> None:
             await connection.run_sync(Base.metadata.create_all)
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIteration[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await initialize_database()
     yield
 

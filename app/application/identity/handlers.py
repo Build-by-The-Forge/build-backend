@@ -18,7 +18,6 @@ from app.domain.identity.value_objects import (
     DeviceId,
     Email,
     Password,
-    PasswordHash,
     RefreshTokenHash,
     SessionId,
     UserId,

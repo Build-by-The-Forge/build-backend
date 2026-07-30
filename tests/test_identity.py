@@ -1,7 +1,4 @@
 import pytest
-from fastapi.testclient import TestClient
-from starlette import status
-
 from app.domain.identity.user import Device, RefreshToken, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
@@ -18,6 +15,9 @@ from app.domain.identity.value_objects import (
 )
 from app.events.event_bus import EventBus
 from app.main import app
+from fastapi.testclient import TestClient
+from starlette import status
+
 
 @pytest.fixture(scope="module")
 def client():

@@ -25,7 +25,6 @@ from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
 
-
 AsyncUnitOfWorkFactory = Callable[[], AsyncIterator[object]]
 
 

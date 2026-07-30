@@ -5,8 +5,6 @@ from app.domain.identity.value_objects import (
     PasswordHash,
     RefreshTokenHash,
     RefreshTokenId,
-    Role,
-    RoleId,
     SessionId,
     UserId,
 )

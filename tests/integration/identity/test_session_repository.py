@@ -1,6 +1,4 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.domain.identity.user import Session
 from app.domain.identity.value_objects import (
     DeviceId,
@@ -9,6 +7,7 @@ from app.domain.identity.value_objects import (
     UserId,
 )
 from app.infrastructure.identity.sqlalchemy_session_repository import SQLAlchemySessionRepository
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
