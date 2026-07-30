@@ -1,5 +1,3 @@
-from sqlalchemy import inspect as sa_inspect
-
 from app.domain.identity.user import RefreshToken, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
@@ -16,29 +14,16 @@ from app.infrastructure.identity.models import RefreshTokenModel, SessionModel, 
 
 
 def user_model_to_domain(model: UserModel) -> User:
-    # Safely access relationships - use empty list if not loaded
-    roles = []
-    try:
-        # Check if roles relationship is loaded
-        mapper = sa_inspect(UserModel)
-        if "roles" in mapper.relationships:
-            insp = sa_inspect(model)
-            if insp.has_identity:  # Object is persistent
-                # Use getattr with a default to avoid lazy loading
-                role_list = getattr(model, "roles", None)
-                if role_list is not None:
-                    roles = [Role(id=RoleId(role.id), name=role.name) for role in role_list]
-    except Exception:
-        # If anything goes wrong, just use empty roles list
-        pass
-    
+    if model is None:
+        return User(id=UserId(""), email=Email(""), password_hash=PasswordHash(""))
+
     return User(
         id=UserId(model.id),
         email=Email(model.email),
         password_hash=PasswordHash(model.password_hash),
         is_active=model.is_active,
         created_at=model.created_at,
-        roles=roles,
+        roles=[],
     )
 
 

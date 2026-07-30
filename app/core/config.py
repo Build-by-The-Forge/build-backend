@@ -33,7 +33,7 @@ class Settings(BaseSettings):
 
     @property
     def effective_postgres_url(self) -> str:
-        if os.getenv("APP_ENVIRONMENT", "").lower() == "testing" or os.getenv("PYTEST_CURRENT_TEST"):
+        if self.app_environment == "testing":
             return "sqlite+aiosqlite:///:memory:"
         return self.postgres_url
 

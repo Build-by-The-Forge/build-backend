@@ -2,6 +2,7 @@ import asyncio
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from contextlib import asynccontextmanager
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.health import router as health_router
@@ -26,23 +27,21 @@ from app.core.tracing import configure_tracing
 configure_logging()
 configure_tracing()
 
-app = FastAPI(title="BUILD Backend", version="0.1.0")
-
-
 async def initialize_database() -> None:
     if settings.effective_postgres_url.startswith("sqlite"):
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
 
-
-if settings.effective_postgres_url.startswith("sqlite"):
-    asyncio.run(initialize_database())
-
-
-@app.on_event("startup")
-async def startup_initialize_database() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIteration[None]:
     await initialize_database()
+    yield
 
+app = FastAPI(
+    title="BUILD Backend",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)

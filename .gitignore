@@ -3,9 +3,17 @@ __pycache__/
 *.pyo
 *.pyd
 .venv/
+.venv*/
 .env
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
+.exit
+.log
+.db
+build/
+build_backend.egg-info/
+register-test.log
+register-test.exit

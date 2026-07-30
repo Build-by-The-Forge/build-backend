@@ -1,36 +1,51 @@
+# tests/conftest.py
 import asyncio
+import os
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import pytest
-from sqlalchemy import text
+from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from app.db.base import Base
-from app.infrastructure.identity.models import UserModel, SessionModel
+from app.db.session import engine as app_engine
+from app.main import app
 
+os.environ["APP_ENVIRONMENT"] = "testing" # fixed typo
+
+@pytest.fixture(scope="session", autouse=True)
+async def prepare_app_database():
+    """Tables for TestClient - uses the app's own engine"""
+    async with app_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with app_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
 
 @pytest.fixture(scope="session")
-def event_loop() -> asyncio.AbstractEventLoop:
+def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
 
-
 @pytest.fixture(scope="session")
 async def engine() -> AsyncIterator[AsyncEngine]:
+    """Separate in-memory engine for pure repository integration tests"""
     database_url = "sqlite+aiosqlite:///:memory:"
-    engine = create_async_engine(database_url, future=True)
-    async with engine.begin() as conn:
+    eng = create_async_engine(database_url, future=True)
+    async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    await engine.dispose()
+    yield eng
+    await eng.dispose()
 
-
-@pytest.fixture(scope="function")
+@pytest.fixture
 async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
     async_session = async_sessionmaker(bind=engine, expire_on_commit=False)
-    async with async_session() as session:
-        async with session.begin():
-            yield session
-        await session.rollback()
+    async with async_session() as sess:
+        yield sess
+        await sess.rollback()

@@ -2,17 +2,21 @@ from collections.abc import AsyncIterator, Callable
 
 from app.application.identity.commands import (
     AuthenticateUserCommand,
+    ForgotPasswordCommand,
     GetCurrentUserCommand,
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
+    ResetPasswordCommand,
 )
 from app.application.identity.handlers import (
     AuthenticateUserHandler,
+    ForgotPasswordHandler,
     GetCurrentUserHandler,
     LogoutSessionHandler,
     RefreshSessionHandler,
     RegisterUserHandler,
+    ResetPasswordHandler,
 )
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
@@ -111,6 +115,27 @@ class UserService:
             return
 
         handler = LogoutSessionHandler(session_repository=self.repository.sessions)
+        await handler.handle(command)
+
+    async def forgot_password(self, email: str) -> str:
+        command = ForgotPasswordCommand(email=email)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                handler = ForgotPasswordHandler(repository=uow.users, password_hasher=self.password_hasher)
+                return await handler.handle(command)
+
+        handler = ForgotPasswordHandler(repository=self.repository, password_hasher=self.password_hasher)
+        return await handler.handle(command)
+
+    async def reset_password(self, token: str, password: str) -> None:
+        command = ResetPasswordCommand(token=token, password=password)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                handler = ResetPasswordHandler(repository=uow.users, password_hasher=self.password_hasher)
+                await handler.handle(command)
+            return
+
+        handler = ResetPasswordHandler(repository=self.repository, password_hasher=self.password_hasher)
         await handler.handle(command)
 
     async def get_current_user(self, user_id: str) -> User:

@@ -27,5 +27,16 @@ class LogoutSessionCommand:
 
 
 @dataclass(slots=True)
+class ForgotPasswordCommand:
+    email: str
+
+
+@dataclass(slots=True)
+class ResetPasswordCommand:
+    token: str
+    password: str
+
+
+@dataclass(slots=True)
 class GetCurrentUserCommand:
     user_id: str

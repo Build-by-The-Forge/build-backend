@@ -1,11 +1,14 @@
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.application.identity.commands import (
     AuthenticateUserCommand,
+    ForgotPasswordCommand,
     GetCurrentUserCommand,
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
+    ResetPasswordCommand,
 )
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
@@ -150,6 +153,58 @@ class LogoutSessionHandler:
 
         session.revoke()
         await self.session_repository.save(session)
+
+
+class ForgotPasswordHandler:
+    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+        self.repository = repository
+        self.password_hasher = password_hasher
+
+    async def handle(self, command: ForgotPasswordCommand) -> str:
+        try:
+            email = Email(command.email)
+        except ValueError as exc:
+            raise AppError("invalid email format", status_code=422) from exc
+
+        user = await self.repository.get_by_email(email.value)
+        if user is None:
+            return ""
+
+        raw_token = str(uuid4())
+        token_hash = self.password_hasher.hash(Password(raw_token))
+        await self.repository.save_password_reset_token(
+            user.id.value,
+            token_hash.value,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        return raw_token
+
+
+class ResetPasswordHandler:
+    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+        self.repository = repository
+        self.password_hasher = password_hasher
+
+    async def handle(self, command: ResetPasswordCommand) -> None:
+        if not command.token:
+            raise AppError("invalid reset token", status_code=422)
+
+        try:
+            password = Password(command.password)
+        except ValueError as exc:
+            raise AppError(str(exc), status_code=422) from exc
+
+        token_hash = self.password_hasher.hash(Password(command.token)).value
+        user_id = await self.repository.consume_password_reset_token(token_hash)
+        if user_id is None:
+            raise AppError("invalid reset token", status_code=401)
+
+        user = await self.repository.get_by_id(user_id)
+        if user is None:
+            raise AppError("user not found", status_code=404)
+
+        user.change_password(password, self.password_hasher)
+        await self.repository.save(user)
 
 
 class GetCurrentUserHandler:

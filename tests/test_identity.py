@@ -1,3 +1,7 @@
+import pytest
+from fastapi.testclient import TestClient
+from starlette import status
+
 from app.domain.identity.user import Device, RefreshToken, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
@@ -5,8 +9,6 @@ from app.domain.identity.value_objects import (
     Password,
     PasswordHash,
     PasswordHasher,
-    Permission,
-    PermissionId,
     RefreshTokenHash,
     RefreshTokenId,
     Role,
@@ -16,12 +18,18 @@ from app.domain.identity.value_objects import (
 )
 from app.events.event_bus import EventBus
 from app.main import app
-from fastapi.testclient import TestClient
 
-client = TestClient(app)
+@pytest.fixture(scope="module")
+def client():
+    """
+    Module scoped client so data persists across tests
+    (your duplicate email test relies on it).
+    Using `with` triggers lifespan -> initialize_database() -> create_all()
+    """
+    with TestClient(app) as c:
+        yield c
 
-
-def test_register_user_creates_identity_record() -> None:
+def test_register_user_creates_identity_record(client) -> None:
     response = client.post(
         "/identity/users",
         json={"email": "student@example.com", "password": "StrongPass123!"},
@@ -33,8 +41,7 @@ def test_register_user_creates_identity_record() -> None:
     assert payload["data"]["email"] == "student@example.com"
     assert payload["data"]["is_active"] is True
 
-
-def test_duplicate_user_email_is_rejected() -> None:
+def test_duplicate_user_email_is_rejected(client) -> None:
     first = client.post(
         "/identity/users",
         json={"email": "dup@example.com", "password": "StrongPass123!"},
@@ -48,8 +55,7 @@ def test_duplicate_user_email_is_rejected() -> None:
     assert second.status_code == 409
     assert second.json()["success"] is False
 
-
-def test_invalid_email_is_rejected() -> None:
+def test_invalid_email_is_rejected(client) -> None:
     response = client.post(
         "/identity/users",
         json={"email": "not-an-email", "password": "StrongPass123!"},
@@ -58,8 +64,7 @@ def test_invalid_email_is_rejected() -> None:
     assert response.status_code == 422
     assert response.json()["success"] is False
 
-
-def test_weak_password_is_rejected() -> None:
+def test_weak_password_is_rejected(client) -> None:
     response = client.post(
         "/identity/users",
         json={"email": "weak@example.com", "password": "short"},
@@ -68,19 +73,17 @@ def test_weak_password_is_rejected() -> None:
     assert response.status_code == 422
     assert response.json()["success"] is False
 
-
-def test_malformed_payload_returns_validation_error_shape() -> None:
+def test_malformed_payload_returns_validation_error_shape(client) -> None:
     response = client.post(
         "/identity/users",
         json={"email": 42, "password": "StrongPass123!"},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     payload = response.json()
     assert payload["success"] is False
     assert payload["data"] == {}
     assert "error" in payload["meta"] or "details" in payload["meta"]
-
 
 def test_user_aggregate_can_change_password_to_hash() -> None:
     user = User(
@@ -92,9 +95,8 @@ def test_user_aggregate_can_change_password_to_hash() -> None:
     new_password = Password("NewStrongPass123!")
     user.change_password(new_password, PasswordHasher())
 
-    assert user.password_hash.value != new_password.value
+    assert user.password_hash.value!= new_password.value
     assert user.password_hash.value.startswith("hashed:")
-
 
 def test_user_can_assign_role() -> None:
     user = User(
@@ -108,7 +110,6 @@ def test_user_can_assign_role() -> None:
 
     assert role in user.roles
 
-
 def test_event_bus_notifies_subscribers() -> None:
     bus = EventBus()
     events: list[str] = []
@@ -121,8 +122,7 @@ def test_event_bus_notifies_subscribers() -> None:
 
     assert events == ["user.registered"]
 
-
-def test_authenticate_user_returns_session_for_valid_credentials() -> None:
+def test_authenticate_user_returns_session_for_valid_credentials(client) -> None:
     client.post(
         "/identity/users",
         json={"email": "auth@example.com", "password": "StrongPass123!"},
@@ -136,10 +136,9 @@ def test_authenticate_user_returns_session_for_valid_credentials() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert payload["data"]["user_id"] == payload["data"]["user_id"]
+    assert "user_id" in payload["data"]
 
-
-def test_refresh_and_logout_flow_round_trips_through_identity_api() -> None:
+def test_refresh_and_logout_flow_round_trips_through_identity_api(client) -> None:
     email = "refresh-flow@example.com"
     client.post(
         "/identity/users",
@@ -176,8 +175,7 @@ def test_refresh_and_logout_flow_round_trips_through_identity_api() -> None:
 
     assert logout_response.status_code == 200
 
-
-def test_current_user_endpoint_returns_authenticated_user() -> None:
+def test_current_user_endpoint_returns_authenticated_user(client) -> None:
     email = "me@example.com"
     client.post(
         "/identity/users",
@@ -202,6 +200,35 @@ def test_current_user_endpoint_returns_authenticated_user() -> None:
     assert payload["success"] is True
     assert payload["data"]["email"] == email
 
+def test_password_reset_flow_allows_sign_in_with_new_password(client) -> None:
+    email = "recover@example.com"
+    client.post(
+        "/identity/users",
+        json={"email": email, "password": "StrongPass123!"},
+    )
+
+    forgot_response = client.post(
+        "/identity/forgot-password",
+        json={"email": email},
+    )
+
+    assert forgot_response.status_code == 200
+    reset_token = forgot_response.json()["data"]["reset_token"]
+
+    reset_response = client.post(
+        "/identity/reset-password",
+        json={"token": reset_token, "password": "NewStrongPass123!"},
+    )
+
+    assert reset_response.status_code == 200
+
+    auth_response = client.post(
+        "/identity/authenticate",
+        json={"email": email, "password": "NewStrongPass123!"},
+    )
+
+    assert auth_response.status_code == 200
+    assert auth_response.json()["success"] is True
 
 def test_session_can_be_revoked_and_touched() -> None:
     session = Session(
@@ -217,7 +244,6 @@ def test_session_can_be_revoked_and_touched() -> None:
     assert session.last_seen_at is not None
     assert session.revoked_at is not None
 
-
 def test_device_can_be_marked_trusted_and_touched() -> None:
     device = Device(id=DeviceId("device-1"), platform="ios")
 
@@ -226,7 +252,6 @@ def test_device_can_be_marked_trusted_and_touched() -> None:
 
     assert device.last_seen is not None
     assert device.trusted is True
-
 
 def test_refresh_token_can_be_rotated_and_revoked() -> None:
     token = RefreshToken(

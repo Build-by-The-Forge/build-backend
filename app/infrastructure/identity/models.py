@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from typing import Optional
+from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,7 +28,7 @@ role_permissions_table = Table(
 class UserModel(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[UserStatus] = mapped_column(
@@ -49,6 +50,7 @@ class UserModel(Base):
         secondary="role_assignments",
         back_populates="users",
         lazy="selectin",
+        overlaps="role_assignments,user,role",
     )
     sessions: Mapped[list["SessionModel"]] = relationship(
         "SessionModel",
@@ -74,6 +76,7 @@ class UserModel(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         lazy="selectin",
+        overlaps="roles"
     )
     verification_tokens: Mapped[list["VerificationTokenModel"]] = relationship(
         "VerificationTokenModel",
@@ -200,6 +203,7 @@ class RoleModel(Base):
         secondary="role_assignments",
         back_populates="roles",
         lazy="selectin",
+        overlaps="role_assignments,user,role"
     )
     permissions: Mapped[list["PermissionModel"]] = relationship(
         "PermissionModel",
@@ -212,6 +216,7 @@ class RoleModel(Base):
         back_populates="role",
         cascade="all, delete-orphan",
         lazy="selectin",
+        overlaps="roles,users"
     )
 
 
@@ -236,8 +241,8 @@ class RoleAssignmentModel(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role_id: Mapped[str] = mapped_column(String(36), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False)
 
-    user: Mapped[UserModel] = relationship("UserModel", back_populates="role_assignments")
-    role: Mapped[RoleModel] = relationship("RoleModel", back_populates="role_assignments")
+    user: Mapped[UserModel] = relationship("UserModel", back_populates="role_assignments", overlaps="roles,users")
+    role: Mapped[RoleModel] = relationship("RoleModel", back_populates="role_assignments", overlaps="roles,users")
 
 
 class RefreshTokenModel(Base):

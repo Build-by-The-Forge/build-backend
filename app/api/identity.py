@@ -142,6 +142,60 @@ async def logout_session(request: Request, payload: dict[str, str]) -> JSONRespo
     )
 
 
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResponse:
+    email = payload.get("email", "")
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        reset_token = await service.forgot_password(email)
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {"reset_token": reset_token},
+            "meta": {},
+            "request_id": request_id,
+        },
+    )
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+async def reset_password(request: Request, payload: dict[str, str]) -> JSONResponse:
+    token = payload.get("token", "")
+    password = payload.get("password", "")
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        await service.reset_password(token, password)
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={"success": True, "data": {}, "meta": {}, "request_id": request_id},
+    )
+
+
 @router.get("/me", status_code=status.HTTP_200_OK)
 async def get_current_user(
     request: Request,
