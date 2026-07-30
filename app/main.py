@@ -27,15 +27,18 @@ from app.db.session import engine
 configure_logging()
 configure_tracing()
 
+
 async def initialize_database() -> None:
     if settings.effective_postgres_url.startswith("sqlite"):
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await initialize_database()
     yield
+
 
 app = FastAPI(
     title="BUILD Backend",

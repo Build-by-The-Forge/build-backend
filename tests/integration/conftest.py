@@ -15,7 +15,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-os.environ["APP_ENVIRONMENT"] = "testing" # fixed typo
+os.environ["APP_ENVIRONMENT"] = "testing"  # fixed typo
+
 
 @pytest.fixture(scope="session", autouse=True)
 async def prepare_app_database():
@@ -26,16 +27,19 @@ async def prepare_app_database():
     async with app_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
+
 @pytest.fixture(scope="module")
 def client():
     with TestClient(app) as c:
         yield c
+
 
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
 
 @pytest.fixture(scope="session")
 async def engine() -> AsyncIterator[AsyncEngine]:
@@ -46,6 +50,7 @@ async def engine() -> AsyncIterator[AsyncEngine]:
         await conn.run_sync(Base.metadata.create_all)
     yield eng
     await eng.dispose()
+
 
 @pytest.fixture
 async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:

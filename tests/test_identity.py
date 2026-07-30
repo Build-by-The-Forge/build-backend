@@ -29,6 +29,7 @@ def client():
     with TestClient(app) as c:
         yield c
 
+
 def test_register_user_creates_identity_record(client) -> None:
     response = client.post(
         "/identity/users",
@@ -40,6 +41,7 @@ def test_register_user_creates_identity_record(client) -> None:
     assert payload["success"] is True
     assert payload["data"]["email"] == "student@example.com"
     assert payload["data"]["is_active"] is True
+
 
 def test_duplicate_user_email_is_rejected(client) -> None:
     first = client.post(
@@ -55,6 +57,7 @@ def test_duplicate_user_email_is_rejected(client) -> None:
     assert second.status_code == 409
     assert second.json()["success"] is False
 
+
 def test_invalid_email_is_rejected(client) -> None:
     response = client.post(
         "/identity/users",
@@ -64,6 +67,7 @@ def test_invalid_email_is_rejected(client) -> None:
     assert response.status_code == 422
     assert response.json()["success"] is False
 
+
 def test_weak_password_is_rejected(client) -> None:
     response = client.post(
         "/identity/users",
@@ -72,6 +76,7 @@ def test_weak_password_is_rejected(client) -> None:
 
     assert response.status_code == 422
     assert response.json()["success"] is False
+
 
 def test_malformed_payload_returns_validation_error_shape(client) -> None:
     response = client.post(
@@ -85,6 +90,7 @@ def test_malformed_payload_returns_validation_error_shape(client) -> None:
     assert payload["data"] == {}
     assert "error" in payload["meta"] or "details" in payload["meta"]
 
+
 def test_user_aggregate_can_change_password_to_hash() -> None:
     user = User(
         id=UserId(""),
@@ -95,8 +101,9 @@ def test_user_aggregate_can_change_password_to_hash() -> None:
     new_password = Password("NewStrongPass123!")
     user.change_password(new_password, PasswordHasher())
 
-    assert user.password_hash.value!= new_password.value
+    assert user.password_hash.value != new_password.value
     assert user.password_hash.value.startswith("hashed:")
+
 
 def test_user_can_assign_role() -> None:
     user = User(
@@ -110,6 +117,7 @@ def test_user_can_assign_role() -> None:
 
     assert role in user.roles
 
+
 def test_event_bus_notifies_subscribers() -> None:
     bus = EventBus()
     events: list[str] = []
@@ -121,6 +129,7 @@ def test_event_bus_notifies_subscribers() -> None:
     bus.publish("user.registered", payload={"user_id": "123"})
 
     assert events == ["user.registered"]
+
 
 def test_authenticate_user_returns_session_for_valid_credentials(client) -> None:
     client.post(
@@ -137,6 +146,7 @@ def test_authenticate_user_returns_session_for_valid_credentials(client) -> None
     payload = response.json()
     assert payload["success"] is True
     assert "user_id" in payload["data"]
+
 
 def test_refresh_and_logout_flow_round_trips_through_identity_api(client) -> None:
     email = "refresh-flow@example.com"
@@ -175,6 +185,7 @@ def test_refresh_and_logout_flow_round_trips_through_identity_api(client) -> Non
 
     assert logout_response.status_code == 200
 
+
 def test_current_user_endpoint_returns_authenticated_user(client) -> None:
     email = "me@example.com"
     client.post(
@@ -199,6 +210,7 @@ def test_current_user_endpoint_returns_authenticated_user(client) -> None:
     payload = me_response.json()
     assert payload["success"] is True
     assert payload["data"]["email"] == email
+
 
 def test_password_reset_flow_allows_sign_in_with_new_password(client) -> None:
     email = "recover@example.com"
@@ -230,6 +242,7 @@ def test_password_reset_flow_allows_sign_in_with_new_password(client) -> None:
     assert auth_response.status_code == 200
     assert auth_response.json()["success"] is True
 
+
 def test_session_can_be_revoked_and_touched() -> None:
     session = Session(
         id=SessionId("session-1"),
@@ -244,6 +257,7 @@ def test_session_can_be_revoked_and_touched() -> None:
     assert session.last_seen_at is not None
     assert session.revoked_at is not None
 
+
 def test_device_can_be_marked_trusted_and_touched() -> None:
     device = Device(id=DeviceId("device-1"), platform="ios")
 
@@ -252,6 +266,7 @@ def test_device_can_be_marked_trusted_and_touched() -> None:
 
     assert device.last_seen is not None
     assert device.trusted is True
+
 
 def test_refresh_token_can_be_rotated_and_revoked() -> None:
     token = RefreshToken(

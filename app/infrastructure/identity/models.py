@@ -45,7 +45,7 @@ class UserModel(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False
+        nullable=False,
     )
     version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     roles: Mapped[list["RoleModel"]] = relationship(
@@ -75,11 +75,7 @@ class UserModel(Base):
         lazy="selectin",
     )
     role_assignments: Mapped[list["RoleAssignmentModel"]] = relationship(
-        "RoleAssignmentModel",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        overlaps="roles"
+        "RoleAssignmentModel", back_populates="user", cascade="all, delete-orphan", lazy="selectin", overlaps="roles"
     )
     verification_tokens: Mapped[list["VerificationTokenModel"]] = relationship(
         "VerificationTokenModel",
@@ -202,11 +198,7 @@ class RoleModel(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     users: Mapped[list[UserModel]] = relationship(
-        "UserModel",
-        secondary="role_assignments",
-        back_populates="roles",
-        lazy="selectin",
-        overlaps="role_assignments,user,role"
+        "UserModel", secondary="role_assignments", back_populates="roles", lazy="selectin", overlaps="role_assignments,user,role"
     )
     permissions: Mapped[list["PermissionModel"]] = relationship(
         "PermissionModel",
@@ -215,11 +207,7 @@ class RoleModel(Base):
         lazy="selectin",
     )
     role_assignments: Mapped[list["RoleAssignmentModel"]] = relationship(
-        "RoleAssignmentModel",
-        back_populates="role",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        overlaps="roles,users"
+        "RoleAssignmentModel", back_populates="role", cascade="all, delete-orphan", lazy="selectin", overlaps="roles,users"
     )
 
 

@@ -48,7 +48,7 @@ class SQLAlchemyUserRepository(UserRepository):
         if expires_at is None:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
-        model = PasswordResetTokenModel(id=str(uuid4()),user_id=user_id, token_hash=token_hash, expires_at=expires_at)
+        model = PasswordResetTokenModel(id=str(uuid4()), user_id=user_id, token_hash=token_hash, expires_at=expires_at)
         self._session.add(model)
         await self._session.flush()
 
