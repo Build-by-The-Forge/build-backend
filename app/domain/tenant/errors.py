@@ -27,3 +27,7 @@ class LevelAlreadyArchivedError(TenantDomainError):
 
 class AcademicSessionAlreadyArchivedError(TenantDomainError):
     pass
+
+
+class SemesterAlreadyArchivedError(TenantDomainError):
+    pass

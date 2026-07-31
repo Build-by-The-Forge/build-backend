@@ -328,3 +328,41 @@ class AcademicSessionSlug:
 class AcademicSessionStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+@dataclass(frozen=True, slots=True)
+class SemesterId:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip() if self.value else ""
+        if not v:
+            object.__setattr__(self, "value", str(uuid4()))
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class SemesterName:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip()
+        if len(v) < 2 or len(v) > 50:
+            raise ValueError("semester name must be 2-50 chars")
+        object.__setattr__(self, "value", v.title())
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class SemesterNumber(int, Enum):
+    FIRST = 1
+    SECOND = 2
+    THIRD = 3
+
+
+class SemesterStatus(str, Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"

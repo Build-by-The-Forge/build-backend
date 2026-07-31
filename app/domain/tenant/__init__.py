@@ -3,6 +3,7 @@ from app.domain.tenant.department import Department
 from app.domain.tenant.faculty import Faculty
 from app.domain.tenant.level import Level
 from app.domain.tenant.programme import Programme
+from app.domain.tenant.semester import Semester
 from app.domain.tenant.tenant import Tenant
 from app.domain.tenant.value_objects import (
     AcademicSessionId,
@@ -27,6 +28,10 @@ from app.domain.tenant.value_objects import (
     ProgrammeName,
     ProgrammeSlug,
     ProgrammeStatus,
+    SemesterId,
+    SemesterName,
+    SemesterNumber,
+    SemesterStatus,
     TenantId,
     TenantName,
     TenantSlug,
@@ -40,6 +45,7 @@ __all__ = [
     "Programme",
     "Level",
     "AcademicSession",
+    "Semester",
     "TenantId",
     "TenantName",
     "TenantSlug",
@@ -66,4 +72,8 @@ __all__ = [
     "AcademicSessionName",
     "AcademicSessionSlug",
     "AcademicSessionStatus",
+    "SemesterId",
+    "SemesterName",
+    "SemesterNumber",
+    "SemesterStatus",
 ]
