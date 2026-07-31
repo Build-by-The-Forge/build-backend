@@ -366,3 +366,41 @@ class SemesterNumber(int, Enum):
 class SemesterStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+@dataclass(frozen=True, slots=True)
+class MembershipId:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip() if self.value else ""
+        if not v:
+            object.__setattr__(self, "value", str(uuid4()))
+
+    def __str__(self) -> str:
+        return self.value
+
+@dataclass(frozen=True, slots=True)
+class UserId:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip()
+        if len(v) < 1:
+            raise ValueError("user_id cannot be empty")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+class MembershipRole(str, Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    FACULTY_ADMIN = "faculty_admin"
+    HOD = "hod"
+    LECTURER = "lecturer"
+    STUDENT = "student"
+
+class MembershipStatus(str, Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    INVITED = "invited"
