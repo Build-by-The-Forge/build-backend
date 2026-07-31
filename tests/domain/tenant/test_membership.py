@@ -9,6 +9,7 @@ from app.domain.tenant.value_objects import (
     UserId,
 )
 
+
 def test_membership_belongs_to_tenant_and_user() -> None:
     member = Membership.create(
         tenant_id=TenantId(""),
@@ -19,6 +20,7 @@ def test_membership_belongs_to_tenant_and_user() -> None:
     assert member.role == MembershipRole.STUDENT
     assert member.is_active is True
     assert member.user_id.value == "user-123"
+
 
 def test_membership_role_validates() -> None:
     with pytest.raises(ValueError):
@@ -31,6 +33,7 @@ def test_membership_role_validates() -> None:
     )
     assert member.role == MembershipRole.LECTURER
 
+
 def test_membership_create_emits_event() -> None:
     member = Membership.create(
         tenant_id=TenantId(""),
@@ -41,6 +44,7 @@ def test_membership_create_emits_event() -> None:
     events = member.pull_events()
     assert events[0].event_type == "membership.created"
     assert events[0].payload["role"] == "admin"
+
 
 def test_membership_change_role_and_archive() -> None:
     member = Membership.create(

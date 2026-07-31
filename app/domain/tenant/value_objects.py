@@ -367,6 +367,7 @@ class SemesterStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
 
+
 @dataclass(frozen=True, slots=True)
 class MembershipId:
     value: str
@@ -378,6 +379,7 @@ class MembershipId:
 
     def __str__(self) -> str:
         return self.value
+
 
 @dataclass(frozen=True, slots=True)
 class UserId:
@@ -392,6 +394,7 @@ class UserId:
     def __str__(self) -> str:
         return self.value
 
+
 class MembershipRole(str, Enum):
     OWNER = "owner"
     ADMIN = "admin"
@@ -399,6 +402,7 @@ class MembershipRole(str, Enum):
     HOD = "hod"
     LECTURER = "lecturer"
     STUDENT = "student"
+
 
 class MembershipStatus(str, Enum):
     ACTIVE = "active"

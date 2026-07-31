@@ -13,10 +13,12 @@ from app.domain.tenant.value_objects import (
     UserId,
 )
 
+
 @dataclass
 class DomainEvent:
     event_type: str
     payload: dict[str, Any]
+
 
 @dataclass
 class Membership:
@@ -25,12 +27,8 @@ class Membership:
     user_id: UserId
     role: MembershipRole
     status: MembershipStatus = MembershipStatus.ACTIVE
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
 
     @classmethod
