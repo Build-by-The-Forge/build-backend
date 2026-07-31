@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import date
 from enum import Enum
 from uuid import uuid4
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _CODE_RE = re.compile(r"^[A-Z0-9]{2,20}$")
 _PROG_CODE_RE = re.compile(r"^[A-Z0-9-]{2,30}$")
+_SESSION_RE = re.compile(r"^\d{4}/\d{4}$")
+_SESSION_SLUG_RE = re.compile(r"^\d{4}-\d{4}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,14 +258,6 @@ class LevelCode:
     def __str__(self) -> str:
         return str(self.value)
 
-    @property
-    def is_final_for_futa(self) -> bool:
-        return self.value == 500
-
-    @property
-    def is_final_for_architecture(self) -> bool:
-        return self.value == 600
-
 
 @dataclass(frozen=True, slots=True)
 class LevelName:
@@ -279,5 +274,57 @@ class LevelName:
 
 
 class LevelStatus(str, Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+@dataclass(frozen=True, slots=True)
+class AcademicSessionId:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip() if self.value else ""
+        if not v:
+            object.__setattr__(self, "value", str(uuid4()))
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class AcademicSessionName:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip()
+        if not _SESSION_RE.match(v):
+            raise ValueError("session name must be YYYY/YYYY e.g. 2025/2026")
+        start, end = int(v.split("/")[0]), int(v.split("/")[1])
+        if end != start + 1:
+            raise ValueError("session end year must be start year + 1")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class AcademicSessionSlug:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip()
+        if not _SESSION_SLUG_RE.match(v):
+            raise ValueError("session slug must be YYYY-YYYY e.g. 2025-2026")
+        start, end = int(v.split("-")[0]), int(v.split("-")[1])
+        if end != start + 1:
+            raise ValueError("session slug end year must be start + 1")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class AcademicSessionStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"

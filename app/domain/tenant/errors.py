@@ -23,3 +23,7 @@ class ProgrammeAlreadyArchivedError(TenantDomainError):
 
 class LevelAlreadyArchivedError(TenantDomainError):
     pass
+
+
+class AcademicSessionAlreadyArchivedError(TenantDomainError):
+    pass
