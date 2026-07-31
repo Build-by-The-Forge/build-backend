@@ -1,5 +1,6 @@
 from app.domain.tenant.department import Department
 from app.domain.tenant.faculty import Faculty
+from app.domain.tenant.level import Level
 from app.domain.tenant.programme import Programme
 from app.domain.tenant.tenant import Tenant
 from app.domain.tenant.value_objects import (
@@ -12,6 +13,10 @@ from app.domain.tenant.value_objects import (
     FacultyName,
     FacultySlug,
     FacultyStatus,
+    LevelCode,
+    LevelId,
+    LevelName,
+    LevelStatus,
     ProgrammeCode,
     ProgrammeId,
     ProgrammeName,
@@ -28,6 +33,7 @@ __all__ = [
     "Faculty",
     "Department",
     "Programme",
+    "Level",
     "TenantId",
     "TenantName",
     "TenantSlug",
@@ -46,4 +52,8 @@ __all__ = [
     "ProgrammeSlug",
     "ProgrammeCode",
     "ProgrammeStatus",
+    "LevelId",
+    "LevelCode",
+    "LevelName",
+    "LevelStatus",
 ]

@@ -228,3 +228,56 @@ class ProgrammeCode:
 class ProgrammeStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+@dataclass(frozen=True, slots=True)
+class LevelId:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip() if self.value else ""
+        if not v:
+            object.__setattr__(self, "value", str(uuid4()))
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class LevelCode:
+    value: int
+
+    def __post_init__(self) -> None:
+        v = self.value
+        if v not in (100, 200, 300, 400, 500, 600, 700):
+            raise ValueError("level code must be one of 100, 200, 300, 400, 500, 600, 700")
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+    @property
+    def is_final_for_futa(self) -> bool:
+        return self.value == 500
+
+    @property
+    def is_final_for_architecture(self) -> bool:
+        return self.value == 600
+
+
+@dataclass(frozen=True, slots=True)
+class LevelName:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip()
+        if len(v) < 2 or len(v) > 50:
+            raise ValueError("level name must be 2-50 chars")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class LevelStatus(str, Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
