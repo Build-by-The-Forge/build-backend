@@ -7,12 +7,18 @@ from app.events.base import DomainEvent
 
 class EventBus:
     def __init__(self) -> None:
-        self._subscribers: dict[str, list[Callable[[DomainEvent], None]]] = defaultdict(list)
+        self._subscribers: dict[str, list[Callable[[DomainEvent], None]]] = defaultdict(
+            list
+        )
 
-    def subscribe(self, event_type: str, handler: Callable[[DomainEvent], None]) -> None:
+    def subscribe(
+        self, event_type: str, handler: Callable[[DomainEvent], None]
+    ) -> None:
         self._subscribers[event_type].append(handler)
 
-    def publish(self, event_name: str, payload: dict[str, Any] | None = None, **kwargs: Any) -> None:
+    def publish(
+        self, event_name: str, payload: dict[str, Any] | None = None, **kwargs: Any
+    ) -> None:
         if payload is None:
             payload = kwargs
         event = DomainEvent(event_type=event_name, payload=payload)

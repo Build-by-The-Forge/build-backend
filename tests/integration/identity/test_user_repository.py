@@ -3,12 +3,16 @@ from app.domain.identity.user import User
 from app.domain.identity.value_objects import Email, PasswordHash, UserId
 from app.infrastructure.identity.mappers import user_model_to_domain
 from app.infrastructure.identity.models import UserModel
-from app.infrastructure.identity.sqlalchemy_user_repository import SQLAlchemyUserRepository
+from app.infrastructure.identity.sqlalchemy_user_repository import (
+    SQLAlchemyUserRepository,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_user_repository_can_save_and_retrieve_by_email(session: AsyncSession) -> None:
+async def test_user_repository_can_save_and_retrieve_by_email(
+    session: AsyncSession,
+) -> None:
     repository = SQLAlchemyUserRepository(session)
     user = User(
         id=UserId("user-1"),

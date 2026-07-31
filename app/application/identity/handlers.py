@@ -28,7 +28,9 @@ from app.events.base import DomainEvent
 
 
 class RegisterUserHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repository: UserRepository, password_hasher: PasswordHasher
+    ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 
@@ -56,7 +58,10 @@ class RegisterUserHandler:
         saved_user.record_event(
             DomainEvent(
                 event_type="user.registered",
-                payload={"user_id": saved_user.id.value, "email": saved_user.email.value},
+                payload={
+                    "user_id": saved_user.id.value,
+                    "email": saved_user.email.value,
+                },
             )
         )
         return saved_user
@@ -111,7 +116,9 @@ class AuthenticateUserHandler:
 
 
 class RefreshSessionHandler:
-    def __init__(self, session_repository: SessionRepository, token_service: TokenService) -> None:
+    def __init__(
+        self, session_repository: SessionRepository, token_service: TokenService
+    ) -> None:
         self.session_repository = session_repository
         self.token_service = token_service
 
@@ -133,7 +140,10 @@ class RefreshSessionHandler:
         session.record_event(
             DomainEvent(
                 event_type="session.refreshed",
-                payload={"session_id": session.id.value, "user_id": session.user_id.value},
+                payload={
+                    "session_id": session.id.value,
+                    "user_id": session.user_id.value,
+                },
             )
         )
         self.token_service.issue_access_token(session.user_id.value)
@@ -155,7 +165,9 @@ class LogoutSessionHandler:
 
 
 class ForgotPasswordHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repository: UserRepository, password_hasher: PasswordHasher
+    ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 
@@ -180,7 +192,9 @@ class ForgotPasswordHandler:
 
 
 class ResetPasswordHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repository: UserRepository, password_hasher: PasswordHasher
+    ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 

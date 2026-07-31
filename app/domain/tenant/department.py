@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 from app.domain.tenant.errors import DepartmentAlreadyArchivedError
 from app.domain.tenant.value_objects import (
@@ -18,7 +19,7 @@ from app.domain.tenant.value_objects import (
 @dataclass
 class DomainEvent:
     event_type: str
-    payload: dict
+    payload: dict[str, Any]
 
 
 @dataclass

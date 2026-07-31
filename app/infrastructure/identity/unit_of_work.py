@@ -3,8 +3,12 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.identity.sqlalchemy_session_repository import SQLAlchemySessionRepository
-from app.infrastructure.identity.sqlalchemy_user_repository import SQLAlchemyUserRepository
+from app.infrastructure.identity.sqlalchemy_session_repository import (
+    SQLAlchemySessionRepository,
+)
+from app.infrastructure.identity.sqlalchemy_user_repository import (
+    SQLAlchemyUserRepository,
+)
 from app.infrastructure.unit_of_work import UnitOfWork
 
 
@@ -16,6 +20,8 @@ class IdentityUnitOfWork(UnitOfWork):
 
 
 @asynccontextmanager
-async def identity_unit_of_work(session: AsyncSession) -> AsyncIterator[IdentityUnitOfWork]:
+async def identity_unit_of_work(
+    session: AsyncSession,
+) -> AsyncIterator[IdentityUnitOfWork]:
     async with IdentityUnitOfWork(session) as uow:
         yield uow

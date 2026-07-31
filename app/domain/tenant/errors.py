@@ -15,3 +15,7 @@ class FacultyAlreadyArchivedError(TenantDomainError):
 
 class DepartmentAlreadyArchivedError(TenantDomainError):
     pass
+
+
+class ProgrammeAlreadyArchivedError(TenantDomainError):
+    pass
