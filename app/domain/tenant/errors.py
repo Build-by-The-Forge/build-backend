@@ -15,3 +15,11 @@ class InvalidTenantNameError(TenantDomainError):
 
 class TenantAlreadyArchivedError(TenantDomainError):
     pass
+
+
+class FacultyAlreadyArchivedError(TenantDomainError):
+    pass
+
+
+class InvalidFacultySlugError(TenantDomainError):
+    pass
