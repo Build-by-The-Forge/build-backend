@@ -6,6 +6,7 @@ from enum import Enum
 from uuid import uuid4
 
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_CODE_RE = re.compile(r"^[A-Z0-9]{2,20}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,9 +57,6 @@ class TenantStatus(str, Enum):
     ARCHIVED = "archived"
 
 
-# ---- Faculty ----
-
-
 @dataclass(frozen=True, slots=True)
 class FacultyId:
     value: str
@@ -103,5 +101,67 @@ class FacultySlug:
 
 
 class FacultyStatus(str, Enum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+
+
+@dataclass(frozen=True, slots=True)
+class DepartmentId:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip() if self.value else ""
+        if not v:
+            object.__setattr__(self, "value", str(uuid4()))
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class DepartmentName:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip()
+        if len(v) < 2 or len(v) > 100:
+            raise ValueError("department name must be 2-100 chars")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class DepartmentSlug:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip().lower()
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError("department slug must be 3-50 chars")
+        if not _SLUG_RE.match(v):
+            raise ValueError("department slug must be lowercase alphanumeric and hyphens only")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class DepartmentCode:
+    value: str
+
+    def __post_init__(self) -> None:
+        v = self.value.strip().upper()
+        if not _CODE_RE.match(v):
+            raise ValueError("department code must be 2-20 uppercase alphanumeric")
+        object.__setattr__(self, "value", v)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class DepartmentStatus(str, Enum):
     ACTIVE = "active"
     ARCHIVED = "archived"
