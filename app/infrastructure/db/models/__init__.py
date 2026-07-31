@@ -1,3 +1,4 @@
+from app.db.base import Base
 from app.infrastructure.db.models.tenant_core import (
     AcademicSessionModel,
     DepartmentModel,
@@ -9,7 +10,11 @@ from app.infrastructure.db.models.tenant_core import (
     TenantModel,
 )
 
+# ensure identity models are also imported for metadata
+import app.infrastructure.identity.models  # noqa: F401
+
 __all__ = [
+    "Base",
     "TenantModel",
     "FacultyModel",
     "DepartmentModel",
