@@ -31,14 +31,10 @@ depends_on = None
 def upgrade() -> None:
     # For SQLite, use batch mode for schema modifications
     with op.batch_alter_table("permissions", schema=None) as batch_op:
-        batch_op.create_unique_constraint(
-            "uq_permissions_resource_action", ["resource", "action"]
-        )
+        batch_op.create_unique_constraint("uq_permissions_resource_action", ["resource", "action"])
 
     with op.batch_alter_table("role_assignments", schema=None) as batch_op:
-        batch_op.create_unique_constraint(
-            "uq_role_assignments_user_role", ["user_id", "role_id"]
-        )
+        batch_op.create_unique_constraint("uq_role_assignments_user_role", ["user_id", "role_id"])
 
     # Add indexes for query optimization
     with op.batch_alter_table("sessions", schema=None) as batch_op:
@@ -54,19 +50,13 @@ def upgrade() -> None:
 
     # Add version columns for optimistic concurrency control
     with op.batch_alter_table("users", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("version", sa.Integer(), nullable=False, server_default="0")
-        )
+        batch_op.add_column(sa.Column("version", sa.Integer(), nullable=False, server_default="0"))
 
     with op.batch_alter_table("sessions", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("version", sa.Integer(), nullable=False, server_default="0")
-        )
+        batch_op.add_column(sa.Column("version", sa.Integer(), nullable=False, server_default="0"))
 
     with op.batch_alter_table("devices", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column("version", sa.Integer(), nullable=False, server_default="0")
-        )
+        batch_op.add_column(sa.Column("version", sa.Integer(), nullable=False, server_default="0"))
 
 
 def downgrade() -> None:

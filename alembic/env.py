@@ -17,18 +17,20 @@ if config.config_file_name is not None:
         pass
 
 # ---- FIX: wire metadata ----
-from app.db.base import Base
-import app.infrastructure.identity.models  # noqa: F401
 import app.infrastructure.db.models.tenant_core  # noqa: F401
+import app.infrastructure.identity.models  # noqa: F401
+from app.db.base import Base
 
 target_metadata = Base.metadata
 # ----------------------------
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
     with context.begin_transaction():
         context.run_migrations()
+
 
 def run_migrations_online() -> None:
     connectable = engine_from_config(
@@ -40,6 +42,7 @@ def run_migrations_online() -> None:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

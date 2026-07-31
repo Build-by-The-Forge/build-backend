@@ -33,11 +33,7 @@ class SQLAlchemyUserRepository(UserRepository):
         return user_model_to_domain(model)
 
     async def get_by_email(self, email: str) -> User | None:
-        statement = (
-            select(UserModel)
-            .where(UserModel.email == email)
-            .options(selectinload(UserModel.roles))
-        )
+        statement = select(UserModel).where(UserModel.email == email).options(selectinload(UserModel.roles))
         result = await self._session.scalars(statement)
         model = result.first()
         return user_model_to_domain(model) if model is not None else None
@@ -51,9 +47,7 @@ class SQLAlchemyUserRepository(UserRepository):
         model = await self._find_by_id(user_id)
         return user_model_to_domain(model) if model is not None else None
 
-    async def save_password_reset_token(
-        self, user_id: str, token_hash: str, expires_at: datetime | None = None
-    ) -> None:
+    async def save_password_reset_token(self, user_id: str, token_hash: str, expires_at: datetime | None = None) -> None:
         if expires_at is None:
             expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 

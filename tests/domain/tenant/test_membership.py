@@ -1,5 +1,4 @@
 import pytest
-
 from app.domain.tenant.errors import MembershipAlreadyArchivedError
 from app.domain.tenant.membership import Membership
 from app.domain.tenant.value_objects import (

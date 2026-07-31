@@ -47,16 +47,12 @@ class UserService:
         command = RegisterUserCommand(email=email, password=password)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                handler = RegisterUserHandler(
-                    repository=uow.users, password_hasher=self.password_hasher
-                )
+                handler = RegisterUserHandler(repository=uow.users, password_hasher=self.password_hasher)
                 user = await handler.handle(command)
             self._publish_events(user.pull_events())
             return user
 
-        handler = RegisterUserHandler(
-            repository=self.repository, password_hasher=self.password_hasher
-        )
+        handler = RegisterUserHandler(repository=self.repository, password_hasher=self.password_hasher)
         user = await handler.handle(command)
         self._publish_events(user.pull_events())
         return user
@@ -96,14 +92,10 @@ class UserService:
         return session
 
     async def refresh_session(self, session_id: str, refresh_token: str) -> Session:
-        command = RefreshSessionCommand(
-            session_id=session_id, refresh_token=refresh_token
-        )
+        command = RefreshSessionCommand(session_id=session_id, refresh_token=refresh_token)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                handler = RefreshSessionHandler(
-                    session_repository=uow.sessions, token_service=self.token_service
-                )
+                handler = RefreshSessionHandler(session_repository=uow.sessions, token_service=self.token_service)
                 session = await handler.handle(command)
             self._publish_events(session.pull_events())
             return session
@@ -131,29 +123,21 @@ class UserService:
         command = ForgotPasswordCommand(email=email)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                handler = ForgotPasswordHandler(
-                    repository=uow.users, password_hasher=self.password_hasher
-                )
+                handler = ForgotPasswordHandler(repository=uow.users, password_hasher=self.password_hasher)
                 return await handler.handle(command)
 
-        handler = ForgotPasswordHandler(
-            repository=self.repository, password_hasher=self.password_hasher
-        )
+        handler = ForgotPasswordHandler(repository=self.repository, password_hasher=self.password_hasher)
         return await handler.handle(command)
 
     async def reset_password(self, token: str, password: str) -> None:
         command = ResetPasswordCommand(token=token, password=password)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                handler = ResetPasswordHandler(
-                    repository=uow.users, password_hasher=self.password_hasher
-                )
+                handler = ResetPasswordHandler(repository=uow.users, password_hasher=self.password_hasher)
                 await handler.handle(command)
             return
 
-        handler = ResetPasswordHandler(
-            repository=self.repository, password_hasher=self.password_hasher
-        )
+        handler = ResetPasswordHandler(repository=self.repository, password_hasher=self.password_hasher)
         await handler.handle(command)
 
     async def get_current_user(self, user_id: str) -> User:

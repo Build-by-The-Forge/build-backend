@@ -4,9 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_environment: str = Field(default="development")
-    postgres_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/build"
-    )
+    postgres_url: str = Field(default="postgresql+asyncpg://postgres:postgres@localhost:5432/build")
     redis_url: str = Field(default="redis://localhost:6379/0")
     debug: bool = Field(default=False)
     request_timeout_seconds: int = Field(default=30)

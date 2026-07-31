@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from sqlalchemy import String, Date, Boolean, DateTime, ForeignKey, UniqueConstraint, Index
-from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base  # adjust if your Base is in models/base.py
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class TenantModel(Base):

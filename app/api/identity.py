@@ -55,9 +55,7 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        session = await service.authenticate_user(
-            email, password, device_id=device_id, user_agent=user_agent
-        )
+        session = await service.authenticate_user(email, password, device_id=device_id, user_agent=user_agent)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -70,9 +68,7 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
         )
 
     access_token = service.token_service.issue_access_token(session.user_id.value)
-    refresh_token = (
-        session.refresh_token_hash.value if session.refresh_token_hash else None
-    )
+    refresh_token = session.refresh_token_hash.value if session.refresh_token_hash else None
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
 from enum import Enum
 from uuid import uuid4
 

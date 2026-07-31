@@ -51,11 +51,7 @@ def session_model_to_domain(model: SessionModel) -> Session:
         id=SessionId(model.id),
         user_id=UserId(model.user_id),
         device_id=DeviceId(model.device_id) if model.device_id else None,
-        refresh_token_hash=(
-            RefreshTokenHash(model.refresh_token_hash)
-            if model.refresh_token_hash
-            else None
-        ),
+        refresh_token_hash=(RefreshTokenHash(model.refresh_token_hash) if model.refresh_token_hash else None),
         ip_address=model.ip_address,
         user_agent=model.user_agent,
         created_at=model.created_at,
@@ -65,17 +61,13 @@ def session_model_to_domain(model: SessionModel) -> Session:
     )
 
 
-def domain_session_to_model(
-    session: Session, model: SessionModel | None = None
-) -> SessionModel:
+def domain_session_to_model(session: Session, model: SessionModel | None = None) -> SessionModel:
     if model is None:
         model = SessionModel(
             id=session.id.value,
             user_id=session.user_id.value,
             device_id=session.device_id.value if session.device_id else None,
-            refresh_token_hash=(
-                session.refresh_token_hash.value if session.refresh_token_hash else None
-            ),
+            refresh_token_hash=(session.refresh_token_hash.value if session.refresh_token_hash else None),
             ip_address=session.ip_address,
             user_agent=session.user_agent,
             created_at=session.created_at,
@@ -86,9 +78,7 @@ def domain_session_to_model(
     else:
         model.user_id = session.user_id.value
         model.device_id = session.device_id.value if session.device_id else None
-        model.refresh_token_hash = (
-            session.refresh_token_hash.value if session.refresh_token_hash else None
-        )
+        model.refresh_token_hash = session.refresh_token_hash.value if session.refresh_token_hash else None
         model.ip_address = session.ip_address
         model.user_agent = session.user_agent
         model.created_at = session.created_at

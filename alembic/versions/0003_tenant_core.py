@@ -4,16 +4,18 @@ Revision ID: 0003
 Revises: 0002
 Create Date: 2026-07-31
 """
+
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0003"
 down_revision = "0002"
 branch_labels = None
 depends_on = None
+
 
 def upgrade() -> None:
     # tenants
@@ -153,6 +155,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_memberships_tenant_id", "memberships", ["tenant_id"])
     op.create_index("ix_memberships_user_id", "memberships", ["user_id"])
+
 
 def downgrade() -> None:
     op.drop_index("ix_memberships_user_id", table_name="memberships")

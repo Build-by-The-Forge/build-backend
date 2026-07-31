@@ -1,7 +1,6 @@
 from datetime import date
 
 import pytest
-
 from app.domain.tenant.academic_session import AcademicSession
 from app.domain.tenant.errors import AcademicSessionAlreadyArchivedError
 from app.domain.tenant.value_objects import (
