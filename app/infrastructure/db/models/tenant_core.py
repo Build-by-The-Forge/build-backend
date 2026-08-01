@@ -2,9 +2,18 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from app.db.base import Base  # adjust if your Base is in models/base.py
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base  # adjust if your Base is in models/base.py
 
 
 class TenantModel(Base):
@@ -12,10 +21,16 @@ class TenantModel(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    slug: Mapped[str] = mapped_column(String(50), nullable=False, unique=True, index=True)
+    slug: Mapped[str] = mapped_column(
+        String(50), nullable=False, unique=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (Index("ix_tenants_slug", "slug"),)
 
@@ -24,12 +39,18 @@ class FacultyModel(Base):
     __tablename__ = "faculties"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     slug: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug", name="uq_faculties_tenant_slug"),
@@ -41,14 +62,22 @@ class DepartmentModel(Base):
     __tablename__ = "departments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    faculty_id: Mapped[str] = mapped_column(String(36), ForeignKey("faculties.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    faculty_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("faculties.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     slug: Mapped[str] = mapped_column(String(50), nullable=False)
     code: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug", name="uq_departments_tenant_slug"),
@@ -62,20 +91,32 @@ class ProgrammeModel(Base):
     __tablename__ = "programmes"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    department_id: Mapped[str] = mapped_column(String(36), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    faculty_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("faculties.id", ondelete="CASCADE"), nullable=False
+    )
+    department_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), nullable=False)
     code: Mapped[str] = mapped_column(String(30), nullable=False)
     duration_years: Mapped[int] = mapped_column(nullable=False, default=5)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug", name="uq_programmes_tenant_slug"),
         UniqueConstraint("tenant_id", "code", name="uq_programmes_tenant_code"),
         Index("ix_programmes_tenant_id", "tenant_id"),
+        Index("ix_programmes_faculty_id", "faculty_id"),
         Index("ix_programmes_department_id", "department_id"),
     )
 
@@ -84,12 +125,18 @@ class LevelModel(Base):
     __tablename__ = "levels"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     code: Mapped[int] = mapped_column(nullable=False)  # 100,200,300,400,500,600
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_levels_tenant_code"),
@@ -101,15 +148,21 @@ class AcademicSessionModel(Base):
     __tablename__ = "academic_sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(20), nullable=False)  # 2025/2026
     slug: Mapped[str] = mapped_column(String(20), nullable=False)  # 2025-2026
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug", name="uq_sessions_tenant_slug"),
@@ -121,9 +174,13 @@ class SemesterModel(Base):
     __tablename__ = "semesters"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     academic_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("academic_sessions.id", ondelete="CASCADE"), nullable=False
+        String(36),
+        ForeignKey("academic_sessions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     number: Mapped[int] = mapped_column(nullable=False)  # 1,2
     name: Mapped[str] = mapped_column(String(50), nullable=False)  # First Semester
@@ -131,11 +188,17 @@ class SemesterModel(Base):
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
-        UniqueConstraint("academic_session_id", "number", name="uq_semesters_session_number"),
+        UniqueConstraint(
+            "academic_session_id", "number", name="uq_semesters_session_number"
+        ),
         Index("ix_semesters_tenant_id", "tenant_id"),
         Index("ix_semesters_session_id", "academic_session_id"),
     )
@@ -145,12 +208,22 @@ class MembershipModel(Base):
     __tablename__ = "memberships"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False)  # FK to users.id if you have it
-    role: Mapped[str] = mapped_column(String(30), nullable=False)  # owner, admin, hod, lecturer, student
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False
+    )  # FK to users.id if you have it
+    role: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # owner, admin, hod, lecturer, student
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "user_id", name="uq_memberships_tenant_user"),

@@ -134,6 +134,7 @@ def programme_to_model(d: Programme) -> ProgrammeModel:
     return ProgrammeModel(
         id=d.id.value,
         tenant_id=d.tenant_id.value,
+        faculty_id=d.faculty_id.value,
         department_id=d.department_id.value,
         name=d.name.value,
         slug=d.slug.value,
@@ -149,6 +150,7 @@ def programme_to_domain(m: ProgrammeModel) -> Programme:
     return Programme(
         id=ProgrammeId(m.id),
         tenant_id=TenantId(m.tenant_id),
+        faculty_id=FacultyId(m.faculty_id),
         department_id=DepartmentId(m.department_id),
         name=ProgrammeName(m.name),
         slug=ProgrammeSlug(m.slug),

@@ -28,7 +28,9 @@ from app.events.base import DomainEvent
 
 
 class RegisterUserHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repository: UserRepository, password_hasher: PasswordHasher
+    ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 
@@ -114,7 +116,9 @@ class AuthenticateUserHandler:
 
 
 class RefreshSessionHandler:
-    def __init__(self, session_repository: SessionRepository, token_service: TokenService) -> None:
+    def __init__(
+        self, session_repository: SessionRepository, token_service: TokenService
+    ) -> None:
         self.session_repository = session_repository
         self.token_service = token_service
 
@@ -161,7 +165,9 @@ class LogoutSessionHandler:
 
 
 class ForgotPasswordHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repository: UserRepository, password_hasher: PasswordHasher
+    ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 
@@ -186,7 +192,9 @@ class ForgotPasswordHandler:
 
 
 class ResetPasswordHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(
+        self, repository: UserRepository, password_hasher: PasswordHasher
+    ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 

@@ -31,85 +31,89 @@ from app.domain.tenant.value_objects import (
 from app.infrastructure.tenant.unit_of_work import TenantUnitOfWork
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+import logging
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./build.db")
 
-# FUTA 9 Schools
+# 9 Schools - Canonical FUTA 2025/2026
 FACULTIES = [
     ("School of Computing", "soc"),
-    ("School of Engineering and Engineering Technology", "seet"),
-    ("School of Environmental Technology", "set"),
     ("School of Agriculture and Agricultural Technology", "saat"),
+    ("School of Infrastructural, Minerals and Manufacturing Engineering", "simme"),
+    ("School of Environmental Technology", "set"),
     ("School of Earth and Mineral Sciences", "sems"),
-    ("School of Management Technology", "smt"),
+    ("School of Logistics and Innovation Technology", "slit"),
     ("School of Physical Sciences", "sps"),
     ("School of Life Sciences", "sls"),
-    ("School of Infrastructure, Minerals and Manufacturing Engineering", "simme"),
+    ("School of Electrical and Systems Engineering", "sese"),
 ]
 
-# 52 Departments sample - REPLACE with your exact list if different
+# 52 Departments - Exact 2025/2026 list
 DEPARTMENTS = [
-    # SOC - 5
+    # SOC - 6
     ("soc", "Computer Science", "csc"),
-    ("soc", "Cybersecurity Science", "cys"),
-    ("soc", "Software Engineering", "sen"),
+    ("soc", "Cyber Security", "cys"),
     ("soc", "Information Systems", "ifs"),
     ("soc", "Information Technology", "ift"),
-    # SEET - 9
-    ("seet", "Civil Engineering", "cve"),
-    ("seet", "Mechanical Engineering", "mee"),
-    ("seet", "Electrical Electronics Engineering", "eee"),
-    ("seet", "Chemical Engineering", "che"),
-    ("seet", "Biomedical Engineering", "bme"),
-    ("seet", "Materials and Metallurgical Engineering", "mme"),
-    ("seet", "Industrial and Production Engineering", "ipe"),
-    ("seet", "Agricultural and Environmental Engineering", "age"),
-    ("seet", "Petroleum and Gas Engineering", "pge"),
-    # SET - 7
-    ("set", "Architecture", "arc"),
-    ("set", "Building Technology", "bdt"),
-    ("set", "Estate Management", "esm"),
-    ("set", "Quantity Surveying", "qsv"),
-    ("set", "Surveying and Geoinformatics", "svg"),
-    ("set", "Remote Sensing and Geoinformatics", "rsg"),
-    ("set", "Urban and Regional Planning", "urp"),
-    # SAAT - 8
-    ("saat", "Agricultural Economics and Extension", "aee"),
-    ("saat", "Agricultural Production and Management", "apm"),
+    ("soc", "Software Engineering", "sen"),
+    ("soc", "Data Science", "dsc"),
+    # SAAT - 9
+    ("saat", "Agricultural Extension and Communication Technology", "aec"),
+    ("saat", "Agricultural Resources Economics", "are"),
     ("saat", "Animal Production and Health", "aph"),
-    ("saat", "Crop Soil and Pest Management", "csp"),
+    ("saat", "Crop, Soil and Pest Management", "csp"),
+    ("saat", "Ecotourism and Wildlife Management", "ewm"),
+    ("saat", "Fisheries and Aquaculture Technology", "fat"),
     ("saat", "Food Science and Technology", "fst"),
     ("saat", "Forestry and Wood Technology", "fwt"),
-    ("saat", "Agricultural Extension and Communication", "aec"),
-    ("saat", "Aquaculture and Fisheries Management", "afm"),
+    ("saat", "Nutrition and Dietetics", "ntd"),
+    # SIMME - 6
+    ("simme", "Agricultural Engineering", "age"),
+    ("simme", "Civil Engineering", "cve"),
+    ("simme", "Industrial and Production Engineering", "ipe"),
+    ("simme", "Mechanical Engineering", "mee"),
+    ("simme", "Mining Engineering", "mne"),
+    ("simme", "Metallurgical and Materials Engineering", "mme"),
+    # SET - 7 (ARC is 6yrs, others 5yrs)
+    ("set", "Architecture", "arc"),
+    ("set", "Building Technology", "bdg"),
+    ("set", "Estate Management", "esm"),
+    ("set", "Industrial Design", "idd"),
+    ("set", "Quantity Surveying", "qsv"),
+    ("set", "Urban and Regional Planning", "urp"),
+    ("set", "Surveying and Geoinformatics", "svg"),
     # SEMS - 5
     ("sems", "Applied Geology", "agy"),
     ("sems", "Applied Geophysics", "agp"),
-    ("sems", "Mining Engineering", "mne"),
+    ("sems", "Marine Science and Technology", "mst"),
     ("sems", "Meteorology and Climate Science", "mcs"),
-    ("sems", "Petroleum Chemistry", "ptc"),
-    # SMT - 5
-    ("smt", "Business Administration", "bam"),
-    ("smt", "Entrepreneurship", "ent"),
-    ("smt", "Maritime Management", "mmt"),
-    ("smt", "Project Management Technology", "pmt"),
-    ("smt", "Transport Management Technology", "tmt"),
-    # SPS - 4
-    ("sps", "Mathematics", "mat"),
-    ("sps", "Physics", "phy"),
+    ("sems", "Remote Sensing and Geoinformatics", "rsg"),
+    # SLIT - 5 (PRT & FINTECH new 2025/2026)
+    ("slit", "Project Management Technology", "pmt"),
+    ("slit", "Logistics and Transport Management Technology", "tmt"),
+    ("slit", "Entrepreneurship Management Technology", "ent"),
+    ("slit", "Procurement Management Technology", "prt"),
+    ("slit", "Financial Technology", "fintech"),
+    # SPS - 6
     ("sps", "Chemistry", "chm"),
+    ("sps", "Physics", "phy"),
+    ("sps", "Mathematical Sciences", "mts"),
     ("sps", "Statistics", "sta"),
-    # SLS - 5
+    ("sps", "Industrial Mathematics", "imm"),
+    ("sps", "Industrial Chemistry", "imc"),
+    # SLS - 4
     ("sls", "Biochemistry", "bch"),
-    ("sls", "Microbiology", "mcb"),
     ("sls", "Biology", "bio"),
+    ("sls", "Microbiology", "mcb"),
     ("sls", "Biotechnology", "btc"),
-    ("sls", "Forensic Science", "fsc"),
-    # SIMME - 4
-    ("simme", "Industrial Design", "ind"),
-    ("simme", "Mechanical Engineering Technology", "met"),
-    ("simme", "Welding and Fabrication Engineering", "wfe"),
-    ("simme", "Chemical Engineering Technology", "cet"),
+    # SESE - 4
+    ("sese", "Electrical - Electronics Engineering", "eee"),
+    ("sese", "Computer Engineering", "cpe"),
+    ("sese", "Information and Communication Engineering", "ice"),
+    ("sese", "Biomedical Engineering", "bme"),
 ]
 
 
@@ -118,27 +122,35 @@ def seed():
     SessionFactory = sessionmaker(bind=engine)
 
     with TenantUnitOfWork(SessionFactory) as uow:
-        # Check if FUTA exists
         existing = uow.tenants.get_by_slug("futa")
         if existing:
-            print(f"FUTA already exists: {existing.id.value}")
-            return
+            log.info(
+                "FUTA already exists: %s - deleting and reseeding is recommended for clean state",
+                existing.id.value,
+            )
+            # for clean reseed, uncomment:
+            # return
 
-        tenant = Tenant.create(name=TenantName("Federal University of Technology Akure"), slug=TenantSlug("futa"))
+        tenant = Tenant.create(
+            name=TenantName("Federal University of Technology Akure"),
+            slug=TenantSlug("futa"),
+        )
         uow.tenants.add(tenant)
-        print(f"Created tenant FUTA: {tenant.id.value}")
+        log.info("Created tenant FUTA: %s", tenant.id.value)
 
         faculty_map = {}
         for name, slug in FACULTIES:
-            f = Faculty.create(tenant_id=tenant.id, name=FacultyName(name), slug=FacultySlug(slug))
+            f = Faculty.create(
+                tenant_id=tenant.id, name=FacultyName(name), slug=FacultySlug(slug)
+            )
             uow.faculties.add(f)
             faculty_map[slug] = f
-            print(f" Faculty {slug}")
+            log.info(" Faculty %s - %s", slug, name)
 
-        dept_map = {}
         for fac_slug, dept_name, dept_code in DEPARTMENTS:
             fac = faculty_map.get(fac_slug)
             if not fac:
+                log.warning(" SKIP %s - faculty %s not found", dept_code, fac_slug)
                 continue
             d = Department.create(
                 tenant_id=tenant.id,
@@ -148,12 +160,10 @@ def seed():
                 slug=DepartmentSlug(dept_code),
             )
             uow.departments.add(d)
-            dept_map[dept_code] = d
-            # Programme per dept
             duration = 6 if dept_code == "arc" else 5
             prog = Programme.create(
-                faculty_id=f.id,
                 tenant_id=tenant.id,
+                faculty_id=fac.id,
                 department_id=d.id,
                 name=ProgrammeName(f"BTech {dept_name}"),
                 code=ProgrammeCode(f"btech-{dept_code}"),
@@ -161,15 +171,18 @@ def seed():
                 duration_years=duration,
             )
             uow.programmes.add(prog)
+            log.info(" Dept %s (%sy)", dept_code, duration)
 
-        # Levels 100-500 + 600 for ARC
         for code in [100, 200, 300, 400, 500, 600]:
-            level = Level.create(tenant_id=tenant.id, code=LevelCode(code), name=LevelName(f"{code} Level"))
+            level = Level.create(
+                tenant_id=tenant.id,
+                code=LevelCode(code),
+                name=LevelName(f"{code} Level"),
+            )
             uow.levels.add(level)
-        print(" Levels 100-600")
+        log.info(" Levels 100-600 created")
 
-        # Academic Session 2025/2026
-        session = AcademicSession.create(
+        acad_session = AcademicSession.create(
             tenant_id=tenant.id,
             name=AcademicSessionName("2025/2026"),
             slug=AcademicSessionSlug("2025-2026"),
@@ -177,13 +190,12 @@ def seed():
             end_date=date(2026, 7, 31),
             is_current=True,
         )
-        uow.sessions.add(session)
-        print(f" Session {session.name.value}")
+        uow.sessions.add(acad_session)
+        log.info(" Session %s", acad_session.name.value)
 
-        # Semesters
         first = Semester.create(
             tenant_id=tenant.id,
-            academic_session_id=session.id,
+            academic_session_id=acad_session.id,
             number=SemesterNumber.FIRST,
             name=SemesterName("First Semester"),
             start_date=date(2025, 9, 1),
@@ -192,7 +204,7 @@ def seed():
         )
         second = Semester.create(
             tenant_id=tenant.id,
-            academic_session_id=session.id,
+            academic_session_id=acad_session.id,
             number=SemesterNumber.SECOND,
             name=SemesterName("Second Semester"),
             start_date=date(2026, 1, 20),
@@ -200,10 +212,13 @@ def seed():
         )
         uow.semesters.add(first)
         uow.semesters.add(second)
-        print(" Semesters First/Second")
+        log.info(" Semesters First/Second")
 
         uow.commit()
-        print("FUTA SEED DONE: tenant futa with 9 faculties, 52 depts, programmes, levels, session, semesters")
+        log.info(
+            "\nFUTA SEED DONE: 9 faculties, %s depts, 52 programmes (ARC=6yrs, others 5yrs), levels, 2025/2026",
+            len(DEPARTMENTS),
+        )
 
 
 if __name__ == "__main__":

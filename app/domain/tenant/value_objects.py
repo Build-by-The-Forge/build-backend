@@ -48,7 +48,9 @@ class TenantSlug:
         if len(v) < 3 or len(v) > 50:
             raise ValueError("tenant slug must be 3-50 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("tenant slug must be lowercase alphanumeric and hyphens only")
+            raise ValueError(
+                "tenant slug must be lowercase alphanumeric and hyphens only"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -96,7 +98,9 @@ class FacultySlug:
         if len(v) < 3 or len(v) > 50:
             raise ValueError("faculty slug must be 3-50 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("faculty slug must be lowercase alphanumeric and hyphens only")
+            raise ValueError(
+                "faculty slug must be lowercase alphanumeric and hyphens only"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -144,7 +148,9 @@ class DepartmentSlug:
         if len(v) < 3 or len(v) > 50:
             raise ValueError("department slug must be 3-50 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("department slug must be lowercase alphanumeric and hyphens only")
+            raise ValueError(
+                "department slug must be lowercase alphanumeric and hyphens only"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -206,7 +212,9 @@ class ProgrammeSlug:
         if len(v) < 3 or len(v) > 80:
             raise ValueError("programme slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("programme slug must be lowercase alphanumeric and hyphens only")
+            raise ValueError(
+                "programme slug must be lowercase alphanumeric and hyphens only"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -220,7 +228,9 @@ class ProgrammeCode:
     def __post_init__(self) -> None:
         v = self.value.strip().upper()
         if not _PROG_CODE_RE.match(v):
-            raise ValueError("programme code must be 2-30 uppercase alphanumeric and hyphens")
+            raise ValueError(
+                "programme code must be 2-30 uppercase alphanumeric and hyphens"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -252,7 +262,9 @@ class LevelCode:
     def __post_init__(self) -> None:
         v = self.value
         if v not in (100, 200, 300, 400, 500, 600, 700):
-            raise ValueError("level code must be one of 100, 200, 300, 400, 500, 600, 700")
+            raise ValueError(
+                "level code must be one of 100, 200, 300, 400, 500, 600, 700"
+            )
 
     def __str__(self) -> str:
         return str(self.value)

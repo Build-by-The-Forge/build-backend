@@ -51,7 +51,11 @@ class Semester:
         if start_date and end_date and end_date <= start_date:
             raise ValueError("semester end_date must be after start_date")
 
-        default_name = SemesterName("First Semester") if number == SemesterNumber.FIRST else SemesterName("Second Semester")
+        default_name = (
+            SemesterName("First Semester")
+            if number == SemesterNumber.FIRST
+            else SemesterName("Second Semester")
+        )
 
         sem = cls(
             id=semester_id or SemesterId(""),

@@ -22,8 +22,12 @@ def upgrade() -> None:
         sa.Column("email", sa.String(length=320), nullable=False),
         sa.Column("password_hash", sa.String(), nullable=False),
         sa.Column("status", sa.String(length=50), nullable=False),
-        sa.Column("is_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        sa.Column(
+            "is_verified", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
+        sa.Column(
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -70,7 +74,9 @@ def upgrade() -> None:
         sa.Column("role_id", sa.String(length=36), nullable=False),
         sa.Column("permission_id", sa.String(length=36), nullable=False),
         sa.ForeignKeyConstraint(["role_id"], ["roles.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["permission_id"], ["permissions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["permission_id"], ["permissions.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("role_id", "permission_id"),
     )
     op.create_table(
@@ -83,7 +89,9 @@ def upgrade() -> None:
         sa.Column("model", sa.String(), nullable=True),
         sa.Column("device_fingerprint", sa.String(), nullable=True),
         sa.Column("push_token", sa.String(), nullable=True),
-        sa.Column("trusted", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "trusted", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("last_seen", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
@@ -159,7 +167,9 @@ def upgrade() -> None:
         sa.Column("user_agent", sa.String(), nullable=True),
         sa.Column("country", sa.String(), nullable=True),
         sa.Column("city", sa.String(), nullable=True),
-        sa.Column("successful", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column(
+            "successful", sa.Boolean(), nullable=False, server_default=sa.text("false")
+        ),
         sa.Column("reason", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="SET NULL"),

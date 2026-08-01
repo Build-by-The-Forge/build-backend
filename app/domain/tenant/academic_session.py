@@ -94,7 +94,9 @@ class AcademicSession:
 
     def archive(self) -> None:
         if self.status == AcademicSessionStatus.ARCHIVED:
-            raise AcademicSessionAlreadyArchivedError("academic session already archived")
+            raise AcademicSessionAlreadyArchivedError(
+                "academic session already archived"
+            )
         self.status = AcademicSessionStatus.ARCHIVED
         self.is_current = False
         self.touch()

@@ -24,7 +24,9 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column("slug", sa.String(length=50), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
@@ -37,7 +39,9 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column("slug", sa.String(length=50), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
@@ -54,7 +58,9 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column("slug", sa.String(length=50), nullable=False),
         sa.Column("code", sa.String(length=20), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["faculty_id"], ["faculties.id"], ondelete="CASCADE"),
@@ -70,20 +76,27 @@ def upgrade() -> None:
         "programmes",
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
+        sa.Column("faculty_id", sa.String(length=36), nullable=False),
         sa.Column("department_id", sa.String(length=36), nullable=False),
         sa.Column("name", sa.String(length=150), nullable=False),
         sa.Column("slug", sa.String(length=80), nullable=False),
         sa.Column("code", sa.String(length=30), nullable=False),
         sa.Column("duration_years", sa.Integer(), nullable=False, server_default="5"),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["department_id"], ["departments.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["department_id"], ["departments.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(["faculty_id"], ["faculties.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("tenant_id", "code", name="uq_programmes_tenant_code"),
         sa.UniqueConstraint("tenant_id", "slug", name="uq_programmes_tenant_slug"),
     )
     op.create_index("ix_programmes_tenant_id", "programmes", ["tenant_id"])
+    op.create_index("ix_programmes_faculty_id", "programmes", ["faculty_id"])
     op.create_index("ix_programmes_department_id", "programmes", ["department_id"])
 
     # levels
@@ -93,7 +106,9 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
         sa.Column("code", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(length=50), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
@@ -111,7 +126,9 @@ def upgrade() -> None:
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=False),
         sa.Column("is_current", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
@@ -130,12 +147,18 @@ def upgrade() -> None:
         sa.Column("start_date", sa.Date(), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=False),
         sa.Column("is_current", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["academic_session_id"], ["academic_sessions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["academic_session_id"], ["academic_sessions.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("academic_session_id", "number", name="uq_semesters_session_number"),
+        sa.UniqueConstraint(
+            "academic_session_id", "number", name="uq_semesters_session_number"
+        ),
     )
     op.create_index("ix_semesters_tenant_id", "semesters", ["tenant_id"])
     op.create_index("ix_semesters_session_id", "semesters", ["academic_session_id"])
@@ -147,7 +170,9 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("role", sa.String(length=30), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
@@ -170,6 +195,7 @@ def downgrade() -> None:
     op.drop_table("levels")
     op.drop_index("ix_programmes_department_id", table_name="programmes")
     op.drop_index("ix_programmes_tenant_id", table_name="programmes")
+    op.drop_index("ix_programmes_faculty_id", table_name="programmes")
     op.drop_table("programmes")
     op.drop_index("ix_departments_faculty_id", table_name="departments")
     op.drop_index("ix_departments_tenant_id", table_name="departments")

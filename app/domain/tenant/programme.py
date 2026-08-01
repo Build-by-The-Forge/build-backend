@@ -32,7 +32,7 @@ class Programme:
     name: ProgrammeName
     slug: ProgrammeSlug
     code: ProgrammeCode
-    duration_years: int = 4
+    duration_years: int = 5
     status: ProgrammeStatus = ProgrammeStatus.ACTIVE
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -47,7 +47,7 @@ class Programme:
         name: ProgrammeName,
         slug: ProgrammeSlug,
         code: ProgrammeCode,
-        duration_years: int = 4,
+        duration_years: int = 5,
         programme_id: ProgrammeId | None = None,
     ) -> Programme:
         if duration_years < 1 or duration_years > 7:
