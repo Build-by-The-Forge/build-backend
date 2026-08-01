@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.identity.user import Session
 from app.domain.repositories.session import SessionRepository
-from app.infrastructure.identity.mappers import domain_session_to_model, session_model_to_domain
+from app.infrastructure.identity.mappers import (
+    domain_session_to_model,
+    session_model_to_domain,
+)
 from app.infrastructure.identity.models import SessionModel
 
 
@@ -30,7 +33,9 @@ class SQLAlchemySessionRepository(SessionRepository):
         return session_model_to_domain(model) if model is not None else None
 
     async def get_by_refresh_token_hash(self, token_hash: str) -> Session | None:
-        statement = select(SessionModel).where(SessionModel.refresh_token_hash == token_hash)
+        statement = select(SessionModel).where(
+            SessionModel.refresh_token_hash == token_hash
+        )
         result = await self._session.scalars(statement)
         model = result.first()
         return session_model_to_domain(model) if model is not None else None
@@ -39,13 +44,20 @@ class SQLAlchemySessionRepository(SessionRepository):
         statement = select(SessionModel).where(
             SessionModel.user_id == user_id,
             SessionModel.revoked_at.is_(None),
-            or_(SessionModel.expires_at.is_(None), SessionModel.expires_at >= datetime.now(timezone.utc)),
+            or_(
+                SessionModel.expires_at.is_(None),
+                SessionModel.expires_at >= datetime.now(timezone.utc),
+            ),
         )
         result = await self._session.scalars(statement)
         return [session_model_to_domain(model) for model in result.all()]
 
     async def revoke(self, session_id: str) -> None:
-        statement = update(SessionModel).where(SessionModel.id == session_id).values(revoked_at=datetime.now(timezone.utc))
+        statement = (
+            update(SessionModel)
+            .where(SessionModel.id == session_id)
+            .values(revoked_at=datetime.now(timezone.utc))
+        )
         await self._session.execute(statement)
 
     async def _find_by_id(self, session_id: str) -> SessionModel | None:

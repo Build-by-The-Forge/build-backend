@@ -4,7 +4,10 @@ from contextlib import asynccontextmanager
 from app.application.identity.user_service import UserService
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
-from app.infrastructure.identity.unit_of_work import IdentityUnitOfWork, identity_unit_of_work
+from app.infrastructure.identity.unit_of_work import (
+    IdentityUnitOfWork,
+    identity_unit_of_work,
+)
 from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
 from app.infrastructure.security.jwt_token_service import JWTTokenService
 

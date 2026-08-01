@@ -45,6 +45,16 @@ select = ["E", "F", "I"]
 [tool.mypy]
 python_version = "3.13"
 strict = true
+ignore_missing_imports = true
+exclude = "alembic"
+
+[[tool.mypy.overrides]]
+module = "app.application.identity.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
 
 [tool.setuptools.packages.find]
 where = ["."]

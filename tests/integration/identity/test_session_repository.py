@@ -6,7 +6,9 @@ from app.domain.identity.value_objects import (
     SessionId,
     UserId,
 )
-from app.infrastructure.identity.sqlalchemy_session_repository import SQLAlchemySessionRepository
+from app.infrastructure.identity.sqlalchemy_session_repository import (
+    SQLAlchemySessionRepository,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -32,7 +34,9 @@ async def test_session_repository_can_save_and_retrieve(session: AsyncSession) -
 
 
 @pytest.mark.asyncio
-async def test_session_repository_can_find_by_refresh_token_and_list_active(session: AsyncSession) -> None:
+async def test_session_repository_can_find_by_refresh_token_and_list_active(
+    session: AsyncSession,
+) -> None:
     repository = SQLAlchemySessionRepository(session)
     session_entity = Session(
         id=SessionId("session-2"),

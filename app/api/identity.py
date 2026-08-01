@@ -35,7 +35,11 @@ async def register_user(request: Request, payload: dict[str, str]) -> JSONRespon
         status_code=status.HTTP_201_CREATED,
         content={
             "success": True,
-            "data": {"id": user.id.value, "email": user.email.value, "is_active": user.is_active},
+            "data": {
+                "id": user.id.value,
+                "email": user.email.value,
+                "is_active": user.is_active,
+            },
             "meta": {},
             "request_id": request_id,
         },
@@ -51,7 +55,9 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        session = await service.authenticate_user(email, password, device_id=device_id, user_agent=user_agent)
+        session = await service.authenticate_user(
+            email, password, device_id=device_id, user_agent=user_agent
+        )
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -64,7 +70,9 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
         )
 
     access_token = service.token_service.issue_access_token(session.user_id.value)
-    refresh_token = session.refresh_token_hash.value if session.refresh_token_hash else None
+    refresh_token = (
+        session.refresh_token_hash.value if session.refresh_token_hash else None
+    )
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -206,7 +214,12 @@ async def get_current_user(
     if authorization is None or not authorization.startswith("Bearer "):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"success": False, "data": {}, "meta": {"error": "missing bearer token"}, "request_id": request_id},
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": "missing bearer token"},
+                "request_id": request_id,
+            },
         )
 
     token = authorization.split(" ", 1)[1]
@@ -215,7 +228,12 @@ async def get_current_user(
     if user_id is None:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"success": False, "data": {}, "meta": {"error": "invalid token"}, "request_id": request_id},
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": "invalid token"},
+                "request_id": request_id,
+            },
         )
 
     if user_id.startswith("access:"):
@@ -227,7 +245,12 @@ async def get_current_user(
     if user_id is None:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            content={"success": False, "data": {}, "meta": {"error": "invalid token"}, "request_id": request_id},
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": "invalid token"},
+                "request_id": request_id,
+            },
         )
 
     try:
@@ -247,7 +270,11 @@ async def get_current_user(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": {"id": user.id.value, "email": user.email.value, "is_active": user.is_active},
+            "data": {
+                "id": user.id.value,
+                "email": user.email.value,
+                "is_active": user.is_active,
+            },
             "meta": {},
             "request_id": request_id,
         },
