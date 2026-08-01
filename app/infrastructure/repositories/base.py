@@ -1,7 +1,7 @@
 from typing import Protocol, TypeVar
 
-T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
-class Repository(Protocol[T]):
+class Repository(Protocol[T_co]):
     pass

@@ -103,6 +103,8 @@ def faculty_to_domain(m: FacultyModel) -> Faculty:
 
 
 def department_to_model(d: Department) -> DepartmentModel:
+    if d.code is None:
+        raise ValueError("department code is None")
     return DepartmentModel(
         id=d.id.value,
         tenant_id=d.tenant_id.value,

@@ -8,7 +8,7 @@ This repository implements the core backend of the BUILD platform using a modula
 
 ## Current Version
 
-**v0.2.0 — Identity & Access Management (IAM)**
+**v0.3.0 — Tenant Core & FUTA Canonical Seed**
 
 ### Completed
 
@@ -28,6 +28,11 @@ This repository implements the core backend of the BUILD platform using a modula
 - Security Headers
 - Metrics & Tracing
 - SQLite Test Environment
+- Alembic Migrations
+- Tenant Core / Multi-tenancy foundation
+- Canonical FUTA curriculum seeding
+- SQLite-safe `0004` batch migration for `faculty_id`
+- Academic Catalogue specification drafted in `docs/`
 - Automated Integration Tests
 
 ---
@@ -154,15 +159,17 @@ Persistence uses:
 
 ### 🚧 Next
 
-- Tenant Management
+- Academic Catalogue (v0.4.0)
 - Course Management
+- Curriculum Versioning
+- Course Prerequisites
+- Topic-Based Learning
+- Question Bank
 - CBT Engine
 - AI Integration
 - Study Analytics
-- Leaderboards
-- Group Collaboration
 - Notifications
-- Payments
+- Progress Tracking
 - Production Deployment
 
 ---

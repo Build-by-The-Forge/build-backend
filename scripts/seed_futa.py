@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import date
 
@@ -31,7 +32,6 @@ from app.domain.tenant.value_objects import (
 from app.infrastructure.tenant.unit_of_work import TenantUnitOfWork
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import logging
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
