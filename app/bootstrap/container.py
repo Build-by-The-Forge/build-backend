@@ -1,9 +1,14 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from app.application.catalogue.course_service import CourseService
 from app.application.identity.user_service import UserService
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
+from app.infrastructure.catalogue.unit_of_work import (
+    CourseUnitOfWork,
+    catalogue_unit_of_work,
+)
 from app.infrastructure.identity.unit_of_work import (
     IdentityUnitOfWork,
     identity_unit_of_work,
@@ -34,6 +39,7 @@ def build_container() -> Container:
     container.register(EventBus, event_bus)
     container.register(Argon2PasswordHasher, password_hasher)
     container.register(JWTTokenService, token_service)
+    container.register(IdentityUnitOfWork, sqlalchemy_identity_uow)
     container.register(
         UserService,
         UserService(
@@ -44,6 +50,14 @@ def build_container() -> Container:
             uow_factory=sqlalchemy_identity_uow,
         ),
     )
+    container.register(CourseUnitOfWork, sqlalchemy_catalogue_uow)
+    container.register(
+        CourseService,
+        CourseService(
+            repository=None,
+            uow_factory=sqlalchemy_catalogue_uow,
+        ),
+    )
     return container
 
 
@@ -51,6 +65,13 @@ def build_container() -> Container:
 async def sqlalchemy_identity_uow() -> AsyncIterator[IdentityUnitOfWork]:
     async with SessionLocal() as session:
         async with identity_unit_of_work(session) as uow:
+            yield uow
+
+
+@asynccontextmanager
+async def sqlalchemy_catalogue_uow() -> AsyncIterator[CourseUnitOfWork]:
+    async with SessionLocal() as session:
+        async with catalogue_unit_of_work(session) as uow:
             yield uow
 
 

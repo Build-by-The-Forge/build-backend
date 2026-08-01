@@ -1,18 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.catalogue import courses_router
+
 router = APIRouter()
-
-
-@router.get("/health/live")
-def live() -> dict[str, str]:
-    return {"status": "alive"}
-
-
-@router.get("/health/ready")
-def ready() -> dict[str, str]:
-    return {"status": "ready"}
-
-
-@router.get("/health/startup")
-def startup() -> dict[str, str]:
-    return {"status": "startup"}
+router.include_router(courses_router)
