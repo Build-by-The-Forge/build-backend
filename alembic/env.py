@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import app.infrastructure.db.models.tenant_core  # noqa: F401
 import app.infrastructure.identity.models  # noqa: F401
+import app.infrastructure.db.models.catalogue  # noqa: F401
 from app.db.base import Base
 
 config = context.config

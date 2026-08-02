@@ -1,7 +1,15 @@
 # ensure identity models are also imported for metadata
 import app.infrastructure.identity.models  # noqa: F401
 from app.db.base import Base
-from app.infrastructure.db.models.catalogue import CourseModel
+import app.infrastructure.db.models.catalogue  # noqa: F401
+from app.infrastructure.db.models.catalogue import (
+    CourseModel,
+    CurriculumVersionModel,
+    TopicModel,
+    LearningOutcomeModel,
+    ReferenceMaterialModel,
+    CoursePrerequisiteModel,
+)
 from app.infrastructure.db.models.tenant_core import (
     AcademicSessionModel,
     DepartmentModel,
@@ -24,4 +32,9 @@ __all__ = [
     "SemesterModel",
     "MembershipModel",
     "CourseModel",
+    "CurriculumVersionModel",
+    "TopicModel",
+    "LearningOutcomeModel",
+    "ReferenceMaterialModel",
+    "CoursePrerequisiteModel",
 ]

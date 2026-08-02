@@ -11,13 +11,17 @@ class SqlAlchemyCourseRepository(CourseRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def save(self, course: Course) -> Course:
+    async def save(self, course: Course, tenant_id: str | None = None) -> Course:
         model = await self._session.get(CourseModel, course.id.value)
         if model is None:
             model = course_to_model(course)
+            if tenant_id is not None:
+                model.tenant_id = tenant_id
             self._session.add(model)
         else:
             model = course_to_model(course, model=model)
+            if tenant_id is not None:
+                model.tenant_id = tenant_id
         await self._session.flush()
         return course
 

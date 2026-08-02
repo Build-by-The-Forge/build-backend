@@ -32,8 +32,6 @@ class TenantModel(Base):
         DateTime(timezone=True), nullable=False
     )
 
-    __table_args__ = (Index("ix_tenants_slug", "slug"),)
-
 
 class FacultyModel(Base):
     __tablename__ = "faculties"
