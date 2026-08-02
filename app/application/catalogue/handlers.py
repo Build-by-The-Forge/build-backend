@@ -1,6 +1,5 @@
 from app.application.catalogue.commands import CreateCourseCommand
 from app.domain.catalogue.course import Course
-from app.domain.repositories.course import CourseRepository
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -10,6 +9,7 @@ from app.domain.catalogue.value_objects import (
     CourseTitle,
     DepartmentId,
 )
+from app.domain.repositories.course import CourseRepository
 
 
 class CreateCourseHandler:

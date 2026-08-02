@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import uuid4
 
-
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _CODE_RE = re.compile(r"^[A-Z0-9]{2,20}$")
 
@@ -155,7 +154,9 @@ class CourseSlug:
         if len(v) < 3 or len(v) > 80:
             raise ValueError("course slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("course slug must be lowercase alphanumeric and hyphens only")
+            raise ValueError(
+                "course slug must be lowercase alphanumeric and hyphens only"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -240,7 +241,9 @@ class TopicSlug:
         if len(v) < 3 or len(v) > 80:
             raise ValueError("topic slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("topic slug must be lowercase alphanumeric and hyphens only")
+            raise ValueError(
+                "topic slug must be lowercase alphanumeric and hyphens only"
+            )
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -389,5 +392,3 @@ class SemesterNumber:
 
     def __int__(self) -> int:
         return self.value
-
-

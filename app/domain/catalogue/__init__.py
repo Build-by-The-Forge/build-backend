@@ -1,7 +1,7 @@
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.value_objects import (
-    CourseCreditUnits,
     CourseCode,
+    CourseCreditUnits,
     CourseId,
     CourseLevel,
     CourseSemester,

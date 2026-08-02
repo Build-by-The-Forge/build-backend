@@ -1,38 +1,70 @@
-# System Architecture
+# BUILD Documentation Handbook
 
-The backend is organized as a modular monolith with clear separation between API, application, domain, and infrastructure concerns.
+This handbook organizes BUILD documentation into a stable architecture reference.
+It is the starting point for contributors who need to understand the platform design, contracts, decisions, events, and vision.
 
-- API layer: routers and request/response handling
-- Application layer: use cases and orchestration
-- Domain layer: business entities and rules
-- Infrastructure layer: persistence, external services, and integrations
+## Read in order
 
-## Academic Knowledge Model
+1. `docs/architecture/overview.md`
+   - High-level architecture introduction and source-of-truth guidance.
+2. `docs/architecture/academic-knowledge-model.md`
+   - Canonical academic catalogue model for v0.4.0.
+3. `docs/architecture/system-data-flow.md`
+   - End-to-end platform flow from curriculum through AI and CBT.
+4. `docs/architecture/public-id-strategy.md`
+   - External identifier policy for stable public IDs.
+5. `docs/architecture/versioning.md`
+   - Versioning rules for curriculum, content, AI, and embeddings.
+6. `docs/domain-map.md`
+   - Frozen domain model and entity graph for implementation.
 
-The academic catalogue is modeled in `docs/architecture/academic-knowledge-model.md`.
-This document defines the canonical BUILD v0.4.0 catalogue aggregates, schema recommendations, and the boundary between Catalogue and Content.
+## Architecture docs
 
-## System Data Flow
+- `docs/architecture/overview.md` — architecture handbook introduction.
+- `docs/architecture/academic-knowledge-model.md` — academic knowledge model and bounded context map.
+- `docs/architecture/system-data-flow.md` — how data flows through BUILD.
+- `docs/architecture/public-id-strategy.md` — public ID policy and naming conventions.
+- `docs/architecture/versioning.md` — versioning strategy for curriculum and AI artifacts.
+- `docs/architecture/academic-catalogue-specification.md` — catalogue-specific architecture details.
 
-The platform data flow is documented in `docs/architecture/system-data-flow.md`.
-That document describes how data moves from curriculum import through catalogue, content, AI, and CBT.
+## Contracts
 
-## Platform Contracts
+Contracts describe the shared boundaries between bounded contexts.
 
-Stable service contracts are documented in `docs/contracts/`.
-These files define ownership, public IDs, APIs, and event semantics for catalogue, content, AI, identity, and events.
+- `docs/contracts/README.md`
+- `docs/contracts/catalogue-contract.md`
+- `docs/contracts/content-contract.md`
+- `docs/contracts/ai-contract.md`
+- `docs/contracts/identity-contract.md`
+- `docs/contracts/events-contract.md`
 
-## Academic Data Strategy
+## Events
 
-The platform's data authority and curriculum source hierarchy are documented in `docs/vision/academic-data-strategy.md`.
-That document defines what BUILD treats as canonical academic truth and what belongs only to supplementary content.
+Event catalogs describe emitted events, payload shapes, and consumer expectations.
 
-## Domain Map
+- `docs/events/catalogue-events.md`
 
-The v0.4.0 domain model is documented in `docs/domain-map.md`.
-This document captures the frozen academic knowledge entity graph and public ID strategy before implementation begins.
+## Vision
 
-## Architectural Decisions
+Vision documents define strategy, source-of-truth policy, reference data, and AI lifecycle.
 
-Platform decisions are recorded in `docs/decisions/`.
-These ADRs capture governance such as source-of-truth rules and contract boundaries.
+- `docs/vision/academic-data-strategy.md`
+- `docs/vision/reference-data-strategy.md`
+- `docs/vision/ai-knowledge-lifecycle.md`
+
+## Decisions and ADRs
+
+- `docs/decisions/001-source-of-truth.md`
+- `docs/adr/` — add future architectural decision records here.
+
+## Domain reference
+
+- `docs/domain-map.md`
+
+## Project templates
+
+- `docs/module-template.md`
+
+## Notes
+
+- `docs/alembic.md` and `docs/phase-2-iam-roadmap.md` are project-specific references and remain at the root.

@@ -46,7 +46,6 @@ class CourseService:
         return await handler.handle(command)
 
     async def list_courses(self, department_id: str | None = None):
-        command = None
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = ListCoursesHandler(repository=uow.courses)

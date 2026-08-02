@@ -1,5 +1,3 @@
-from typing import Any
-
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
@@ -12,7 +10,9 @@ service = container.get(CourseService)
 
 
 @router.get("/", status_code=status.HTTP_200_OK)
-async def list_courses(request: Request, department_id: str | None = None) -> JSONResponse:
+async def list_courses(
+    request: Request, department_id: str | None = None
+) -> JSONResponse:
     try:
         courses = await service.list_courses(department_id=department_id)
     except Exception as exc:

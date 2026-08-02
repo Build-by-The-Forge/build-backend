@@ -7,8 +7,8 @@ from typing import Any
 from app.domain.catalogue.value_objects import (
     CourseId,
     CoursePrerequisiteId,
-    PrerequisiteType,
     PrerequisiteStatus,
+    PrerequisiteType,
 )
 
 

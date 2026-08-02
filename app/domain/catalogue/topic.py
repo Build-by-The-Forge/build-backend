@@ -56,7 +56,10 @@ class Topic:
         topic._events.append(
             DomainEvent(
                 event_type="topic.created",
-                payload={"topic_id": topic.id.value, "course_id": topic.course_id.value},
+                payload={
+                    "topic_id": topic.id.value,
+                    "course_id": topic.course_id.value,
+                },
             )
         )
         return topic

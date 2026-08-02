@@ -26,7 +26,9 @@ class SqlAlchemyCourseRepository(CourseRepository):
         return course_to_domain(model) if model is not None else None
 
     async def list_by_department(self, department_id: str) -> list[Course]:
-        statement = select(CourseModel).where(CourseModel.department_id == department_id)
+        statement = select(CourseModel).where(
+            CourseModel.department_id == department_id
+        )
         result = await self._session.scalars(statement)
         return [course_to_domain(c) for c in result.all()]
 

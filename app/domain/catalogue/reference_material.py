@@ -52,7 +52,10 @@ class ReferenceMaterial:
         material._events.append(
             DomainEvent(
                 event_type="reference_material.created",
-                payload={"reference_material_id": material.id.value, "course_id": course_id.value},
+                payload={
+                    "reference_material_id": material.id.value,
+                    "course_id": course_id.value,
+                },
             )
         )
         return material

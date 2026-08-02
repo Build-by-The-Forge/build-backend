@@ -8,8 +8,8 @@ from app.domain.catalogue.value_objects import (
     CourseId,
     LearningOutcomeDescription,
     LearningOutcomeId,
-    LearningOutcomeStatus,
     LearningOutcomeSequence,
+    LearningOutcomeStatus,
 )
 
 
@@ -48,7 +48,10 @@ class LearningOutcome:
         lo._events.append(
             DomainEvent(
                 event_type="learning_outcome.created",
-                payload={"learning_outcome_id": lo.id.value, "course_id": lo.course_id.value},
+                payload={
+                    "learning_outcome_id": lo.id.value,
+                    "course_id": lo.course_id.value,
+                },
             )
         )
         return lo

@@ -52,7 +52,10 @@ class CourseOffering:
         offering._events.append(
             DomainEvent(
                 event_type="course_offering.created",
-                payload={"course_offering_id": offering.id.value, "course_id": course_id.value},
+                payload={
+                    "course_offering_id": offering.id.value,
+                    "course_id": course_id.value,
+                },
             )
         )
         return offering
