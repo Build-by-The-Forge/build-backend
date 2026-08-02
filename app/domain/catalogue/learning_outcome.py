@@ -4,12 +4,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from app.domain.catalogue.errors import LearningOutcomeAlreadyArchivedError
 from app.domain.catalogue.value_objects import (
-    CourseId,
     LearningOutcomeDescription,
     LearningOutcomeId,
     LearningOutcomeSequence,
     LearningOutcomeStatus,
+    TopicId,
 )
 
 
@@ -22,7 +23,7 @@ class DomainEvent:
 @dataclass
 class LearningOutcome:
     id: LearningOutcomeId
-    course_id: CourseId
+    topic_id: TopicId
     sequence: LearningOutcomeSequence
     description: LearningOutcomeDescription
     status: LearningOutcomeStatus = LearningOutcomeStatus.ACTIVE
@@ -33,14 +34,14 @@ class LearningOutcome:
     @classmethod
     def create(
         cls,
-        course_id: CourseId,
+        topic_id: TopicId,
         sequence: LearningOutcomeSequence,
         description: LearningOutcomeDescription,
         learning_outcome_id: LearningOutcomeId | None = None,
     ) -> LearningOutcome:
         lo = cls(
             id=learning_outcome_id or LearningOutcomeId(""),
-            course_id=course_id,
+            topic_id=topic_id,
             sequence=sequence,
             description=description,
             status=LearningOutcomeStatus.ACTIVE,
@@ -50,18 +51,34 @@ class LearningOutcome:
                 event_type="learning_outcome.created",
                 payload={
                     "learning_outcome_id": lo.id.value,
-                    "course_id": lo.course_id.value,
+                    "topic_id": lo.topic_id.value,
                 },
             )
         )
         return lo
 
     def archive(self) -> None:
+        if self.status == LearningOutcomeStatus.ARCHIVED:
+            raise LearningOutcomeAlreadyArchivedError(
+                "learning outcome already archived"
+            )
         self.status = LearningOutcomeStatus.ARCHIVED
         self.touch()
         self._events.append(
             DomainEvent(
                 event_type="learning_outcome.archived",
+                payload={"learning_outcome_id": self.id.value},
+            )
+        )
+
+    def publish(self) -> None:
+        if self.status == LearningOutcomeStatus.ACTIVE:
+            return
+        self.status = LearningOutcomeStatus.ACTIVE
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="learning_outcome.published",
                 payload={"learning_outcome_id": self.id.value},
             )
         )
@@ -73,3 +90,7 @@ class LearningOutcome:
         events = list(self._events)
         self._events.clear()
         return events
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == LearningOutcomeStatus.ACTIVE

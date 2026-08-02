@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from app.domain.catalogue.errors import ReferenceMaterialAlreadyArchivedError
 from app.domain.catalogue.value_objects import (
     CourseId,
     ReferenceMaterialId,
@@ -61,11 +62,27 @@ class ReferenceMaterial:
         return material
 
     def archive(self) -> None:
+        if self.status == ReferenceMaterialStatus.ARCHIVED:
+            raise ReferenceMaterialAlreadyArchivedError(
+                "reference material already archived"
+            )
         self.status = ReferenceMaterialStatus.ARCHIVED
         self.touch()
         self._events.append(
             DomainEvent(
                 event_type="reference_material.archived",
+                payload={"reference_material_id": self.id.value},
+            )
+        )
+
+    def publish(self) -> None:
+        if self.status == ReferenceMaterialStatus.ACTIVE:
+            return
+        self.status = ReferenceMaterialStatus.ACTIVE
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="reference_material.published",
                 payload={"reference_material_id": self.id.value},
             )
         )
@@ -77,3 +94,7 @@ class ReferenceMaterial:
         events = list(self._events)
         self._events.clear()
         return events
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == ReferenceMaterialStatus.ACTIVE

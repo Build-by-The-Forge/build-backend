@@ -1,4 +1,8 @@
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.curriculum_version import CurriculumVersion
+from app.domain.catalogue.learning_outcome import LearningOutcome
+from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -8,11 +12,34 @@ from app.domain.catalogue.value_objects import (
     CourseSlug,
     CourseStatus,
     CourseTitle,
+    CurriculumVersionId,
+    CurriculumVersionName,
+    CurriculumVersionStatus,
     DepartmentId,
+    ProgrammeId,
+    TopicDescription,
+    TopicId,
+    TopicLevel,
+    TopicSlug,
+    TopicStatus,
+    TopicTitle,
+    LearningOutcomeDescription,
+    LearningOutcomeId,
+    LearningOutcomeSequence,
+    LearningOutcomeStatus,
+    ReferenceMaterialId,
+    ReferenceMaterialStatus,
+    ReferenceMaterialTitle,
+    ReferenceMaterialType,
+    ReferenceMaterialUrl,
 )
 
 __all__ = [
     "Course",
+    "CurriculumVersion",
+    "LearningOutcome",
+    "ReferenceMaterial",
+    "Topic",
     "CourseId",
     "CourseCode",
     "CourseTitle",
@@ -22,4 +49,23 @@ __all__ = [
     "CourseSemester",
     "CourseStatus",
     "DepartmentId",
+    "ProgrammeId",
+    "CurriculumVersionId",
+    "CurriculumVersionName",
+    "CurriculumVersionStatus",
+    "TopicDescription",
+    "TopicId",
+    "TopicLevel",
+    "TopicSlug",
+    "TopicStatus",
+    "TopicTitle",
+    "LearningOutcomeDescription",
+    "LearningOutcomeId",
+    "LearningOutcomeSequence",
+    "LearningOutcomeStatus",
+    "ReferenceMaterialId",
+    "ReferenceMaterialStatus",
+    "ReferenceMaterialTitle",
+    "ReferenceMaterialType",
+    "ReferenceMaterialUrl",
 ]
