@@ -4,14 +4,14 @@ from app.domain.catalogue.course import Course
 
 
 class CourseRepository(Protocol):
-    async def save(self, course: Course) -> Course:
+    async def save(self, course: Course, tenant_id: str | None = None) -> Course:
         raise NotImplementedError
 
-    async def get_by_id(self, course_id: str) -> Course | None:
+    async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         raise NotImplementedError
 
-    async def list_by_department(self, department_id: str) -> list[Course]:
+    async def list_by_department(self, department_id: str, tenant_id: str | None = None) -> list[Course]:
         raise NotImplementedError
 
-    async def list_all(self) -> list[Course]:
+    async def list_all(self, tenant_id: str | None = None) -> list[Course]:
         raise NotImplementedError

@@ -29,6 +29,7 @@ class DomainEvent:
 class Topic:
     id: TopicId
     course_id: CourseId
+    sequence: TopicSequence
     title: TopicTitle
     slug: TopicSlug
     description: TopicDescription | None = None
@@ -47,11 +48,13 @@ class Topic:
         slug: TopicSlug,
         description: TopicDescription | None = None,
         level: TopicLevel = TopicLevel.PRIMARY,
+        sequence: TopicSequence | None = None,
         topic_id: TopicId | None = None,
     ) -> Topic:
         topic = cls(
             id=topic_id or TopicId(""),
             course_id=course_id,
+            sequence=sequence or TopicSequence(1),
             title=title,
             slug=slug,
             description=description,

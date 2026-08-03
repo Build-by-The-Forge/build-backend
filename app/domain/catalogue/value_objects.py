@@ -262,6 +262,18 @@ class TopicDescription:
 
 
 @dataclass(frozen=True, slots=True)
+class TopicSequence:
+    value: int
+
+    def __post_init__(self) -> None:
+        if self.value < 1:
+            raise ValueError("topic sequence must be >= 1")
+
+    def __int__(self) -> int:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
 class LearningOutcomeDescription:
     value: str
 

@@ -20,6 +20,7 @@ from app.domain.catalogue.value_objects import (
     TopicDescription,
     TopicId,
     TopicLevel,
+    TopicSequence,
     TopicSlug,
     TopicStatus,
     TopicTitle,

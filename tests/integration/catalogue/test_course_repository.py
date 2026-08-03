@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 import pytest
 
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.learning_outcome import LearningOutcome
+from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -13,6 +16,17 @@ from app.domain.catalogue.value_objects import (
     CourseSlug,
     CourseTitle,
     DepartmentId,
+    LearningOutcomeDescription,
+    LearningOutcomeSequence,
+    ReferenceMaterialTitle,
+    ReferenceMaterialType,
+    ReferenceMaterialUrl,
+    TopicDescription,
+    TopicId,
+    TopicLevel,
+    TopicSequence,
+    TopicSlug,
+    TopicTitle,
 )
 from app.infrastructure.catalogue.repositories import SqlAlchemyCourseRepository
 from app.infrastructure.db.models.tenant_core import (
@@ -74,12 +88,39 @@ async def test_course_repository_save_get_list(session):
         semester=CourseSemester(1),
     )
 
+    topic = Topic.create(
+        course_id=course.id,
+        title=TopicTitle("Intro Topic"),
+        slug=TopicSlug("intro-topic"),
+        description=TopicDescription("A starting topic."),
+        level=TopicLevel.PRIMARY,
+        sequence=TopicSequence(1),
+    )
+    outcome = LearningOutcome.create(
+        topic_id=topic.id,
+        sequence=LearningOutcomeSequence(1),
+        description=LearningOutcomeDescription("Describe the course overview."),
+    )
+    topic.add_learning_outcome(outcome)
+    course.add_topic(topic)
+
+    reference = ReferenceMaterial.create(
+        course_id=course.id,
+        title=ReferenceMaterialTitle("Course Handbook"),
+        material_type=ReferenceMaterialType.LINK,
+        url=ReferenceMaterialUrl("https://example.com/handbook"),
+    )
+    course.add_reference(reference)
+
     await repo.save(course, tenant_id=tenant_id)
 
-    fetched = await repo.get_by_id(course.id.value)
+    fetched = await repo.get_by_id(course.id.value, tenant_id=tenant_id)
     assert fetched is not None
-    assert str(fetched.id) == str(course.id)
     assert fetched.code.value == course.code.value
+    assert len(fetched.topics) == 1
+    assert fetched.topics[0].sequence.value == 1
+    assert len(fetched.topics[0].learning_outcomes) == 1
+    assert fetched.references[0].title.value == reference.title.value
 
-    all_courses = await repo.list_all()
+    all_courses = await repo.list_all(tenant_id=tenant_id)
     assert any(c.id.value == course.id.value for c in all_courses)

@@ -7,11 +7,12 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -45,6 +46,20 @@ class CourseModel(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    topics: Mapped[list["TopicModel"]] = relationship(
+        "TopicModel",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="TopicModel.sequence",
+    )
+    reference_materials: Mapped[list["ReferenceMaterialModel"]] = relationship(
+        "ReferenceMaterialModel",
+        back_populates="course",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_courses_tenant_code"),
         UniqueConstraint("tenant_id", "slug", name="uq_courses_tenant_slug"),
@@ -57,21 +72,35 @@ class CurriculumVersionModel(Base):
     __tablename__ = "curriculum_versions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    course_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    programme_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("programmes.id", ondelete="CASCADE"), nullable=False
     )
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    is_published: Mapped[bool] = mapped_column(Integer, nullable=False, default=0)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    effective_session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("academic_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    expires_session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("academic_sessions.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    course_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
 
     __table_args__ = (
-        UniqueConstraint("course_id", "version", name="uq_curriculum_course_version"),
-        Index("ix_curriculum_course_id", "course_id"),
+        UniqueConstraint("programme_id", "version", name="uq_curriculum_programme_version"),
+        Index("ix_curriculum_programme_id", "programme_id"),
+        Index("ix_curriculum_effective_session_id", "effective_session_id"),
     )
 
 
@@ -79,26 +108,42 @@ class TopicModel(Base):
     __tablename__ = "topics"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    curriculum_version_id: Mapped[str] = mapped_column(
-        String(36),
-        ForeignKey("curriculum_versions.id", ondelete="CASCADE"),
-        nullable=False,
+    course_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    level: Mapped[str] = mapped_column(String(20), nullable=False, default="primary")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    course: Mapped["CourseModel"] = relationship(
+        "CourseModel",
+        back_populates="topics",
+        overlaps="topics,reference_materials",
+    )
+    learning_outcomes: Mapped[list["LearningOutcomeModel"]] = relationship(
+        "LearningOutcomeModel",
+        back_populates="topic",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="LearningOutcomeModel.sequence",
+    )
 
     __table_args__ = (
-        UniqueConstraint(
-            "curriculum_version_id", "sequence", name="uq_topic_curriculum_sequence"
-        ),
-        Index("ix_topics_curriculum_version_id", "curriculum_version_id"),
+        UniqueConstraint("course_id", "sequence", name="uq_topic_course_sequence"),
+        Index("ix_topics_course_id", "course_id"),
     )
 
 
@@ -111,10 +156,22 @@ class LearningOutcomeModel(Base):
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    topic: Mapped["TopicModel"] = relationship(
+        "TopicModel",
+        back_populates="learning_outcomes",
+        overlaps="learning_outcomes",
     )
 
     __table_args__ = (
@@ -131,14 +188,26 @@ class ReferenceMaterialModel(Base):
         String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
     title: Mapped[str] = mapped_column(String(300), nullable=False)
+    material_type: Mapped[str] = mapped_column(String(20), nullable=False)
     author: Mapped[str | None] = mapped_column(String(200), nullable=True)
     citation: Mapped[str | None] = mapped_column(Text, nullable=True)
     url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    course: Mapped["CourseModel"] = relationship(
+        "CourseModel",
+        back_populates="reference_materials",
+        overlaps="topics,reference_materials",
     )
 
     __table_args__ = (Index("ix_reference_course_id", "course_id"),)
@@ -154,10 +223,20 @@ class CoursePrerequisiteModel(Base):
     prerequisite_course_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
+    prerequisite_type: Mapped[str] = mapped_column(String(20), nullable=False, default="pre_requisite")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
 
     __table_args__ = (
-        UniqueConstraint(
-            "course_id", "prerequisite_course_id", name="uq_course_prereq"
-        ),
+        UniqueConstraint("course_id", "prerequisite_course_id", name="uq_course_prereq"),
         Index("ix_prereq_course_id", "course_id"),
     )
