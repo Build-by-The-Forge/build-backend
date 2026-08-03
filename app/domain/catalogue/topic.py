@@ -9,6 +9,7 @@ from app.domain.catalogue.value_objects import (
     CourseId,
     TopicDescription,
     TopicId,
+    TopicSequence,
     TopicLevel,
     TopicSlug,
     TopicStatus,
