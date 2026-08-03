@@ -64,7 +64,9 @@ class CurriculumVersionModel(Base):
     is_published: Mapped[bool] = mapped_column(Integer, nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
     __table_args__ = (
@@ -78,18 +80,24 @@ class TopicModel(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     curriculum_version_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("curriculum_versions.id", ondelete="CASCADE"), nullable=False
+        String(36),
+        ForeignKey("curriculum_versions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
     __table_args__ = (
-        UniqueConstraint("curriculum_version_id", "sequence", name="uq_topic_curriculum_sequence"),
+        UniqueConstraint(
+            "curriculum_version_id", "sequence", name="uq_topic_curriculum_sequence"
+        ),
         Index("ix_topics_curriculum_version_id", "curriculum_version_id"),
     )
 
@@ -104,7 +112,9 @@ class LearningOutcomeModel(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
     __table_args__ = (
@@ -126,12 +136,12 @@ class ReferenceMaterialModel(Base):
     url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     is_active: Mapped[bool] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
     )
 
-    __table_args__ = (
-        Index("ix_reference_course_id", "course_id"),
-    )
+    __table_args__ = (Index("ix_reference_course_id", "course_id"),)
 
 
 class CoursePrerequisiteModel(Base):
@@ -146,6 +156,8 @@ class CoursePrerequisiteModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("course_id", "prerequisite_course_id", name="uq_course_prereq"),
+        UniqueConstraint(
+            "course_id", "prerequisite_course_id", name="uq_course_prereq"
+        ),
         Index("ix_prereq_course_id", "course_id"),
     )

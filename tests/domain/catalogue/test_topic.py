@@ -69,7 +69,10 @@ def test_topic_add_learning_outcome_emits_event() -> None:
     topic.pull_events()
 
     from app.domain.catalogue.learning_outcome import LearningOutcome
-    from app.domain.catalogue.value_objects import LearningOutcomeDescription, LearningOutcomeSequence
+    from app.domain.catalogue.value_objects import (
+        LearningOutcomeDescription,
+        LearningOutcomeSequence,
+    )
 
     lo = LearningOutcome.create(
         topic_id=topic.id,

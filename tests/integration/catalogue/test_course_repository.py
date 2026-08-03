@@ -30,8 +30,23 @@ async def test_course_repository_save_get_list(session):
 
     now = datetime.now(timezone.utc)
 
-    tenant = TenantModel(id=tenant_id, name="T", slug="t", created_at=now, updated_at=now, status="active")
-    faculty = FacultyModel(id=faculty_id, tenant_id=tenant_id, name="F", slug="f", created_at=now, updated_at=now, status="active")
+    tenant = TenantModel(
+        id=tenant_id,
+        name="T",
+        slug="t",
+        created_at=now,
+        updated_at=now,
+        status="active",
+    )
+    faculty = FacultyModel(
+        id=faculty_id,
+        tenant_id=tenant_id,
+        name="F",
+        slug="f",
+        created_at=now,
+        updated_at=now,
+        status="active",
+    )
     department = DepartmentModel(
         id=department_id,
         tenant_id=tenant_id,
