@@ -6,6 +6,9 @@ from fastapi.responses import JSONResponse
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
 from app.core.exceptions import AppError
+from fastapi import Depends
+from app.core.dependencies import get_current_principal
+from app.core.principal import AuthenticatedPrincipal
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
@@ -279,3 +282,8 @@ async def get_current_user(
             "request_id": request_id,
         },
     )
+
+
+@router.get("/whoami", status_code=status.HTTP_200_OK)
+async def whoami(principal: AuthenticatedPrincipal = Depends(get_current_principal)) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"success": True, "data": {"user_id": principal.user_id}, "meta": {}})
