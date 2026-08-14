@@ -27,7 +27,7 @@ class CreateCourseHandler:
             semester=CourseSemester(command.semester),
             description=command.description,
         )
-        return await self.repository.save(course)
+        return await self.repository.save(course, tenant_id=command.tenant_id)
 
 
 class ListCoursesHandler:

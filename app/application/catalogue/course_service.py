@@ -26,6 +26,7 @@ class CourseService:
         level: int,
         semester: int,
         description: str | None = None,
+        tenant_id: str | None = None,
     ):
         command = CreateCourseCommand(
             department_id=department_id,
@@ -36,6 +37,7 @@ class CourseService:
             level=level,
             semester=semester,
             description=description,
+            tenant_id=tenant_id,
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:

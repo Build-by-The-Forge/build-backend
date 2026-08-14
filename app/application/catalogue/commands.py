@@ -11,3 +11,4 @@ class CreateCourseCommand:
     level: int
     semester: int
     description: str | None = None
+    tenant_id: str | None = None
