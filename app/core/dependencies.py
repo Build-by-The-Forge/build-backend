@@ -5,6 +5,7 @@ from app.infrastructure.unit_of_work import UnitOfWork
 from fastapi import Depends, HTTPException, Request, status
 
 from app.bootstrap.container import build_container
+from app.core.authorization import Permission, authorization
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
 from app.infrastructure.identity.sqlalchemy_user_repository import SQLAlchemyUserRepository
@@ -73,6 +74,7 @@ async def get_current_tenant_context(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="tenant context is required",
         )
+    tenant_slug = tenant_slug.strip().lower()
 
     tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(
         tenant_slug
@@ -98,3 +100,17 @@ async def get_current_tenant_context(
         membership_id=membership.id.value,
         role=membership.role.value,
     )
+
+
+def require_permission(permission: Permission):
+    async def dependency(
+        context: TenantContext = Depends(get_current_tenant_context),
+    ) -> TenantContext:
+        if not authorization.can(context, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="permission denied",
+            )
+        return context
+
+    return dependency
