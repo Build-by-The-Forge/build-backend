@@ -3,6 +3,8 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 
+os.environ["APP_ENVIRONMENT"] = "testing"
+
 import pytest
 from app.db.base import Base
 from app.db.session import engine as app_engine
@@ -14,8 +16,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-
-os.environ["APP_ENVIRONMENT"] = "testing"  # fixed typo
 
 
 @pytest.fixture(scope="session", autouse=True)

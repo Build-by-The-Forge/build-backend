@@ -8,7 +8,7 @@ This repository implements the core backend of the BUILD platform using a modula
 
 ## Current Version
 
-**v0.3.0 — Tenant Core & FUTA Canonical Seed**
+**v0.4.0 — Academic Catalogue**
 
 ### Completed
 
@@ -34,6 +34,15 @@ This repository implements the core backend of the BUILD platform using a modula
 - SQLite-safe `0004` batch migration for `faculty_id`
 - Academic Catalogue specification drafted in `docs/`
 - Automated Integration Tests
+
+### In Progress
+
+- Academic Catalogue bounded context
+- Curriculum versioning
+- Course / programme course model
+- Topic-based learning structure
+- Course prerequisites and learning outcomes
+- Catalogue read APIs
 
 ---
 
@@ -157,9 +166,13 @@ Persistence uses:
 
 - Identity & Access Management
 
+### ✅ v0.3.0
+
+- Tenant Core
+
 ### 🚧 Next
 
-- Academic Catalogue (v0.4.0)
+- Academic Catalogue implementation
 - Course Management
 - Curriculum Versioning
 - Course Prerequisites

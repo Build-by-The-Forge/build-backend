@@ -17,8 +17,17 @@ class NotFoundError(AppError):
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
 
 
-async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "data": {},
+            "meta": {"error": exc.detail},
+            **({"request_id": request_id} if request_id is not None else {}),
+        },
+    )
 
 
 async def validation_exception_handler(
@@ -36,5 +45,14 @@ async def validation_exception_handler(
     )
 
 
-async def app_exception_handler(_: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "data": {},
+            "meta": {"error": exc.message},
+            **({"request_id": request_id} if request_id is not None else {}),
+        },
+    )

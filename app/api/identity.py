@@ -6,6 +6,12 @@ from fastapi.responses import JSONResponse
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
 from app.core.exceptions import AppError
+from fastapi import Depends
+from app.core.dependencies import get_current_principal, require_permission
+from app.core.authorization import Permission, authorization
+from app.core.principal import AuthenticatedPrincipal
+from app.core.tenant_context import TenantContext
+from app.core.dependencies import get_current_tenant_context
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
@@ -277,5 +283,70 @@ async def get_current_user(
             },
             "meta": {},
             "request_id": request_id,
+        },
+    )
+
+
+@router.get("/whoami", status_code=status.HTTP_200_OK)
+async def whoami(principal: AuthenticatedPrincipal = Depends(get_current_principal)) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"success": True, "data": {"user_id": principal.user_id}, "meta": {}})
+
+
+@router.get("/tenant-context", status_code=status.HTTP_200_OK)
+async def get_tenant_context(
+    context: TenantContext = Depends(get_current_tenant_context),
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "user_id": context.user_id,
+                "tenant_id": context.tenant_id,
+                "membership_id": context.membership_id,
+                "role": context.role,
+            },
+            "meta": {},
+        },
+    )
+
+
+@router.get("/permissions", status_code=status.HTTP_200_OK)
+async def get_permissions(
+    context: TenantContext = Depends(get_current_tenant_context),
+) -> JSONResponse:
+    permissions = sorted(
+        permission.value for permission in authorization.permissions_for(context)
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "tenant_id": context.tenant_id,
+                "role": context.role,
+                "permissions": permissions,
+            },
+            "meta": {},
+        },
+    )
+
+
+@router.get("/authorization-probe", status_code=status.HTTP_200_OK)
+async def authorization_probe(
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_CREATE)
+    ),
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "tenant_id": context.tenant_id,
+                "role": context.role,
+                "permission": Permission.CATALOGUE_CREATE.value,
+            },
+            "meta": {},
         },
     )
