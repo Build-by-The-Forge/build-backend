@@ -34,7 +34,11 @@ class ListCoursesHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(self, department_id: str | None = None) -> list[Course]:
+    async def handle(
+        self, department_id: str | None = None, tenant_id: str | None = None
+    ) -> list[Course]:
         if department_id:
-            return await self.repository.list_by_department(department_id)
-        return await self.repository.list_all()
+            return await self.repository.list_by_department(
+                department_id, tenant_id=tenant_id
+            )
+        return await self.repository.list_all(tenant_id=tenant_id)

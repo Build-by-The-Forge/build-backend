@@ -47,11 +47,24 @@ class CourseService:
         handler = CreateCourseHandler(repository=self.repository)
         return await handler.handle(command)
 
-    async def list_courses(self, department_id: str | None = None):
+    async def list_courses(
+        self, department_id: str | None = None, tenant_id: str | None = None
+    ):
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = ListCoursesHandler(repository=uow.courses)
-                return await handler.handle(department_id=department_id)
+                return await handler.handle(
+                    department_id=department_id, tenant_id=tenant_id
+                )
 
         handler = ListCoursesHandler(repository=self.repository)
-        return await handler.handle(department_id=department_id)
+        return await handler.handle(
+            department_id=department_id, tenant_id=tenant_id
+        )
+
+    async def get_course(self, course_id: str, tenant_id: str | None = None):
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.get_by_id(course_id, tenant_id=tenant_id)
+
+        return await self.repository.get_by_id(course_id, tenant_id=tenant_id)
