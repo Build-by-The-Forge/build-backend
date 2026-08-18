@@ -25,7 +25,7 @@ async def test_whoami_malformed_header(client, session):
 @pytest.mark.asyncio
 async def test_whoami_valid_token_for_existing_user(client, session):
     # register a user
-    payload = {"email": "a@example.com", "password": "Password123"}
+    payload = {"email": "a@example.com", "password": "StrongPass123!"}
     r = client.post("/identity/users", json=payload)
     assert r.status_code == 201
     user = r.json()["data"]
