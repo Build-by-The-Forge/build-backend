@@ -6,8 +6,13 @@ from fastapi import Depends, HTTPException, Request, status
 
 from app.bootstrap.container import build_container
 from app.core.principal import AuthenticatedPrincipal
+from app.core.tenant_context import TenantContext
 from app.infrastructure.identity.sqlalchemy_user_repository import SQLAlchemyUserRepository
 from app.infrastructure.security.jwt_token_service import JWTTokenService
+from app.infrastructure.tenant.async_repositories import (
+    AsyncSqlAlchemyMembershipRepository,
+    AsyncSqlAlchemyTenantRepository,
+)
 
 
 async def get_unit_of_work() -> AsyncIterator[UnitOfWork]:
@@ -55,3 +60,41 @@ async def get_current_principal(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
 
     return AuthenticatedPrincipal(user_id=user.id.value)
+
+
+async def get_current_tenant_context(
+    request: Request,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> TenantContext:
+    tenant_slug = request.headers.get("x-tenant-slug")
+    if not tenant_slug:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="tenant context is required",
+        )
+
+    tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(
+        tenant_slug
+    )
+    if tenant is None or not tenant.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="tenant access denied",
+        )
+
+    membership = await AsyncSqlAlchemyMembershipRepository(
+        uow.session
+    ).get_by_tenant_user(tenant.id.value, principal.user_id)
+    if membership is None or not membership.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="tenant access denied",
+        )
+
+    return TenantContext(
+        user_id=principal.user_id,
+        tenant_id=tenant.id.value,
+        membership_id=membership.id.value,
+        role=membership.role.value,
+    )

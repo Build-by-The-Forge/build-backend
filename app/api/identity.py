@@ -9,6 +9,8 @@ from app.core.exceptions import AppError
 from fastapi import Depends
 from app.core.dependencies import get_current_principal
 from app.core.principal import AuthenticatedPrincipal
+from app.core.tenant_context import TenantContext
+from app.core.dependencies import get_current_tenant_context
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
@@ -287,3 +289,22 @@ async def get_current_user(
 @router.get("/whoami", status_code=status.HTTP_200_OK)
 async def whoami(principal: AuthenticatedPrincipal = Depends(get_current_principal)) -> JSONResponse:
     return JSONResponse(status_code=status.HTTP_200_OK, content={"success": True, "data": {"user_id": principal.user_id}, "meta": {}})
+
+
+@router.get("/tenant-context", status_code=status.HTTP_200_OK)
+async def get_tenant_context(
+    context: TenantContext = Depends(get_current_tenant_context),
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "user_id": context.user_id,
+                "tenant_id": context.tenant_id,
+                "membership_id": context.membership_id,
+                "role": context.role,
+            },
+            "meta": {},
+        },
+    )
