@@ -54,7 +54,6 @@ async def test_create_course_api(client, session):
     await session.flush()
 
     payload = {
-        "tenant_id": tenant_id,
         "department_id": department_id,
         "code": "CS201",
         "title": "Algorithms",
@@ -64,13 +63,6 @@ async def test_create_course_api(client, session):
         "semester": 1,
         "description": "Intro to algorithms",
     }
-
-    resp = client.post("/catalogue/courses/", json=payload)
-    assert resp.status_code == 201
-    data = resp.json()
-    assert data["success"] is True
-    created = data["data"]
-    assert created["code"] == payload["code"]
 
     auth_payload = {
         "email": f"catalogue-{uuid.uuid4()}@example.com",
@@ -82,6 +74,7 @@ async def test_create_course_api(client, session):
     authenticated = client.post("/identity/authenticate", json=auth_payload)
     assert authenticated.status_code == 200
     access_token = authenticated.json()["data"]["access_token"]
+
     async with SessionLocal() as app_session:
         app_session.add(
             TenantModel(
@@ -122,13 +115,27 @@ async def test_create_course_api(client, session):
                 id=str(uuid.uuid4()),
                 tenant_id=tenant_id,
                 user_id=user_id,
-                role="student",
+                role="lecturer",
                 status="active",
                 created_at=now,
                 updated_at=now,
             )
         )
         await app_session.commit()
+
+    resp = client.post(
+        "/catalogue/courses/",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Tenant-Slug": "t",
+        },
+        json=payload,
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["success"] is True
+    created = data["data"]
+    assert created["code"] == payload["code"]
 
     # list via GET within the authenticated tenant context
     resp2 = client.get(

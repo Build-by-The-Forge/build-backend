@@ -99,10 +99,16 @@ async def get_course(
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_course(request: Request, payload: CreateCourseRequest) -> JSONResponse:
+async def create_course(
+    request: Request,
+    payload: CreateCourseRequest,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_CREATE)
+    ),
+) -> JSONResponse:
     try:
         course = await service.create_course(
-            tenant_id=payload.tenant_id,
+            tenant_id=context.tenant_id,
             department_id=payload.department_id,
             code=payload.code,
             title=payload.title,

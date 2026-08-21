@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class CreateCourseRequest(BaseModel):
-    tenant_id: str | None = Field(default=None)
+    model_config = ConfigDict(extra="forbid")
+
     department_id: str
     code: str
     title: str
