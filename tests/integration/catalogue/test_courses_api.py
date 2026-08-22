@@ -23,7 +23,7 @@ async def test_create_course_api(client, session):
 
     tenant = TenantModel(
         id=tenant_id,
-        name="T",
+        name="Test Tenant",
         slug="t",
         created_at=now,
         updated_at=now,
@@ -32,7 +32,7 @@ async def test_create_course_api(client, session):
     faculty = FacultyModel(
         id=faculty_id,
         tenant_id=tenant_id,
-        name="F",
+        name="Test Faculty",
         slug="f",
         created_at=now,
         updated_at=now,
@@ -42,7 +42,7 @@ async def test_create_course_api(client, session):
         id=department_id,
         tenant_id=tenant_id,
         faculty_id=faculty_id,
-        name="D",
+        name="Test Department",
         slug="d",
         code="DPT",
         created_at=now,
@@ -79,7 +79,7 @@ async def test_create_course_api(client, session):
         app_session.add(
             TenantModel(
                 id=tenant_id,
-                name="T",
+                name="Test Tenant",
                 slug="t",
                 created_at=now,
                 updated_at=now,
@@ -90,7 +90,7 @@ async def test_create_course_api(client, session):
             FacultyModel(
                 id=faculty_id,
                 tenant_id=tenant_id,
-                name="F",
+                name="Test Faculty",
                 slug="f",
                 created_at=now,
                 updated_at=now,
@@ -102,7 +102,7 @@ async def test_create_course_api(client, session):
                 id=department_id,
                 tenant_id=tenant_id,
                 faculty_id=faculty_id,
-                name="D",
+                name="Test Department",
                 slug="d",
                 code="DPT",
                 created_at=now,
