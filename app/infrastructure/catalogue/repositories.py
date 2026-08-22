@@ -13,7 +13,15 @@ class SqlAlchemyCourseRepository(CourseRepository):
         self._session = session
 
     async def save(self, course: Course, tenant_id: str | None = None) -> Course:
-        model = await self._session.get(CourseModel, course.id.value)
+        statement = select(CourseModel).where(CourseModel.id == course.id.value)
+        if tenant_id is not None:
+            statement = statement.where(CourseModel.tenant_id == tenant_id)
+        statement = statement.options(
+            selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
+            selectinload(CourseModel.reference_materials),
+        )
+        result = await self._session.scalars(statement)
+        model = result.first()
         if model is None:
             model = course_to_model(course)
             if tenant_id is not None:
