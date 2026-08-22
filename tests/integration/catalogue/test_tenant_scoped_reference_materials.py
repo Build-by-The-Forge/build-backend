@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -5,6 +6,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import ReferenceMaterialModel
+from app.infrastructure.db.models.tenant_core import MembershipModel
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,
@@ -47,11 +49,39 @@ async def test_reference_material_creation_requires_authentication(client):
 
 @pytest.mark.asyncio
 async def test_student_cannot_create_reference_material(client):
-    _, tenant_slug, _, course_id, token = await seed_course_context(client, "student")
-    topic_id = await create_topic(client, tenant_slug, course_id, token)
+    tenant_id, tenant_slug, _, course_id, lecturer_token = await seed_course_context(
+        client, "lecturer"
+    )
+    topic_id = await create_topic(client, tenant_slug, course_id, lecturer_token)
+
+    payload = {
+        "email": f"student-material-{uuid4()}@example.com",
+        "password": "StrongPass123!",
+    }
+    registered = client.post("/identity/users", json=payload)
+    assert registered.status_code == 201
+    student_id = registered.json()["data"]["id"]
+    authenticated = client.post("/identity/authenticate", json=payload)
+    assert authenticated.status_code == 200
+    student_token = authenticated.json()["data"]["access_token"]
+
+    async with SessionLocal() as session:
+        session.add(
+            MembershipModel(
+                id=str(uuid4()),
+                tenant_id=tenant_id,
+                user_id=student_id,
+                role="student",
+                status="active",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
+
     response = client.post(
         f"/catalogue/topics/{topic_id}/reference-materials",
-        headers=headers(token, tenant_slug),
+        headers=headers(student_token, tenant_slug),
         json={"title": "Course Handbook", "material_type": "book"},
     )
     assert response.status_code == 403
