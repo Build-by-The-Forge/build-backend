@@ -25,3 +25,8 @@ class CourseRepository(Protocol):
         self, learning_outcome_id: str, tenant_id: str | None = None
     ) -> Course | None:
         raise NotImplementedError
+
+    async def get_by_reference_material_id(
+        self, reference_material_id: str, tenant_id: str | None = None
+    ) -> Course | None:
+        raise NotImplementedError

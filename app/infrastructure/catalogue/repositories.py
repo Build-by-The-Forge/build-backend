@@ -8,6 +8,7 @@ from app.infrastructure.catalogue.mappers import course_to_domain, course_to_mod
 from app.infrastructure.db.models.catalogue import (
     CourseModel,
     LearningOutcomeModel,
+    ReferenceMaterialModel,
     TopicModel,
 )
 
@@ -101,6 +102,27 @@ class SqlAlchemyCourseRepository(CourseRepository):
                 LearningOutcomeModel.topic_id == TopicModel.id,
             )
             .where(LearningOutcomeModel.id == learning_outcome_id)
+        )
+        if tenant_id is not None:
+            statement = statement.where(CourseModel.tenant_id == tenant_id)
+        statement = statement.options(
+            selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
+            selectinload(CourseModel.reference_materials),
+        )
+        result = await self._session.scalars(statement)
+        model = result.first()
+        return course_to_domain(model) if model is not None else None
+
+    async def get_by_reference_material_id(
+        self, reference_material_id: str, tenant_id: str | None = None
+    ) -> Course | None:
+        statement = (
+            select(CourseModel)
+            .join(
+                ReferenceMaterialModel,
+                ReferenceMaterialModel.course_id == CourseModel.id,
+            )
+            .where(ReferenceMaterialModel.id == reference_material_id)
         )
         if tenant_id is not None:
             statement = statement.where(CourseModel.tenant_id == tenant_id)

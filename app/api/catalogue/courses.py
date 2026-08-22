@@ -10,6 +10,8 @@ from app.api.catalogue.schemas import (
     UpdateTopicRequest,
     CreateLearningOutcomeRequest,
     UpdateLearningOutcomeRequest,
+    CreateReferenceMaterialRequest,
+    UpdateReferenceMaterialRequest,
 )
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
@@ -20,6 +22,9 @@ router = APIRouter(prefix="/catalogue/courses", tags=["catalogue"])
 topic_router = APIRouter(prefix="/catalogue/topics", tags=["catalogue"])
 learning_outcome_router = APIRouter(
     prefix="/catalogue/learning-outcomes", tags=["catalogue"]
+)
+reference_router = APIRouter(
+    prefix="/catalogue/reference-materials", tags=["catalogue"]
 )
 container = build_container()
 service = container.get(CourseService)
@@ -520,3 +525,122 @@ async def archive_learning_outcome(
             "request_id": getattr(request.state, "request_id", None),
         },
     )
+
+
+@topic_router.post(
+    "/{topic_id}/reference-materials", status_code=status.HTTP_201_CREATED
+)
+async def create_reference_material(
+    topic_id: str,
+    request: Request,
+    payload: CreateReferenceMaterialRequest,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_CREATE)
+    ),
+) -> JSONResponse:
+    material = await service.create_reference_material(
+        topic_id=topic_id,
+        title=payload.title,
+        material_type=payload.material_type,
+        url=payload.url,
+        tenant_id=context.tenant_id,
+    )
+    if material is None:
+        raise HTTPException(status_code=404, detail="topic not found")
+    return JSONResponse(
+        status_code=201,
+        content={
+            "success": True,
+            "data": _reference_material_payload(material),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@topic_router.get("/{topic_id}/reference-materials", status_code=status.HTTP_200_OK)
+async def list_reference_materials(
+    topic_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_READ)
+    ),
+) -> JSONResponse:
+    course = await service.get_course_by_topic(topic_id, context.tenant_id)
+    if course is None or not any(item.id.value == topic_id for item in course.topics):
+        raise HTTPException(status_code=404, detail="topic not found")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": [_reference_material_payload(item) for item in course.references],
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@reference_router.patch("/{reference_material_id}", status_code=status.HTTP_200_OK)
+async def update_reference_material(
+    reference_material_id: str,
+    request: Request,
+    payload: UpdateReferenceMaterialRequest,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_UPDATE)
+    ),
+) -> JSONResponse:
+    material = await service.update_reference_material(
+        reference_material_id,
+        title=payload.title,
+        material_type=payload.material_type,
+        url=payload.url,
+        tenant_id=context.tenant_id,
+    )
+    if material is None:
+        raise HTTPException(status_code=404, detail="reference material not found")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": _reference_material_payload(material),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@reference_router.post(
+    "/{reference_material_id}/archive", status_code=status.HTTP_200_OK
+)
+async def archive_reference_material(
+    reference_material_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_ARCHIVE)
+    ),
+) -> JSONResponse:
+    material = await service.transition_reference_material(
+        reference_material_id, context.tenant_id, "archive"
+    )
+    if material is None:
+        raise HTTPException(status_code=404, detail="reference material not found")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {"id": material.id.value, "status": material.status.value},
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+def _reference_material_payload(material) -> dict[str, object]:
+    return {
+        "id": material.id.value,
+        "course_id": material.course_id.value,
+        "title": material.title.value,
+        "material_type": material.material_type.value,
+        "url": material.url.value if material.url is not None else None,
+        "status": material.status.value,
+    }

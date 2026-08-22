@@ -53,3 +53,21 @@ class UpdateLearningOutcomeCommand:
     learning_outcome_id: str
     description: str | None = None
     tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class CreateReferenceMaterialCommand:
+    topic_id: str
+    title: str
+    material_type: str
+    url: str | None = None
+    tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class UpdateReferenceMaterialCommand:
+    reference_material_id: str
+    title: str | None = None
+    material_type: str | None = None
+    url: str | None = None
+    tenant_id: str | None = None

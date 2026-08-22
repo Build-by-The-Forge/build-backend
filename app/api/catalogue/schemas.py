@@ -1,4 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.domain.catalogue.value_objects import ReferenceMaterialType
 
 
 class CreateCourseRequest(BaseModel):
@@ -61,3 +63,19 @@ class UpdateLearningOutcomeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     description: str | None = None
+
+
+class CreateReferenceMaterialRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=3, max_length=200)
+    material_type: ReferenceMaterialType
+    url: str | None = None
+
+
+class UpdateReferenceMaterialRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(default=None, min_length=3, max_length=200)
+    material_type: ReferenceMaterialType | None = None
+    url: str | None = None

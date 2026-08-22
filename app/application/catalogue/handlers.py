@@ -3,12 +3,15 @@ from app.application.catalogue.commands import (
     CreateTopicCommand,
     CreateLearningOutcomeCommand,
     UpdateLearningOutcomeCommand,
+    CreateReferenceMaterialCommand,
+    UpdateReferenceMaterialCommand,
     UpdateTopicCommand,
     UpdateCourseCommand,
 )
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.learning_outcome import LearningOutcome
+from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -23,6 +26,9 @@ from app.domain.catalogue.value_objects import (
     TopicTitle,
     LearningOutcomeDescription,
     LearningOutcomeSequence,
+    ReferenceMaterialTitle,
+    ReferenceMaterialType,
+    ReferenceMaterialUrl,
 )
 from app.domain.repositories.course import CourseRepository
 
@@ -171,6 +177,78 @@ class UpdateLearningOutcomeHandler:
             )
         await self.repository.save(course, tenant_id=command.tenant_id)
         return outcome
+
+
+class CreateReferenceMaterialHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(
+        self, command: CreateReferenceMaterialCommand
+    ) -> ReferenceMaterial | None:
+        course = await self.repository.get_by_topic_id(
+            command.topic_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        if not any(topic.id.value == command.topic_id for topic in course.topics):
+            return None
+        material = ReferenceMaterial.create(
+            course_id=course.id,
+            title=ReferenceMaterialTitle(command.title),
+            material_type=ReferenceMaterialType(command.material_type),
+            url=(
+                ReferenceMaterialUrl(command.url)
+                if command.url is not None
+                else None
+            ),
+        )
+        course.add_reference(material)
+        await self.repository.save(course, tenant_id=command.tenant_id)
+        return material
+
+
+class UpdateReferenceMaterialHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(
+        self, command: UpdateReferenceMaterialCommand
+    ) -> ReferenceMaterial | None:
+        course = await self.repository.get_by_reference_material_id(
+            command.reference_material_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        material = next(
+            (
+                item
+                for item in course.references
+                if item.id.value == command.reference_material_id
+            ),
+            None,
+        )
+        if material is None:
+            return None
+        material.update_details(
+            title=(
+                ReferenceMaterialTitle(command.title)
+                if command.title is not None
+                else None
+            ),
+            material_type=(
+                ReferenceMaterialType(command.material_type)
+                if command.material_type is not None
+                else None
+            ),
+            url=(
+                ReferenceMaterialUrl(command.url)
+                if command.url is not None
+                else None
+            ),
+        )
+        await self.repository.save(course, tenant_id=command.tenant_id)
+        return material
 
 
 class UpdateCourseHandler:

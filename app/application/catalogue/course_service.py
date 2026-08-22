@@ -5,6 +5,8 @@ from app.application.catalogue.commands import (
     CreateTopicCommand,
     CreateLearningOutcomeCommand,
     UpdateLearningOutcomeCommand,
+    CreateReferenceMaterialCommand,
+    UpdateReferenceMaterialCommand,
     UpdateTopicCommand,
 )
 from app.application.catalogue.handlers import (
@@ -16,6 +18,8 @@ from app.application.catalogue.handlers import (
     CreateTopicHandler,
     CreateLearningOutcomeHandler,
     UpdateLearningOutcomeHandler,
+    CreateReferenceMaterialHandler,
+    UpdateReferenceMaterialHandler,
 )
 from app.application.catalogue.commands import UpdateCourseCommand
 from app.domain.repositories.course import CourseRepository
@@ -243,4 +247,68 @@ class CourseService:
                     outcome.publish()
                 await uow.courses.save(course, tenant_id=tenant_id)
                 return outcome
+        return None
+
+    async def create_reference_material(
+        self,
+        topic_id: str,
+        title: str,
+        material_type: str,
+        url: str | None = None,
+        tenant_id: str | None = None,
+    ):
+        command = CreateReferenceMaterialCommand(
+            topic_id=topic_id,
+            title=title,
+            material_type=material_type,
+            url=url,
+            tenant_id=tenant_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await CreateReferenceMaterialHandler(uow.courses).handle(command)
+        return await CreateReferenceMaterialHandler(self.repository).handle(command)
+
+    async def update_reference_material(
+        self,
+        reference_material_id: str,
+        title: str | None = None,
+        material_type: str | None = None,
+        url: str | None = None,
+        tenant_id: str | None = None,
+    ):
+        command = UpdateReferenceMaterialCommand(
+            reference_material_id=reference_material_id,
+            title=title,
+            material_type=material_type,
+            url=url,
+            tenant_id=tenant_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await UpdateReferenceMaterialHandler(uow.courses).handle(command)
+        return await UpdateReferenceMaterialHandler(self.repository).handle(command)
+
+    async def transition_reference_material(
+        self, reference_material_id: str, tenant_id: str, transition: str
+    ):
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                course = await uow.courses.get_by_reference_material_id(
+                    reference_material_id, tenant_id
+                )
+                if course is None:
+                    return None
+                material = next(
+                    (item for item in course.references if item.id.value == reference_material_id),
+                    None,
+                )
+                if material is None:
+                    return None
+                if transition == "archive":
+                    material.archive()
+                else:
+                    material.publish()
+                await uow.courses.save(course, tenant_id=tenant_id)
+                return material
         return None
