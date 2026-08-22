@@ -15,6 +15,7 @@ from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 
 router = APIRouter(prefix="/catalogue/courses", tags=["catalogue"])
+topic_router = APIRouter(prefix="/catalogue/topics", tags=["catalogue"])
 container = build_container()
 service = container.get(CourseService)
 
@@ -329,7 +330,7 @@ async def list_topics(
     )
 
 
-@router.patch("/topics/{topic_id}", status_code=status.HTTP_200_OK)
+@topic_router.patch("/{topic_id}", status_code=status.HTTP_200_OK)
 async def update_topic(
     topic_id: str,
     request: Request,
@@ -365,7 +366,7 @@ async def update_topic(
     )
 
 
-@router.post("/topics/{topic_id}/archive", status_code=status.HTTP_200_OK)
+@topic_router.post("/{topic_id}/archive", status_code=status.HTTP_200_OK)
 async def archive_topic(
     topic_id: str,
     request: Request,
