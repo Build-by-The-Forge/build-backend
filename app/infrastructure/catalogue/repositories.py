@@ -5,7 +5,11 @@ from sqlalchemy.orm import selectinload
 from app.domain.catalogue.course import Course
 from app.domain.repositories.course import CourseRepository
 from app.infrastructure.catalogue.mappers import course_to_domain, course_to_model
-from app.infrastructure.db.models.catalogue import CourseModel, TopicModel
+from app.infrastructure.db.models.catalogue import (
+    CourseModel,
+    LearningOutcomeModel,
+    TopicModel,
+)
 
 
 class SqlAlchemyCourseRepository(CourseRepository):
@@ -75,6 +79,28 @@ class SqlAlchemyCourseRepository(CourseRepository):
             select(CourseModel)
             .join(TopicModel, TopicModel.course_id == CourseModel.id)
             .where(TopicModel.id == topic_id)
+        )
+        if tenant_id is not None:
+            statement = statement.where(CourseModel.tenant_id == tenant_id)
+        statement = statement.options(
+            selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
+            selectinload(CourseModel.reference_materials),
+        )
+        result = await self._session.scalars(statement)
+        model = result.first()
+        return course_to_domain(model) if model is not None else None
+
+    async def get_by_learning_outcome_id(
+        self, learning_outcome_id: str, tenant_id: str | None = None
+    ) -> Course | None:
+        statement = (
+            select(CourseModel)
+            .join(TopicModel, TopicModel.course_id == CourseModel.id)
+            .join(
+                LearningOutcomeModel,
+                LearningOutcomeModel.topic_id == TopicModel.id,
+            )
+            .where(LearningOutcomeModel.id == learning_outcome_id)
         )
         if tenant_id is not None:
             statement = statement.where(CourseModel.tenant_id == tenant_id)

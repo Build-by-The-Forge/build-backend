@@ -48,3 +48,16 @@ class UpdateTopicRequest(BaseModel):
 
     title: str | None = None
     description: str | None = None
+
+
+class CreateLearningOutcomeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sequence: int = 1
+    description: str
+
+
+class UpdateLearningOutcomeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None

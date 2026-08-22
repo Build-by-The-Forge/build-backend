@@ -38,3 +38,18 @@ class UpdateTopicCommand:
     title: str | None = None
     description: str | None = None
     tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class CreateLearningOutcomeCommand:
+    topic_id: str
+    sequence: int
+    description: str
+    tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class UpdateLearningOutcomeCommand:
+    learning_outcome_id: str
+    description: str | None = None
+    tenant_id: str | None = None

@@ -51,3 +51,19 @@ def test_learning_outcome_archive_twice_raises() -> None:
 
     with pytest.raises(LearningOutcomeAlreadyArchivedError):
         lo.archive()
+
+
+def test_learning_outcome_update_description_emits_event() -> None:
+    lo = LearningOutcome.create(
+        topic_id=TopicId("topic-1"),
+        sequence=LearningOutcomeSequence(1),
+        description=LearningOutcomeDescription("Explain gradient descent."),
+    )
+    lo.pull_events()
+
+    lo.update_description(
+        LearningOutcomeDescription("Explain how gradient descent converges.")
+    )
+
+    assert lo.description.value == "Explain how gradient descent converges."
+    assert lo.pull_events()[0].event_type == "learning_outcome.updated"

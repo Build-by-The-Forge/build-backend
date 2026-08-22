@@ -1,11 +1,14 @@
 from app.application.catalogue.commands import (
     CreateCourseCommand,
     CreateTopicCommand,
+    CreateLearningOutcomeCommand,
+    UpdateLearningOutcomeCommand,
     UpdateTopicCommand,
     UpdateCourseCommand,
 )
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.topic import Topic
+from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -18,6 +21,8 @@ from app.domain.catalogue.value_objects import (
     TopicSequence,
     TopicSlug,
     TopicTitle,
+    LearningOutcomeDescription,
+    LearningOutcomeSequence,
 )
 from app.domain.repositories.course import CourseRepository
 
@@ -107,6 +112,65 @@ class UpdateTopicHandler:
         )
         await self.repository.save(course, tenant_id=command.tenant_id)
         return topic
+
+
+class CreateLearningOutcomeHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(
+        self, command: CreateLearningOutcomeCommand
+    ) -> LearningOutcome | None:
+        course = await self.repository.get_by_topic_id(
+            command.topic_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        topic = next(
+            (item for item in course.topics if item.id.value == command.topic_id),
+            None,
+        )
+        if topic is None:
+            return None
+        outcome = LearningOutcome.create(
+            topic_id=topic.id,
+            sequence=LearningOutcomeSequence(command.sequence),
+            description=LearningOutcomeDescription(command.description),
+        )
+        topic.add_learning_outcome(outcome)
+        await self.repository.save(course, tenant_id=command.tenant_id)
+        return outcome
+
+
+class UpdateLearningOutcomeHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(
+        self, command: UpdateLearningOutcomeCommand
+    ) -> LearningOutcome | None:
+        course = await self.repository.get_by_learning_outcome_id(
+            command.learning_outcome_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        outcome = next(
+            (
+                item
+                for topic in course.topics
+                for item in topic.learning_outcomes
+                if item.id.value == command.learning_outcome_id
+            ),
+            None,
+        )
+        if outcome is None:
+            return None
+        if command.description is not None:
+            outcome.update_description(
+                LearningOutcomeDescription(command.description)
+            )
+        await self.repository.save(course, tenant_id=command.tenant_id)
+        return outcome
 
 
 class UpdateCourseHandler:

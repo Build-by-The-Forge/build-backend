@@ -3,6 +3,8 @@ from collections.abc import AsyncIterator
 from app.application.catalogue.commands import (
     CreateCourseCommand,
     CreateTopicCommand,
+    CreateLearningOutcomeCommand,
+    UpdateLearningOutcomeCommand,
     UpdateTopicCommand,
 )
 from app.application.catalogue.handlers import (
@@ -12,6 +14,8 @@ from app.application.catalogue.handlers import (
     UpdateTopicHandler,
     UpdateCourseHandler,
     CreateTopicHandler,
+    CreateLearningOutcomeHandler,
+    UpdateLearningOutcomeHandler,
 )
 from app.application.catalogue.commands import UpdateCourseCommand
 from app.domain.repositories.course import CourseRepository
@@ -80,6 +84,12 @@ class CourseService:
                 return await uow.courses.get_by_id(course_id, tenant_id=tenant_id)
 
         return await self.repository.get_by_id(course_id, tenant_id=tenant_id)
+
+    async def get_course_by_topic(self, topic_id: str, tenant_id: str | None = None):
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.get_by_topic_id(topic_id, tenant_id=tenant_id)
+        return await self.repository.get_by_topic_id(topic_id, tenant_id=tenant_id)
 
     async def update_course(
         self,
@@ -170,4 +180,67 @@ class CourseService:
                     topic.publish()
                 await uow.courses.save(course, tenant_id=tenant_id)
                 return topic
+        return None
+
+    async def create_learning_outcome(
+        self,
+        topic_id: str,
+        sequence: int,
+        description: str,
+        tenant_id: str | None = None,
+    ):
+        command = CreateLearningOutcomeCommand(
+            topic_id=topic_id,
+            sequence=sequence,
+            description=description,
+            tenant_id=tenant_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await CreateLearningOutcomeHandler(uow.courses).handle(command)
+        return await CreateLearningOutcomeHandler(self.repository).handle(command)
+
+    async def update_learning_outcome(
+        self,
+        learning_outcome_id: str,
+        description: str | None = None,
+        tenant_id: str | None = None,
+    ):
+        command = UpdateLearningOutcomeCommand(
+            learning_outcome_id=learning_outcome_id,
+            description=description,
+            tenant_id=tenant_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await UpdateLearningOutcomeHandler(uow.courses).handle(command)
+        return await UpdateLearningOutcomeHandler(self.repository).handle(command)
+
+    async def transition_learning_outcome(
+        self, learning_outcome_id: str, tenant_id: str, transition: str
+    ):
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                course = await uow.courses.get_by_learning_outcome_id(
+                    learning_outcome_id, tenant_id
+                )
+                if course is None:
+                    return None
+                outcome = next(
+                    (
+                        item
+                        for topic in course.topics
+                        for item in topic.learning_outcomes
+                        if item.id.value == learning_outcome_id
+                    ),
+                    None,
+                )
+                if outcome is None:
+                    return None
+                if transition == "archive":
+                    outcome.archive()
+                else:
+                    outcome.publish()
+                await uow.courses.save(course, tenant_id=tenant_id)
+                return outcome
         return None

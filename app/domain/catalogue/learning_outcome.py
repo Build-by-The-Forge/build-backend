@@ -71,6 +71,18 @@ class LearningOutcome:
             )
         )
 
+    def update_description(self, description: LearningOutcomeDescription) -> None:
+        if description == self.description:
+            return
+        self.description = description
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="learning_outcome.updated",
+                payload={"learning_outcome_id": self.id.value},
+            )
+        )
+
     def publish(self) -> None:
         if self.status == LearningOutcomeStatus.ACTIVE:
             return
