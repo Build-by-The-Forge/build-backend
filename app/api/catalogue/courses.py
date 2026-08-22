@@ -6,6 +6,8 @@ from app.api.catalogue.schemas import (
     CreateCourseRequest,
     CourseResponse,
     UpdateCourseRequest,
+    CreateTopicRequest,
+    UpdateTopicRequest,
 )
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
@@ -241,6 +243,144 @@ async def _transition_course(
                 "id": course.id.value,
                 "status": course.status.value,
             },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.post("/{course_id}/topics", status_code=status.HTTP_201_CREATED)
+async def create_topic(
+    course_id: str,
+    request: Request,
+    payload: CreateTopicRequest,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_CREATE)
+    ),
+) -> JSONResponse:
+    topic = await service.create_topic(
+        course_id=course_id,
+        title=payload.title,
+        slug=payload.slug,
+        description=payload.description,
+        sequence=payload.sequence,
+        tenant_id=context.tenant_id,
+    )
+    if topic is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+            "success": True,
+            "data": {
+                "id": topic.id.value,
+                "course_id": topic.course_id.value,
+                "title": topic.title.value,
+                "slug": topic.slug.value,
+                "description": (
+                    topic.description.value if topic.description is not None else None
+                ),
+                "sequence": topic.sequence.value,
+                "status": topic.status.value,
+            },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.get("/{course_id}/topics", status_code=status.HTTP_200_OK)
+async def list_topics(
+    course_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_READ)
+    ),
+) -> JSONResponse:
+    course = await service.get_course(course_id, tenant_id=context.tenant_id)
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": [
+                {
+                    "id": topic.id.value,
+                    "course_id": topic.course_id.value,
+                    "title": topic.title.value,
+                    "slug": topic.slug.value,
+                    "description": (
+                        topic.description.value if topic.description is not None else None
+                    ),
+                    "sequence": topic.sequence.value,
+                    "status": topic.status.value,
+                }
+                for topic in course.topics
+            ],
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.patch("/topics/{topic_id}", status_code=status.HTTP_200_OK)
+async def update_topic(
+    topic_id: str,
+    request: Request,
+    payload: UpdateTopicRequest,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_UPDATE)
+    ),
+) -> JSONResponse:
+    topic = await service.update_topic(
+        topic_id=topic_id,
+        tenant_id=context.tenant_id,
+        title=payload.title,
+        description=payload.description,
+    )
+    if topic is None:
+        raise HTTPException(status_code=404, detail="topic not found")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {
+                "id": topic.id.value,
+                "course_id": topic.course_id.value,
+                "title": topic.title.value,
+                "slug": topic.slug.value,
+                "description": topic.description.value if topic.description else None,
+                "sequence": topic.sequence.value,
+                "status": topic.status.value,
+            },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.post("/topics/{topic_id}/archive", status_code=status.HTTP_200_OK)
+async def archive_topic(
+    topic_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_ARCHIVE)
+    ),
+) -> JSONResponse:
+    topic = await service.transition_topic(topic_id, context.tenant_id, "archive")
+    if topic is None:
+        raise HTTPException(status_code=404, detail="topic not found")
+    return JSONResponse(
+        status_code=200,
+        content={
+            "success": True,
+            "data": {"id": topic.id.value, "status": topic.status.value},
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },

@@ -20,3 +20,21 @@ class UpdateCourseCommand:
     title: str | None = None
     description: str | None = None
     tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class CreateTopicCommand:
+    course_id: str
+    title: str
+    slug: str
+    description: str | None = None
+    sequence: int = 1
+    tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class UpdateTopicCommand:
+    topic_id: str
+    title: str | None = None
+    description: str | None = None
+    tenant_id: str | None = None

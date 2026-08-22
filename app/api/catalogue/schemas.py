@@ -32,3 +32,19 @@ class UpdateCourseRequest(BaseModel):
 
     title: str | None = None
     description: str | None = None
+
+
+class CreateTopicRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    slug: str
+    description: str | None = None
+    sequence: int = 1
+
+
+class UpdateTopicRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    description: str | None = None

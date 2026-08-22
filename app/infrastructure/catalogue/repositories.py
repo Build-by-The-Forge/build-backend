@@ -67,3 +67,21 @@ class SqlAlchemyCourseRepository(CourseRepository):
         )
         result = await self._session.scalars(statement)
         return [course_to_domain(c) for c in result.all()]
+
+    async def get_by_topic_id(
+        self, topic_id: str, tenant_id: str | None = None
+    ) -> Course | None:
+        statement = (
+            select(CourseModel)
+            .join(TopicModel, TopicModel.course_id == CourseModel.id)
+            .where(TopicModel.id == topic_id)
+        )
+        if tenant_id is not None:
+            statement = statement.where(CourseModel.tenant_id == tenant_id)
+        statement = statement.options(
+            selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
+            selectinload(CourseModel.reference_materials),
+        )
+        result = await self._session.scalars(statement)
+        model = result.first()
+        return course_to_domain(model) if model is not None else None

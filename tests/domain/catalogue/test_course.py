@@ -11,6 +11,8 @@ from app.domain.catalogue.value_objects import (
     CourseSlug,
     CourseTitle,
     DepartmentId,
+    TopicSlug,
+    TopicTitle,
 )
 
 
@@ -116,3 +118,25 @@ def test_course_add_topic_references_event() -> None:
     events = course.pull_events()
     assert events[0].event_type == "course.topic_added"
     assert events[0].payload["topic_id"] == topic.id.value
+
+
+def test_course_rejects_topic_from_another_course() -> None:
+    course = Course.create(
+        department_id=DepartmentId(""),
+        code=CourseCode("CSC101"),
+        title=CourseTitle("Introduction to Computer Science"),
+        slug=CourseSlug("introduction-to-computer-science"),
+        credit_units=CourseCreditUnits(3),
+        level=CourseLevel(100),
+        semester=CourseSemester(1),
+    )
+    from app.domain.catalogue.topic import Topic
+
+    topic = Topic.create(
+        course_id=CourseId("other-course"),
+        title=TopicTitle("Unused Topic"),
+        slug=TopicSlug("unused-topic"),
+    )
+
+    with pytest.raises(ValueError, match="course_id"):
+        course.add_topic(topic)
