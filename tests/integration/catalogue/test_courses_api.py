@@ -24,7 +24,7 @@ async def test_create_course_api(client, session):
     tenant = TenantModel(
         id=tenant_id,
         name="Test Tenant",
-        slug="t",
+        slug="test-tenant",
         created_at=now,
         updated_at=now,
         status="active",
@@ -33,7 +33,7 @@ async def test_create_course_api(client, session):
         id=faculty_id,
         tenant_id=tenant_id,
         name="Test Faculty",
-        slug="f",
+        slug="test-faculty",
         created_at=now,
         updated_at=now,
         status="active",
@@ -43,7 +43,7 @@ async def test_create_course_api(client, session):
         tenant_id=tenant_id,
         faculty_id=faculty_id,
         name="Test Department",
-        slug="d",
+        slug="test-department",
         code="DPT",
         created_at=now,
         updated_at=now,
@@ -80,7 +80,7 @@ async def test_create_course_api(client, session):
             TenantModel(
                 id=tenant_id,
                 name="Test Tenant",
-                slug="t",
+                slug="test-tenant",
                 created_at=now,
                 updated_at=now,
                 status="active",
@@ -91,7 +91,7 @@ async def test_create_course_api(client, session):
                 id=faculty_id,
                 tenant_id=tenant_id,
                 name="Test Faculty",
-                slug="f",
+                slug="test-faculty",
                 created_at=now,
                 updated_at=now,
                 status="active",
@@ -103,7 +103,7 @@ async def test_create_course_api(client, session):
                 tenant_id=tenant_id,
                 faculty_id=faculty_id,
                 name="Test Department",
-                slug="d",
+                slug="test-department",
                 code="DPT",
                 created_at=now,
                 updated_at=now,
@@ -127,7 +127,7 @@ async def test_create_course_api(client, session):
         "/catalogue/courses/",
         headers={
             "Authorization": f"Bearer {access_token}",
-            "X-Tenant-Slug": "t",
+            "X-Tenant-Slug": "test-tenant",
         },
         json=payload,
     )
@@ -142,7 +142,7 @@ async def test_create_course_api(client, session):
         "/catalogue/courses/?department_id=%s" % department_id,
         headers={
             "Authorization": f"Bearer {access_token}",
-            "X-Tenant-Slug": "t",
+            "X-Tenant-Slug": "test-tenant",
         },
     )
     assert resp2.status_code == 200
