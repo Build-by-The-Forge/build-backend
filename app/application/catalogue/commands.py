@@ -12,3 +12,11 @@ class CreateCourseCommand:
     semester: int
     description: str | None = None
     tenant_id: str | None = None
+
+
+@dataclass(slots=True)
+class UpdateCourseCommand:
+    course_id: str
+    title: str | None = None
+    description: str | None = None
+    tenant_id: str | None = None

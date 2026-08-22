@@ -72,6 +72,25 @@ def test_course_archive_twice_raises() -> None:
         course.archive()
 
 
+def test_course_update_details_emits_event() -> None:
+    course = Course.create(
+        department_id=DepartmentId(""),
+        code=CourseCode("CSC101"),
+        title=CourseTitle("Introduction to Computer Science"),
+        slug=CourseSlug("introduction-to-computer-science"),
+        credit_units=CourseCreditUnits(3),
+        level=CourseLevel(100),
+        semester=CourseSemester(1),
+    )
+    course.pull_events()
+
+    course.update_details(CourseTitle("Updated Course Title"), "Updated description")
+
+    assert course.title.value == "Updated Course Title"
+    assert course.description == "Updated description"
+    assert course.pull_events()[0].event_type == "course.updated"
+
+
 def test_course_add_topic_references_event() -> None:
     course = Course.create(
         department_id=DepartmentId(""),

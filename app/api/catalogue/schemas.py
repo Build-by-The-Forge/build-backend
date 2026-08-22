@@ -25,3 +25,10 @@ class CourseResponse(BaseModel):
     semester: int
     status: str
     description: str | None = None
+
+
+class UpdateCourseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    description: str | None = None

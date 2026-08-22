@@ -1,7 +1,13 @@
 from collections.abc import AsyncIterator
 
 from app.application.catalogue.commands import CreateCourseCommand
-from app.application.catalogue.handlers import CreateCourseHandler, ListCoursesHandler
+from app.application.catalogue.handlers import (
+    CreateCourseHandler,
+    ListCoursesHandler,
+    TransitionCourseHandler,
+    UpdateCourseHandler,
+)
+from app.application.catalogue.commands import UpdateCourseCommand
 from app.domain.repositories.course import CourseRepository
 
 AsyncUnitOfWorkFactory = AsyncIterator[object]
@@ -68,3 +74,33 @@ class CourseService:
                 return await uow.courses.get_by_id(course_id, tenant_id=tenant_id)
 
         return await self.repository.get_by_id(course_id, tenant_id=tenant_id)
+
+    async def update_course(
+        self,
+        course_id: str,
+        tenant_id: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+    ):
+        command = UpdateCourseCommand(
+            course_id=course_id,
+            title=title,
+            description=description,
+            tenant_id=tenant_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await UpdateCourseHandler(uow.courses).handle(command)
+        return await UpdateCourseHandler(self.repository).handle(command)
+
+    async def transition_course(
+        self, course_id: str, tenant_id: str | None, transition: str
+    ):
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await TransitionCourseHandler(uow.courses).handle(
+                    course_id, tenant_id, transition
+                )
+        return await TransitionCourseHandler(self.repository).handle(
+            course_id, tenant_id, transition
+        )

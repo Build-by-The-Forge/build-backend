@@ -1,4 +1,4 @@
-from app.application.catalogue.commands import CreateCourseCommand
+from app.application.catalogue.commands import CreateCourseCommand, UpdateCourseCommand
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.value_objects import (
     CourseCode,
@@ -42,3 +42,37 @@ class ListCoursesHandler:
                 department_id, tenant_id=tenant_id
             )
         return await self.repository.list_all(tenant_id=tenant_id)
+
+
+class UpdateCourseHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(self, command: UpdateCourseCommand) -> Course | None:
+        course = await self.repository.get_by_id(
+            command.course_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        course.update_details(
+            title=CourseTitle(command.title) if command.title is not None else None,
+            description=command.description,
+        )
+        return await self.repository.save(course, tenant_id=command.tenant_id)
+
+
+class TransitionCourseHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(
+        self, course_id: str, tenant_id: str | None, transition: str
+    ) -> Course | None:
+        course = await self.repository.get_by_id(course_id, tenant_id=tenant_id)
+        if course is None:
+            return None
+        if transition == "publish":
+            course.publish()
+        else:
+            course.archive()
+        return await self.repository.save(course, tenant_id=tenant_id)

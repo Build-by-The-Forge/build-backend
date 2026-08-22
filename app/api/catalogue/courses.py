@@ -2,7 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.application.catalogue.course_service import CourseService
-from app.api.catalogue.schemas import CreateCourseRequest, CourseResponse
+from app.api.catalogue.schemas import (
+    CreateCourseRequest,
+    CourseResponse,
+    UpdateCourseRequest,
+)
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
@@ -147,6 +151,96 @@ async def create_course(
         content={
             "success": True,
             "data": response.dict(),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.patch("/{course_id}", status_code=status.HTTP_200_OK)
+async def update_course(
+    course_id: str,
+    request: Request,
+    payload: UpdateCourseRequest,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_UPDATE)
+    ),
+) -> JSONResponse:
+    course = await service.update_course(
+        course_id=course_id,
+        tenant_id=context.tenant_id,
+        title=payload.title,
+        description=payload.description,
+    )
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": CourseResponse(
+                id=course.id.value,
+                department_id=course.department_id.value,
+                code=course.code.value,
+                title=course.title.value,
+                slug=course.slug.value,
+                credit_units=course.credit_units.value,
+                level=course.level.value,
+                semester=course.semester.value,
+                status=course.status.value,
+                description=course.description,
+            ).model_dump(),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.post("/{course_id}/publish", status_code=status.HTTP_200_OK)
+async def publish_course(
+    course_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_PUBLISH)
+    ),
+) -> JSONResponse:
+    return await _transition_course(course_id, request, context, "publish")
+
+
+@router.post("/{course_id}/archive", status_code=status.HTTP_200_OK)
+async def archive_course(
+    course_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CATALOGUE_ARCHIVE)
+    ),
+) -> JSONResponse:
+    return await _transition_course(course_id, request, context, "archive")
+
+
+async def _transition_course(
+    course_id: str,
+    request: Request,
+    context: TenantContext,
+    transition: str,
+) -> JSONResponse:
+    course = await service.transition_course(
+        course_id, context.tenant_id, transition
+    )
+    if course is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "id": course.id.value,
+                "status": course.status.value,
+            },
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
