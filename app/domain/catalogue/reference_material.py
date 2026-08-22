@@ -75,6 +75,32 @@ class ReferenceMaterial:
             )
         )
 
+    def update_details(
+        self,
+        title: ReferenceMaterialTitle | None = None,
+        material_type: ReferenceMaterialType | None = None,
+        url: ReferenceMaterialUrl | None = None,
+    ) -> None:
+        changed = False
+        if title is not None and title != self.title:
+            self.title = title
+            changed = True
+        if material_type is not None and material_type != self.material_type:
+            self.material_type = material_type
+            changed = True
+        if url is not None and url != self.url:
+            self.url = url
+            changed = True
+        if not changed:
+            return
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="reference_material.updated",
+                payload={"reference_material_id": self.id.value},
+            )
+        )
+
     def publish(self) -> None:
         if self.status == ReferenceMaterialStatus.ACTIVE:
             return

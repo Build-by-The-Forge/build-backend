@@ -54,3 +54,23 @@ def test_reference_material_archive_twice_raises() -> None:
 
     with pytest.raises(ReferenceMaterialAlreadyArchivedError):
         reference.archive()
+
+
+def test_reference_material_update_details_emits_event() -> None:
+    reference = ReferenceMaterial.create(
+        course_id=CourseId("course-1"),
+        title=ReferenceMaterialTitle("Pattern Recognition and Machine Learning"),
+        material_type=ReferenceMaterialType.BOOK,
+        url=ReferenceMaterialUrl("https://example.com/book"),
+    )
+    reference.pull_events()
+
+    reference.update_details(
+        title=ReferenceMaterialTitle("Updated Machine Learning Handbook"),
+        url=ReferenceMaterialUrl("https://example.com/updated"),
+    )
+
+    assert reference.title.value == "Updated Machine Learning Handbook"
+    assert reference.url is not None
+    assert reference.url.value == "https://example.com/updated"
+    assert reference.pull_events()[0].event_type == "reference_material.updated"
