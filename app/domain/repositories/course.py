@@ -15,3 +15,8 @@ class CourseRepository(Protocol):
 
     async def list_all(self, tenant_id: str | None = None) -> list[Course]:
         raise NotImplementedError
+
+    async def get_by_topic_id(
+        self, topic_id: str, tenant_id: str | None = None
+    ) -> Course | None:
+        raise NotImplementedError

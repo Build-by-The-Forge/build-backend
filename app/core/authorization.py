@@ -8,12 +8,17 @@ class Permission(StrEnum):
     CATALOGUE_CREATE = "catalogue.create"
     CATALOGUE_UPDATE = "catalogue.update"
     CATALOGUE_ARCHIVE = "catalogue.archive"
+    CATALOGUE_PUBLISH = "catalogue.publish"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
     "student": frozenset({Permission.CATALOGUE_READ}),
     "lecturer": frozenset(
-        {Permission.CATALOGUE_READ, Permission.CATALOGUE_CREATE}
+        {
+            Permission.CATALOGUE_READ,
+            Permission.CATALOGUE_CREATE,
+            Permission.CATALOGUE_UPDATE,
+        }
     ),
     "hod": frozenset(
         {
@@ -28,6 +33,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CATALOGUE_CREATE,
             Permission.CATALOGUE_UPDATE,
             Permission.CATALOGUE_ARCHIVE,
+            Permission.CATALOGUE_PUBLISH,
         }
     ),
     "admin": frozenset(Permission),

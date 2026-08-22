@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class CreateCourseRequest(BaseModel):
-    tenant_id: str | None = Field(default=None)
+    model_config = ConfigDict(extra="forbid")
+
     department_id: str
     code: str
     title: str
@@ -23,4 +24,27 @@ class CourseResponse(BaseModel):
     level: int
     semester: int
     status: str
+    description: str | None = None
+
+
+class UpdateCourseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    description: str | None = None
+
+
+class CreateTopicRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    slug: str
+    description: str | None = None
+    sequence: int = 1
+
+
+class UpdateTopicRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
     description: str | None = None

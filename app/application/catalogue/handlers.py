@@ -1,5 +1,11 @@
-from app.application.catalogue.commands import CreateCourseCommand
+from app.application.catalogue.commands import (
+    CreateCourseCommand,
+    CreateTopicCommand,
+    UpdateTopicCommand,
+    UpdateCourseCommand,
+)
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -8,6 +14,10 @@ from app.domain.catalogue.value_objects import (
     CourseSlug,
     CourseTitle,
     DepartmentId,
+    TopicDescription,
+    TopicSequence,
+    TopicSlug,
+    TopicTitle,
 )
 from app.domain.repositories.course import CourseRepository
 
@@ -34,7 +44,100 @@ class ListCoursesHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(self, department_id: str | None = None) -> list[Course]:
+    async def handle(
+        self, department_id: str | None = None, tenant_id: str | None = None
+    ) -> list[Course]:
         if department_id:
-            return await self.repository.list_by_department(department_id)
-        return await self.repository.list_all()
+            return await self.repository.list_by_department(
+                department_id, tenant_id=tenant_id
+            )
+        return await self.repository.list_all(tenant_id=tenant_id)
+
+
+class CreateTopicHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(self, command: CreateTopicCommand) -> Topic | None:
+        course = await self.repository.get_by_id(
+            command.course_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+
+        topic = Topic.create(
+            course_id=course.id,
+            title=TopicTitle(command.title),
+            slug=TopicSlug(command.slug),
+            description=(
+                TopicDescription(command.description)
+                if command.description is not None
+                else None
+            ),
+            sequence=TopicSequence(command.sequence),
+        )
+        course.add_topic(topic)
+        await self.repository.save(course, tenant_id=command.tenant_id)
+        return topic
+
+
+class UpdateTopicHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(self, command: UpdateTopicCommand) -> Topic | None:
+        course = await self.repository.get_by_topic_id(
+            command.topic_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        topic = next(
+            (candidate for candidate in course.topics if candidate.id.value == command.topic_id),
+            None,
+        )
+        if topic is None:
+            return None
+        topic.update_details(
+            title=TopicTitle(command.title) if command.title is not None else None,
+            description=(
+                TopicDescription(command.description)
+                if command.description is not None
+                else None
+            ),
+        )
+        await self.repository.save(course, tenant_id=command.tenant_id)
+        return topic
+
+
+class UpdateCourseHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(self, command: UpdateCourseCommand) -> Course | None:
+        course = await self.repository.get_by_id(
+            command.course_id, tenant_id=command.tenant_id
+        )
+        if course is None:
+            return None
+        course.update_details(
+            title=CourseTitle(command.title) if command.title is not None else None,
+            description=command.description,
+        )
+        return await self.repository.save(course, tenant_id=command.tenant_id)
+
+
+class TransitionCourseHandler:
+    def __init__(self, repository: CourseRepository) -> None:
+        self.repository = repository
+
+    async def handle(
+        self, course_id: str, tenant_id: str | None, transition: str
+    ) -> Course | None:
+        course = await self.repository.get_by_id(course_id, tenant_id=tenant_id)
+        if course is None:
+            return None
+        if transition == "publish":
+            course.publish()
+        else:
+            course.archive()
+        return await self.repository.save(course, tenant_id=tenant_id)

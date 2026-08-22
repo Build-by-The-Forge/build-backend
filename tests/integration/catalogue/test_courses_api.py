@@ -2,6 +2,8 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from app.db.session import SessionLocal
+from app.infrastructure.db.models.tenant_core import MembershipModel
 
 from app.infrastructure.db.models.tenant_core import (
     TenantModel,
@@ -21,8 +23,8 @@ async def test_create_course_api(client, session):
 
     tenant = TenantModel(
         id=tenant_id,
-        name="T",
-        slug="t",
+        name="Test Tenant",
+        slug="test-tenant",
         created_at=now,
         updated_at=now,
         status="active",
@@ -30,8 +32,8 @@ async def test_create_course_api(client, session):
     faculty = FacultyModel(
         id=faculty_id,
         tenant_id=tenant_id,
-        name="F",
-        slug="f",
+        name="Test Faculty",
+        slug="test-faculty",
         created_at=now,
         updated_at=now,
         status="active",
@@ -40,8 +42,8 @@ async def test_create_course_api(client, session):
         id=department_id,
         tenant_id=tenant_id,
         faculty_id=faculty_id,
-        name="D",
-        slug="d",
+        name="Test Department",
+        slug="test-department",
         code="DPT",
         created_at=now,
         updated_at=now,
@@ -52,7 +54,6 @@ async def test_create_course_api(client, session):
     await session.flush()
 
     payload = {
-        "tenant_id": tenant_id,
         "department_id": department_id,
         "code": "CS201",
         "title": "Algorithms",
@@ -63,15 +64,87 @@ async def test_create_course_api(client, session):
         "description": "Intro to algorithms",
     }
 
-    resp = client.post("/catalogue/courses/", json=payload)
+    auth_payload = {
+        "email": f"catalogue-{uuid.uuid4()}@example.com",
+        "password": "StrongPass123!",
+    }
+    registered = client.post("/identity/users", json=auth_payload)
+    assert registered.status_code == 201
+    user_id = registered.json()["data"]["id"]
+    authenticated = client.post("/identity/authenticate", json=auth_payload)
+    assert authenticated.status_code == 200
+    access_token = authenticated.json()["data"]["access_token"]
+
+    async with SessionLocal() as app_session:
+        app_session.add(
+            TenantModel(
+                id=tenant_id,
+                name="Test Tenant",
+                slug="test-tenant",
+                created_at=now,
+                updated_at=now,
+                status="active",
+            )
+        )
+        app_session.add(
+            FacultyModel(
+                id=faculty_id,
+                tenant_id=tenant_id,
+                name="Test Faculty",
+                slug="test-faculty",
+                created_at=now,
+                updated_at=now,
+                status="active",
+            )
+        )
+        app_session.add(
+            DepartmentModel(
+                id=department_id,
+                tenant_id=tenant_id,
+                faculty_id=faculty_id,
+                name="Test Department",
+                slug="test-department",
+                code="DPT",
+                created_at=now,
+                updated_at=now,
+                status="active",
+            )
+        )
+        app_session.add(
+            MembershipModel(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant_id,
+                user_id=user_id,
+                role="lecturer",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await app_session.commit()
+
+    resp = client.post(
+        "/catalogue/courses/",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Tenant-Slug": "test-tenant",
+        },
+        json=payload,
+    )
     assert resp.status_code == 201
     data = resp.json()
     assert data["success"] is True
     created = data["data"]
     assert created["code"] == payload["code"]
 
-    # list via GET
-    resp2 = client.get("/catalogue/courses/?department_id=%s" % department_id)
+    # list via GET within the authenticated tenant context
+    resp2 = client.get(
+        "/catalogue/courses/?department_id=%s" % department_id,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "X-Tenant-Slug": "test-tenant",
+        },
+    )
     assert resp2.status_code == 200
     data2 = resp2.json()
     assert any(c["code"] == payload["code"] for c in data2["data"]) 

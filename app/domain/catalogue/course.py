@@ -95,6 +95,24 @@ class Course:
             )
         )
 
+    def update_details(self, title: CourseTitle | None, description: str | None) -> None:
+        changed = False
+        if title is not None and title != self.title:
+            self.title = title
+            changed = True
+        if description is not None and description != self.description:
+            self.description = description
+            changed = True
+        if not changed:
+            return
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="course.updated",
+                payload={"course_id": self.id.value},
+            )
+        )
+
     def publish(self) -> None:
         if self.status == CourseStatus.ACTIVE:
             return

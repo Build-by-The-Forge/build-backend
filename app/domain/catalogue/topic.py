@@ -85,6 +85,26 @@ class Topic:
             )
         )
 
+    def update_details(
+        self, title: TopicTitle | None, description: TopicDescription | None
+    ) -> None:
+        changed = False
+        if title is not None and title != self.title:
+            self.title = title
+            changed = True
+        if description is not None and description != self.description:
+            self.description = description
+            changed = True
+        if not changed:
+            return
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="topic.updated",
+                payload={"topic_id": self.id.value},
+            )
+        )
+
     def publish(self) -> None:
         if self.status == TopicStatus.ACTIVE:
             return
