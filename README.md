@@ -386,7 +386,9 @@ tests/                    # Domain, integration, and foundation tests
 - [Architecture](docs/architecture.md)
 - [Academic knowledge model](docs/architecture/academic-knowledge-model.md)
 - [Academic catalogue specification](docs/architecture/academic-catalogue-specification.md)
-- [Architecture decision records](docs/architecture/adr/)
+- [Assessment Core design](docs/architecture/assessment-core.md)
+- [Architecture decision records](docs/adr/)
+- [Assessment Core ADR](docs/adr/007-assessment-core.md)
 - [Catalogue event contracts](docs/events/catalogue-events.md)
 - [Module template](docs/module-template.md)
 
