@@ -95,6 +95,8 @@ class Question:
             status=QuestionStatus.DRAFT,
             options=normalized_options,
         )
+        for option in question.options:
+            option.question_id = question.id
         question._events.append(
             DomainEvent(
                 event_type="question.created",

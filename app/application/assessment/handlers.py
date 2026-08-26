@@ -12,6 +12,7 @@ from app.domain.assessment.value_objects import (
     Difficulty,
     QuestionDisplayOrder,
     QuestionExplanation,
+    QuestionId,
     QuestionMarks,
     QuestionOptionId,
     QuestionOptionText,
@@ -59,7 +60,7 @@ class CreateQuestionHandler:
             options.append(
                 QuestionOption(
                     id=QuestionOptionId(""),
-                    question_id=None,  # type: ignore[arg-type]
+                    question_id=QuestionId(""),
                     text=QuestionOptionText(str(option_text)),
                     display_order=QuestionDisplayOrder(int(display_order)),
                     is_correct=is_correct,

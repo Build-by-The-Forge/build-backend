@@ -26,7 +26,8 @@ def question_option_to_model(
     if model is None:
         model = QuestionOptionModel(id=option.id.value)
 
-    model.question_id = option.question_id.value
+    if option.question_id is not None:
+        model.question_id = option.question_id.value
     model.text = option.text.value
     model.display_order = int(option.display_order.value)
     model.is_correct = option.is_correct
