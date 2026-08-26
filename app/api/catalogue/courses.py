@@ -108,7 +108,7 @@ async def get_course(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": response.dict(),
+            "data": response.model_dump(),
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
@@ -163,7 +163,7 @@ async def create_course(
         status_code=status.HTTP_201_CREATED,
         content={
             "success": True,
-            "data": response.dict(),
+            "data": response.model_dump(),
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
