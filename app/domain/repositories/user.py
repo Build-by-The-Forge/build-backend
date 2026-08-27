@@ -1,15 +1,17 @@
 from datetime import datetime
 from typing import Protocol
 
+from app.domain.identity.user import User
+
 
 class UserRepository(Protocol):
-    async def save(self, user: object) -> object:
+    async def save(self, user: User) -> User:
         raise NotImplementedError
 
-    async def get_by_email(self, email: str) -> object | None:
+    async def get_by_email(self, email: str) -> User | None:
         raise NotImplementedError
 
-    async def get_by_id(self, user_id: str) -> object | None:
+    async def get_by_id(self, user_id: str) -> User | None:
         raise NotImplementedError
 
     async def exists_by_email(self, email: str) -> bool:

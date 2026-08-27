@@ -6,6 +6,12 @@ requests_total = Counter(
     "Total number of requests processed by the backend",
     registry=registry,
 )
+errors_total = Counter(
+    "build_backend_errors_total",
+    "Total number of failed requests handled by the backend",
+    ["error_type"],
+    registry=registry,
+)
 
 
 def metrics_payload() -> bytes:

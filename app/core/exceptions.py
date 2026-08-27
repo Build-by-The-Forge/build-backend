@@ -1,6 +1,12 @@
 from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+import structlog
+
+from app.core.metrics import errors_total
+
+
+logger = structlog.get_logger(__name__)
 
 
 class AppError(Exception):
@@ -19,6 +25,13 @@ class NotFoundError(AppError):
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
+    errors_total.labels(error_type="HTTPException").inc()
+    logger.warning(
+        "http_exception",
+        request_id=request_id,
+        status_code=exc.status_code,
+        path=request.url.path,
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -34,6 +47,12 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
+    errors_total.labels(error_type="RequestValidationError").inc()
+    logger.warning(
+        "request_validation_failed",
+        request_id=request_id,
+        path=request.url.path,
+    )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
@@ -47,6 +66,13 @@ async def validation_exception_handler(
 
 async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
+    errors_total.labels(error_type=type(exc).__name__).inc()
+    logger.warning(
+        "application_exception",
+        request_id=request_id,
+        status_code=exc.status_code,
+        path=request.url.path,
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={

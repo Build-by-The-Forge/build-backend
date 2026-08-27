@@ -1,5 +1,3 @@
-from collections.abc import AsyncIterator
-
 from app.application.catalogue.commands import (
     CreateCourseCommand,
     CreateLearningOutcomeCommand,
@@ -22,16 +20,14 @@ from app.application.catalogue.handlers import (
     UpdateReferenceMaterialHandler,
     UpdateTopicHandler,
 )
+from app.application.common.uow import CourseUnitOfWorkFactory
 from app.domain.repositories.course import CourseRepository
-
-AsyncUnitOfWorkFactory = AsyncIterator[object]
-
 
 class CourseService:
     def __init__(
         self,
         repository: CourseRepository | None = None,
-        uow_factory: AsyncUnitOfWorkFactory | None = None,
+        uow_factory: CourseUnitOfWorkFactory | None = None,
     ) -> None:
         self.repository = repository
         self.uow_factory = uow_factory

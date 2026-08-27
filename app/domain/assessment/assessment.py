@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
-
 from app.domain.assessment.errors import AssessmentAlreadyArchivedError
+from app.events.base import DomainEvent
 
 
 class AssessmentStatus(str, Enum):
@@ -32,12 +31,6 @@ class AssessmentQuestion:
             raise ValueError("question must contain at least one option")
         if self.marks <= 0:
             raise ValueError("question marks must be positive")
-
-
-@dataclass(slots=True)
-class DomainEvent:
-    event_type: str
-    payload: dict[str, Any] | None = None
 
 
 @dataclass

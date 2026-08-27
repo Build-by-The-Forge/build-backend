@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
-
 from app.domain.assessment.errors import QuestionAlreadyArchivedError
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -17,12 +15,7 @@ from app.domain.assessment.value_objects import (
     QuestionStatus,
     QuestionType,
 )
-
-
-@dataclass(slots=True)
-class DomainEvent:
-    event_type: str
-    payload: dict[str, Any] | None = None
+from app.events.base import DomainEvent
 
 
 @dataclass(slots=True)
