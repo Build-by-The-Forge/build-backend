@@ -1,3 +1,4 @@
+from app.domain.assessment.assessment import Assessment, AssessmentQuestion, AssessmentStatus
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -13,6 +14,9 @@ from app.domain.assessment.value_objects import (
 )
 
 __all__ = [
+    "Assessment",
+    "AssessmentQuestion",
+    "AssessmentStatus",
     "Question",
     "QuestionOption",
     "Difficulty",

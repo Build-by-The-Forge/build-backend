@@ -4,3 +4,7 @@ class QuestionAlreadyArchivedError(Exception):
 
 class QuestionOptionAlreadyArchivedError(Exception):
     pass
+
+
+class AssessmentAlreadyArchivedError(Exception):
+    pass

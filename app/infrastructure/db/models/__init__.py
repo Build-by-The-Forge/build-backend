@@ -1,7 +1,14 @@
 # ensure identity models are also imported for metadata
+import app.infrastructure.db.models.assessment  # noqa: F401
 import app.infrastructure.db.models.catalogue  # noqa: F401
 import app.infrastructure.identity.models  # noqa: F401
 from app.db.base import Base
+from app.infrastructure.db.models.assessment import (
+    AssessmentModel,
+    AssessmentQuestionModel,
+    QuestionModel,
+    QuestionOptionModel,
+)
 from app.infrastructure.db.models.catalogue import (
     CourseModel,
     CoursePrerequisiteModel,
@@ -37,4 +44,8 @@ __all__ = [
     "LearningOutcomeModel",
     "ReferenceMaterialModel",
     "CoursePrerequisiteModel",
+    "AssessmentModel",
+    "AssessmentQuestionModel",
+    "QuestionModel",
+    "QuestionOptionModel",
 ]

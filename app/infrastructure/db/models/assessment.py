@@ -84,3 +84,93 @@ class QuestionOptionModel(Base):
         ),
         Index("ix_option_question_id", "question_id"),
     )
+
+
+class AssessmentModel(Base):
+    __tablename__ = "assessments"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    course_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    passing_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    questions: Mapped[list["AssessmentQuestionModel"]] = relationship(
+        "AssessmentQuestionModel",
+        back_populates="assessment",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AssessmentQuestionModel.sequence",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "course_id",
+            "title",
+            name="uq_assessment_tenant_course_title",
+        ),
+        Index("ix_assessments_tenant_id", "tenant_id"),
+        Index("ix_assessments_course_id", "course_id"),
+        Index("ix_assessments_status", "status"),
+    )
+
+
+class AssessmentQuestionModel(Base):
+    __tablename__ = "assessment_questions"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    assessment_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey("assessments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    question_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    options_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    marks: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    assessment: Mapped["AssessmentModel"] = relationship(
+        "AssessmentModel",
+        back_populates="questions",
+        overlaps="questions",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "assessment_id",
+            "question_id",
+            name="uq_assessment_question",
+        ),
+        Index("ix_assessment_questions_assessment_id", "assessment_id"),
+        Index("ix_assessment_questions_question_id", "question_id"),
+    )

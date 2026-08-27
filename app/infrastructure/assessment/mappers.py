@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+
+from app.domain.assessment.assessment import (
+    Assessment,
+    AssessmentQuestion,
+    AssessmentStatus,
+)
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -14,6 +22,8 @@ from app.domain.assessment.value_objects import (
     QuestionType,
 )
 from app.infrastructure.db.models.assessment import (
+    AssessmentModel,
+    AssessmentQuestionModel,
     QuestionModel,
     QuestionOptionModel,
 )
@@ -96,3 +106,84 @@ def question_model_to_domain(model: QuestionModel) -> Question:
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+
+
+def assessment_question_to_model(
+    question: AssessmentQuestion,
+    *,
+    assessment_id: str,
+    sequence: int,
+    model: AssessmentQuestionModel | None = None,
+) -> AssessmentQuestionModel:
+    if model is None:
+        model = AssessmentQuestionModel(
+            id=f"{assessment_id}-{sequence}-{question.question_id}"
+        )
+
+    model.assessment_id = assessment_id
+    model.sequence = sequence
+    model.question_id = question.question_id
+    model.prompt = question.prompt
+    model.options_json = json.dumps(question.options)
+    model.marks = question.marks
+    model.is_active = True
+    model.updated_at = datetime.now(timezone.utc)
+    return model
+
+
+def assessment_to_model(
+    assessment: Assessment,
+    model: AssessmentModel | None = None,
+) -> AssessmentModel:
+    if model is None:
+        model = AssessmentModel(id=assessment.id)
+
+    model.tenant_id = assessment.tenant_id
+    model.course_id = assessment.course_id
+    model.title = assessment.title
+    model.instructions = assessment.instructions
+    model.duration_minutes = assessment.duration_minutes
+    model.passing_score = assessment.passing_score
+    model.status = assessment.status.value
+    model.created_at = assessment.created_at
+    model.updated_at = assessment.updated_at
+
+    existing_questions = {item.question_id: item for item in model.questions or []}
+    model.questions = [
+        assessment_question_to_model(
+            question,
+            assessment_id=model.id,
+            sequence=index,
+            model=existing_questions.get(question.question_id),
+        )
+        for index, question in enumerate(assessment.questions)
+    ]
+    return model
+
+
+def assessment_question_model_to_domain(model: AssessmentQuestionModel) -> AssessmentQuestion:
+    return AssessmentQuestion(
+        question_id=model.question_id,
+        prompt=model.prompt,
+        options=json.loads(model.options_json),
+        marks=model.marks,
+    )
+
+
+def assessment_model_to_domain(model: AssessmentModel) -> Assessment:
+    assessment = Assessment(
+        tenant_id=model.tenant_id,
+        course_id=model.course_id,
+        title=model.title,
+        instructions=model.instructions,
+        duration_minutes=model.duration_minutes,
+        passing_score=model.passing_score,
+        status=AssessmentStatus(model.status),
+        questions=[
+            assessment_question_model_to_domain(item)
+            for item in (model.questions or [])
+        ],
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+    return assessment
