@@ -1,8 +1,8 @@
-from opentelemetry import trace
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter
 from collections.abc import Sequence
-from opentelemetry.sdk.trace import ReadableSpan
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter
 
 
 class NoOpExporter(SpanExporter):

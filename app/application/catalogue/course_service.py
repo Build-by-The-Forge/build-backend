@@ -23,6 +23,7 @@ from app.application.catalogue.handlers import (
 from app.application.common.uow import CourseUnitOfWorkFactory
 from app.domain.repositories.course import CourseRepository
 
+
 class CourseService:
     def __init__(
         self,

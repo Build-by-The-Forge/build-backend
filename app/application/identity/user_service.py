@@ -1,3 +1,4 @@
+from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.commands import (
     AuthenticateUserCommand,
     ForgotPasswordCommand,
@@ -16,13 +17,13 @@ from app.application.identity.handlers import (
     RegisterUserHandler,
     ResetPasswordHandler,
 )
-from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.domain.identity.user import Session, User
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
+
 
 class UserService:
     def __init__(

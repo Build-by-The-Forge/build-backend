@@ -1,5 +1,6 @@
-from fastapi import Request
 from collections.abc import Awaitable, Callable
+
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 

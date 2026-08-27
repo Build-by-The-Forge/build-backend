@@ -1,5 +1,5 @@
-from collections.abc import AsyncContextManager, Callable
-from typing import Protocol
+from collections.abc import Callable
+from typing import AsyncContextManager, Protocol
 
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.course import CourseRepository
@@ -27,6 +27,4 @@ AssessmentUnitOfWorkFactory = Callable[
     [], AsyncContextManager[AssessmentUnitOfWorkPort]
 ]
 CourseUnitOfWorkFactory = Callable[[], AsyncContextManager[CourseUnitOfWorkPort]]
-IdentityUnitOfWorkFactory = Callable[
-    [], AsyncContextManager[IdentityUnitOfWorkPort]
-]
+IdentityUnitOfWorkFactory = Callable[[], AsyncContextManager[IdentityUnitOfWorkPort]]

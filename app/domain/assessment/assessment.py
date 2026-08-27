@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+
 from app.domain.assessment.errors import AssessmentAlreadyArchivedError
 from app.events.base import DomainEvent
 

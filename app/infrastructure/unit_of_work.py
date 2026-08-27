@@ -2,9 +2,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from types import TracebackType
 
-from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
-
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
 

@@ -1,12 +1,11 @@
 import logging
 
 import pytest
-from fastapi import HTTPException
-from starlette.requests import Request
-
 from app.core.exceptions import http_exception_handler
 from app.core.metrics import metrics_payload
 from app.infrastructure.unit_of_work import UnitOfWork
+from fastapi import HTTPException
+from starlette.requests import Request
 
 
 class FailingSession:

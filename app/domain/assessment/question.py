@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
 from app.domain.assessment.errors import QuestionAlreadyArchivedError
 from app.domain.assessment.value_objects import (
     Difficulty,

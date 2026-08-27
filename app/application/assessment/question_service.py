@@ -22,6 +22,7 @@ from app.domain.repositories.question import QuestionRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
 
+
 class QuestionService:
     def __init__(
         self,

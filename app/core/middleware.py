@@ -1,13 +1,12 @@
 import time
 import uuid
 
-from fastapi import Request
 import structlog
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.core.metrics import errors_total, requests_total
-
 
 logger = structlog.get_logger(__name__)
 
