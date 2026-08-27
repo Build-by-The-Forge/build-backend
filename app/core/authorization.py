@@ -10,6 +10,9 @@ class Permission(StrEnum):
     CATALOGUE_ARCHIVE = "catalogue.archive"
     CATALOGUE_PUBLISH = "catalogue.publish"
     ASSESSMENT_READ = "assessment.read"
+    ASSESSMENT_CREATE = "assessment.create"
+    ASSESSMENT_UPDATE = "assessment.update"
+    ASSESSMENT_PUBLISH = "assessment.publish"
     ASSESSMENT_QUESTION_CREATE = "assessment.question.create"
     ASSESSMENT_QUESTION_UPDATE = "assessment.question.update"
     ASSESSMENT_QUESTION_PUBLISH = "assessment.question.publish"
@@ -24,6 +27,9 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CATALOGUE_CREATE,
             Permission.CATALOGUE_UPDATE,
             Permission.ASSESSMENT_READ,
+            Permission.ASSESSMENT_CREATE,
+            Permission.ASSESSMENT_UPDATE,
+            Permission.ASSESSMENT_PUBLISH,
             Permission.ASSESSMENT_QUESTION_CREATE,
             Permission.ASSESSMENT_QUESTION_UPDATE,
             Permission.ASSESSMENT_QUESTION_PUBLISH,
@@ -36,6 +42,9 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CATALOGUE_CREATE,
             Permission.CATALOGUE_UPDATE,
             Permission.ASSESSMENT_READ,
+            Permission.ASSESSMENT_CREATE,
+            Permission.ASSESSMENT_UPDATE,
+            Permission.ASSESSMENT_PUBLISH,
             Permission.ASSESSMENT_QUESTION_CREATE,
             Permission.ASSESSMENT_QUESTION_UPDATE,
             Permission.ASSESSMENT_QUESTION_PUBLISH,
@@ -50,6 +59,9 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CATALOGUE_ARCHIVE,
             Permission.CATALOGUE_PUBLISH,
             Permission.ASSESSMENT_READ,
+            Permission.ASSESSMENT_CREATE,
+            Permission.ASSESSMENT_UPDATE,
+            Permission.ASSESSMENT_PUBLISH,
             Permission.ASSESSMENT_QUESTION_CREATE,
             Permission.ASSESSMENT_QUESTION_UPDATE,
             Permission.ASSESSMENT_QUESTION_PUBLISH,

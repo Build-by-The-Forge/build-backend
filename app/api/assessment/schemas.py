@@ -49,3 +49,50 @@ class QuestionResponse(BaseModel):
     marks: int
     status: str
     options: list[QuestionOptionResponse]
+
+
+class CreateAssessmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    course_id: str
+    title: str
+    instructions: str
+    duration_minutes: int
+    passing_score: int = 0
+
+
+class UpdateAssessmentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = None
+    instructions: str | None = None
+    duration_minutes: int | None = None
+    passing_score: int | None = None
+
+
+class AssessmentQuestionResponse(BaseModel):
+    question_id: str
+    prompt: str
+    options: list[str]
+    marks: int
+
+
+class AssessmentResponse(BaseModel):
+    id: str
+    tenant_id: str
+    course_id: str
+    title: str
+    instructions: str
+    duration_minutes: int
+    passing_score: int
+    status: str
+    question_count: int
+    questions: list[AssessmentQuestionResponse]
+    created_at: str
+    updated_at: str
+
+
+class AddAssessmentQuestionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_id: str
