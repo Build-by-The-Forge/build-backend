@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.assessment.schemas import (
     CreateQuestionRequest,
+    QuestionOptionResponse,
     QuestionResponse,
     UpdateQuestionRequest,
 )
@@ -70,12 +71,12 @@ async def create_question(
                 marks=question.marks.value,
                 status=question.status.value,
                 options=[
-                    {
-                        "id": option.id.value,
-                        "text": option.text.value,
-                        "display_order": option.display_order.value,
-                        "is_correct": option.is_correct,
-                    }
+                    QuestionOptionResponse(
+                        id=option.id.value,
+                        text=option.text.value,
+                        display_order=option.display_order.value,
+                        is_correct=option.is_correct,
+                    )
                     for option in question.options
                 ],
             ).model_dump(),
@@ -114,12 +115,12 @@ async def get_question(
                 marks=question.marks.value,
                 status=question.status.value,
                 options=[
-                    {
-                        "id": option.id.value,
-                        "text": option.text.value,
-                        "display_order": option.display_order.value,
-                        "is_correct": option.is_correct,
-                    }
+                    QuestionOptionResponse(
+                        id=option.id.value,
+                        text=option.text.value,
+                        display_order=option.display_order.value,
+                        is_correct=option.is_correct,
+                    )
                     for option in question.options
                 ],
             ).model_dump(),
@@ -168,12 +169,12 @@ async def update_question(
                 marks=question.marks.value,
                 status=question.status.value,
                 options=[
-                    {
-                        "id": option.id.value,
-                        "text": option.text.value,
-                        "display_order": option.display_order.value,
-                        "is_correct": option.is_correct,
-                    }
+                    QuestionOptionResponse(
+                        id=option.id.value,
+                        text=option.text.value,
+                        display_order=option.display_order.value,
+                        is_correct=option.is_correct,
+                    )
                     for option in question.options
                 ],
             ).model_dump(),

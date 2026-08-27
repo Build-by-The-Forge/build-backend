@@ -17,6 +17,7 @@ from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
+from app.domain.catalogue.reference_material import ReferenceMaterial
 
 router = APIRouter(prefix="/catalogue/courses", tags=["catalogue"])
 topic_router = APIRouter(prefix="/catalogue/topics", tags=["catalogue"])
@@ -597,7 +598,7 @@ async def archive_reference_material(
     )
 
 
-def _reference_material_payload(material) -> dict[str, object]:
+def _reference_material_payload(material: ReferenceMaterial) -> dict[str, object]:
     return {
         "id": material.id.value,
         "course_id": material.course_id.value,

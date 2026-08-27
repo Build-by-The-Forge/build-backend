@@ -18,6 +18,7 @@ from app.application.assessment.handlers import (
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.question import Question
+from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
@@ -27,7 +28,7 @@ class QuestionService:
     def __init__(
         self,
         repository: QuestionRepository | None = None,
-        catalogue_repository: object | None = None,
+        catalogue_repository: CourseRepository | None = None,
         event_bus: EventBus | None = None,
         uow_factory: AssessmentUnitOfWorkFactory | None = None,
     ) -> None:

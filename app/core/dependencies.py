@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -114,7 +114,9 @@ async def get_current_tenant_context(
     )
 
 
-def require_permission(permission: Permission):
+def require_permission(
+    permission: Permission,
+) -> Callable[..., Awaitable[TenantContext]]:
     async def dependency(
         context: TenantContext = Depends(get_current_tenant_context),
     ) -> TenantContext:

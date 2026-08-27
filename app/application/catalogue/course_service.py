@@ -21,6 +21,10 @@ from app.application.catalogue.handlers import (
     UpdateTopicHandler,
 )
 from app.application.common.uow import CourseUnitOfWorkFactory
+from app.domain.catalogue.course import Course
+from app.domain.catalogue.learning_outcome import LearningOutcome
+from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.topic import Topic
 from app.domain.repositories.course import CourseRepository
 
 
@@ -33,6 +37,11 @@ class CourseService:
         self.repository = repository
         self.uow_factory = uow_factory
 
+    def _repository(self) -> CourseRepository:
+        if self.repository is None:
+            raise ValueError("repository is required")
+        return self.repository
+
     async def create_course(
         self,
         department_id: str,
@@ -44,7 +53,7 @@ class CourseService:
         semester: int,
         description: str | None = None,
         tenant_id: str | None = None,
-    ):
+    ) -> Course:
         command = CreateCourseCommand(
             department_id=department_id,
             code=code,
@@ -61,12 +70,12 @@ class CourseService:
                 handler = CreateCourseHandler(repository=uow.courses)
                 return await handler.handle(command)
 
-        handler = CreateCourseHandler(repository=self.repository)
+        handler = CreateCourseHandler(repository=self._repository())
         return await handler.handle(command)
 
     async def list_courses(
         self, department_id: str | None = None, tenant_id: str | None = None
-    ):
+    ) -> list[Course]:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = ListCoursesHandler(repository=uow.courses)
@@ -74,21 +83,25 @@ class CourseService:
                     department_id=department_id, tenant_id=tenant_id
                 )
 
-        handler = ListCoursesHandler(repository=self.repository)
+        handler = ListCoursesHandler(repository=self._repository())
         return await handler.handle(department_id=department_id, tenant_id=tenant_id)
 
-    async def get_course(self, course_id: str, tenant_id: str | None = None):
+    async def get_course(
+        self, course_id: str, tenant_id: str | None = None
+    ) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await uow.courses.get_by_id(course_id, tenant_id=tenant_id)
 
-        return await self.repository.get_by_id(course_id, tenant_id=tenant_id)
+        return await self._repository().get_by_id(course_id, tenant_id=tenant_id)
 
-    async def get_course_by_topic(self, topic_id: str, tenant_id: str | None = None):
+    async def get_course_by_topic(
+        self, topic_id: str, tenant_id: str | None = None
+    ) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await uow.courses.get_by_topic_id(topic_id, tenant_id=tenant_id)
-        return await self.repository.get_by_topic_id(topic_id, tenant_id=tenant_id)
+        return await self._repository().get_by_topic_id(topic_id, tenant_id=tenant_id)
 
     async def update_course(
         self,
@@ -96,7 +109,7 @@ class CourseService:
         tenant_id: str | None = None,
         title: str | None = None,
         description: str | None = None,
-    ):
+    ) -> Course | None:
         command = UpdateCourseCommand(
             course_id=course_id,
             title=title,
@@ -106,17 +119,17 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await UpdateCourseHandler(uow.courses).handle(command)
-        return await UpdateCourseHandler(self.repository).handle(command)
+        return await UpdateCourseHandler(self._repository()).handle(command)
 
     async def transition_course(
         self, course_id: str, tenant_id: str | None, transition: str
-    ):
+    ) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await TransitionCourseHandler(uow.courses).handle(
                     course_id, tenant_id, transition
                 )
-        return await TransitionCourseHandler(self.repository).handle(
+        return await TransitionCourseHandler(self._repository()).handle(
             course_id, tenant_id, transition
         )
 
@@ -128,7 +141,7 @@ class CourseService:
         description: str | None = None,
         sequence: int = 1,
         tenant_id: str | None = None,
-    ):
+    ) -> Topic | None:
         command = CreateTopicCommand(
             course_id=course_id,
             title=title,
@@ -140,7 +153,7 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await CreateTopicHandler(uow.courses).handle(command)
-        return await CreateTopicHandler(self.repository).handle(command)
+        return await CreateTopicHandler(self._repository()).handle(command)
 
     async def update_topic(
         self,
@@ -148,7 +161,7 @@ class CourseService:
         tenant_id: str | None = None,
         title: str | None = None,
         description: str | None = None,
-    ):
+    ) -> Topic | None:
         command = UpdateTopicCommand(
             topic_id=topic_id,
             title=title,
@@ -158,11 +171,11 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await UpdateTopicHandler(uow.courses).handle(command)
-        return await UpdateTopicHandler(self.repository).handle(command)
+        return await UpdateTopicHandler(self._repository()).handle(command)
 
     async def transition_topic(
         self, topic_id: str, tenant_id: str | None, transition: str
-    ):
+    ) -> Topic | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 course = await uow.courses.get_by_topic_id(topic_id, tenant_id)
@@ -187,7 +200,7 @@ class CourseService:
         sequence: int,
         description: str,
         tenant_id: str | None = None,
-    ):
+    ) -> LearningOutcome | None:
         command = CreateLearningOutcomeCommand(
             topic_id=topic_id,
             sequence=sequence,
@@ -197,14 +210,14 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await CreateLearningOutcomeHandler(uow.courses).handle(command)
-        return await CreateLearningOutcomeHandler(self.repository).handle(command)
+        return await CreateLearningOutcomeHandler(self._repository()).handle(command)
 
     async def update_learning_outcome(
         self,
         learning_outcome_id: str,
         description: str | None = None,
         tenant_id: str | None = None,
-    ):
+    ) -> LearningOutcome | None:
         command = UpdateLearningOutcomeCommand(
             learning_outcome_id=learning_outcome_id,
             description=description,
@@ -213,11 +226,11 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await UpdateLearningOutcomeHandler(uow.courses).handle(command)
-        return await UpdateLearningOutcomeHandler(self.repository).handle(command)
+        return await UpdateLearningOutcomeHandler(self._repository()).handle(command)
 
     async def transition_learning_outcome(
         self, learning_outcome_id: str, tenant_id: str, transition: str
-    ):
+    ) -> LearningOutcome | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 course = await uow.courses.get_by_learning_outcome_id(
@@ -251,7 +264,7 @@ class CourseService:
         material_type: str,
         url: str | None = None,
         tenant_id: str | None = None,
-    ):
+    ) -> ReferenceMaterial | None:
         command = CreateReferenceMaterialCommand(
             topic_id=topic_id,
             title=title,
@@ -262,7 +275,7 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await CreateReferenceMaterialHandler(uow.courses).handle(command)
-        return await CreateReferenceMaterialHandler(self.repository).handle(command)
+        return await CreateReferenceMaterialHandler(self._repository()).handle(command)
 
     async def update_reference_material(
         self,
@@ -271,7 +284,7 @@ class CourseService:
         material_type: str | None = None,
         url: str | None = None,
         tenant_id: str | None = None,
-    ):
+    ) -> ReferenceMaterial | None:
         command = UpdateReferenceMaterialCommand(
             reference_material_id=reference_material_id,
             title=title,
@@ -282,11 +295,11 @@ class CourseService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await UpdateReferenceMaterialHandler(uow.courses).handle(command)
-        return await UpdateReferenceMaterialHandler(self.repository).handle(command)
+        return await UpdateReferenceMaterialHandler(self._repository()).handle(command)
 
     async def transition_reference_material(
         self, reference_material_id: str, tenant_id: str, transition: str
-    ):
+    ) -> ReferenceMaterial | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 course = await uow.courses.get_by_reference_material_id(

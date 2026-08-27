@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from fastapi import Request
+
 
 @dataclass(slots=True)
 class TenantContext:
@@ -7,6 +9,6 @@ class TenantContext:
 
 
 class TenantResolver:
-    def resolve(self, request) -> TenantContext:
+    def resolve(self, request: Request) -> TenantContext:
         tenant_id = getattr(request, "headers", {}).get("x-tenant-id")
         return TenantContext(tenant_id=tenant_id)

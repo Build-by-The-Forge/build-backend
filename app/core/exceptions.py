@@ -22,7 +22,9 @@ class NotFoundError(AppError):
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
 
 
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, HTTPException):
+        raise TypeError("expected HTTPException")
     request_id = getattr(request.state, "request_id", None)
     errors_total.labels(error_type="HTTPException").inc()
     logger.warning(
@@ -43,8 +45,10 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
+    request: Request, exc: Exception
 ) -> JSONResponse:
+    if not isinstance(exc, RequestValidationError):
+        raise TypeError("expected RequestValidationError")
     request_id = getattr(request.state, "request_id", None)
     errors_total.labels(error_type="RequestValidationError").inc()
     logger.warning(
@@ -63,7 +67,9 @@ async def validation_exception_handler(
     )
 
 
-async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
+async def app_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, AppError):
+        raise TypeError("expected AppError")
     request_id = getattr(request.state, "request_id", None)
     errors_total.labels(error_type=type(exc).__name__).inc()
     logger.warning(
