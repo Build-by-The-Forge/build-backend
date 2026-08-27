@@ -134,7 +134,9 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
     async def list_by_course(
         self, course_id: str, tenant_id: str | None = None
     ) -> list[Assessment]:
-        statement = select(AssessmentModel).where(AssessmentModel.course_id == course_id)
+        statement = select(AssessmentModel).where(
+            AssessmentModel.course_id == course_id
+        )
         if tenant_id is not None:
             statement = statement.where(AssessmentModel.tenant_id == tenant_id)
         statement = statement.options(selectinload(AssessmentModel.questions))

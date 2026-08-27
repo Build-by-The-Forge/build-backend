@@ -161,7 +161,9 @@ def assessment_to_model(
     return model
 
 
-def assessment_question_model_to_domain(model: AssessmentQuestionModel) -> AssessmentQuestion:
+def assessment_question_model_to_domain(
+    model: AssessmentQuestionModel,
+) -> AssessmentQuestion:
     return AssessmentQuestion(
         question_id=model.question_id,
         prompt=model.prompt,

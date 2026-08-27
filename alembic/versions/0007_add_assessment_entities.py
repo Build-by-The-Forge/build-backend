@@ -26,7 +26,9 @@ def upgrade() -> None:
         sa.Column("instructions", sa.Text(), nullable=False),
         sa.Column("duration_minutes", sa.Integer(), nullable=False),
         sa.Column("passing_score", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="draft"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="draft"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
@@ -74,8 +76,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_assessment_questions_question_id", table_name="assessment_questions")
-    op.drop_index("ix_assessment_questions_assessment_id", table_name="assessment_questions")
+    op.drop_index(
+        "ix_assessment_questions_question_id", table_name="assessment_questions"
+    )
+    op.drop_index(
+        "ix_assessment_questions_assessment_id", table_name="assessment_questions"
+    )
     op.drop_table("assessment_questions")
     op.drop_index("ix_assessments_status", table_name="assessments")
     op.drop_index("ix_assessments_course_id", table_name="assessments")

@@ -121,7 +121,9 @@ class Assessment:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
         if any(existing.question_id == question_id for existing in self.questions):
-            raise ValueError(f"question {question_id} already exists in this assessment")
+            raise ValueError(
+                f"question {question_id} already exists in this assessment"
+            )
 
         item = AssessmentQuestion(
             question_id=question_id,

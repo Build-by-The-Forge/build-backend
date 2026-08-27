@@ -1,5 +1,4 @@
 import pytest
-
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.errors import AssessmentAlreadyArchivedError
 
