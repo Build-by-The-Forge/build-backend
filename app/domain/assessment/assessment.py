@@ -143,6 +143,42 @@ class Assessment:
         )
         return item
 
+    def update_details(
+        self,
+        *,
+        title: str | None = None,
+        instructions: str | None = None,
+        duration_minutes: int | None = None,
+        passing_score: int | None = None,
+    ) -> None:
+        if self.status == AssessmentStatus.ARCHIVED:
+            raise AssessmentAlreadyArchivedError("assessment already archived")
+
+        if title is not None:
+            if not title.strip():
+                raise ValueError("title is required")
+            self.title = title
+        if instructions is not None:
+            if not instructions.strip():
+                raise ValueError("instructions are required")
+            self.instructions = instructions
+        if duration_minutes is not None:
+            if duration_minutes <= 0:
+                raise ValueError("duration_minutes must be positive")
+            self.duration_minutes = duration_minutes
+        if passing_score is not None:
+            if passing_score < 0:
+                raise ValueError("passing_score cannot be negative")
+            self.passing_score = passing_score
+
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="assessment.updated",
+                payload={"assessment_id": self.id},
+            )
+        )
+
     def publish(self) -> None:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")

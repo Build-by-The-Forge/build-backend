@@ -1,11 +1,12 @@
 import logging
 
 import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
+
 from app.core.exceptions import http_exception_handler
 from app.core.metrics import metrics_payload
 from app.infrastructure.unit_of_work import UnitOfWork
-from fastapi import HTTPException
-from starlette.requests import Request
 
 
 class FailingSession:
@@ -14,6 +15,20 @@ class FailingSession:
 
     async def rollback(self) -> None:
         return None
+
+    async def close(self) -> None:
+        return None
+
+
+class RollbackSession:
+    def __init__(self) -> None:
+        self.rollback_called = False
+
+    async def commit(self) -> None:
+        raise AssertionError("commit must not run during rollback")
+
+    async def rollback(self) -> None:
+        self.rollback_called = True
 
     async def close(self) -> None:
         return None
@@ -28,6 +43,19 @@ async def test_unit_of_work_logs_commit_failure(caplog):
             pass
 
     assert "unit_of_work_commit_failed" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_unit_of_work_rolls_back_and_logs_operation_failure(caplog):
+    caplog.set_level(logging.ERROR)
+    session = RollbackSession()
+
+    with pytest.raises(RuntimeError, match="operation failed"):
+        async with UnitOfWork(session):
+            raise RuntimeError("operation failed")
+
+    assert session.rollback_called is True
+    assert "unit_of_work_rollback" in caplog.text
 
 
 @pytest.mark.asyncio
