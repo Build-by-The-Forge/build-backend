@@ -1,10 +1,9 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
-
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import LearningOutcomeModel
+from sqlalchemy import select
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,
@@ -22,7 +21,11 @@ async def create_topic(client, tenant_slug: str, course_id: str, token: str) -> 
 
 
 async def create_outcome(
-    client, tenant_slug: str, topic_id: str, token: str, description: str = "Explain the regression model."
+    client,
+    tenant_slug: str,
+    topic_id: str,
+    token: str,
+    description: str = "Explain the regression model.",
 ) -> dict:
     response = client.post(
         f"/catalogue/topics/{topic_id}/learning-outcomes",
@@ -45,7 +48,9 @@ async def test_learning_outcome_creation_requires_authentication(client):
 
 @pytest.mark.asyncio
 async def test_student_cannot_create_learning_outcome(client):
-    user_id, tenant_slug, _, course_id, token = await seed_course_context(client, "student")
+    user_id, tenant_slug, _, course_id, token = await seed_course_context(
+        client, "student"
+    )
     topic_response = client.post(
         f"/catalogue/courses/{course_id}/topics",
         headers=headers(token, tenant_slug),
@@ -79,7 +84,9 @@ async def test_authorized_learning_outcome_round_trip_and_list(client):
 
 @pytest.mark.asyncio
 async def test_learning_outcome_update_and_archive(client):
-    _, tenant_slug, _, course_id, token = await seed_course_context(client, "faculty_admin")
+    _, tenant_slug, _, course_id, token = await seed_course_context(
+        client, "faculty_admin"
+    )
     topic_id = await create_topic(client, tenant_slug, course_id, token)
     outcome = await create_outcome(client, tenant_slug, topic_id, token)
     request_headers = headers(token, tenant_slug)
@@ -90,7 +97,10 @@ async def test_learning_outcome_update_and_archive(client):
         json={"description": "Explain how regression models are evaluated."},
     )
     assert updated.status_code == 200
-    assert updated.json()["data"]["description"] == "Explain how regression models are evaluated."
+    assert (
+        updated.json()["data"]["description"]
+        == "Explain how regression models are evaluated."
+    )
 
     archived = client.post(
         f"/catalogue/learning-outcomes/{outcome['id']}/archive",
@@ -120,7 +130,9 @@ async def test_learning_outcome_client_tenant_id_is_rejected(client):
 
 @pytest.mark.asyncio
 async def test_learning_outcome_cross_tenant_access_is_denied(client):
-    _, tenant_a_slug, _, course_a_id, token_a = await seed_course_context(client, "lecturer")
+    _, tenant_a_slug, _, course_a_id, token_a = await seed_course_context(
+        client, "lecturer"
+    )
     topic_a_id = await create_topic(client, tenant_a_slug, course_a_id, token_a)
     outcome = await create_outcome(client, tenant_a_slug, topic_a_id, token_a)
     _, tenant_b_slug, _, _, token_b = await seed_course_context(client, "lecturer")

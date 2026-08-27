@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -10,7 +11,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    Boolean,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,7 +29,9 @@ class QuestionModel(Base):
     question_type: Mapped[str] = mapped_column(String(20), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
-    difficulty: Mapped[str] = mapped_column(String(20), nullable=False, default="medium")
+    difficulty: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="medium"
+    )
     marks: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     created_at: Mapped[datetime] = mapped_column(
@@ -77,6 +79,8 @@ class QuestionOptionModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("question_id", "display_order", name="uq_option_question_display_order"),
+        UniqueConstraint(
+            "question_id", "display_order", name="uq_option_question_display_order"
+        ),
         Index("ix_option_question_id", "question_id"),
     )

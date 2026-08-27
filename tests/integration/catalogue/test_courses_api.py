@@ -3,12 +3,11 @@ from datetime import datetime, timezone
 
 import pytest
 from app.db.session import SessionLocal
-from app.infrastructure.db.models.tenant_core import MembershipModel
-
 from app.infrastructure.db.models.tenant_core import (
-    TenantModel,
-    FacultyModel,
     DepartmentModel,
+    FacultyModel,
+    MembershipModel,
+    TenantModel,
 )
 
 
@@ -147,4 +146,4 @@ async def test_create_course_api(client, session):
     )
     assert resp2.status_code == 200
     data2 = resp2.json()
-    assert any(c["code"] == payload["code"] for c in data2["data"]) 
+    assert any(c["code"] == payload["code"] for c in data2["data"])

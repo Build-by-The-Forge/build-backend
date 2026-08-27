@@ -1,9 +1,5 @@
 import pytest
 
-from app.infrastructure.db.models.tenant_core import TenantModel, FacultyModel, DepartmentModel
-from datetime import datetime, timezone
-import uuid
-
 
 @pytest.mark.asyncio
 async def test_whoami_requires_token(client, session):

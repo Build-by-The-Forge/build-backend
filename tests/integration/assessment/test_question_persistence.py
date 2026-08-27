@@ -1,6 +1,4 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -15,7 +13,7 @@ from app.domain.assessment.value_objects import (
     QuestionType,
 )
 from app.infrastructure.assessment.repositories import SqlAlchemyQuestionRepository
-from app.infrastructure.unit_of_work import UnitOfWork
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def build_question(**overrides):
@@ -41,7 +39,9 @@ def build_question(**overrides):
         "learning_outcome_id": "lo-123",
         "question_type": QuestionType.MCQ,
         "prompt": QuestionPrompt("Which data structure uses FIFO ordering?"),
-        "explanation": QuestionExplanation("A queue follows first-in, first-out order."),
+        "explanation": QuestionExplanation(
+            "A queue follows first-in, first-out order."
+        ),
         "difficulty": Difficulty.EASY,
         "marks": QuestionMarks(2),
         "options": options,
@@ -143,7 +143,9 @@ async def test_list_by_topic_with_tenant_scoping(session: AsyncSession):
     assert all(q.topic_id == "topic-1" for q in retrieved)
 
     # Cross-tenant query should return empty
-    retrieved_wrong_tenant = await repository.list_by_topic("topic-1", tenant_id="tenant-456")
+    retrieved_wrong_tenant = await repository.list_by_topic(
+        "topic-1", tenant_id="tenant-456"
+    )
     assert len(retrieved_wrong_tenant) == 0
 
 
@@ -159,7 +161,9 @@ async def test_list_by_learning_outcome_with_tenant_scoping(session: AsyncSessio
     await repository.save(q1, tenant_id="tenant-123")
     await repository.save(q2, tenant_id="tenant-123")
 
-    retrieved = await repository.list_by_learning_outcome("lo-1", tenant_id="tenant-123")
+    retrieved = await repository.list_by_learning_outcome(
+        "lo-1", tenant_id="tenant-123"
+    )
     assert len(retrieved) == 1
     assert retrieved[0].learning_outcome_id == "lo-1"
 

@@ -28,16 +28,22 @@ def upgrade() -> None:
         sa.Column("question_type", sa.String(length=20), nullable=False),
         sa.Column("prompt", sa.Text(), nullable=False),
         sa.Column("explanation", sa.Text(), nullable=True),
-        sa.Column("difficulty", sa.String(length=20), nullable=False, server_default="medium"),
+        sa.Column(
+            "difficulty", sa.String(length=20), nullable=False, server_default="medium"
+        ),
         sa.Column("marks", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="draft"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="draft"
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_questions_tenant_id", "questions", ["tenant_id"])
     op.create_index("ix_questions_topic_id", "questions", ["topic_id"])
-    op.create_index("ix_questions_learning_outcome_id", "questions", ["learning_outcome_id"])
+    op.create_index(
+        "ix_questions_learning_outcome_id", "questions", ["learning_outcome_id"]
+    )
     op.create_index("ix_questions_status", "questions", ["status"])
 
     # question_options table

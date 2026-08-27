@@ -2,26 +2,26 @@ from collections.abc import AsyncIterator
 
 from app.application.catalogue.commands import (
     CreateCourseCommand,
-    CreateTopicCommand,
     CreateLearningOutcomeCommand,
-    UpdateLearningOutcomeCommand,
     CreateReferenceMaterialCommand,
+    CreateTopicCommand,
+    UpdateCourseCommand,
+    UpdateLearningOutcomeCommand,
     UpdateReferenceMaterialCommand,
     UpdateTopicCommand,
 )
 from app.application.catalogue.handlers import (
     CreateCourseHandler,
+    CreateLearningOutcomeHandler,
+    CreateReferenceMaterialHandler,
+    CreateTopicHandler,
     ListCoursesHandler,
     TransitionCourseHandler,
-    UpdateTopicHandler,
     UpdateCourseHandler,
-    CreateTopicHandler,
-    CreateLearningOutcomeHandler,
     UpdateLearningOutcomeHandler,
-    CreateReferenceMaterialHandler,
     UpdateReferenceMaterialHandler,
+    UpdateTopicHandler,
 )
-from app.application.catalogue.commands import UpdateCourseCommand
 from app.domain.repositories.course import CourseRepository
 
 AsyncUnitOfWorkFactory = AsyncIterator[object]
@@ -78,9 +78,7 @@ class CourseService:
                 )
 
         handler = ListCoursesHandler(repository=self.repository)
-        return await handler.handle(
-            department_id=department_id, tenant_id=tenant_id
-        )
+        return await handler.handle(department_id=department_id, tenant_id=tenant_id)
 
     async def get_course(self, course_id: str, tenant_id: str | None = None):
         if self.uow_factory is not None:
@@ -300,7 +298,11 @@ class CourseService:
                 if course is None:
                     return None
                 material = next(
-                    (item for item in course.references if item.id.value == reference_material_id),
+                    (
+                        item
+                        for item in course.references
+                        if item.id.value == reference_material_id
+                    ),
                     None,
                 )
                 if material is None:

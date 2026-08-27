@@ -1,10 +1,8 @@
 import pytest
-
 from app.domain.catalogue.curriculum_version import CurriculumVersion
 from app.domain.catalogue.errors import CurriculumVersionAlreadyArchivedError
 from app.domain.catalogue.value_objects import (
     CurriculumVersionName,
-    CurriculumVersionId,
     CurriculumVersionStatus,
     ProgrammeId,
 )

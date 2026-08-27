@@ -1,5 +1,4 @@
 import pytest
-
 from app.domain.catalogue.errors import ReferenceMaterialAlreadyArchivedError
 from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.value_objects import (

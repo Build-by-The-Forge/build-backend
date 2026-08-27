@@ -2,10 +2,12 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
-
 from app.db.session import SessionLocal
-from app.infrastructure.db.models.catalogue import CourseModel, LearningOutcomeModel, TopicModel
+from app.infrastructure.db.models.catalogue import (
+    CourseModel,
+    LearningOutcomeModel,
+    TopicModel,
+)
 from app.infrastructure.db.models.tenant_core import (
     DepartmentModel,
     FacultyModel,
@@ -139,7 +141,9 @@ async def test_lecturer_can_create_read_update_publish_and_archive_question(clie
     user_id, access_token = await register_and_authenticate(
         client, f"assessment-lecturer-{uuid4()}@example.com"
     )
-    _, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(user_id, "lecturer")
+    _, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(
+        user_id, "lecturer"
+    )
 
     payload = {
         "topic_id": topic_id,
@@ -150,7 +154,11 @@ async def test_lecturer_can_create_read_update_publish_and_archive_question(clie
         "difficulty": "medium",
         "marks": 2,
         "options": [
-            {"text": "Learning from labelled data", "display_order": 1, "is_correct": True},
+            {
+                "text": "Learning from labelled data",
+                "display_order": 1,
+                "is_correct": True,
+            },
             {"text": "Learning with no data", "display_order": 2, "is_correct": False},
         ],
     }

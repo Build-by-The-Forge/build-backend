@@ -210,7 +210,9 @@ class QuestionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                handler = ListQuestionsByLearningOutcomeHandler(repository=uow.questions)
+                handler = ListQuestionsByLearningOutcomeHandler(
+                    repository=uow.questions
+                )
                 return await handler.handle(command)
 
         if self.repository is None:

@@ -1,14 +1,14 @@
 # ensure identity models are also imported for metadata
+import app.infrastructure.db.models.catalogue  # noqa: F401
 import app.infrastructure.identity.models  # noqa: F401
 from app.db.base import Base
-import app.infrastructure.db.models.catalogue  # noqa: F401
 from app.infrastructure.db.models.catalogue import (
     CourseModel,
+    CoursePrerequisiteModel,
     CurriculumVersionModel,
-    TopicModel,
     LearningOutcomeModel,
     ReferenceMaterialModel,
-    CoursePrerequisiteModel,
+    TopicModel,
 )
 from app.infrastructure.db.models.tenant_core import (
     AcademicSessionModel,

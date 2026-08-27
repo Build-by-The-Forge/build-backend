@@ -97,13 +97,19 @@ class UpdateQuestionHandler:
         if question is None:
             return None
         question.update_details(
-            prompt=QuestionPrompt(command.prompt) if command.prompt is not None else None,
+            prompt=(
+                QuestionPrompt(command.prompt) if command.prompt is not None else None
+            ),
             explanation=(
                 QuestionExplanation(command.explanation)
                 if command.explanation is not None
                 else None
             ),
-            difficulty=Difficulty(command.difficulty) if command.difficulty is not None else None,
+            difficulty=(
+                Difficulty(command.difficulty)
+                if command.difficulty is not None
+                else None
+            ),
             marks=QuestionMarks(command.marks) if command.marks is not None else None,
         )
         return await self.repository.update(question, tenant_id=command.tenant_id)

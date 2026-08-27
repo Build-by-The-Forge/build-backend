@@ -1,17 +1,17 @@
 from app.application.catalogue.commands import (
     CreateCourseCommand,
-    CreateTopicCommand,
     CreateLearningOutcomeCommand,
-    UpdateLearningOutcomeCommand,
     CreateReferenceMaterialCommand,
+    CreateTopicCommand,
+    UpdateCourseCommand,
+    UpdateLearningOutcomeCommand,
     UpdateReferenceMaterialCommand,
     UpdateTopicCommand,
-    UpdateCourseCommand,
 )
 from app.domain.catalogue.course import Course
-from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
@@ -20,15 +20,15 @@ from app.domain.catalogue.value_objects import (
     CourseSlug,
     CourseTitle,
     DepartmentId,
-    TopicDescription,
-    TopicSequence,
-    TopicSlug,
-    TopicTitle,
     LearningOutcomeDescription,
     LearningOutcomeSequence,
     ReferenceMaterialTitle,
     ReferenceMaterialType,
     ReferenceMaterialUrl,
+    TopicDescription,
+    TopicSequence,
+    TopicSlug,
+    TopicTitle,
 )
 from app.domain.repositories.course import CourseRepository
 
@@ -103,7 +103,11 @@ class UpdateTopicHandler:
         if course is None:
             return None
         topic = next(
-            (candidate for candidate in course.topics if candidate.id.value == command.topic_id),
+            (
+                candidate
+                for candidate in course.topics
+                if candidate.id.value == command.topic_id
+            ),
             None,
         )
         if topic is None:
@@ -172,9 +176,7 @@ class UpdateLearningOutcomeHandler:
         if outcome is None:
             return None
         if command.description is not None:
-            outcome.update_description(
-                LearningOutcomeDescription(command.description)
-            )
+            outcome.update_description(LearningOutcomeDescription(command.description))
         await self.repository.save(course, tenant_id=command.tenant_id)
         return outcome
 
@@ -198,9 +200,7 @@ class CreateReferenceMaterialHandler:
             title=ReferenceMaterialTitle(command.title),
             material_type=ReferenceMaterialType(command.material_type),
             url=(
-                ReferenceMaterialUrl(command.url)
-                if command.url is not None
-                else None
+                ReferenceMaterialUrl(command.url) if command.url is not None else None
             ),
         )
         course.add_reference(material)
@@ -242,9 +242,7 @@ class UpdateReferenceMaterialHandler:
                 else None
             ),
             url=(
-                ReferenceMaterialUrl(command.url)
-                if command.url is not None
-                else None
+                ReferenceMaterialUrl(command.url) if command.url is not None else None
             ),
         )
         await self.repository.save(course, tenant_id=command.tenant_id)

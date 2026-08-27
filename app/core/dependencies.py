@@ -1,19 +1,21 @@
 from collections.abc import AsyncIterator
 
-from app.db.session import SessionLocal
-from app.infrastructure.unit_of_work import UnitOfWork
 from fastapi import Depends, HTTPException, Request, status
 
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
-from app.infrastructure.identity.sqlalchemy_user_repository import SQLAlchemyUserRepository
+from app.db.session import SessionLocal
+from app.infrastructure.identity.sqlalchemy_user_repository import (
+    SQLAlchemyUserRepository,
+)
 from app.infrastructure.security.jwt_token_service import JWTTokenService
 from app.infrastructure.tenant.async_repositories import (
     AsyncSqlAlchemyMembershipRepository,
     AsyncSqlAlchemyTenantRepository,
 )
+from app.infrastructure.unit_of_work import UnitOfWork
 
 
 async def get_unit_of_work() -> AsyncIterator[UnitOfWork]:
@@ -31,7 +33,9 @@ async def get_current_principal(
     """
     auth = request.headers.get("authorization")
     if auth is None or not auth.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token"
+        )
 
     token = auth.split(" ", 1)[1]
     container = build_container()
@@ -40,25 +44,35 @@ async def get_current_principal(
     try:
         valid = token_service.validate(token)
     except Exception:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
 
     if not valid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
 
     decoded = token_service.decode(token)
     user_id = decoded.get("sub") if isinstance(decoded, dict) else None
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
 
     # normalise access/refresh prefixes used by JWTTokenService implementations
-    if isinstance(user_id, str) and (user_id.startswith("access:") or user_id.startswith("refresh:")):
+    if isinstance(user_id, str) and (
+        user_id.startswith("access:") or user_id.startswith("refresh:")
+    ):
         user_id = user_id.split(":", 1)[1]
 
     # verify user exists
     repo = SQLAlchemyUserRepository(uow.session)
     user = await repo.get_by_id(user_id)
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token"
+        )
 
     return AuthenticatedPrincipal(user_id=user.id.value)
 
@@ -76,9 +90,7 @@ async def get_current_tenant_context(
         )
     tenant_slug = tenant_slug.strip().lower()
 
-    tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(
-        tenant_slug
-    )
+    tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(tenant_slug)
     if tenant is None or not tenant.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
