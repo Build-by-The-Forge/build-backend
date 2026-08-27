@@ -180,6 +180,7 @@ def assessment_model_to_domain(model: AssessmentModel) -> Assessment:
         instructions=model.instructions,
         duration_minutes=model.duration_minutes,
         passing_score=model.passing_score,
+        assessment_id=model.id,
         status=AssessmentStatus(model.status),
         questions=[
             assessment_question_model_to_domain(item)

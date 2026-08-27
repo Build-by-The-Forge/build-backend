@@ -121,12 +121,6 @@ class AssessmentModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id",
-            "course_id",
-            "title",
-            name="uq_assessment_tenant_course_title",
-        ),
         Index("ix_assessments_tenant_id", "tenant_id"),
         Index("ix_assessments_course_id", "course_id"),
         Index("ix_assessments_status", "status"),

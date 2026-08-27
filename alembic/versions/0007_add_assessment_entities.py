@@ -33,12 +33,6 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["course_id"], ["courses.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint(
-            "tenant_id",
-            "course_id",
-            "title",
-            name="uq_assessment_tenant_course_title",
-        ),
     )
     op.create_index("ix_assessments_tenant_id", "assessments", ["tenant_id"])
     op.create_index("ix_assessments_course_id", "assessments", ["course_id"])

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from uuid import uuid4
 
 from app.domain.assessment.errors import AssessmentAlreadyArchivedError
 from app.events.base import DomainEvent
@@ -42,6 +43,9 @@ class Assessment:
     instructions: str
     duration_minutes: int
     passing_score: int = 0
+    assessment_id: str = field(
+        default_factory=lambda: f"assessment-{uuid4()}", repr=False
+    )
     status: AssessmentStatus = AssessmentStatus.DRAFT
     questions: list[AssessmentQuestion] = field(default_factory=list, repr=False)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -95,7 +99,7 @@ class Assessment:
 
     @property
     def id(self) -> str:
-        return f"assessment-{self.created_at.timestamp():.0f}-{self.tenant_id}-{self.course_id}"
+        return self.assessment_id
 
     @property
     def pass_mark(self) -> int:
