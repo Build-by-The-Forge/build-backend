@@ -1,10 +1,9 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
-
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import CourseModel
+from sqlalchemy import select
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
     seed_tenant_context,
@@ -143,9 +142,7 @@ async def test_assessment_api_does_not_cross_tenants(client):
     owner_id, owner_token = await register_and_authenticate(
         client, f"assessment-owner-{uuid4()}@example.com"
     )
-    owner_tenant_id, owner_slug, _, _ = await seed_tenant_context(
-        owner_id, "lecturer"
-    )
+    owner_tenant_id, owner_slug, _, _ = await seed_tenant_context(owner_id, "lecturer")
     course_id = await course_id_for_tenant(owner_tenant_id)
     owner_headers = headers(owner_token, owner_slug)
     created = client.post(

@@ -23,9 +23,7 @@ service = build_container().get(AssessmentService)
 async def create_assessment(
     request: Request,
     payload: CreateAssessmentRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_CREATE)),
 ) -> JSONResponse:
     assessment = await service.create_assessment(
         tenant_id=context.tenant_id or "",
@@ -46,9 +44,7 @@ async def create_assessment(
 async def list_assessments(
     request: Request,
     course_id: str | None = None,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
     assessments = await service.list_assessments(
         tenant_id=context.tenant_id or "", course_id=course_id
@@ -68,9 +64,7 @@ async def list_assessments(
 async def get_assessment(
     assessment_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
     assessment = await service.get_assessment(
         assessment_id, tenant_id=context.tenant_id or ""
@@ -85,9 +79,7 @@ async def update_assessment(
     assessment_id: str,
     request: Request,
     payload: UpdateAssessmentRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_UPDATE)),
 ) -> JSONResponse:
     assessment = await service.update_assessment(
         assessment_id,
@@ -106,9 +98,7 @@ async def update_assessment(
 async def publish_assessment(
     assessment_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_PUBLISH)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_PUBLISH)),
 ) -> JSONResponse:
     assessment = await service.publish_assessment(
         assessment_id, context.tenant_id or ""
@@ -123,9 +113,7 @@ async def add_question(
     assessment_id: str,
     request: Request,
     payload: AddAssessmentQuestionRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_UPDATE)),
 ) -> JSONResponse:
     assessment = await service.add_question(
         assessment_id,
