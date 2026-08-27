@@ -1,18 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from app.application.catalogue.course_service import CourseService
 from app.api.catalogue.schemas import (
-    CreateCourseRequest,
     CourseResponse,
-    UpdateCourseRequest,
-    CreateTopicRequest,
-    UpdateTopicRequest,
+    CreateCourseRequest,
     CreateLearningOutcomeRequest,
-    UpdateLearningOutcomeRequest,
     CreateReferenceMaterialRequest,
+    CreateTopicRequest,
+    UpdateCourseRequest,
+    UpdateLearningOutcomeRequest,
     UpdateReferenceMaterialRequest,
+    UpdateTopicRequest,
 )
+from app.application.catalogue.course_service import CourseService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
@@ -34,9 +34,7 @@ service = container.get(CourseService)
 async def list_courses(
     request: Request,
     department_id: str | None = None,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     try:
         courses = await service.list_courses(
@@ -82,9 +80,7 @@ async def list_courses(
 async def get_course(
     course_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None:
@@ -108,7 +104,7 @@ async def get_course(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": response.dict(),
+            "data": response.model_dump(),
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
@@ -119,9 +115,7 @@ async def get_course(
 async def create_course(
     request: Request,
     payload: CreateCourseRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
     try:
         course = await service.create_course(
@@ -163,7 +157,7 @@ async def create_course(
         status_code=status.HTTP_201_CREATED,
         content={
             "success": True,
-            "data": response.dict(),
+            "data": response.model_dump(),
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
@@ -175,9 +169,7 @@ async def update_course(
     course_id: str,
     request: Request,
     payload: UpdateCourseRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
 ) -> JSONResponse:
     course = await service.update_course(
         course_id=course_id,
@@ -215,9 +207,7 @@ async def update_course(
 async def publish_course(
     course_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_PUBLISH)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_PUBLISH)),
 ) -> JSONResponse:
     return await _transition_course(course_id, request, context, "publish")
 
@@ -226,9 +216,7 @@ async def publish_course(
 async def archive_course(
     course_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_ARCHIVE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
     return await _transition_course(course_id, request, context, "archive")
 
@@ -239,9 +227,7 @@ async def _transition_course(
     context: TenantContext,
     transition: str,
 ) -> JSONResponse:
-    course = await service.transition_course(
-        course_id, context.tenant_id, transition
-    )
+    course = await service.transition_course(course_id, context.tenant_id, transition)
     if course is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
@@ -265,9 +251,7 @@ async def create_topic(
     course_id: str,
     request: Request,
     payload: CreateTopicRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
     topic = await service.create_topic(
         course_id=course_id,
@@ -307,9 +291,7 @@ async def create_topic(
 async def list_topics(
     course_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None:
@@ -327,7 +309,9 @@ async def list_topics(
                     "title": topic.title.value,
                     "slug": topic.slug.value,
                     "description": (
-                        topic.description.value if topic.description is not None else None
+                        topic.description.value
+                        if topic.description is not None
+                        else None
                     ),
                     "sequence": topic.sequence.value,
                     "status": topic.status.value,
@@ -345,9 +329,7 @@ async def update_topic(
     topic_id: str,
     request: Request,
     payload: UpdateTopicRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
 ) -> JSONResponse:
     topic = await service.update_topic(
         topic_id=topic_id,
@@ -380,9 +362,7 @@ async def update_topic(
 async def archive_topic(
     topic_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_ARCHIVE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
     topic = await service.transition_topic(topic_id, context.tenant_id, "archive")
     if topic is None:
@@ -398,16 +378,12 @@ async def archive_topic(
     )
 
 
-@topic_router.post(
-    "/{topic_id}/learning-outcomes", status_code=status.HTTP_201_CREATED
-)
+@topic_router.post("/{topic_id}/learning-outcomes", status_code=status.HTTP_201_CREATED)
 async def create_learning_outcome(
     topic_id: str,
     request: Request,
     payload: CreateLearningOutcomeRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
     outcome = await service.create_learning_outcome(
         topic_id=topic_id,
@@ -438,9 +414,7 @@ async def create_learning_outcome(
 async def list_learning_outcomes(
     topic_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     course = await service.get_course_by_topic(topic_id, context.tenant_id)
     if course is None:
@@ -473,9 +447,7 @@ async def update_learning_outcome(
     learning_outcome_id: str,
     request: Request,
     payload: UpdateLearningOutcomeRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
 ) -> JSONResponse:
     outcome = await service.update_learning_outcome(
         learning_outcome_id,
@@ -507,9 +479,7 @@ async def update_learning_outcome(
 async def archive_learning_outcome(
     learning_outcome_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_ARCHIVE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
     outcome = await service.transition_learning_outcome(
         learning_outcome_id, context.tenant_id, "archive"
@@ -534,9 +504,7 @@ async def create_reference_material(
     topic_id: str,
     request: Request,
     payload: CreateReferenceMaterialRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
     material = await service.create_reference_material(
         topic_id=topic_id,
@@ -562,9 +530,7 @@ async def create_reference_material(
 async def list_reference_materials(
     topic_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     course = await service.get_course_by_topic(topic_id, context.tenant_id)
     if course is None or not any(item.id.value == topic_id for item in course.topics):
@@ -585,9 +551,7 @@ async def update_reference_material(
     reference_material_id: str,
     request: Request,
     payload: UpdateReferenceMaterialRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
 ) -> JSONResponse:
     material = await service.update_reference_material(
         reference_material_id,
@@ -615,9 +579,7 @@ async def update_reference_material(
 async def archive_reference_material(
     reference_material_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_ARCHIVE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
     material = await service.transition_reference_material(
         reference_material_id, context.tenant_id, "archive"

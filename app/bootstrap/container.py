@@ -1,10 +1,15 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
 from app.application.identity.user_service import UserService
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
+from app.infrastructure.assessment.unit_of_work import (
+    AssessmentUnitOfWork,
+    assessment_unit_of_work,
+)
 from app.infrastructure.catalogue.unit_of_work import (
     CourseUnitOfWork,
     catalogue_unit_of_work,
@@ -58,6 +63,14 @@ def build_container() -> Container:
             uow_factory=sqlalchemy_catalogue_uow,
         ),
     )
+    container.register(AssessmentUnitOfWork, sqlalchemy_assessment_uow)
+    container.register(
+        QuestionService,
+        QuestionService(
+            repository=None,
+            uow_factory=sqlalchemy_assessment_uow,
+        ),
+    )
     return container
 
 
@@ -72,6 +85,13 @@ async def sqlalchemy_identity_uow() -> AsyncIterator[IdentityUnitOfWork]:
 async def sqlalchemy_catalogue_uow() -> AsyncIterator[CourseUnitOfWork]:
     async with SessionLocal() as session:
         async with catalogue_unit_of_work(session) as uow:
+            yield uow
+
+
+@asynccontextmanager
+async def sqlalchemy_assessment_uow() -> AsyncIterator[AssessmentUnitOfWork]:
+    async with SessionLocal() as session:
+        async with assessment_unit_of_work(session) as uow:
             yield uow
 
 

@@ -26,6 +26,7 @@ It is the starting point for contributors who need to understand the platform de
 - `docs/architecture/public-id-strategy.md` — public ID policy and naming conventions.
 - `docs/architecture/versioning.md` — versioning strategy for curriculum and AI artifacts.
 - `docs/architecture/academic-catalogue-specification.md` — catalogue-specific architecture details.
+- `docs/architecture/assessment-core.md` — assessment aggregates, lifecycles, security, snapshots, and delivery plan.
 
 ## Contracts
 
@@ -56,6 +57,7 @@ Vision documents define strategy, source-of-truth policy, reference data, and AI
 
 - `docs/decisions/001-source-of-truth.md`
 - `docs/adr/` — add future architectural decision records here.
+- `docs/adr/007-assessment-core.md` — Assessment Core architecture decision.
 
 ## Domain reference
 

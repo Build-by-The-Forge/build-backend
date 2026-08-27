@@ -1,10 +1,11 @@
 from fastapi import APIRouter
 
+from app.api.assessment import question_router
 from app.api.catalogue import (
-	courses_router,
-	learning_outcome_router,
-	reference_router,
-	topic_router,
+    courses_router,
+    learning_outcome_router,
+    reference_router,
+    topic_router,
 )
 
 router = APIRouter()
@@ -12,3 +13,4 @@ router.include_router(courses_router)
 router.include_router(topic_router)
 router.include_router(learning_outcome_router)
 router.include_router(reference_router)
+router.include_router(question_router)

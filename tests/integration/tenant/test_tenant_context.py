@@ -2,7 +2,6 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantModel
 
@@ -52,9 +51,7 @@ async def authenticate_user(client, email: str) -> tuple[str, str]:
 
 @pytest.mark.asyncio
 async def test_tenant_context_requires_authentication(client):
-    response = client.get(
-        "/identity/tenant-context", headers={"X-Tenant-Slug": "futa"}
-    )
+    response = client.get("/identity/tenant-context", headers={"X-Tenant-Slug": "futa"})
 
     assert response.status_code == 401
     assert response.json()["success"] is False
@@ -99,6 +96,7 @@ async def test_tenant_context_resolves_active_membership(client):
         "membership_id": membership_id,
         "role": "lecturer",
     }
+
 
 @pytest.mark.asyncio
 async def test_tenant_context_denies_non_member(client):

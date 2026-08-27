@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 import pytest
-
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,
@@ -111,7 +110,9 @@ async def test_topics_for_missing_course_return_not_found(client):
 
 @pytest.mark.asyncio
 async def test_lecturer_updates_and_archives_topic(client):
-    _, tenant_slug, _, course_id, token = await seed_course_context(client, "faculty_admin")
+    _, tenant_slug, _, course_id, token = await seed_course_context(
+        client, "faculty_admin"
+    )
     request_headers = headers(token, tenant_slug)
     created = client.post(
         f"/catalogue/courses/{course_id}/topics",
@@ -136,7 +137,7 @@ async def test_lecturer_updates_and_archives_topic(client):
 
 
 @pytest.mark.asyncio
-async def test_student_cannot_create_topic(client):
+async def test_student_cannot_create_topic_without_permission(client):
     _, tenant_slug, _, course_id, token = await seed_course_context(client, "student")
     request_headers = headers(token, tenant_slug)
     response = client.post(

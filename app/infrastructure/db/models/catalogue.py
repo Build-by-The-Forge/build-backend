@@ -7,7 +7,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -78,10 +77,14 @@ class CurriculumVersionModel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     version: Mapped[str] = mapped_column(String(50), nullable=False)
     effective_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("academic_sessions.id", ondelete="CASCADE"), nullable=False
+        String(36),
+        ForeignKey("academic_sessions.id", ondelete="CASCADE"),
+        nullable=False,
     )
     expires_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("academic_sessions.id", ondelete="SET NULL"), nullable=True
+        String(36),
+        ForeignKey("academic_sessions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     course_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
@@ -98,7 +101,9 @@ class CurriculumVersionModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("programme_id", "version", name="uq_curriculum_programme_version"),
+        UniqueConstraint(
+            "programme_id", "version", name="uq_curriculum_programme_version"
+        ),
         Index("ix_curriculum_programme_id", "programme_id"),
         Index("ix_curriculum_effective_session_id", "effective_session_id"),
     )
@@ -223,7 +228,9 @@ class CoursePrerequisiteModel(Base):
     prerequisite_course_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
     )
-    prerequisite_type: Mapped[str] = mapped_column(String(20), nullable=False, default="pre_requisite")
+    prerequisite_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pre_requisite"
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -237,6 +244,8 @@ class CoursePrerequisiteModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("course_id", "prerequisite_course_id", name="uq_course_prereq"),
+        UniqueConstraint(
+            "course_id", "prerequisite_course_id", name="uq_course_prereq"
+        ),
         Index("ix_prereq_course_id", "course_id"),
     )

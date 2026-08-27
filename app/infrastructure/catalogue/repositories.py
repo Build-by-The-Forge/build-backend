@@ -39,7 +39,9 @@ class SqlAlchemyCourseRepository(CourseRepository):
         await self._session.flush()
         return course
 
-    async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_id(
+        self, course_id: str, tenant_id: str | None = None
+    ) -> Course | None:
         statement = select(CourseModel).where(CourseModel.id == course_id)
         if tenant_id is not None:
             statement = statement.where(CourseModel.tenant_id == tenant_id)
@@ -51,8 +53,12 @@ class SqlAlchemyCourseRepository(CourseRepository):
         model = result.first()
         return course_to_domain(model) if model is not None else None
 
-    async def list_by_department(self, department_id: str, tenant_id: str | None = None) -> list[Course]:
-        statement = select(CourseModel).where(CourseModel.department_id == department_id)
+    async def list_by_department(
+        self, department_id: str, tenant_id: str | None = None
+    ) -> list[Course]:
+        statement = select(CourseModel).where(
+            CourseModel.department_id == department_id
+        )
         if tenant_id is not None:
             statement = statement.where(CourseModel.tenant_id == tenant_id)
         statement = statement.options(

@@ -2,7 +2,6 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
@@ -10,7 +9,6 @@ from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import (
     CourseCode,
     CourseCreditUnits,
-    CourseId,
     CourseLevel,
     CourseSemester,
     CourseSlug,
@@ -22,7 +20,6 @@ from app.domain.catalogue.value_objects import (
     ReferenceMaterialType,
     ReferenceMaterialUrl,
     TopicDescription,
-    TopicId,
     TopicLevel,
     TopicSequence,
     TopicSlug,
@@ -30,9 +27,9 @@ from app.domain.catalogue.value_objects import (
 )
 from app.infrastructure.catalogue.repositories import SqlAlchemyCourseRepository
 from app.infrastructure.db.models.tenant_core import (
-    TenantModel,
-    FacultyModel,
     DepartmentModel,
+    FacultyModel,
+    TenantModel,
 )
 
 

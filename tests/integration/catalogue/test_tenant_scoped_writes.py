@@ -2,8 +2,6 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import select
-
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import CourseModel
 from app.infrastructure.db.models.tenant_core import (
@@ -12,6 +10,7 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
+from sqlalchemy import select
 
 
 async def seed_write_context(user_id: str, role: str) -> tuple[str, str, str]:
@@ -164,7 +163,9 @@ async def test_lecturer_course_is_owned_by_context_tenant(client):
     user_id, access_token = await register_and_authenticate(
         client, f"write-lecturer-{uuid4()}@example.com"
     )
-    tenant_id, tenant_slug, department_id = await seed_write_context(user_id, "lecturer")
+    tenant_id, tenant_slug, department_id = await seed_write_context(
+        user_id, "lecturer"
+    )
 
     response = client.post(
         "/catalogue/courses/",
@@ -191,7 +192,9 @@ async def test_client_tenant_id_is_rejected(client):
     user_id, access_token = await register_and_authenticate(
         client, f"write-injection-{uuid4()}@example.com"
     )
-    tenant_id, tenant_slug, department_id = await seed_write_context(user_id, "lecturer")
+    tenant_id, tenant_slug, department_id = await seed_write_context(
+        user_id, "lecturer"
+    )
 
     response = client.post(
         "/catalogue/courses/",

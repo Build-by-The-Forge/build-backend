@@ -25,6 +25,7 @@ htmlcov/
 
 # Databases
 *.db
+build.db
 *.sqlite
 *.sqlite3
 

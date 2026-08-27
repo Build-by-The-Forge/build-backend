@@ -1,18 +1,14 @@
-from datetime import datetime, timezone
 from collections.abc import Generator
+from datetime import datetime, timezone
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
-
 from app.db.base import Base
 from app.domain.tenant.membership import Membership
 from app.domain.tenant.tenant import Tenant
 from app.domain.tenant.value_objects import (
+    MembershipId,
     MembershipRole,
     MembershipStatus,
-    MembershipId,
     TenantId,
     TenantName,
     TenantSlug,
@@ -22,6 +18,9 @@ from app.infrastructure.tenant.repositories import (
     SqlAlchemyMembershipRepository,
     SqlAlchemyTenantRepository,
 )
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture

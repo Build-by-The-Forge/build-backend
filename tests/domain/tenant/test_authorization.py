@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.authorization import AuthorizationService, Permission
 from app.core.tenant_context import TenantContext
 

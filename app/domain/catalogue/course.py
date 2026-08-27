@@ -95,7 +95,9 @@ class Course:
             )
         )
 
-    def update_details(self, title: CourseTitle | None, description: str | None) -> None:
+    def update_details(
+        self, title: CourseTitle | None, description: str | None
+    ) -> None:
         changed = False
         if title is not None and title != self.title:
             self.title = title

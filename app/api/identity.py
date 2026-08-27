@@ -1,17 +1,19 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Request, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import JSONResponse
 
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
-from app.core.exceptions import AppError
-from fastapi import Depends
-from app.core.dependencies import get_current_principal, require_permission
 from app.core.authorization import Permission, authorization
+from app.core.dependencies import (
+    get_current_principal,
+    get_current_tenant_context,
+    require_permission,
+)
+from app.core.exceptions import AppError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
-from app.core.dependencies import get_current_tenant_context
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
@@ -288,8 +290,17 @@ async def get_current_user(
 
 
 @router.get("/whoami", status_code=status.HTTP_200_OK)
-async def whoami(principal: AuthenticatedPrincipal = Depends(get_current_principal)) -> JSONResponse:
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"success": True, "data": {"user_id": principal.user_id}, "meta": {}})
+async def whoami(
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {"user_id": principal.user_id},
+            "meta": {},
+        },
+    )
 
 
 @router.get("/tenant-context", status_code=status.HTTP_200_OK)
@@ -334,9 +345,7 @@ async def get_permissions(
 
 @router.get("/authorization-probe", status_code=status.HTTP_200_OK)
 async def authorization_probe(
-    context: TenantContext = Depends(
-        require_permission(Permission.CATALOGUE_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_200_OK,
