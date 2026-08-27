@@ -38,6 +38,52 @@ def test_assessment_rejects_duplicate_question_ids():
         assessment.add_question("question-1", "Prompt A", ["A", "B"], 5)
 
 
+def test_assessment_rejects_publishing_without_questions():
+    assessment = Assessment.create(
+        tenant_id="tenant-123",
+        course_id="course-123",
+        title="Midterm Test",
+        instructions="Answer all questions.",
+        duration_minutes=60,
+        passing_score=50,
+    )
+
+    with pytest.raises(ValueError, match="at least one question"):
+        assessment.publish()
+
+
+def test_assessment_with_question_can_be_published():
+    assessment = Assessment.create(
+        tenant_id="tenant-123",
+        course_id="course-123",
+        title="Midterm Test",
+        instructions="Answer all questions.",
+        duration_minutes=60,
+        passing_score=50,
+    )
+    assessment.add_question("question-1", "Prompt A", ["A", "B"], 5)
+
+    assessment.publish()
+
+    assert assessment.status == AssessmentStatus.PUBLISHED
+
+
+def test_published_assessment_rejects_new_questions():
+    assessment = Assessment.create(
+        tenant_id="tenant-123",
+        course_id="course-123",
+        title="Midterm Test",
+        instructions="Answer all questions.",
+        duration_minutes=60,
+        passing_score=50,
+    )
+    assessment.add_question("question-1", "Prompt A", ["A", "B"], 5)
+    assessment.publish()
+
+    with pytest.raises(ValueError, match="cannot be changed after publication"):
+        assessment.add_question("question-2", "Prompt B", ["A", "B"], 5)
+
+
 def test_assessment_publish_and_close_transitions():
     assessment = Assessment.create(
         tenant_id="tenant-123",
@@ -47,6 +93,7 @@ def test_assessment_publish_and_close_transitions():
         duration_minutes=60,
         passing_score=50,
     )
+    assessment.add_question("question-1", "Prompt A", ["A", "B"], 5)
 
     assessment.publish()
     assert assessment.status == AssessmentStatus.PUBLISHED

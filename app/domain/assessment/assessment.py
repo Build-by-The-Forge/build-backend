@@ -118,6 +118,8 @@ class Assessment:
     ) -> AssessmentQuestion:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
+        if self.status != AssessmentStatus.DRAFT:
+            raise ValueError("questions cannot be changed after publication")
         if any(existing.question_id == question_id for existing in self.questions):
             raise ValueError(
                 f"question {question_id} already exists in this assessment"
@@ -186,6 +188,8 @@ class Assessment:
             return
         if self.status == AssessmentStatus.OPEN:
             raise ValueError("assessment cannot be republished while open")
+        if not self.questions:
+            raise ValueError("assessment must contain at least one question")
         self.status = AssessmentStatus.PUBLISHED
         self.touch()
         self._events.append(
