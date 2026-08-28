@@ -14,18 +14,18 @@ from app.infrastructure.assessment.mappers import (
     assessment_model_to_domain,
     assessment_question_model_to_domain,
     assessment_to_model,
-    attempt_model_to_domain,
     attempt_answer_model_to_domain,
     attempt_answer_to_model,
+    attempt_model_to_domain,
     attempt_to_model,
     question_model_to_domain,
     question_to_model,
 )
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
-    AttemptAnswerModel,
     AssessmentModel,
     AssessmentQuestionModel,
+    AttemptAnswerModel,
     QuestionModel,
 )
 

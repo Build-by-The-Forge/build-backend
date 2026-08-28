@@ -74,7 +74,9 @@ class GetAttemptAnswersHandler:
         self.attempts = attempts
         self.answers = answers
 
-    async def handle(self, command: GetAttemptAnswersCommand) -> list[AttemptAnswer] | None:
+    async def handle(
+        self, command: GetAttemptAnswersCommand
+    ) -> list[AttemptAnswer] | None:
         attempt = await self.attempts.get_by_id(
             command.attempt_id,
             tenant_id=command.tenant_id,

@@ -58,8 +58,12 @@ class AttemptAnswerService:
         command = GetAttemptAnswersCommand(attempt_id, tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetAttemptAnswersHandler(uow.attempts, uow.attempt_answers).handle(command)
-        return await GetAttemptAnswersHandler(self._attempts(), self._answers()).handle(command)
+                return await GetAttemptAnswersHandler(
+                    uow.attempts, uow.attempt_answers
+                ).handle(command)
+        return await GetAttemptAnswersHandler(self._attempts(), self._answers()).handle(
+            command
+        )
 
     async def delete_answer(
         self, attempt_id: str, assessment_question_id: str, tenant_id: str, user_id: str
@@ -69,8 +73,12 @@ class AttemptAnswerService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await DeleteAttemptAnswerHandler(uow.attempts, uow.attempt_answers).handle(command)
-        return await DeleteAttemptAnswerHandler(self._attempts(), self._answers()).handle(command)
+                return await DeleteAttemptAnswerHandler(
+                    uow.attempts, uow.attempt_answers
+                ).handle(command)
+        return await DeleteAttemptAnswerHandler(
+            self._attempts(), self._answers()
+        ).handle(command)
 
     def _answers(self) -> AttemptAnswerRepository:
         if self.repository is None:

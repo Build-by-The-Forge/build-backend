@@ -1,8 +1,7 @@
 from datetime import datetime
 
 import pytest
-
-from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
+from app.domain.assessment.attempt import AssessmentAttempt
 from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.errors import AttemptAlreadySubmittedError
 

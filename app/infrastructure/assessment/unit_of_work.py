@@ -5,8 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.assessment.repositories import (
     SqlAlchemyAssessmentRepository,
-    SqlAlchemyAttemptRepository,
     SqlAlchemyAttemptAnswerRepository,
+    SqlAlchemyAttemptRepository,
     SqlAlchemyQuestionRepository,
 )
 from app.infrastructure.catalogue.repositories import SqlAlchemyCourseRepository

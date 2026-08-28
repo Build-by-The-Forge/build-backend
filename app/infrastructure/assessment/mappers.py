@@ -25,9 +25,9 @@ from app.domain.assessment.value_objects import (
 )
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
-    AttemptAnswerModel,
     AssessmentModel,
     AssessmentQuestionModel,
+    AttemptAnswerModel,
     QuestionModel,
     QuestionOptionModel,
 )
