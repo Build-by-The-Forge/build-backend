@@ -17,10 +17,21 @@ class Permission(StrEnum):
     ASSESSMENT_QUESTION_UPDATE = "assessment.question.update"
     ASSESSMENT_QUESTION_PUBLISH = "assessment.question.publish"
     ASSESSMENT_QUESTION_ARCHIVE = "assessment.question.archive"
+    ASSESSMENT_ATTEMPT_START = "assessment.attempt.start"
+    ASSESSMENT_ATTEMPT_READ = "assessment.attempt.read"
+    ASSESSMENT_ATTEMPT_SUBMIT = "assessment.attempt.submit"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
-    "student": frozenset({Permission.CATALOGUE_READ}),
+    "student": frozenset(
+        {
+            Permission.CATALOGUE_READ,
+            Permission.ASSESSMENT_READ,
+            Permission.ASSESSMENT_ATTEMPT_START,
+            Permission.ASSESSMENT_ATTEMPT_READ,
+            Permission.ASSESSMENT_ATTEMPT_SUBMIT,
+        }
+    ),
     "lecturer": frozenset(
         {
             Permission.CATALOGUE_READ,

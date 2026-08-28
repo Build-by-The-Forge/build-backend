@@ -158,6 +158,7 @@ async def test_update_and_publish_assessment(
         title="Updated Midterm",
         duration_minutes=90,
     )
+    await assessment_service.add_question(assessment.id, "question-123", "tenant-123")
     published = await assessment_service.publish_assessment(assessment.id, "tenant-123")
 
     assert updated is not None
@@ -215,12 +216,14 @@ async def test_assessment_events_are_published_after_application_operations() ->
 
     service = AssessmentService(
         repository=InMemoryAssessmentRepository(),
+        question_repository=InMemoryQuestionRepository(build_question()),
         catalogue_repository=InMemoryCourseRepository(),
         event_bus=event_bus,
     )
     assessment = await service.create_assessment(
         "tenant-123", "course-123", "Midterm", "Answer all questions.", 60
     )
+    await service.add_question(assessment.id, "question-123", "tenant-123")
     await service.update_assessment(assessment.id, "tenant-123", title="Updated")
     await service.publish_assessment(assessment.id, "tenant-123")
 
