@@ -3,6 +3,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
 from app.domain.repositories.assessment import AssessmentRepository
+from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 from app.domain.repositories.session import SessionRepository
@@ -18,6 +19,9 @@ class AssessmentUnitOfWorkPort(Protocol):
 
     @property
     def catalogue(self) -> CourseRepository: ...
+
+    @property
+    def attempts(self) -> AttemptRepository: ...
 
 
 class CourseUnitOfWorkPort(Protocol):

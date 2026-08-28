@@ -168,3 +168,53 @@ class AssessmentQuestionModel(Base):
         Index("ix_assessment_questions_assessment_id", "assessment_id"),
         Index("ix_assessment_questions_question_id", "question_id"),
     )
+
+
+class AssessmentAttemptModel(Base):
+    __tablename__ = "assessment_attempts"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    assessment_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="in_progress"
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        Index("ix_assessment_attempts_tenant_id", "tenant_id"),
+        Index("ix_assessment_attempts_assessment_id", "assessment_id"),
+        Index("ix_assessment_attempts_user_id", "user_id"),
+        Index("ix_assessment_attempts_status", "status"),
+        Index(
+            "uq_assessment_attempts_active",
+            "tenant_id",
+            "assessment_id",
+            "user_id",
+            unique=True,
+            sqlite_where=(status == "in_progress"),
+            postgresql_where=(status == "in_progress"),
+        ),
+    )

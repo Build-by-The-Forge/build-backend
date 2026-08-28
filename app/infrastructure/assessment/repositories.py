@@ -3,16 +3,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.assessment.assessment import Assessment
+from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.question import Question
 from app.domain.repositories.assessment import AssessmentRepository
+from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.question import QuestionRepository
 from app.infrastructure.assessment.mappers import (
     assessment_model_to_domain,
     assessment_to_model,
+    attempt_model_to_domain,
+    attempt_to_model,
     question_model_to_domain,
     question_to_model,
 )
-from app.infrastructure.db.models.assessment import AssessmentModel, QuestionModel
+from app.infrastructure.db.models.assessment import (
+    AssessmentAttemptModel,
+    AssessmentModel,
+    QuestionModel,
+)
 
 
 class SqlAlchemyQuestionRepository(QuestionRepository):
@@ -23,7 +31,7 @@ class SqlAlchemyQuestionRepository(QuestionRepository):
         statement = select(QuestionModel).where(QuestionModel.id == question.id.value)
         if tenant_id is not None:
             statement = statement.where(QuestionModel.tenant_id == tenant_id)
-        statement = statement.options(selectinload(QuestionModel.options))
+            statement = statement.options(selectinload(QuestionModel.options))
         result = await self._session.scalars(statement)
         model = result.first()
         if model is None:
@@ -105,7 +113,7 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         statement = select(AssessmentModel).where(AssessmentModel.id == assessment.id)
         if tenant_id is not None:
             statement = statement.where(AssessmentModel.tenant_id == tenant_id)
-        statement = statement.options(selectinload(AssessmentModel.questions))
+            statement = statement.options(selectinload(AssessmentModel.questions))
         result = await self._session.scalars(statement)
         model = result.first()
         if model is None:
@@ -165,3 +173,86 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         assessment_to_model(assessment, model=model)
         await self._session.flush()
         return assessment
+
+
+class SqlAlchemyAttemptRepository(AttemptRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def save(
+        self, attempt: AssessmentAttempt, tenant_id: str | None = None
+    ) -> AssessmentAttempt:
+        model = await self._find(attempt.id, tenant_id=tenant_id)
+        if model is None:
+            model = attempt_to_model(attempt)
+            if tenant_id is not None:
+                model.tenant_id = tenant_id
+            self._session.add(model)
+        else:
+            attempt_to_model(attempt, model=model)
+        await self._session.flush()
+        return attempt
+
+    async def get_by_id(
+        self,
+        attempt_id: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> AssessmentAttempt | None:
+        statement = select(AssessmentAttemptModel).where(
+            AssessmentAttemptModel.id == attempt_id
+        )
+        if tenant_id is not None:
+            statement = statement.where(AssessmentAttemptModel.tenant_id == tenant_id)
+        if user_id is not None:
+            statement = statement.where(AssessmentAttemptModel.user_id == user_id)
+        result = await self._session.scalars(statement)
+        model = result.first()
+        return attempt_model_to_domain(model) if model is not None else None
+
+    async def get_active_for_user(
+        self,
+        assessment_id: str,
+        user_id: str,
+        tenant_id: str,
+    ) -> AssessmentAttempt | None:
+        statement = select(AssessmentAttemptModel).where(
+            AssessmentAttemptModel.assessment_id == assessment_id,
+            AssessmentAttemptModel.user_id == user_id,
+            AssessmentAttemptModel.tenant_id == tenant_id,
+            AssessmentAttemptModel.status == AttemptStatus.IN_PROGRESS.value,
+        )
+        result = await self._session.scalars(statement)
+        model = result.first()
+        return attempt_model_to_domain(model) if model is not None else None
+
+    async def list_by_user(
+        self, user_id: str, tenant_id: str
+    ) -> list[AssessmentAttempt]:
+        statement = select(AssessmentAttemptModel).where(
+            AssessmentAttemptModel.user_id == user_id,
+            AssessmentAttemptModel.tenant_id == tenant_id,
+        )
+        result = await self._session.scalars(statement)
+        return [attempt_model_to_domain(item) for item in result.all()]
+
+    async def update(
+        self, attempt: AssessmentAttempt, tenant_id: str | None = None
+    ) -> AssessmentAttempt:
+        model = await self._find(attempt.id, tenant_id=tenant_id)
+        if model is None:
+            raise ValueError(f"attempt {attempt.id} not found")
+        attempt_to_model(attempt, model=model)
+        await self._session.flush()
+        return attempt
+
+    async def _find(
+        self, attempt_id: str, tenant_id: str | None = None
+    ) -> AssessmentAttemptModel | None:
+        statement = select(AssessmentAttemptModel).where(
+            AssessmentAttemptModel.id == attempt_id
+        )
+        if tenant_id is not None:
+            statement = statement.where(AssessmentAttemptModel.tenant_id == tenant_id)
+        result = await self._session.scalars(statement)
+        return result.first()

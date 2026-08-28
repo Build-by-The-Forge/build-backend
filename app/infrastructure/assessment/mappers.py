@@ -8,6 +8,7 @@ from app.domain.assessment.assessment import (
     AssessmentQuestion,
     AssessmentStatus,
 )
+from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -22,6 +23,7 @@ from app.domain.assessment.value_objects import (
     QuestionType,
 )
 from app.infrastructure.db.models.assessment import (
+    AssessmentAttemptModel,
     AssessmentModel,
     AssessmentQuestionModel,
     QuestionModel,
@@ -190,3 +192,35 @@ def assessment_model_to_domain(model: AssessmentModel) -> Assessment:
         updated_at=model.updated_at,
     )
     return assessment
+
+
+def attempt_to_model(
+    attempt: AssessmentAttempt,
+    model: AssessmentAttemptModel | None = None,
+) -> AssessmentAttemptModel:
+    if model is None:
+        model = AssessmentAttemptModel(id=attempt.id)
+
+    model.tenant_id = attempt.tenant_id
+    model.assessment_id = attempt.assessment_id
+    model.user_id = attempt.user_id
+    model.status = attempt.status.value
+    model.started_at = attempt.started_at
+    model.submitted_at = attempt.submitted_at
+    model.created_at = attempt.created_at
+    model.updated_at = attempt.updated_at
+    return model
+
+
+def attempt_model_to_domain(model: AssessmentAttemptModel) -> AssessmentAttempt:
+    return AssessmentAttempt(
+        tenant_id=model.tenant_id,
+        assessment_id=model.assessment_id,
+        user_id=model.user_id,
+        status=AttemptStatus(model.status),
+        attempt_id=model.id,
+        started_at=model.started_at,
+        submitted_at=model.submitted_at,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )

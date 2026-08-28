@@ -15,6 +15,19 @@ from app.application.assessment.assessment_handlers import (
     UpdateAssessmentHandler,
 )
 from app.application.assessment.assessment_service import AssessmentService
+from app.application.assessment.attempt_commands import (
+    GetAttemptCommand,
+    ListMyAttemptsCommand,
+    StartAttemptCommand,
+    SubmitAttemptCommand,
+)
+from app.application.assessment.attempt_handlers import (
+    GetAttemptHandler,
+    ListMyAttemptsHandler,
+    StartAttemptHandler,
+    SubmitAttemptHandler,
+)
+from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.commands import (
     ArchiveQuestionCommand,
     CreateQuestionCommand,
@@ -64,4 +77,13 @@ __all__ = [
     "PublishAssessmentHandler",
     "UpdateAssessmentHandler",
     "AssessmentService",
+    "GetAttemptCommand",
+    "ListMyAttemptsCommand",
+    "StartAttemptCommand",
+    "SubmitAttemptCommand",
+    "GetAttemptHandler",
+    "ListMyAttemptsHandler",
+    "StartAttemptHandler",
+    "SubmitAttemptHandler",
+    "AttemptService",
 ]

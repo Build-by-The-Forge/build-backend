@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.assessment.repositories import (
     SqlAlchemyAssessmentRepository,
+    SqlAlchemyAttemptRepository,
     SqlAlchemyQuestionRepository,
 )
 from app.infrastructure.catalogue.repositories import SqlAlchemyCourseRepository
@@ -15,6 +16,7 @@ class AssessmentUnitOfWork(UnitOfWork):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
         self.assessments = SqlAlchemyAssessmentRepository(session)
+        self.attempts = SqlAlchemyAttemptRepository(session)
         self.questions = SqlAlchemyQuestionRepository(session)
         self.catalogue = SqlAlchemyCourseRepository(session)
 

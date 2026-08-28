@@ -3,6 +3,7 @@ from app.domain.assessment.assessment import (
     AssessmentQuestion,
     AssessmentStatus,
 )
+from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -26,6 +27,8 @@ __all__ = [
     "Difficulty",
     "QuestionDisplayOrder",
     "QuestionExplanation",
+    "AssessmentAttempt",
+    "AttemptStatus",
     "QuestionId",
     "QuestionMarks",
     "QuestionOptionId",

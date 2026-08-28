@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import TypeVar, cast
 
 from app.application.assessment.assessment_service import AssessmentService
+from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
 from app.application.identity.user_service import UserService
@@ -78,6 +79,10 @@ def build_container() -> Container:
     container.register(
         AssessmentService,
         AssessmentService(uow_factory=sqlalchemy_assessment_uow),
+    )
+    container.register(
+        AttemptService,
+        AttemptService(uow_factory=sqlalchemy_assessment_uow),
     )
     return container
 
