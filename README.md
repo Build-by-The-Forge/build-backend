@@ -93,6 +93,31 @@ Attempt answer persistence    next
 Deterministic scoring         next
 ```
 
+### Phase 3D — Attempt answer persistence
+
+The next major assessment slice is `3D: Attempt Answer Persistence`. This layer exists to record the learner's selected option against the immutable assessment snapshot without making grading decisions.
+
+Core rules:
+
+- Persist learner selections against snapshot question records, not live question records.
+- Treat `3D` as a persistence and interaction layer, not a scoring layer.
+- Enforce one answer per `attempt_id + assessment_question_id` pair.
+- Scope answers to the active tenant and authenticated learner.
+- Reject answers for questions that are not part of the current attempt's assessment.
+- Validate the selected option against the snapshot options list.
+- Prevent mutation of answers after the attempt has been submitted.
+- Never expose correctness metadata such as `is_correct`, `answer_key`, or `score` in 3D responses.
+
+Recommended API surface:
+
+```text
+PUT    /assessment/attempts/{attempt_id}/answers/{question_id}
+GET    /assessment/attempts/{attempt_id}/answers
+DELETE /assessment/attempts/{attempt_id}/answers/{question_id}
+```
+
+The persisted answer should contain the learner's selection only, for example a selected option identifier or index. Correctness, scoring, and results belong to later phases (`3F+`).
+
 ### Catalogue ownership
 
 ```text
@@ -448,7 +473,8 @@ tests/                    # Domain, integration, and foundation tests
 
 - Question bank and question versions
 - Assessment blueprints
-- Attempt answer persistence and answer submission
+- Attempt answer persistence (3D) with one answer per question per attempt
+- Submission hardening and immutable submitted attempts
 - Deterministic scoring and results
 - Student enrolment, progress, and learning history
 
