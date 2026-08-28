@@ -23,6 +23,7 @@ class AssessmentQuestion:
     prompt: str
     options: list[str]
     marks: int = 1
+    assessment_question_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.question_id or not self.question_id.strip():

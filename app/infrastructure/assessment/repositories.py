@@ -4,21 +4,26 @@ from sqlalchemy.orm import selectinload
 
 from app.domain.assessment.assessment import Assessment, AssessmentQuestion
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
+from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.question import Question
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
+from app.domain.repositories.attempt_answer import AttemptAnswerRepository
 from app.domain.repositories.question import QuestionRepository
 from app.infrastructure.assessment.mappers import (
     assessment_model_to_domain,
     assessment_question_model_to_domain,
     assessment_to_model,
     attempt_model_to_domain,
+    attempt_answer_model_to_domain,
+    attempt_answer_to_model,
     attempt_to_model,
     question_model_to_domain,
     question_to_model,
 )
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
+    AttemptAnswerModel,
     AssessmentModel,
     AssessmentQuestionModel,
     QuestionModel,
@@ -274,3 +279,60 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
             statement = statement.where(AssessmentAttemptModel.tenant_id == tenant_id)
         result = await self._session.scalars(statement)
         return result.first()
+
+
+class SqlAlchemyAttemptAnswerRepository(AttemptAnswerRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_attempt_and_question(
+        self,
+        attempt_id: str,
+        assessment_question_id: str,
+        tenant_id: str,
+    ) -> AttemptAnswer | None:
+        statement = select(AttemptAnswerModel).where(
+            AttemptAnswerModel.attempt_id == attempt_id,
+            AttemptAnswerModel.assessment_question_id == assessment_question_id,
+            AttemptAnswerModel.tenant_id == tenant_id,
+        )
+        model = (await self._session.scalars(statement)).first()
+        return attempt_answer_model_to_domain(model) if model is not None else None
+
+    async def list_by_attempt(
+        self, attempt_id: str, tenant_id: str
+    ) -> list[AttemptAnswer]:
+        statement = (
+            select(AttemptAnswerModel)
+            .where(
+                AttemptAnswerModel.attempt_id == attempt_id,
+                AttemptAnswerModel.tenant_id == tenant_id,
+            )
+            .order_by(AttemptAnswerModel.created_at.asc())
+        )
+        models = (await self._session.scalars(statement)).all()
+        return [attempt_answer_model_to_domain(model) for model in models]
+
+    async def save(self, answer: AttemptAnswer) -> AttemptAnswer:
+        statement = select(AttemptAnswerModel).where(
+            AttemptAnswerModel.id == answer.id,
+            AttemptAnswerModel.tenant_id == answer.tenant_id,
+        )
+        model = (await self._session.scalars(statement)).first()
+        if model is None:
+            model = attempt_answer_to_model(answer)
+            self._session.add(model)
+        else:
+            attempt_answer_to_model(answer, model=model)
+        await self._session.flush()
+        return answer
+
+    async def delete(self, answer: AttemptAnswer) -> None:
+        statement = select(AttemptAnswerModel).where(
+            AttemptAnswerModel.id == answer.id,
+            AttemptAnswerModel.tenant_id == answer.tenant_id,
+        )
+        model = (await self._session.scalars(statement)).first()
+        if model is not None:
+            await self._session.delete(model)
+            await self._session.flush()

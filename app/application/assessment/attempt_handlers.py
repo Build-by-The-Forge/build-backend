@@ -107,6 +107,7 @@ class GetAttemptQuestionsHandler:
         )
         return [
             AttemptQuestionSnapshot(
+                assessment_question_id=question.assessment_question_id or question.question_id,
                 question_id=question.question_id,
                 sequence=sequence,
                 prompt=question.prompt,

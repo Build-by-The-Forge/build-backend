@@ -25,6 +25,7 @@ Implemented foundation:
 - Assessment application and HTTP APIs
 - Attempt lifecycle with learner ownership, resume behavior, and submission
 - Snapshot-based question delivery that excludes answer keys
+- Attempt answer persistence with snapshot question identity and selected option indexes
 - Domain events, in-process event bus, metrics, and tracing hooks
 - Domain, repository, API, tenancy, authorization, and regression tests
 
@@ -76,7 +77,7 @@ Assessment
 
 Assessment attempts are tenant- and learner-scoped. Delivery reads the immutable
 `assessment_questions` snapshot rows rather than mutable live Question records.
-Answers, scoring, results, timers, and AI integration are intentionally deferred.
+Scoring, results, timers, and AI integration are intentionally deferred.
 
 Current assessment-engine checkpoint:
 
@@ -89,13 +90,13 @@ Attempt persistence           complete
 Attempt application           complete
 Attempt API                   complete
 Snapshot question delivery    complete
-Attempt answer persistence    next
+Attempt answer persistence    complete
 Deterministic scoring         next
 ```
 
 ### Phase 3D — Attempt answer persistence
 
-The next major assessment slice is `3D: Attempt Answer Persistence`. This layer exists to record the learner's selected option against the immutable assessment snapshot without making grading decisions.
+Phase `3D: Attempt Answer Persistence` records the learner's selected option against the immutable assessment snapshot without making grading decisions.
 
 Core rules:
 
@@ -116,7 +117,7 @@ GET    /assessment/attempts/{attempt_id}/answers
 DELETE /assessment/attempts/{attempt_id}/answers/{question_id}
 ```
 
-The persisted answer should contain the learner's selection only, for example a selected option identifier or index. Correctness, scoring, and results belong to later phases (`3F+`).
+The current implementation stores `selected_option_index`. Correctness, scoring, and results belong to later phases (`3F+`).
 
 ### Catalogue ownership
 
@@ -289,6 +290,19 @@ Attempt start, retrieval, listing, submission, and question delivery are scoped
 to the authenticated learner and selected tenant. Starting an assessment resumes
 an existing active attempt. The question-delivery response contains prompt,
 option text, position, sequence, and marks, but never correctness metadata.
+
+### Attempt answers
+
+```text
+PUT    /assessment/attempts/{attempt_id}/answers/{assessment_question_id}
+GET    /assessment/attempts/{attempt_id}/answers
+DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id}
+```
+
+Save requests use `selected_option_index` and are idempotent for a given attempt
+and snapshot question. Only persisted answers are returned. Answer mutations are
+allowed while an attempt is in progress and rejected after submission; answer
+responses never include correctness or grading metadata.
 
 ## Local Development
 

@@ -9,6 +9,7 @@ from app.domain.assessment.assessment import (
     AssessmentStatus,
 )
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
+from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -24,6 +25,7 @@ from app.domain.assessment.value_objects import (
 )
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
+    AttemptAnswerModel,
     AssessmentModel,
     AssessmentQuestionModel,
     QuestionModel,
@@ -171,6 +173,7 @@ def assessment_question_model_to_domain(
         prompt=model.prompt,
         options=json.loads(model.options_json),
         marks=model.marks,
+        assessment_question_id=model.id,
     )
 
 
@@ -221,6 +224,33 @@ def attempt_model_to_domain(model: AssessmentAttemptModel) -> AssessmentAttempt:
         attempt_id=model.id,
         started_at=model.started_at,
         submitted_at=model.submitted_at,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def attempt_answer_to_model(
+    answer: AttemptAnswer,
+    model: AttemptAnswerModel | None = None,
+) -> AttemptAnswerModel:
+    if model is None:
+        model = AttemptAnswerModel(id=answer.id)
+    model.tenant_id = answer.tenant_id
+    model.attempt_id = answer.attempt_id
+    model.assessment_question_id = answer.assessment_question_id
+    model.selected_option_index = answer.selected_option_index
+    model.created_at = answer.created_at
+    model.updated_at = answer.updated_at
+    return model
+
+
+def attempt_answer_model_to_domain(model: AttemptAnswerModel) -> AttemptAnswer:
+    return AttemptAnswer(
+        tenant_id=model.tenant_id,
+        attempt_id=model.attempt_id,
+        assessment_question_id=model.assessment_question_id,
+        selected_option_index=model.selected_option_index,
+        answer_id=model.id,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

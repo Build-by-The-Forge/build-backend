@@ -138,6 +138,7 @@ def _assessment_payload(assessment: Assessment) -> dict[str, object]:
         question_count=assessment.question_count,
         questions=[
             AssessmentQuestionResponse(
+                assessment_question_id=item.assessment_question_id or item.question_id,
                 question_id=item.question_id,
                 prompt=item.prompt,
                 options=item.options,

@@ -218,3 +218,35 @@ class AssessmentAttemptModel(Base):
             postgresql_where=(status == "in_progress"),
         ),
     )
+
+
+class AttemptAnswerModel(Base):
+    __tablename__ = "assessment_attempt_answers"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    attempt_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("assessment_attempts.id", ondelete="CASCADE"), nullable=False
+    )
+    assessment_question_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("assessment_questions.id", ondelete="CASCADE"), nullable=False
+    )
+    selected_option_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "attempt_id", "assessment_question_id",
+            name="uq_attempt_answer_question",
+        ),
+        Index("ix_attempt_answers_tenant_id", "tenant_id"),
+        Index("ix_attempt_answers_attempt_id", "attempt_id"),
+        Index("ix_attempt_answers_assessment_question_id", "assessment_question_id"),
+    )

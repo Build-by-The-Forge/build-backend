@@ -20,6 +20,8 @@ class Permission(StrEnum):
     ASSESSMENT_ATTEMPT_START = "assessment.attempt.start"
     ASSESSMENT_ATTEMPT_READ = "assessment.attempt.read"
     ASSESSMENT_ATTEMPT_SUBMIT = "assessment.attempt.submit"
+    ASSESSMENT_ATTEMPT_ANSWER_WRITE = "assessment.attempt.answer.write"
+    ASSESSMENT_ATTEMPT_ANSWER_DELETE = "assessment.attempt.answer.delete"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
@@ -30,6 +32,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_START,
             Permission.ASSESSMENT_ATTEMPT_READ,
             Permission.ASSESSMENT_ATTEMPT_SUBMIT,
+            Permission.ASSESSMENT_ATTEMPT_ANSWER_WRITE,
+            Permission.ASSESSMENT_ATTEMPT_ANSWER_DELETE,
         }
     ),
     "lecturer": frozenset(

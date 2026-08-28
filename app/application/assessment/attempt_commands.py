@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 @dataclass(slots=True)
 class AttemptQuestionSnapshot:
+    assessment_question_id: str
     question_id: str
     sequence: int
     prompt: str

@@ -147,6 +147,7 @@ def _attempt_payload(attempt: AssessmentAttempt) -> dict[str, object]:
 
 def _question_payload(question: AttemptQuestionSnapshot) -> AttemptQuestionResponse:
     return AttemptQuestionResponse(
+        assessment_question_id=question.assessment_question_id,
         question_id=question.question_id,
         sequence=question.sequence,
         prompt=question.prompt,

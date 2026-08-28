@@ -85,6 +85,10 @@ class AssessmentAttempt:
             )
         )
 
+    def ensure_answer_mutation_allowed(self) -> None:
+        if self.status == AttemptStatus.SUBMITTED:
+            raise AttemptAlreadySubmittedError("attempt already submitted")
+
     def pull_events(self) -> list[DomainEvent]:
         events = list(self._events)
         self._events.clear()

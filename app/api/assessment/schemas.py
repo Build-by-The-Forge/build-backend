@@ -116,6 +116,7 @@ class AttemptQuestionOptionResponse(BaseModel):
 
 
 class AttemptQuestionResponse(BaseModel):
+    assessment_question_id: str
     question_id: str
     sequence: int
     prompt: str
@@ -127,3 +128,21 @@ class AttemptQuestionsResponse(BaseModel):
     attempt_id: str
     assessment_id: str
     questions: list[AttemptQuestionResponse]
+
+
+class SaveAttemptAnswerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    selected_option_index: int
+
+
+class AttemptAnswerResponse(BaseModel):
+    attempt_id: str
+    assessment_question_id: str
+    selected_option_index: int
+    updated_at: str
+
+
+class AttemptAnswersResponse(BaseModel):
+    attempt_id: str
+    answers: list[AttemptAnswerResponse]
