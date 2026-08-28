@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.domain.assessment.assessment import Assessment
+from app.domain.assessment.assessment import Assessment, AssessmentQuestion
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.question import Question
 from app.domain.repositories.assessment import AssessmentRepository
@@ -10,6 +10,7 @@ from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.question import QuestionRepository
 from app.infrastructure.assessment.mappers import (
     assessment_model_to_domain,
+    assessment_question_model_to_domain,
     assessment_to_model,
     attempt_model_to_domain,
     attempt_to_model,
@@ -19,6 +20,7 @@ from app.infrastructure.assessment.mappers import (
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
     AssessmentModel,
+    AssessmentQuestionModel,
     QuestionModel,
 )
 
@@ -158,6 +160,24 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         statement = statement.options(selectinload(AssessmentModel.questions))
         result = await self._session.scalars(statement)
         return [assessment_model_to_domain(item) for item in result.all()]
+
+    async def list_question_snapshots(
+        self, assessment_id: str, tenant_id: str
+    ) -> list[AssessmentQuestion]:
+        statement = (
+            select(AssessmentQuestionModel)
+            .join(AssessmentModel)
+            .where(
+                AssessmentQuestionModel.assessment_id == assessment_id,
+                AssessmentModel.tenant_id == tenant_id,
+                AssessmentQuestionModel.is_active.is_(True),
+            )
+            .order_by(AssessmentQuestionModel.sequence.asc())
+        )
+        result = await self._session.scalars(statement)
+        return [
+            assessment_question_model_to_domain(item) for item in result.all()
+        ]
 
     async def update(
         self, assessment: Assessment, tenant_id: str | None = None

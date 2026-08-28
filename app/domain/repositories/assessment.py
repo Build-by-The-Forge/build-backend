@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from app.domain.assessment.assessment import Assessment
+from app.domain.assessment.assessment import Assessment, AssessmentQuestion
 
 
 class AssessmentRepository(Protocol):
@@ -20,6 +20,11 @@ class AssessmentRepository(Protocol):
         raise NotImplementedError
 
     async def list_all(self, tenant_id: str | None = None) -> list[Assessment]:
+        raise NotImplementedError
+
+    async def list_question_snapshots(
+        self, assessment_id: str, tenant_id: str
+    ) -> list[AssessmentQuestion]:
         raise NotImplementedError
 
     async def update(

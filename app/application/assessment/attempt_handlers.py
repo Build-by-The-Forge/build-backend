@@ -1,5 +1,7 @@
 from app.application.assessment.attempt_commands import (
+    AttemptQuestionSnapshot,
     GetAttemptCommand,
+    GetAttemptQuestionsCommand,
     ListMyAttemptsCommand,
     StartAttemptCommand,
     SubmitAttemptCommand,
@@ -78,3 +80,38 @@ class SubmitAttemptHandler:
             return None
         attempt.submit()
         return await self.repository.update(attempt, tenant_id=command.tenant_id)
+
+
+class GetAttemptQuestionsHandler:
+    def __init__(
+        self,
+        attempts: AttemptRepository,
+        assessments: AssessmentRepository,
+    ) -> None:
+        self.attempts = attempts
+        self.assessments = assessments
+
+    async def handle(
+        self, command: GetAttemptQuestionsCommand
+    ) -> list[AttemptQuestionSnapshot] | None:
+        attempt = await self.attempts.get_by_id(
+            command.attempt_id,
+            tenant_id=command.tenant_id,
+            user_id=command.user_id,
+        )
+        if attempt is None or attempt.status != AttemptStatus.IN_PROGRESS:
+            return None
+
+        snapshots = await self.assessments.list_question_snapshots(
+            attempt.assessment_id, tenant_id=command.tenant_id
+        )
+        return [
+            AttemptQuestionSnapshot(
+                question_id=question.question_id,
+                sequence=sequence,
+                prompt=question.prompt,
+                options=list(question.options),
+                marks=question.marks,
+            )
+            for sequence, question in enumerate(snapshots)
+        ]

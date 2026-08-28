@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
-from app.api.assessment.schemas import AttemptResponse
+from app.api.assessment.schemas import (
+    AttemptQuestionOptionResponse,
+    AttemptQuestionResponse,
+    AttemptQuestionsResponse,
+    AttemptResponse,
+)
+from app.application.assessment.attempt_commands import AttemptQuestionSnapshot
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
@@ -48,6 +54,41 @@ async def get_attempt(
     if attempt is None:
         raise HTTPException(status_code=404, detail="attempt not found")
     return _response(request, attempt)
+
+
+@router.get("/attempts/{attempt_id}/questions", status_code=status.HTTP_200_OK)
+async def get_attempt_questions(
+    attempt_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.ASSESSMENT_ATTEMPT_READ)
+    ),
+) -> JSONResponse:
+    attempt = await service.get_attempt(
+        attempt_id, context.tenant_id, context.user_id
+    )
+    if attempt is None:
+        raise HTTPException(status_code=404, detail="attempt questions not found")
+    questions = await service.get_attempt_questions(
+        attempt_id, context.tenant_id, context.user_id
+    )
+    if questions is None:
+        raise HTTPException(status_code=404, detail="attempt questions not found")
+
+    response = AttemptQuestionsResponse(
+        attempt_id=attempt_id,
+        assessment_id=attempt.assessment_id,
+        questions=[_question_payload(question) for question in questions],
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": response.model_dump(),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
 
 
 @router.get("/attempts", status_code=status.HTTP_200_OK)
@@ -104,6 +145,19 @@ def _attempt_payload(attempt: AssessmentAttempt) -> dict[str, object]:
         created_at=attempt.created_at.isoformat(),
         updated_at=attempt.updated_at.isoformat(),
     ).model_dump()
+
+
+def _question_payload(question: AttemptQuestionSnapshot) -> AttemptQuestionResponse:
+    return AttemptQuestionResponse(
+        question_id=question.question_id,
+        sequence=question.sequence,
+        prompt=question.prompt,
+        marks=question.marks,
+        options=[
+            AttemptQuestionOptionResponse(position=index, text=text)
+            for index, text in enumerate(question.options)
+        ],
+    )
 
 
 def _response(

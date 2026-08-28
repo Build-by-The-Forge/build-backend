@@ -126,11 +126,32 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["data"]] == [attempt_id]
 
+    delivered = client.get(
+        f"/assessment/attempts/{attempt_id}/questions", headers=student_headers
+    )
+    assert delivered.status_code == 200, delivered.text
+    delivered_data = delivered.json()["data"]
+    assert delivered_data["assessment_id"] == assessment_id
+    assert delivered_data["questions"][0]["sequence"] == 0
+    assert delivered_data["questions"][0]["prompt"] == "Which is FIFO?"
+    assert delivered_data["questions"][0]["options"] == [
+        {"position": 0, "text": "Stack"},
+        {"position": 1, "text": "Queue"},
+    ]
+    assert "is_correct" not in delivered.text
+    assert "answer_key" not in delivered.text
+    assert "score" not in delivered.text
+
     submitted = client.post(
         f"/assessment/attempts/{attempt_id}/submit", headers=student_headers
     )
     assert submitted.status_code == 200
     assert submitted.json()["data"]["status"] == "submitted"
+
+    unavailable = client.get(
+        f"/assessment/attempts/{attempt_id}/questions", headers=student_headers
+    )
+    assert unavailable.status_code == 404
 
     duplicate = client.post(
         f"/assessment/attempts/{attempt_id}/submit", headers=student_headers

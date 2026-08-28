@@ -1,11 +1,14 @@
 from app.application.assessment.attempt_commands import (
+    AttemptQuestionSnapshot,
     GetAttemptCommand,
+    GetAttemptQuestionsCommand,
     ListMyAttemptsCommand,
     StartAttemptCommand,
     SubmitAttemptCommand,
 )
 from app.application.assessment.attempt_handlers import (
     GetAttemptHandler,
+    GetAttemptQuestionsHandler,
     ListMyAttemptsHandler,
     StartAttemptHandler,
     SubmitAttemptHandler,
@@ -83,6 +86,19 @@ class AttemptService:
         if attempt is not None:
             self._publish_events(attempt.pull_events())
         return attempt
+
+    async def get_attempt_questions(
+        self, attempt_id: str, tenant_id: str, user_id: str
+    ) -> list[AttemptQuestionSnapshot] | None:
+        command = GetAttemptQuestionsCommand(attempt_id, tenant_id, user_id)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await GetAttemptQuestionsHandler(
+                    uow.attempts, uow.assessments
+                ).handle(command)
+        return await GetAttemptQuestionsHandler(
+            self._required_repository(), self._required_assessment_repository()
+        ).handle(command)
 
     def _required_repository(self) -> AttemptRepository:
         if self.repository is None:

@@ -2,6 +2,15 @@ from dataclasses import dataclass
 
 
 @dataclass(slots=True)
+class AttemptQuestionSnapshot:
+    question_id: str
+    sequence: int
+    prompt: str
+    options: list[str]
+    marks: int
+
+
+@dataclass(slots=True)
 class StartAttemptCommand:
     assessment_id: str
     tenant_id: str
@@ -23,6 +32,13 @@ class ListMyAttemptsCommand:
 
 @dataclass(slots=True)
 class SubmitAttemptCommand:
+    attempt_id: str
+    tenant_id: str
+    user_id: str
+
+
+@dataclass(slots=True)
+class GetAttemptQuestionsCommand:
     attempt_id: str
     tenant_id: str
     user_id: str

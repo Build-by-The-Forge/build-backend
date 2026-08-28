@@ -108,3 +108,22 @@ class AttemptResponse(BaseModel):
     submitted_at: str | None = None
     created_at: str
     updated_at: str
+
+
+class AttemptQuestionOptionResponse(BaseModel):
+    position: int
+    text: str
+
+
+class AttemptQuestionResponse(BaseModel):
+    question_id: str
+    sequence: int
+    prompt: str
+    marks: int
+    options: list[AttemptQuestionOptionResponse]
+
+
+class AttemptQuestionsResponse(BaseModel):
+    attempt_id: str
+    assessment_id: str
+    questions: list[AttemptQuestionResponse]
