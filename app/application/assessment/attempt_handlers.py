@@ -7,7 +7,7 @@ from app.application.assessment.attempt_commands import (
     SubmitAttemptCommand,
 )
 from app.domain.assessment.assessment import AssessmentStatus
-from app.domain.assessment.attempt import AssessmentAttempt
+from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 

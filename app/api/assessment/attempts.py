@@ -64,9 +64,7 @@ async def get_attempt_questions(
         require_permission(Permission.ASSESSMENT_ATTEMPT_READ)
     ),
 ) -> JSONResponse:
-    attempt = await service.get_attempt(
-        attempt_id, context.tenant_id, context.user_id
-    )
+    attempt = await service.get_attempt(attempt_id, context.tenant_id, context.user_id)
     if attempt is None:
         raise HTTPException(status_code=404, detail="attempt questions not found")
     questions = await service.get_attempt_questions(

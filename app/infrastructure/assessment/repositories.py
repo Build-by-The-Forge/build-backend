@@ -175,9 +175,7 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
             .order_by(AssessmentQuestionModel.sequence.asc())
         )
         result = await self._session.scalars(statement)
-        return [
-            assessment_question_model_to_domain(item) for item in result.all()
-        ]
+        return [assessment_question_model_to_domain(item) for item in result.all()]
 
     async def update(
         self, assessment: Assessment, tenant_id: str | None = None
