@@ -1,3 +1,7 @@
+from app.domain.curriculum.audit import (
+    BenchmarkAuditAction,
+    BenchmarkAuditLog,
+)
 from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,
@@ -52,4 +56,6 @@ __all__ = [
     "DiffStatistics",
     "BenchmarkCurriculumDiff",
     "BenchmarkCurriculumDiffEngine",
+    "BenchmarkAuditAction",
+    "BenchmarkAuditLog",
 ]

@@ -31,6 +31,7 @@ def benchmark_curriculum_to_model(
             version=curriculum.version,
             minimum_credit_units=curriculum.minimum_credit_units,
             status=curriculum.status.value,
+            review_fingerprint=curriculum.review_fingerprint,
             created_at=curriculum.created_at,
             updated_at=curriculum.updated_at,
         )
@@ -41,6 +42,7 @@ def benchmark_curriculum_to_model(
     model.version = curriculum.version
     model.minimum_credit_units = curriculum.minimum_credit_units
     model.status = curriculum.status.value
+    model.review_fingerprint = curriculum.review_fingerprint
     model.updated_at = curriculum.updated_at
     return model
 
@@ -58,6 +60,7 @@ def benchmark_curriculum_model_to_domain(
         version=model.version,
         minimum_credit_units=model.minimum_credit_units,
         status=BenchmarkStatus(model.status),
+        review_fingerprint=model.review_fingerprint,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

@@ -10,6 +10,9 @@ from app.application.curriculum.benchmark_service import (
 from app.domain.curriculum.benchmark import BenchmarkStatus
 from app.domain.curriculum.source import CurriculumSource
 from app.events.event_bus import EventBus
+from app.infrastructure.curriculum.audit_repositories import (
+    SqlAlchemyBenchmarkAuditRepository,
+)
 from app.infrastructure.curriculum.benchmark_repositories import (
     SqlAlchemyBenchmarkCurriculumRepository,
 )
@@ -25,6 +28,7 @@ async def test_benchmark_activation_and_supersession_pipeline(
 ) -> None:
     source_repo = SqlAlchemyCurriculumSourceRepository(session)
     benchmark_repo = SqlAlchemyBenchmarkCurriculumRepository(session)
+    audit_repo = SqlAlchemyBenchmarkAuditRepository(session)
     event_bus = EventBus()
     events_emitted: list[str] = []
 
@@ -60,6 +64,7 @@ async def test_benchmark_activation_and_supersession_pipeline(
 
     service = BenchmarkCurriculumService(
         repository=benchmark_repo,
+        audit_repository=audit_repo,
         event_bus=event_bus,
     )
 
@@ -98,6 +103,15 @@ async def test_benchmark_activation_and_supersession_pipeline(
         courses=[course_input],
     )
     await service.validate_candidate(v1_curr.id)
+    await service.submit_for_review(
+        v1_curr.id, actor_id="admin-1", actor_email="admin1@nuc.edu.ng"
+    )
+    await service.approve_curriculum(
+        v1_curr.id,
+        reviewer_id="rev-1",
+        reviewer_email="rev1@nuc.edu.ng",
+        reason="Approved v1",
+    )
 
     # 2. Activate V1 -> Becomes ACTIVE, 0 superseded
     activated_v1, superseded = await service.activate_curriculum(
@@ -130,6 +144,15 @@ async def test_benchmark_activation_and_supersession_pipeline(
         courses=[course_input],
     )
     await service.validate_candidate(v2_curr.id)
+    await service.submit_for_review(
+        v2_curr.id, actor_id="admin-1", actor_email="admin1@nuc.edu.ng"
+    )
+    await service.approve_curriculum(
+        v2_curr.id,
+        reviewer_id="rev-1",
+        reviewer_email="rev1@nuc.edu.ng",
+        reason="Approved v2",
+    )
 
     # 4. Activate V2 -> V2 becomes ACTIVE, V1 becomes SUPERSEDED
     activated_v2, superseded_v1 = await service.activate_curriculum(

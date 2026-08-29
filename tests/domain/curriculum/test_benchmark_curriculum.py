@@ -159,19 +159,29 @@ def test_benchmark_lifecycle_activation_and_supersession() -> None:
         version="2026.01",
     )
     # Direct activation from CANDIDATE must fail
-    with pytest.raises(ValueError, match="only validated benchmarks can be activated"):
+    with pytest.raises(ValueError, match="only approved benchmarks can be activated"):
         curriculum.activate()
 
     # Transition to VALIDATED
     curriculum.mark_validated()
     assert curriculum.status == BenchmarkStatus.VALIDATED
 
+    # Activation from VALIDATED must fail without review and approval
+    with pytest.raises(ValueError, match="only approved benchmarks can be activated"):
+        curriculum.activate()
+
+    # Submit for review and approve
+    curriculum.submit_for_review(diff_fingerprint="abc")
+    assert curriculum.status == BenchmarkStatus.UNDER_REVIEW
+    curriculum.approve(reviewer_id="rev-1", reason="Approved standard")
+    assert curriculum.status == BenchmarkStatus.APPROVED
+
     # Activate
     curriculum.activate(activated_by="admin-user-1")
     assert curriculum.status == BenchmarkStatus.ACTIVE
 
     # Activating already active raises
-    with pytest.raises(ValueError, match="only validated benchmarks can be activated"):
+    with pytest.raises(ValueError, match="only approved benchmarks can be activated"):
         curriculum.activate()
 
     # Supersede

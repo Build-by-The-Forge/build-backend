@@ -104,14 +104,36 @@ async def test_activate_benchmark_curriculum_api(client) -> None:
     )
     assert val_res.status_code == 200
 
-    # 6. Student attempt to activate -> 403 Forbidden
+    # 6. Attempt activation directly from VALIDATED -> 400 Bad Request
+    unapproved_act = client.post(
+        f"/curriculum/benchmarks/{curriculum_id}/activate",
+        headers=admin_headers,
+    )
+    assert unapproved_act.status_code == 400
+
+    # 7. Submit for review & Approve
+    submit_res = client.post(
+        f"/curriculum/benchmarks/{curriculum_id}/submit-review",
+        headers=admin_headers,
+        json={"notes": "Ready for approval"},
+    )
+    assert submit_res.status_code == 200
+
+    appr_res = client.post(
+        f"/curriculum/benchmarks/{curriculum_id}/approve",
+        headers=admin_headers,
+        json={"reason": "Approved standard"},
+    )
+    assert appr_res.status_code == 200
+
+    # 8. Student attempt to activate -> 403 Forbidden
     student_act = client.post(
         f"/curriculum/benchmarks/{curriculum_id}/activate",
         headers=student_headers,
     )
     assert student_act.status_code == 403
 
-    # 7. Admin activates validated curriculum -> 200 OK
+    # 9. Admin activates approved curriculum -> 200 OK
     admin_act = client.post(
         f"/curriculum/benchmarks/{curriculum_id}/activate",
         headers=admin_headers,
@@ -122,7 +144,7 @@ async def test_activate_benchmark_curriculum_api(client) -> None:
     assert act_data["data"]["activated"]["status"] == "active"
     assert act_data["data"]["superseded"] is None
 
-    # 8. Query active benchmark endpoint
+    # 10. Query active benchmark endpoint
     get_active = client.get(
         f"/curriculum/benchmarks/active/Computing/{prog_code}",
         headers=admin_headers,

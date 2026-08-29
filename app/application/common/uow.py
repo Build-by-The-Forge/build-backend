@@ -6,6 +6,9 @@ from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
+from app.domain.repositories.benchmark_audit import (
+    BenchmarkAuditRepository,
+)
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
 )
@@ -55,6 +58,9 @@ class CurriculumUnitOfWorkPort(Protocol):
 
     @property
     def benchmarks(self) -> BenchmarkCurriculumRepository: ...
+
+    @property
+    def benchmark_audits(self) -> BenchmarkAuditRepository: ...
 
 
 AssessmentUnitOfWorkFactory = Callable[

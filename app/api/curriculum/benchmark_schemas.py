@@ -167,3 +167,39 @@ class BenchmarkCurriculumDiffResponse(BaseModel):
     diff_fingerprint: str
     statistics: DiffStatisticsResponse
     course_diffs: list[CourseDiffResponse] = Field(default_factory=list)
+
+
+class SubmitReviewRequest(BaseModel):
+    notes: str | None = None
+
+
+class ApproveBenchmarkRequest(BaseModel):
+    reason: str
+
+
+class RejectBenchmarkRequest(BaseModel):
+    reason: str
+
+
+class ReviseBenchmarkRequest(BaseModel):
+    reason: str | None = None
+
+
+class BenchmarkAuditLogResponse(BaseModel):
+    id: str
+    curriculum_id: str
+    action: str
+    actor_id: str
+    actor_email: str
+    previous_status: str
+    new_status: str
+    reason: str | None = None
+    review_notes: str | None = None
+    diff_fingerprint: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: str
+
+
+class BenchmarkGovernanceActionResponse(BaseModel):
+    curriculum: BenchmarkCurriculumSummaryResponse
+    audit_log: BenchmarkAuditLogResponse

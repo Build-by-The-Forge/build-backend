@@ -37,6 +37,7 @@ class BenchmarkCurriculumModel(Base):
         Integer, nullable=False, default=120
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="candidate")
+    review_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -64,6 +65,15 @@ class BenchmarkCurriculumModel(Base):
         ),
         Index("ix_benchmark_curricula_programme_code", "programme_code"),
         Index("ix_benchmark_curricula_status", "status"),
+        Index(
+            "uq_benchmark_active_identity",
+            "discipline_group",
+            "programme_code",
+            "degree_level",
+            unique=True,
+            postgresql_where=(status == "active"),
+            sqlite_where=(status == "active"),
+        ),
     )
 
 

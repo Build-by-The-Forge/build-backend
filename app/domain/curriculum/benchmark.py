@@ -11,6 +11,9 @@ from app.events.base import DomainEvent
 class BenchmarkStatus(StrEnum):
     CANDIDATE = "candidate"
     VALIDATED = "validated"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
     ACTIVE = "active"
     SUPERSEDED = "superseded"
     ARCHIVED = "archived"
@@ -179,6 +182,7 @@ class BenchmarkCurriculum:
     degree_level: str = "undergraduate"
     minimum_credit_units: int = 120
     status: BenchmarkStatus = BenchmarkStatus.CANDIDATE
+    review_fingerprint: str | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
@@ -194,6 +198,7 @@ class BenchmarkCurriculum:
         degree_level: str = "undergraduate",
         minimum_credit_units: int = 120,
         curriculum_id: str | None = None,
+        review_fingerprint: str | None = None,
     ) -> BenchmarkCurriculum:
         if not source_snapshot_id.strip():
             raise ValueError("source_snapshot_id cannot be empty")
@@ -220,6 +225,7 @@ class BenchmarkCurriculum:
             degree_level=degree_level.strip(),
             minimum_credit_units=minimum_credit_units,
             status=BenchmarkStatus.CANDIDATE,
+            review_fingerprint=review_fingerprint,
             created_at=now,
             updated_at=now,
         )
@@ -260,14 +266,114 @@ class BenchmarkCurriculum:
             )
         )
 
+    def submit_for_review(
+        self,
+        diff_fingerprint: str | None = None,
+        notes: str | None = None,
+    ) -> None:
+        if self.status != BenchmarkStatus.VALIDATED:
+            raise ValueError(
+                f"only validated benchmarks can be submitted for review, current status is '{self.status.value}'"
+            )
+        self.status = BenchmarkStatus.UNDER_REVIEW
+        self.review_fingerprint = diff_fingerprint
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_submitted_for_review",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
+                    "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
+                    "version": self.version,
+                    "diff_fingerprint": diff_fingerprint,
+                    "notes": notes,
+                },
+            )
+        )
+
+    def approve(self, reviewer_id: str, reason: str) -> None:
+        if self.status != BenchmarkStatus.UNDER_REVIEW:
+            raise ValueError(
+                f"only benchmarks under review can be approved, current status is '{self.status.value}'"
+            )
+        if not reason.strip():
+            raise ValueError("approval reason cannot be empty")
+        self.status = BenchmarkStatus.APPROVED
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_approved",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
+                    "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
+                    "version": self.version,
+                    "reviewer_id": reviewer_id,
+                    "reason": reason.strip(),
+                    "diff_fingerprint": self.review_fingerprint,
+                },
+            )
+        )
+
+    def reject(self, reviewer_id: str, reason: str) -> None:
+        if self.status != BenchmarkStatus.UNDER_REVIEW:
+            raise ValueError(
+                f"only benchmarks under review can be rejected, current status is '{self.status.value}'"
+            )
+        if not reason.strip():
+            raise ValueError("rejection reason cannot be empty")
+        self.status = BenchmarkStatus.REJECTED
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_rejected",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
+                    "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
+                    "version": self.version,
+                    "reviewer_id": reviewer_id,
+                    "reason": reason.strip(),
+                },
+            )
+        )
+
+    def revise_to_candidate(self) -> None:
+        if self.status != BenchmarkStatus.REJECTED:
+            raise ValueError(
+                f"only rejected benchmarks can be revised to candidate, current status is '{self.status.value}'"
+            )
+        self.status = BenchmarkStatus.CANDIDATE
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_revised_to_candidate",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
+                    "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
+                    "version": self.version,
+                },
+            )
+        )
+
     def activate(
         self,
         superseded_id: str | None = None,
         activated_by: str | None = None,
     ) -> None:
-        if self.status != BenchmarkStatus.VALIDATED:
+        if self.status != BenchmarkStatus.APPROVED:
             raise ValueError(
-                f"only validated benchmarks can be activated, current status is '{self.status.value}'"
+                f"only approved benchmarks can be activated, current status is '{self.status.value}'"
             )
         self.status = BenchmarkStatus.ACTIVE
         self.touch()
@@ -283,6 +389,7 @@ class BenchmarkCurriculum:
                     "version": self.version,
                     "superseded_id": superseded_id,
                     "activated_by": activated_by,
+                    "diff_fingerprint": self.review_fingerprint,
                 },
             )
         )

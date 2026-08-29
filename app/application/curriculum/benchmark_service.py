@@ -26,15 +26,31 @@ from app.application.curriculum.diff_commands import (
 from app.application.curriculum.diff_handlers import (
     CompareBenchmarkCurriculaHandler,
 )
+from app.application.curriculum.governance_commands import (
+    ApproveBenchmarkCommand,
+    GetBenchmarkAuditTrailCommand,
+    RejectBenchmarkCommand,
+    ReviseBenchmarkCommand,
+    SubmitBenchmarkReviewCommand,
+)
+from app.application.curriculum.governance_handlers import (
+    ApproveBenchmarkHandler,
+    GetBenchmarkAuditTrailHandler,
+    RejectBenchmarkHandler,
+    ReviseBenchmarkHandler,
+    SubmitBenchmarkReviewHandler,
+)
 from app.application.curriculum.validation_commands import (
     ValidateBenchmarkCandidateCommand,
 )
 from app.application.curriculum.validation_handlers import (
     ValidateBenchmarkCandidateHandler,
 )
+from app.domain.curriculum.audit import BenchmarkAuditLog
 from app.domain.curriculum.benchmark import BenchmarkCourse, BenchmarkCurriculum
 from app.domain.curriculum.diff import BenchmarkCurriculumDiff
 from app.domain.curriculum.validator import ValidationResult
+from app.domain.repositories.benchmark_audit import BenchmarkAuditRepository
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
 )
@@ -46,10 +62,12 @@ class BenchmarkCurriculumService:
     def __init__(
         self,
         repository: BenchmarkCurriculumRepository | None = None,
+        audit_repository: BenchmarkAuditRepository | None = None,
         event_bus: EventBus | None = None,
         uow_factory: CurriculumUnitOfWorkFactory | None = None,
     ) -> None:
         self.repository = repository
+        self.audit_repository = audit_repository
         self.event_bus = event_bus
         self.uow_factory = uow_factory
 
@@ -163,6 +181,129 @@ class BenchmarkCurriculumService:
         self._publish_events(events)
         return curriculum, result
 
+    async def submit_for_review(
+        self,
+        curriculum_id: str,
+        actor_id: str,
+        actor_email: str,
+        notes: str | None = None,
+    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog]:
+        command = SubmitBenchmarkReviewCommand(
+            curriculum_id=curriculum_id,
+            actor_id=actor_id,
+            actor_email=actor_email,
+            notes=notes,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                curriculum, audit_log, events = await SubmitBenchmarkReviewHandler(
+                    uow.benchmarks, uow.benchmark_audits
+                ).handle(command)
+            self._publish_events(events)
+            return curriculum, audit_log
+
+        curriculum, audit_log, events = await SubmitBenchmarkReviewHandler(
+            self._required_repository(),
+            self._required_audit_repository(),
+        ).handle(command)
+        self._publish_events(events)
+        return curriculum, audit_log
+
+    async def approve_curriculum(
+        self,
+        curriculum_id: str,
+        reviewer_id: str,
+        reviewer_email: str,
+        reason: str,
+    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog]:
+        command = ApproveBenchmarkCommand(
+            curriculum_id=curriculum_id,
+            reviewer_id=reviewer_id,
+            reviewer_email=reviewer_email,
+            reason=reason,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                curriculum, audit_log, events = await ApproveBenchmarkHandler(
+                    uow.benchmarks, uow.benchmark_audits
+                ).handle(command)
+            self._publish_events(events)
+            return curriculum, audit_log
+
+        curriculum, audit_log, events = await ApproveBenchmarkHandler(
+            self._required_repository(),
+            self._required_audit_repository(),
+        ).handle(command)
+        self._publish_events(events)
+        return curriculum, audit_log
+
+    async def reject_curriculum(
+        self,
+        curriculum_id: str,
+        reviewer_id: str,
+        reviewer_email: str,
+        reason: str,
+    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog]:
+        command = RejectBenchmarkCommand(
+            curriculum_id=curriculum_id,
+            reviewer_id=reviewer_id,
+            reviewer_email=reviewer_email,
+            reason=reason,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                curriculum, audit_log, events = await RejectBenchmarkHandler(
+                    uow.benchmarks, uow.benchmark_audits
+                ).handle(command)
+            self._publish_events(events)
+            return curriculum, audit_log
+
+        curriculum, audit_log, events = await RejectBenchmarkHandler(
+            self._required_repository(),
+            self._required_audit_repository(),
+        ).handle(command)
+        self._publish_events(events)
+        return curriculum, audit_log
+
+    async def revise_curriculum(
+        self,
+        curriculum_id: str,
+        actor_id: str,
+        actor_email: str,
+        reason: str | None = None,
+    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog]:
+        command = ReviseBenchmarkCommand(
+            curriculum_id=curriculum_id,
+            actor_id=actor_id,
+            actor_email=actor_email,
+            reason=reason,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                curriculum, audit_log, events = await ReviseBenchmarkHandler(
+                    uow.benchmarks, uow.benchmark_audits
+                ).handle(command)
+            self._publish_events(events)
+            return curriculum, audit_log
+
+        curriculum, audit_log, events = await ReviseBenchmarkHandler(
+            self._required_repository(),
+            self._required_audit_repository(),
+        ).handle(command)
+        self._publish_events(events)
+        return curriculum, audit_log
+
+    async def get_audit_trail(self, curriculum_id: str) -> list[BenchmarkAuditLog]:
+        command = GetBenchmarkAuditTrailCommand(curriculum_id=curriculum_id)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await GetBenchmarkAuditTrailHandler(uow.benchmark_audits).handle(
+                    command
+                )
+        return await GetBenchmarkAuditTrailHandler(
+            self._required_audit_repository()
+        ).handle(command)
+
     async def activate_curriculum(
         self,
         curriculum_id: str,
@@ -175,15 +316,16 @@ class BenchmarkCurriculumService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 curriculum, superseded, events = (
-                    await ActivateBenchmarkCurriculumHandler(uow.benchmarks).handle(
-                        command
-                    )
+                    await ActivateBenchmarkCurriculumHandler(
+                        uow.benchmarks, uow.benchmark_audits
+                    ).handle(command)
                 )
             self._publish_events(events)
             return curriculum, superseded
 
         curriculum, superseded, events = await ActivateBenchmarkCurriculumHandler(
-            self._required_repository()
+            self._required_repository(),
+            self.audit_repository,
         ).handle(command)
         self._publish_events(events)
         return curriculum, superseded
@@ -229,6 +371,11 @@ class BenchmarkCurriculumService:
         if self.repository is None:
             raise ValueError("benchmark curriculum repository is required")
         return self.repository
+
+    def _required_audit_repository(self) -> BenchmarkAuditRepository:
+        if self.audit_repository is None:
+            raise ValueError("benchmark audit repository is required")
+        return self.audit_repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:
         if self.event_bus is not None:

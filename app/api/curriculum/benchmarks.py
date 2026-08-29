@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.curriculum.benchmark_schemas import (
+    ApproveBenchmarkRequest,
+    BenchmarkAuditLogResponse,
     BenchmarkCourseDetailResponse,
     BenchmarkCourseSummaryResponse,
     BenchmarkCurriculumDiffResponse,
@@ -13,6 +15,9 @@ from app.api.curriculum.benchmark_schemas import (
     FieldDiffResponse,
     IngestBenchmarkCandidateRequest,
     OutcomeDiffResponse,
+    RejectBenchmarkRequest,
+    ReviseBenchmarkRequest,
+    SubmitReviewRequest,
     TopicDiffResponse,
     ValidationIssueResponse,
     ValidationResultResponse,
@@ -29,6 +34,7 @@ from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
+from app.domain.curriculum.audit import BenchmarkAuditLog
 from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,
@@ -289,6 +295,168 @@ async def validate_candidate(
     )
 
 
+@router.post("/{curriculum_id}/submit-review", status_code=status.HTTP_200_OK)
+async def submit_for_review(
+    curriculum_id: str,
+    payload: SubmitReviewRequest,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
+    ),
+) -> JSONResponse:
+    try:
+        curriculum, audit_log = await service.submit_for_review(
+            curriculum_id=curriculum_id,
+            actor_id=context.tenant_id,
+            actor_email=f"{context.tenant_id}@build.internal",
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "curriculum": _curriculum_summary_payload(curriculum),
+                "audit_log": _audit_log_payload(audit_log),
+            },
+            "meta": {
+                "diff_fingerprint": audit_log.diff_fingerprint,
+            },
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.post("/{curriculum_id}/approve", status_code=status.HTTP_200_OK)
+async def approve_curriculum(
+    curriculum_id: str,
+    payload: ApproveBenchmarkRequest,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
+    ),
+) -> JSONResponse:
+    try:
+        curriculum, audit_log = await service.approve_curriculum(
+            curriculum_id=curriculum_id,
+            reviewer_id=context.tenant_id,
+            reviewer_email=f"{context.tenant_id}@build.internal",
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "curriculum": _curriculum_summary_payload(curriculum),
+                "audit_log": _audit_log_payload(audit_log),
+            },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.post("/{curriculum_id}/reject", status_code=status.HTTP_200_OK)
+async def reject_curriculum(
+    curriculum_id: str,
+    payload: RejectBenchmarkRequest,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
+    ),
+) -> JSONResponse:
+    try:
+        curriculum, audit_log = await service.reject_curriculum(
+            curriculum_id=curriculum_id,
+            reviewer_id=context.tenant_id,
+            reviewer_email=f"{context.tenant_id}@build.internal",
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "curriculum": _curriculum_summary_payload(curriculum),
+                "audit_log": _audit_log_payload(audit_log),
+            },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.post("/{curriculum_id}/revise", status_code=status.HTTP_200_OK)
+async def revise_curriculum(
+    curriculum_id: str,
+    payload: ReviseBenchmarkRequest,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
+    ),
+) -> JSONResponse:
+    try:
+        curriculum, audit_log = await service.revise_curriculum(
+            curriculum_id=curriculum_id,
+            actor_id=context.tenant_id,
+            actor_email=f"{context.tenant_id}@build.internal",
+            reason=payload.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "curriculum": _curriculum_summary_payload(curriculum),
+                "audit_log": _audit_log_payload(audit_log),
+            },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.get("/{curriculum_id}/audit-trail", status_code=status.HTTP_200_OK)
+async def get_audit_trail(
+    curriculum_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_READ)
+    ),
+) -> JSONResponse:
+    audit_logs = await service.get_audit_trail(curriculum_id)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": [_audit_log_payload(log) for log in audit_logs],
+            "meta": {"total": len(audit_logs)},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
 @router.post("/{curriculum_id}/activate", status_code=status.HTTP_200_OK)
 async def activate_curriculum(
     curriculum_id: str,
@@ -539,4 +707,21 @@ def _diff_payload(diff: BenchmarkCurriculumDiff) -> dict[str, object]:
         diff_fingerprint=diff.diff_fingerprint,
         statistics=stats,
         course_diffs=course_diffs,
+    ).model_dump()
+
+
+def _audit_log_payload(log: BenchmarkAuditLog) -> dict[str, object]:
+    return BenchmarkAuditLogResponse(
+        id=log.id,
+        curriculum_id=log.curriculum_id,
+        action=log.action.value,
+        actor_id=log.actor_id,
+        actor_email=log.actor_email,
+        previous_status=log.previous_status,
+        new_status=log.new_status,
+        reason=log.reason,
+        review_notes=log.review_notes,
+        diff_fingerprint=log.diff_fingerprint,
+        metadata=log.metadata_payload,
+        created_at=log.created_at.isoformat(),
     ).model_dump()
