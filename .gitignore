@@ -15,6 +15,7 @@ venv/
 
 # Testing
 .pytest_cache/
+*-q
 .coverage
 coverage.xml
 htmlcov/
@@ -43,6 +44,8 @@ pip-wheel-metadata/
 # IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS files
 .DS_Store

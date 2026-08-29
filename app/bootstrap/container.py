@@ -1,6 +1,10 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import TypeVar, cast
 
+from app.application.assessment.assessment_service import AssessmentService
+from app.application.assessment.attempt_answer_service import AttemptAnswerService
+from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
 from app.application.identity.user_service import UserService
@@ -21,18 +25,20 @@ from app.infrastructure.identity.unit_of_work import (
 from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
 from app.infrastructure.security.jwt_token_service import JWTTokenService
 
+ServiceT = TypeVar("ServiceT")
+
 
 class Container:
     def __init__(self) -> None:
         self._services: dict[type[object], object] = {}
 
-    def register(self, service_type: type[object], implementation: object) -> None:
+    def register(self, service_type: type[ServiceT], implementation: ServiceT) -> None:
         self._services[service_type] = implementation
 
-    def get(self, service_type: type[object]) -> object:
+    def get(self, service_type: type[ServiceT]) -> ServiceT:
         if service_type not in self._services:
             raise KeyError(f"Service {service_type.__name__} is not registered")
-        return self._services[service_type]
+        return cast(ServiceT, self._services[service_type])
 
 
 def build_container() -> Container:
@@ -71,6 +77,18 @@ def build_container() -> Container:
             uow_factory=sqlalchemy_assessment_uow,
         ),
     )
+    container.register(
+        AssessmentService,
+        AssessmentService(uow_factory=sqlalchemy_assessment_uow),
+    )
+    container.register(
+        AttemptService,
+        AttemptService(uow_factory=sqlalchemy_assessment_uow),
+    )
+    container.register(
+        AttemptAnswerService,
+        AttemptAnswerService(uow_factory=sqlalchemy_assessment_uow),
+    )
     return container
 
 
@@ -108,6 +126,7 @@ def build_sqlalchemy_container() -> Container:
     container.register(
         UserService,
         UserService(
+            repository=None,
             event_bus=event_bus,
             password_hasher=password_hasher,
             token_service=token_service,

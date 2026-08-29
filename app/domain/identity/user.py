@@ -24,7 +24,7 @@ class User:
     password_hash: PasswordHash
     is_active: bool = True
     created_at: datetime | None = None
-    roles: list[Role] | None = None
+    roles: list[Role] = field(default_factory=list)
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -37,8 +37,6 @@ class User:
         self.password_hash = hasher.hash(new_password)
 
     def assign_role(self, role: Role) -> None:
-        if not getattr(self, "roles", None):
-            self.roles = []
         if role not in self.roles:
             self.roles.append(role)
 

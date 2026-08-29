@@ -1,0 +1,378 @@
+README.md:28: trailing whitespace.
+[32m+[m[32m- Attempt answer persistence with snapshot question identity and selected option indexes[m[41m[m
+README.md:80: trailing whitespace.
+[32m+[m[32mScoring, results, timers, and AI integration are intentionally deferred.[m[41m[m
+README.md:93: trailing whitespace.
+[32m+[m[32mAttempt answer persistence    complete[m[41m[m
+README.md:99: trailing whitespace.
+[32m+[m[32mPhase `3D: Attempt Answer Persistence` records the learner's selected option against the immutable assessment snapshot without making grading decisions.[m[41m[m
+README.md:120: trailing whitespace.
+[32m+[m[32mThe current implementation stores `selected_option_index`. Correctness, scoring, and results belong to later phases (`3F+`).[m[41m[m
+README.md:294: trailing whitespace.
+[32m+[m[32m### Attempt answers[m[41m[m
+README.md:295: trailing whitespace.
+[32m+[m[41m[m
+README.md:296: trailing whitespace.
+[32m+[m[32m```text[m[41m[m
+README.md:297: trailing whitespace.
+[32m+[m[32mPUT    /assessment/attempts/{attempt_id}/answers/{assessment_question_id}[m[41m[m
+README.md:298: trailing whitespace.
+[32m+[m[32mGET    /assessment/attempts/{attempt_id}/answers[m[41m[m
+README.md:299: trailing whitespace.
+[32m+[m[32mDELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id}[m[41m[m
+README.md:300: trailing whitespace.
+[32m+[m[32m```[m[41m[m
+README.md:301: trailing whitespace.
+[32m+[m[41m[m
+README.md:302: trailing whitespace.
+[32m+[m[32mSave requests use `selected_option_index` and are idempotent for a given attempt[m[41m[m
+README.md:303: trailing whitespace.
+[32m+[m[32mand snapshot question. Only persisted answers are returned. Answer mutations are[m[41m[m
+README.md:304: trailing whitespace.
+[32m+[m[32mallowed while an attempt is in progress and rejected after submission; answer[m[41m[m
+README.md:305: trailing whitespace.
+[32m+[m[32mresponses never include correctness or grading metadata.[m[41m[m
+README.md:306: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/assessments.py:141: trailing whitespace.
+[32m+[m[32m                assessment_question_id=item.assessment_question_id or item.question_id,[m[41m[m
+app/api/assessment/attempts.py:150: trailing whitespace.
+[32m+[m[32m        assessment_question_id=question.assessment_question_id,[m[41m[m
+app/api/assessment/schemas.py:119: trailing whitespace.
+[32m+[m[32m    assessment_question_id: str[m[41m[m
+app/api/assessment/schemas.py:131: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:132: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:133: trailing whitespace.
+[32m+[m[32mclass SaveAttemptAnswerRequest(BaseModel):[m[41m[m
+app/api/assessment/schemas.py:134: trailing whitespace.
+[32m+[m[32m    model_config = ConfigDict(extra="forbid")[m[41m[m
+app/api/assessment/schemas.py:135: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:136: trailing whitespace.
+[32m+[m[32m    selected_option_index: int[m[41m[m
+app/api/assessment/schemas.py:137: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:138: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:139: trailing whitespace.
+[32m+[m[32mclass AttemptAnswerResponse(BaseModel):[m[41m[m
+app/api/assessment/schemas.py:140: trailing whitespace.
+[32m+[m[32m    attempt_id: str[m[41m[m
+app/api/assessment/schemas.py:141: trailing whitespace.
+[32m+[m[32m    assessment_question_id: str[m[41m[m
+app/api/assessment/schemas.py:142: trailing whitespace.
+[32m+[m[32m    selected_option_index: int[m[41m[m
+app/api/assessment/schemas.py:143: trailing whitespace.
+[32m+[m[32m    updated_at: str[m[41m[m
+app/api/assessment/schemas.py:144: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:145: trailing whitespace.
+[32m+[m[41m[m
+app/api/assessment/schemas.py:146: trailing whitespace.
+[32m+[m[32mclass AttemptAnswersResponse(BaseModel):[m[41m[m
+app/api/assessment/schemas.py:147: trailing whitespace.
+[32m+[m[32m    attempt_id: str[m[41m[m
+app/api/assessment/schemas.py:148: trailing whitespace.
+[32m+[m[32m    answers: list[AttemptAnswerResponse][m[41m[m
+app/api/router.py:4: trailing whitespace.
+[32m+[m[32mfrom app.api.assessment.answers import router as answer_router[m[41m[m
+app/api/router.py:20: trailing whitespace.
+[32m+[m[32mrouter.include_router(answer_router)[m[41m[m
+app/application/assessment/attempt_commands.py:6: trailing whitespace.
+[32m+[m[32m    assessment_question_id: str[m[41m[m
+app/application/assessment/attempt_handlers.py:110: trailing whitespace.
+[32m+[m[32m                assessment_question_id=question.assessment_question_id or question.question_id,[m[41m[m
+app/application/common/uow.py:7: trailing whitespace.
+[32m+[m[32mfrom app.domain.repositories.attempt_answer import AttemptAnswerRepository[m[41m[m
+app/application/common/uow.py:27: trailing whitespace.
+[32m+[m[32m    @property[m[41m[m
+app/application/common/uow.py:28: trailing whitespace.
+[32m+[m[32m    def attempt_answers(self) -> AttemptAnswerRepository: ...[m[41m[m
+app/application/common/uow.py:29: trailing whitespace.
+[32m+[m[41m[m
+app/bootstrap/container.py:7: trailing whitespace.
+[32m+[m[32mfrom app.application.assessment.attempt_answer_service import AttemptAnswerService[m[41m[m
+app/bootstrap/container.py:88: trailing whitespace.
+[32m+[m[32m    container.register([m[41m[m
+app/bootstrap/container.py:89: trailing whitespace.
+[32m+[m[32m        AttemptAnswerService,[m[41m[m
+app/bootstrap/container.py:90: trailing whitespace.
+[32m+[m[32m        AttemptAnswerService(uow_factory=sqlalchemy_assessment_uow),[m[41m[m
+app/bootstrap/container.py:91: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/core/authorization.py:23: trailing whitespace.
+[32m+[m[32m    ASSESSMENT_ATTEMPT_ANSWER_WRITE = "assessment.attempt.answer.write"[m[41m[m
+app/core/authorization.py:24: trailing whitespace.
+[32m+[m[32m    ASSESSMENT_ATTEMPT_ANSWER_DELETE = "assessment.attempt.answer.delete"[m[41m[m
+app/core/authorization.py:35: trailing whitespace.
+[32m+[m[32m            Permission.ASSESSMENT_ATTEMPT_ANSWER_WRITE,[m[41m[m
+app/core/authorization.py:36: trailing whitespace.
+[32m+[m[32m            Permission.ASSESSMENT_ATTEMPT_ANSWER_DELETE,[m[41m[m
+app/domain/assessment/__init__.py:7: trailing whitespace.
+[32m+[m[32mfrom app.domain.assessment.attempt_answer import AttemptAnswer[m[41m[m
+app/domain/assessment/__init__.py:33: trailing whitespace.
+[32m+[m[32m    "AttemptAnswer",[m[41m[m
+app/domain/assessment/assessment.py:26: trailing whitespace.
+[32m+[m[32m    assessment_question_id: str | None = None[m[41m[m
+app/domain/assessment/attempt.py:88: trailing whitespace.
+[32m+[m[32m    def ensure_answer_mutation_allowed(self) -> None:[m[41m[m
+app/domain/assessment/attempt.py:89: trailing whitespace.
+[32m+[m[32m        if self.status == AttemptStatus.SUBMITTED:[m[41m[m
+app/domain/assessment/attempt.py:90: trailing whitespace.
+[32m+[m[32m            raise AttemptAlreadySubmittedError("attempt already submitted")[m[41m[m
+app/domain/assessment/attempt.py:91: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/mappers.py:12: trailing whitespace.
+[32m+[m[32mfrom app.domain.assessment.attempt_answer import AttemptAnswer[m[41m[m
+app/infrastructure/assessment/mappers.py:28: trailing whitespace.
+[32m+[m[32m    AttemptAnswerModel,[m[41m[m
+app/infrastructure/assessment/mappers.py:176: trailing whitespace.
+[32m+[m[32m        assessment_question_id=model.id,[m[41m[m
+app/infrastructure/assessment/mappers.py:230: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/mappers.py:231: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/mappers.py:232: trailing whitespace.
+[32m+[m[32mdef attempt_answer_to_model([m[41m[m
+app/infrastructure/assessment/mappers.py:233: trailing whitespace.
+[32m+[m[32m    answer: AttemptAnswer,[m[41m[m
+app/infrastructure/assessment/mappers.py:234: trailing whitespace.
+[32m+[m[32m    model: AttemptAnswerModel | None = None,[m[41m[m
+app/infrastructure/assessment/mappers.py:235: trailing whitespace.
+[32m+[m[32m) -> AttemptAnswerModel:[m[41m[m
+app/infrastructure/assessment/mappers.py:236: trailing whitespace.
+[32m+[m[32m    if model is None:[m[41m[m
+app/infrastructure/assessment/mappers.py:237: trailing whitespace.
+[32m+[m[32m        model = AttemptAnswerModel(id=answer.id)[m[41m[m
+app/infrastructure/assessment/mappers.py:238: trailing whitespace.
+[32m+[m[32m    model.tenant_id = answer.tenant_id[m[41m[m
+app/infrastructure/assessment/mappers.py:239: trailing whitespace.
+[32m+[m[32m    model.attempt_id = answer.attempt_id[m[41m[m
+app/infrastructure/assessment/mappers.py:240: trailing whitespace.
+[32m+[m[32m    model.assessment_question_id = answer.assessment_question_id[m[41m[m
+app/infrastructure/assessment/mappers.py:241: trailing whitespace.
+[32m+[m[32m    model.selected_option_index = answer.selected_option_index[m[41m[m
+app/infrastructure/assessment/mappers.py:242: trailing whitespace.
+[32m+[m[32m    model.created_at = answer.created_at[m[41m[m
+app/infrastructure/assessment/mappers.py:243: trailing whitespace.
+[32m+[m[32m    model.updated_at = answer.updated_at[m[41m[m
+app/infrastructure/assessment/mappers.py:244: trailing whitespace.
+[32m+[m[32m    return model[m[41m[m
+app/infrastructure/assessment/mappers.py:245: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/mappers.py:246: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/mappers.py:247: trailing whitespace.
+[32m+[m[32mdef attempt_answer_model_to_domain(model: AttemptAnswerModel) -> AttemptAnswer:[m[41m[m
+app/infrastructure/assessment/mappers.py:248: trailing whitespace.
+[32m+[m[32m    return AttemptAnswer([m[41m[m
+app/infrastructure/assessment/mappers.py:249: trailing whitespace.
+[32m+[m[32m        tenant_id=model.tenant_id,[m[41m[m
+app/infrastructure/assessment/mappers.py:250: trailing whitespace.
+[32m+[m[32m        attempt_id=model.attempt_id,[m[41m[m
+app/infrastructure/assessment/mappers.py:251: trailing whitespace.
+[32m+[m[32m        assessment_question_id=model.assessment_question_id,[m[41m[m
+app/infrastructure/assessment/mappers.py:252: trailing whitespace.
+[32m+[m[32m        selected_option_index=model.selected_option_index,[m[41m[m
+app/infrastructure/assessment/mappers.py:253: trailing whitespace.
+[32m+[m[32m        answer_id=model.id,[m[41m[m
+app/infrastructure/assessment/mappers.py:254: trailing whitespace.
+[32m+[m[32m        created_at=model.created_at,[m[41m[m
+app/infrastructure/assessment/mappers.py:255: trailing whitespace.
+[32m+[m[32m        updated_at=model.updated_at,[m[41m[m
+app/infrastructure/assessment/mappers.py:256: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/infrastructure/assessment/repositories.py:7: trailing whitespace.
+[32m+[m[32mfrom app.domain.assessment.attempt_answer import AttemptAnswer[m[41m[m
+app/infrastructure/assessment/repositories.py:11: trailing whitespace.
+[32m+[m[32mfrom app.domain.repositories.attempt_answer import AttemptAnswerRepository[m[41m[m
+app/infrastructure/assessment/repositories.py:18: trailing whitespace.
+[32m+[m[32m    attempt_answer_model_to_domain,[m[41m[m
+app/infrastructure/assessment/repositories.py:19: trailing whitespace.
+[32m+[m[32m    attempt_answer_to_model,[m[41m[m
+app/infrastructure/assessment/repositories.py:26: trailing whitespace.
+[32m+[m[32m    AttemptAnswerModel,[m[41m[m
+app/infrastructure/assessment/repositories.py:282: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/repositories.py:283: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/repositories.py:284: trailing whitespace.
+[32m+[m[32mclass SqlAlchemyAttemptAnswerRepository(AttemptAnswerRepository):[m[41m[m
+app/infrastructure/assessment/repositories.py:285: trailing whitespace.
+[32m+[m[32m    def __init__(self, session: AsyncSession) -> None:[m[41m[m
+app/infrastructure/assessment/repositories.py:286: trailing whitespace.
+[32m+[m[32m        self._session = session[m[41m[m
+app/infrastructure/assessment/repositories.py:287: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/repositories.py:288: trailing whitespace.
+[32m+[m[32m    async def get_by_attempt_and_question([m[41m[m
+app/infrastructure/assessment/repositories.py:289: trailing whitespace.
+[32m+[m[32m        self,[m[41m[m
+app/infrastructure/assessment/repositories.py:290: trailing whitespace.
+[32m+[m[32m        attempt_id: str,[m[41m[m
+app/infrastructure/assessment/repositories.py:291: trailing whitespace.
+[32m+[m[32m        assessment_question_id: str,[m[41m[m
+app/infrastructure/assessment/repositories.py:292: trailing whitespace.
+[32m+[m[32m        tenant_id: str,[m[41m[m
+app/infrastructure/assessment/repositories.py:293: trailing whitespace.
+[32m+[m[32m    ) -> AttemptAnswer | None:[m[41m[m
+app/infrastructure/assessment/repositories.py:294: trailing whitespace.
+[32m+[m[32m        statement = select(AttemptAnswerModel).where([m[41m[m
+app/infrastructure/assessment/repositories.py:295: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.attempt_id == attempt_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:296: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.assessment_question_id == assessment_question_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:297: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.tenant_id == tenant_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:298: trailing whitespace.
+[32m+[m[32m        )[m[41m[m
+app/infrastructure/assessment/repositories.py:299: trailing whitespace.
+[32m+[m[32m        model = (await self._session.scalars(statement)).first()[m[41m[m
+app/infrastructure/assessment/repositories.py:300: trailing whitespace.
+[32m+[m[32m        return attempt_answer_model_to_domain(model) if model is not None else None[m[41m[m
+app/infrastructure/assessment/repositories.py:301: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/repositories.py:302: trailing whitespace.
+[32m+[m[32m    async def list_by_attempt([m[41m[m
+app/infrastructure/assessment/repositories.py:303: trailing whitespace.
+[32m+[m[32m        self, attempt_id: str, tenant_id: str[m[41m[m
+app/infrastructure/assessment/repositories.py:304: trailing whitespace.
+[32m+[m[32m    ) -> list[AttemptAnswer]:[m[41m[m
+app/infrastructure/assessment/repositories.py:305: trailing whitespace.
+[32m+[m[32m        statement = ([m[41m[m
+app/infrastructure/assessment/repositories.py:306: trailing whitespace.
+[32m+[m[32m            select(AttemptAnswerModel)[m[41m[m
+app/infrastructure/assessment/repositories.py:307: trailing whitespace.
+[32m+[m[32m            .where([m[41m[m
+app/infrastructure/assessment/repositories.py:308: trailing whitespace.
+[32m+[m[32m                AttemptAnswerModel.attempt_id == attempt_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:309: trailing whitespace.
+[32m+[m[32m                AttemptAnswerModel.tenant_id == tenant_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:310: trailing whitespace.
+[32m+[m[32m            )[m[41m[m
+app/infrastructure/assessment/repositories.py:311: trailing whitespace.
+[32m+[m[32m            .order_by(AttemptAnswerModel.created_at.asc())[m[41m[m
+app/infrastructure/assessment/repositories.py:312: trailing whitespace.
+[32m+[m[32m        )[m[41m[m
+app/infrastructure/assessment/repositories.py:313: trailing whitespace.
+[32m+[m[32m        models = (await self._session.scalars(statement)).all()[m[41m[m
+app/infrastructure/assessment/repositories.py:314: trailing whitespace.
+[32m+[m[32m        return [attempt_answer_model_to_domain(model) for model in models][m[41m[m
+app/infrastructure/assessment/repositories.py:315: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/repositories.py:316: trailing whitespace.
+[32m+[m[32m    async def save(self, answer: AttemptAnswer) -> AttemptAnswer:[m[41m[m
+app/infrastructure/assessment/repositories.py:317: trailing whitespace.
+[32m+[m[32m        statement = select(AttemptAnswerModel).where([m[41m[m
+app/infrastructure/assessment/repositories.py:318: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.id == answer.id,[m[41m[m
+app/infrastructure/assessment/repositories.py:319: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.tenant_id == answer.tenant_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:320: trailing whitespace.
+[32m+[m[32m        )[m[41m[m
+app/infrastructure/assessment/repositories.py:321: trailing whitespace.
+[32m+[m[32m        model = (await self._session.scalars(statement)).first()[m[41m[m
+app/infrastructure/assessment/repositories.py:322: trailing whitespace.
+[32m+[m[32m        if model is None:[m[41m[m
+app/infrastructure/assessment/repositories.py:323: trailing whitespace.
+[32m+[m[32m            model = attempt_answer_to_model(answer)[m[41m[m
+app/infrastructure/assessment/repositories.py:324: trailing whitespace.
+[32m+[m[32m            self._session.add(model)[m[41m[m
+app/infrastructure/assessment/repositories.py:325: trailing whitespace.
+[32m+[m[32m        else:[m[41m[m
+app/infrastructure/assessment/repositories.py:326: trailing whitespace.
+[32m+[m[32m            attempt_answer_to_model(answer, model=model)[m[41m[m
+app/infrastructure/assessment/repositories.py:327: trailing whitespace.
+[32m+[m[32m        await self._session.flush()[m[41m[m
+app/infrastructure/assessment/repositories.py:328: trailing whitespace.
+[32m+[m[32m        return answer[m[41m[m
+app/infrastructure/assessment/repositories.py:329: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/assessment/repositories.py:330: trailing whitespace.
+[32m+[m[32m    async def delete(self, answer: AttemptAnswer) -> None:[m[41m[m
+app/infrastructure/assessment/repositories.py:331: trailing whitespace.
+[32m+[m[32m        statement = select(AttemptAnswerModel).where([m[41m[m
+app/infrastructure/assessment/repositories.py:332: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.id == answer.id,[m[41m[m
+app/infrastructure/assessment/repositories.py:333: trailing whitespace.
+[32m+[m[32m            AttemptAnswerModel.tenant_id == answer.tenant_id,[m[41m[m
+app/infrastructure/assessment/repositories.py:334: trailing whitespace.
+[32m+[m[32m        )[m[41m[m
+app/infrastructure/assessment/repositories.py:335: trailing whitespace.
+[32m+[m[32m        model = (await self._session.scalars(statement)).first()[m[41m[m
+app/infrastructure/assessment/repositories.py:336: trailing whitespace.
+[32m+[m[32m        if model is not None:[m[41m[m
+app/infrastructure/assessment/repositories.py:337: trailing whitespace.
+[32m+[m[32m            await self._session.delete(model)[m[41m[m
+app/infrastructure/assessment/repositories.py:338: trailing whitespace.
+[32m+[m[32m            await self._session.flush()[m[41m[m
+app/infrastructure/assessment/unit_of_work.py:9: trailing whitespace.
+[32m+[m[32m    SqlAlchemyAttemptAnswerRepository,[m[41m[m
+app/infrastructure/assessment/unit_of_work.py:21: trailing whitespace.
+[32m+[m[32m        self.attempt_answers = SqlAlchemyAttemptAnswerRepository(session)[m[41m[m
+app/infrastructure/db/models/assessment.py:221: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/db/models/assessment.py:222: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/db/models/assessment.py:223: trailing whitespace.
+[32m+[m[32mclass AttemptAnswerModel(Base):[m[41m[m
+app/infrastructure/db/models/assessment.py:224: trailing whitespace.
+[32m+[m[32m    __tablename__ = "assessment_attempt_answers"[m[41m[m
+app/infrastructure/db/models/assessment.py:225: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/db/models/assessment.py:226: trailing whitespace.
+[32m+[m[32m    id: Mapped[str] = mapped_column(String(255), primary_key=True)[m[41m[m
+app/infrastructure/db/models/assessment.py:227: trailing whitespace.
+[32m+[m[32m    tenant_id: Mapped[str] = mapped_column([m[41m[m
+app/infrastructure/db/models/assessment.py:228: trailing whitespace.
+[32m+[m[32m        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False[m[41m[m
+app/infrastructure/db/models/assessment.py:229: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/infrastructure/db/models/assessment.py:230: trailing whitespace.
+[32m+[m[32m    attempt_id: Mapped[str] = mapped_column([m[41m[m
+app/infrastructure/db/models/assessment.py:231: trailing whitespace.
+[32m+[m[32m        String(255), ForeignKey("assessment_attempts.id", ondelete="CASCADE"), nullable=False[m[41m[m
+app/infrastructure/db/models/assessment.py:232: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/infrastructure/db/models/assessment.py:233: trailing whitespace.
+[32m+[m[32m    assessment_question_id: Mapped[str] = mapped_column([m[41m[m
+app/infrastructure/db/models/assessment.py:234: trailing whitespace.
+[32m+[m[32m        String(255), ForeignKey("assessment_questions.id", ondelete="CASCADE"), nullable=False[m[41m[m
+app/infrastructure/db/models/assessment.py:235: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/infrastructure/db/models/assessment.py:236: trailing whitespace.
+[32m+[m[32m    selected_option_index: Mapped[int] = mapped_column(Integer, nullable=False)[m[41m[m
+app/infrastructure/db/models/assessment.py:237: trailing whitespace.
+[32m+[m[32m    created_at: Mapped[datetime] = mapped_column([m[41m[m
+app/infrastructure/db/models/assessment.py:238: trailing whitespace.
+[32m+[m[32m        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)[m[41m[m
+app/infrastructure/db/models/assessment.py:239: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/infrastructure/db/models/assessment.py:240: trailing whitespace.
+[32m+[m[32m    updated_at: Mapped[datetime] = mapped_column([m[41m[m
+app/infrastructure/db/models/assessment.py:241: trailing whitespace.
+[32m+[m[32m        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)[m[41m[m
+app/infrastructure/db/models/assessment.py:242: trailing whitespace.
+[32m+[m[32m    )[m[41m[m
+app/infrastructure/db/models/assessment.py:243: trailing whitespace.
+[32m+[m[41m[m
+app/infrastructure/db/models/assessment.py:244: trailing whitespace.
+[32m+[m[32m    __table_args__ = ([m[41m[m
+app/infrastructure/db/models/assessment.py:245: trailing whitespace.
+[32m+[m[32m        UniqueConstraint([m[41m[m
+app/infrastructure/db/models/assessment.py:246: trailing whitespace.
+[32m+[m[32m            "tenant_id", "attempt_id", "assessment_question_id",[m[41m[m
+app/infrastructure/db/models/assessment.py:247: trailing whitespace.
+[32m+[m[32m            name="uq_attempt_answer_question",[m[41m[m
+app/infrastructure/db/models/assessment.py:248: trailing whitespace.
+[32m+[m[32m        ),[m[41m[m
+app/infrastructure/db/models/assessment.py:249: trailing whitespace.
+[32m+[m[32m        Index("ix_attempt_answers_tenant_id", "tenant_id"),[m[41m[m
+app/infrastructure/db/models/assessment.py:250: trailing whitespace.
+[32m+[m[32m        Index("ix_attempt_answers_attempt_id", "attempt_id"),[m[41m[m
+app/infrastructure/db/models/assessment.py:251: trailing whitespace.
+[32m+[m[32m        Index("ix_attempt_answers_assessment_question_id", "assessment_question_id"),[m[41m[m
+app/infrastructure/db/models/assessment.py:252: trailing whitespace.
+[32m+[m[32m    )[m[41m[m

@@ -19,6 +19,7 @@ from app.domain.assessment.value_objects import (
     QuestionPrompt,
     QuestionType,
 )
+from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 
 
@@ -26,7 +27,7 @@ class CreateQuestionHandler:
     def __init__(
         self,
         repository: QuestionRepository,
-        catalogue_repository: object,
+        catalogue_repository: CourseRepository,
     ) -> None:
         self.repository = repository
         self.catalogue_repository = catalogue_repository
@@ -57,6 +58,8 @@ class CreateQuestionHandler:
             is_correct = bool(raw_option.get("is_correct", False))
             if option_text is None or display_order is None:
                 continue
+            if not isinstance(display_order, (int, str)):
+                raise TypeError("display_order must be an integer")
             options.append(
                 QuestionOption(
                     id=QuestionOptionId(""),

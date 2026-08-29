@@ -1,3 +1,36 @@
+from app.application.assessment.assessment_commands import (
+    AddQuestionToAssessmentCommand,
+    CreateAssessmentCommand,
+    GetAssessmentCommand,
+    ListAssessmentsCommand,
+    PublishAssessmentCommand,
+    UpdateAssessmentCommand,
+)
+from app.application.assessment.assessment_handlers import (
+    AddQuestionToAssessmentHandler,
+    CreateAssessmentHandler,
+    GetAssessmentHandler,
+    ListAssessmentsHandler,
+    PublishAssessmentHandler,
+    UpdateAssessmentHandler,
+)
+from app.application.assessment.assessment_service import AssessmentService
+from app.application.assessment.attempt_commands import (
+    AttemptQuestionSnapshot,
+    GetAttemptCommand,
+    GetAttemptQuestionsCommand,
+    ListMyAttemptsCommand,
+    StartAttemptCommand,
+    SubmitAttemptCommand,
+)
+from app.application.assessment.attempt_handlers import (
+    GetAttemptHandler,
+    GetAttemptQuestionsHandler,
+    ListMyAttemptsHandler,
+    StartAttemptHandler,
+    SubmitAttemptHandler,
+)
+from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.commands import (
     ArchiveQuestionCommand,
     CreateQuestionCommand,
@@ -34,4 +67,29 @@ __all__ = [
     "PublishQuestionHandler",
     "UpdateQuestionHandler",
     "QuestionService",
+    "AddQuestionToAssessmentCommand",
+    "CreateAssessmentCommand",
+    "GetAssessmentCommand",
+    "ListAssessmentsCommand",
+    "PublishAssessmentCommand",
+    "UpdateAssessmentCommand",
+    "AddQuestionToAssessmentHandler",
+    "CreateAssessmentHandler",
+    "GetAssessmentHandler",
+    "ListAssessmentsHandler",
+    "PublishAssessmentHandler",
+    "UpdateAssessmentHandler",
+    "AssessmentService",
+    "GetAttemptCommand",
+    "ListMyAttemptsCommand",
+    "StartAttemptCommand",
+    "SubmitAttemptCommand",
+    "GetAttemptHandler",
+    "ListMyAttemptsHandler",
+    "StartAttemptHandler",
+    "SubmitAttemptHandler",
+    "AttemptService",
+    "AttemptQuestionSnapshot",
+    "GetAttemptQuestionsCommand",
+    "GetAttemptQuestionsHandler",
 ]

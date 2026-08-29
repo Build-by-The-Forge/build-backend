@@ -3,7 +3,13 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.assessment.repositories import SqlAlchemyQuestionRepository
+from app.infrastructure.assessment.repositories import (
+    SqlAlchemyAssessmentRepository,
+    SqlAlchemyAttemptAnswerRepository,
+    SqlAlchemyAttemptRepository,
+    SqlAlchemyAttemptResultRepository,
+    SqlAlchemyQuestionRepository,
+)
 from app.infrastructure.catalogue.repositories import SqlAlchemyCourseRepository
 from app.infrastructure.unit_of_work import UnitOfWork
 
@@ -11,6 +17,10 @@ from app.infrastructure.unit_of_work import UnitOfWork
 class AssessmentUnitOfWork(UnitOfWork):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session)
+        self.assessments = SqlAlchemyAssessmentRepository(session)
+        self.attempts = SqlAlchemyAttemptRepository(session)
+        self.attempt_answers = SqlAlchemyAttemptAnswerRepository(session)
+        self.attempt_results = SqlAlchemyAttemptResultRepository(session)
         self.questions = SqlAlchemyQuestionRepository(session)
         self.catalogue = SqlAlchemyCourseRepository(session)
 

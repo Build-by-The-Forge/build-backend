@@ -1,6 +1,11 @@
+import structlog
 from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+from app.core.metrics import errors_total
+
+logger = structlog.get_logger(__name__)
 
 
 class AppError(Exception):
@@ -17,8 +22,17 @@ class NotFoundError(AppError):
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
 
 
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, HTTPException):
+        raise TypeError("expected HTTPException")
     request_id = getattr(request.state, "request_id", None)
+    errors_total.labels(error_type="HTTPException").inc()
+    logger.warning(
+        "http_exception",
+        request_id=request_id,
+        status_code=exc.status_code,
+        path=request.url.path,
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -31,9 +45,17 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
+    request: Request, exc: Exception
 ) -> JSONResponse:
+    if not isinstance(exc, RequestValidationError):
+        raise TypeError("expected RequestValidationError")
     request_id = getattr(request.state, "request_id", None)
+    errors_total.labels(error_type="RequestValidationError").inc()
+    logger.warning(
+        "request_validation_failed",
+        request_id=request_id,
+        path=request.url.path,
+    )
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={
@@ -45,8 +67,17 @@ async def validation_exception_handler(
     )
 
 
-async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
+async def app_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if not isinstance(exc, AppError):
+        raise TypeError("expected AppError")
     request_id = getattr(request.state, "request_id", None)
+    errors_total.labels(error_type=type(exc).__name__).inc()
+    logger.warning(
+        "application_exception",
+        request_id=request_id,
+        status_code=exc.status_code,
+        path=request.url.path,
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={

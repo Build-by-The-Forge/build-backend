@@ -6,7 +6,7 @@ BUILD is a security-first modular monolith. Its current focus is tenant-owned ac
 
 ## Status
 
-Current development line: `feat/catalogue-learning-outcomes`
+Current development line: `feat/assessment-engine`
 
 Implemented foundation:
 
@@ -20,6 +20,12 @@ Implemented foundation:
 - Role-based catalogue authorization
 - Tenant-scoped course reads, creation, updates, publishing, and archiving
 - Tenant-scoped Topic, LearningOutcome, and ReferenceMaterial management
+- Question authoring with MCQ validation and draft/published/archived lifecycle
+- Assessment definitions with tenant-scoped question snapshots and lifecycle rules
+- Assessment application and HTTP APIs
+- Attempt lifecycle with learner ownership, resume behavior, and submission
+- Snapshot-based question delivery that excludes answer keys
+- Attempt answer persistence with snapshot question identity and selected option indexes
 - Domain events, in-process event bus, metrics, and tracing hooks
 - Domain, repository, API, tenancy, authorization, and regression tests
 
@@ -57,6 +63,62 @@ Repository -> Unit of Work -> Database
 | `alembic` | Database migration history |
 | `tests` | Domain, API, repository, tenancy, authorization, and regression tests |
 
+### Assessment flow
+
+```text
+Assessment
+   |
+   +--> published question snapshots
+   |
+   +--> Attempt -> submitted
+             |
+             +--> snapshot question delivery
+```
+
+Assessment attempts are tenant- and learner-scoped. Delivery reads the immutable
+`assessment_questions` snapshot rows rather than mutable live Question records.
+Scoring, results, timers, and AI integration are intentionally deferred.
+
+Current assessment-engine checkpoint:
+
+```text
+Assessment definition         complete
+Assessment application        complete
+Assessment API                complete
+Attempt lifecycle             complete
+Attempt persistence           complete
+Attempt application           complete
+Attempt API                   complete
+Snapshot question delivery    complete
+Attempt answer persistence    complete
+Deterministic scoring         next
+```
+
+### Phase 3D — Attempt answer persistence
+
+Phase `3D: Attempt Answer Persistence` records the learner's selected option against the immutable assessment snapshot without making grading decisions.
+
+Core rules:
+
+- Persist learner selections against snapshot question records, not live question records.
+- Treat `3D` as a persistence and interaction layer, not a scoring layer.
+- Enforce one answer per `attempt_id + assessment_question_id` pair.
+- Scope answers to the active tenant and authenticated learner.
+- Reject answers for questions that are not part of the current attempt's assessment.
+- Validate the selected option against the snapshot options list.
+- Prevent mutation of answers after the attempt has been submitted.
+- Never expose correctness metadata such as `is_correct`, `answer_key`, or `score` in 3D responses.
+
+Recommended API surface:
+
+```text
+PUT    /assessment/attempts/{attempt_id}/answers/{question_id}
+GET    /assessment/attempts/{attempt_id}/answers
+DELETE /assessment/attempts/{attempt_id}/answers/{question_id}
+```
+
+The current implementation stores `selected_option_index`. Correctness, scoring, and results belong to later phases (`3F+`).
+
 ### Catalogue ownership
 
 ```text
@@ -90,11 +152,13 @@ Protected requests follow this sequence:
 - `404`: resource is not visible in the current tenant context
 - `422`: request validation failed
 
+> Current implementation note: the tenant selector header is `X-Tenant-Slug` in the API contract, and the runtime dependency layer reads the lowercase header value `x-tenant-slug` when building the tenant context.
+
 ### Current tenant roles
 
 | Role | Catalogue capabilities |
 | --- | --- |
-| `student` | Read catalogue |
+| `student` | Read catalogue and published assessments; start, resume, and submit own attempts |
 | `lecturer` | Read, create, and update catalogue content |
 | `hod` | Read, create, and update catalogue content |
 | `faculty_admin` | Read, create, update, publish, and archive |
@@ -185,6 +249,61 @@ POST  /catalogue/reference-materials/{reference_material_id}/archive
 
 Reference materials are currently persisted as course-owned children. Nested topic routes verify that the topic belongs to the tenant-scoped course. A future schema decision may add direct topic ownership.
 
+### Questions
+
+```text
+POST  /assessment/questions
+GET   /assessment/questions/{question_id}
+PATCH /assessment/questions/{question_id}
+POST  /assessment/questions/{question_id}/publish
+POST  /assessment/questions/{question_id}/archive
+```
+
+Question creation is tenant-scoped and validates its catalogue relationships. MCQ
+questions require at least two options and exactly one correct option.
+
+### Assessments
+
+```text
+POST  /assessment/assessments
+GET   /assessment/assessments
+GET   /assessment/assessments/{assessment_id}
+PATCH /assessment/assessments/{assessment_id}
+POST  /assessment/assessments/{assessment_id}/publish
+POST  /assessment/assessments/{assessment_id}/questions
+```
+
+Assessments must contain at least one question before publication. Published
+assessments cannot receive additional questions.
+
+### Attempts and question delivery
+
+```text
+POST /assessment/assessments/{assessment_id}/attempts
+GET  /assessment/attempts/{attempt_id}
+GET  /assessment/attempts
+POST /assessment/attempts/{attempt_id}/submit
+GET  /assessment/attempts/{attempt_id}/questions
+```
+
+Attempt start, retrieval, listing, submission, and question delivery are scoped
+to the authenticated learner and selected tenant. Starting an assessment resumes
+an existing active attempt. The question-delivery response contains prompt,
+option text, position, sequence, and marks, but never correctness metadata.
+
+### Attempt answers
+
+```text
+PUT    /assessment/attempts/{attempt_id}/answers/{assessment_question_id}
+GET    /assessment/attempts/{attempt_id}/answers
+DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id}
+```
+
+Save requests use `selected_option_index` and are idempotent for a given attempt
+and snapshot question. Only persisted answers are returned. Answer mutations are
+allowed while an attempt is in progress and rejected after submission; answer
+responses never include correctness or grading metadata.
+
 ## Local Development
 
 ### Requirements
@@ -231,7 +350,7 @@ Configuration uses environment variables and an optional `.env` file.
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
 | `DEBUG` | `false` | Debug configuration flag |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | Request timeout setting |
-| `TENANT_HEADER` | `x-tenant-id` | Configured setting; catalogue context currently uses `X-Tenant-Slug` |
+| `TENANT_HEADER` | `x-tenant-id` | Legacy setting name; actual runtime tenant context is selected from the `X-Tenant-Slug` header (`x-tenant-slug` at runtime) |
 
 Example:
 
@@ -241,6 +360,8 @@ POSTGRES_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/build
 REDIS_URL=redis://localhost:6379/0
 ```
 
+In testing mode, the app uses an in-memory SQLite database automatically via `APP_ENVIRONMENT=testing`; this keeps the test suite isolated from PostgreSQL.
+
 ### Run the API
 
 ```bash
@@ -248,6 +369,8 @@ uvicorn app.main:app --reload
 ```
 
 Open `http://localhost:8000`. Interactive API documentation is available at `/docs` and `/redoc`.
+
+The app initializes the database on startup when `APP_ENVIRONMENT` is not set to `production` and will create the schema automatically for the configured database.
 
 ### Migrations
 
@@ -296,6 +419,8 @@ Run focused suites:
 ```bash
 python -m pytest tests/domain/catalogue -q
 python -m pytest tests/integration/catalogue -q
+python -m pytest tests/domain/assessment -q
+python -m pytest tests/integration/assessment -q
 ```
 
 Compile modules:
@@ -362,7 +487,9 @@ tests/                    # Domain, integration, and foundation tests
 
 - Question bank and question versions
 - Assessment blueprints
-- Attempts, submissions, scoring, and results
+- Attempt answer persistence (3D) with one answer per question per attempt
+- Submission hardening and immutable submitted attempts
+- Deterministic scoring and results
 - Student enrolment, progress, and learning history
 
 ### Intelligence

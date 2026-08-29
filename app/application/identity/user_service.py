@@ -1,5 +1,4 @@
-from collections.abc import AsyncIterator, Callable
-
+from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.commands import (
     AuthenticateUserCommand,
     ForgotPasswordCommand,
@@ -25,8 +24,6 @@ from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
 
-AsyncUnitOfWorkFactory = Callable[[], AsyncIterator[object]]
-
 
 class UserService:
     def __init__(
@@ -35,7 +32,7 @@ class UserService:
         event_bus: EventBus,
         password_hasher: PasswordHasher,
         token_service: TokenService,
-        uow_factory: AsyncUnitOfWorkFactory | None = None,
+        uow_factory: IdentityUnitOfWorkFactory | None = None,
     ) -> None:
         self.repository = repository
         self.event_bus = event_bus

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.domain.identity.user import RefreshToken, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
@@ -30,19 +32,20 @@ def user_model_to_domain(model: UserModel) -> User:
 
 
 def domain_user_to_model(user: User, model: UserModel | None = None) -> UserModel:
+    created_at = user.created_at or datetime.now(timezone.utc)
     if model is None:
         model = UserModel(
             id=user.id.value,
             email=user.email.value,
             password_hash=user.password_hash.value,
             is_active=user.is_active,
-            created_at=user.created_at,
+            created_at=created_at,
         )
     else:
         model.email = user.email.value
         model.password_hash = user.password_hash.value
         model.is_active = user.is_active
-        model.created_at = user.created_at
+        model.created_at = created_at
     return model
 
 
@@ -68,6 +71,8 @@ def session_model_to_domain(model: SessionModel) -> Session:
 def domain_session_to_model(
     session: Session, model: SessionModel | None = None
 ) -> SessionModel:
+    created_at = session.created_at or datetime.now(timezone.utc)
+    last_seen_at = session.last_seen_at or created_at
     if model is None:
         model = SessionModel(
             id=session.id.value,
@@ -78,9 +83,9 @@ def domain_session_to_model(
             ),
             ip_address=session.ip_address,
             user_agent=session.user_agent,
-            created_at=session.created_at,
+            created_at=created_at,
             expires_at=session.expires_at,
-            last_seen_at=session.last_seen_at,
+            last_seen_at=last_seen_at,
             revoked_at=session.revoked_at,
         )
     else:
@@ -91,9 +96,9 @@ def domain_session_to_model(
         )
         model.ip_address = session.ip_address
         model.user_agent = session.user_agent
-        model.created_at = session.created_at
+        model.created_at = created_at
         model.expires_at = session.expires_at
-        model.last_seen_at = session.last_seen_at
+        model.last_seen_at = last_seen_at
         model.revoked_at = session.revoked_at
     return model
 

@@ -1,5 +1,3 @@
-from collections.abc import AsyncIterator, Callable
-
 from app.application.assessment.commands import (
     ArchiveQuestionCommand,
     CreateQuestionCommand,
@@ -18,21 +16,21 @@ from app.application.assessment.handlers import (
     PublishQuestionHandler,
     UpdateQuestionHandler,
 )
+from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.question import Question
+from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
-
-AsyncUnitOfWorkFactory = Callable[[], AsyncIterator[object]]
 
 
 class QuestionService:
     def __init__(
         self,
         repository: QuestionRepository | None = None,
-        catalogue_repository: object | None = None,
+        catalogue_repository: CourseRepository | None = None,
         event_bus: EventBus | None = None,
-        uow_factory: AsyncUnitOfWorkFactory | None = None,
+        uow_factory: AssessmentUnitOfWorkFactory | None = None,
     ) -> None:
         self.repository = repository
         self.catalogue_repository = catalogue_repository
