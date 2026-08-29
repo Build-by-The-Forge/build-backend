@@ -7,6 +7,9 @@ from app.application.assessment.attempt_answer_service import AttemptAnswerServi
 from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
+from app.application.curriculum.benchmark_service import (
+    BenchmarkCurriculumService,
+)
 from app.application.curriculum.curriculum_source_service import (
     CurriculumSourceService,
 )
@@ -100,6 +103,13 @@ def build_container() -> Container:
     container.register(
         CurriculumSourceService,
         CurriculumSourceService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_curriculum_uow,
+        ),
+    )
+    container.register(
+        BenchmarkCurriculumService,
+        BenchmarkCurriculumService(
             event_bus=event_bus,
             uow_factory=sqlalchemy_curriculum_uow,
         ),

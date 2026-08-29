@@ -1,3 +1,11 @@
+from app.domain.curriculum.benchmark import (
+    BenchmarkCourse,
+    BenchmarkCurriculum,
+    BenchmarkOutcome,
+    BenchmarkStatus,
+    BenchmarkTopic,
+    BloomTaxonomyLevel,
+)
 from app.domain.curriculum.source import (
     CurriculumSnapshot,
     CurriculumSource,
@@ -10,4 +18,10 @@ __all__ = [
     "CurriculumSnapshot",
     "SourceStatus",
     "SnapshotStatus",
+    "BenchmarkCurriculum",
+    "BenchmarkCourse",
+    "BenchmarkTopic",
+    "BenchmarkOutcome",
+    "BenchmarkStatus",
+    "BloomTaxonomyLevel",
 ]
