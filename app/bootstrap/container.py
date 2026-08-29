@@ -7,6 +7,15 @@ from app.application.assessment.attempt_answer_service import AttemptAnswerServi
 from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
+from app.application.curriculum.benchmark_service import (
+    BenchmarkCurriculumService,
+)
+from app.application.curriculum.curriculum_source_service import (
+    CurriculumSourceService,
+)
+from app.application.curriculum.institutional_adoption_service import (
+    InstitutionalAdoptionService,
+)
 from app.application.identity.user_service import UserService
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
@@ -17,6 +26,10 @@ from app.infrastructure.assessment.unit_of_work import (
 from app.infrastructure.catalogue.unit_of_work import (
     CourseUnitOfWork,
     catalogue_unit_of_work,
+)
+from app.infrastructure.curriculum.unit_of_work import (
+    CurriculumUnitOfWork,
+    curriculum_unit_of_work,
 )
 from app.infrastructure.identity.unit_of_work import (
     IdentityUnitOfWork,
@@ -89,6 +102,28 @@ def build_container() -> Container:
         AttemptAnswerService,
         AttemptAnswerService(uow_factory=sqlalchemy_assessment_uow),
     )
+    container.register(CurriculumUnitOfWork, sqlalchemy_curriculum_uow)
+    container.register(
+        CurriculumSourceService,
+        CurriculumSourceService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_curriculum_uow,
+        ),
+    )
+    container.register(
+        BenchmarkCurriculumService,
+        BenchmarkCurriculumService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_curriculum_uow,
+        ),
+    )
+    container.register(
+        InstitutionalAdoptionService,
+        InstitutionalAdoptionService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_curriculum_uow,
+        ),
+    )
     return container
 
 
@@ -110,6 +145,13 @@ async def sqlalchemy_catalogue_uow() -> AsyncIterator[CourseUnitOfWork]:
 async def sqlalchemy_assessment_uow() -> AsyncIterator[AssessmentUnitOfWork]:
     async with SessionLocal() as session:
         async with assessment_unit_of_work(session) as uow:
+            yield uow
+
+
+@asynccontextmanager
+async def sqlalchemy_curriculum_uow() -> AsyncIterator[CurriculumUnitOfWork]:
+    async with SessionLocal() as session:
+        async with curriculum_unit_of_work(session) as uow:
             yield uow
 
 
