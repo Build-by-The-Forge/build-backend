@@ -14,6 +14,9 @@ from app.domain.repositories.benchmark_curriculum import (
 )
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.curriculum_source import CurriculumSourceRepository
+from app.domain.repositories.institutional_adoption import (
+    InstitutionalAdoptionRepository,
+)
 from app.domain.repositories.question import QuestionRepository
 from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
@@ -61,6 +64,9 @@ class CurriculumUnitOfWorkPort(Protocol):
 
     @property
     def benchmark_audits(self) -> BenchmarkAuditRepository: ...
+
+    @property
+    def adoptions(self) -> InstitutionalAdoptionRepository: ...
 
 
 AssessmentUnitOfWorkFactory = Callable[

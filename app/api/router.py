@@ -9,6 +9,7 @@ from app.api.catalogue import (
     topic_router,
 )
 from app.api.curriculum import (
+    curriculum_adoptions_router,
     curriculum_benchmarks_router,
     curriculum_sources_router,
 )
@@ -24,3 +25,4 @@ router.include_router(attempt_router)
 router.include_router(answer_router)
 router.include_router(curriculum_sources_router)
 router.include_router(curriculum_benchmarks_router)
+router.include_router(curriculum_adoptions_router)

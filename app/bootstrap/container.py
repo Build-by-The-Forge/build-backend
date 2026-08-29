@@ -13,6 +13,9 @@ from app.application.curriculum.benchmark_service import (
 from app.application.curriculum.curriculum_source_service import (
     CurriculumSourceService,
 )
+from app.application.curriculum.institutional_adoption_service import (
+    InstitutionalAdoptionService,
+)
 from app.application.identity.user_service import UserService
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
@@ -110,6 +113,13 @@ def build_container() -> Container:
     container.register(
         BenchmarkCurriculumService,
         BenchmarkCurriculumService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_curriculum_uow,
+        ),
+    )
+    container.register(
+        InstitutionalAdoptionService,
+        InstitutionalAdoptionService(
             event_bus=event_bus,
             uow_factory=sqlalchemy_curriculum_uow,
         ),

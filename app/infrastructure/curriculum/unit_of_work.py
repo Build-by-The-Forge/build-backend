@@ -3,6 +3,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from app.infrastructure.curriculum.adoption_repositories import (
+    SqlAlchemyInstitutionalAdoptionRepository,
+)
 from app.infrastructure.curriculum.audit_repositories import (
     SqlAlchemyBenchmarkAuditRepository,
 )
@@ -22,6 +25,7 @@ class CurriculumUnitOfWork(UnitOfWork):
         self.sources = SqlAlchemyCurriculumSourceRepository(session)
         self.benchmarks = SqlAlchemyBenchmarkCurriculumRepository(session)
         self.benchmark_audits = SqlAlchemyBenchmarkAuditRepository(session)
+        self.adoptions = SqlAlchemyInstitutionalAdoptionRepository(session)
 
 
 @asynccontextmanager

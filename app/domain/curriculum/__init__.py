@@ -1,3 +1,9 @@
+from app.domain.curriculum.adoption import (
+    AdoptionStatus,
+    CurriculumOverride,
+    InstitutionalAdoption,
+    OverrideType,
+)
 from app.domain.curriculum.audit import (
     BenchmarkAuditAction,
     BenchmarkAuditLog,
@@ -58,4 +64,8 @@ __all__ = [
     "BenchmarkCurriculumDiffEngine",
     "BenchmarkAuditAction",
     "BenchmarkAuditLog",
+    "InstitutionalAdoption",
+    "CurriculumOverride",
+    "AdoptionStatus",
+    "OverrideType",
 ]
