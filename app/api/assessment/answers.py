@@ -11,6 +11,7 @@ from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
+from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.errors import AttemptAlreadySubmittedError
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
@@ -115,7 +116,7 @@ async def delete_answer(
     )
 
 
-def _response(request: Request, answer) -> JSONResponse:
+def _response(request: Request, answer: AttemptAnswer) -> JSONResponse:
     payload = AttemptAnswerResponse(
         attempt_id=answer.attempt_id,
         assessment_question_id=answer.assessment_question_id,

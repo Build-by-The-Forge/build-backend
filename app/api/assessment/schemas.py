@@ -71,6 +71,7 @@ class UpdateAssessmentRequest(BaseModel):
 
 
 class AssessmentQuestionResponse(BaseModel):
+    assessment_question_id: str
     question_id: str
     prompt: str
     options: list[str]

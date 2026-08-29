@@ -44,6 +44,8 @@ pip-wheel-metadata/
 # IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # OS files
 .DS_Store
