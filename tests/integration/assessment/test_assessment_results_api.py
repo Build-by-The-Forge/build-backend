@@ -155,7 +155,9 @@ async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     ).json()
     assert p2["meta"]["total"] == 2
     assert len(p2["data"]["results"]) == 1
-    assert p1["data"]["results"][0]["attempt_id"] != p2["data"]["results"][0]["attempt_id"]
+    assert (
+        p1["data"]["results"][0]["attempt_id"] != p2["data"]["results"][0]["attempt_id"]
+    )
 
     # 7. Student caller is FORBIDDEN (403)
     student_res = client.get(

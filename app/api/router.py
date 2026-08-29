@@ -8,6 +8,7 @@ from app.api.catalogue import (
     reference_router,
     topic_router,
 )
+from app.api.curriculum import curriculum_sources_router
 
 router = APIRouter()
 router.include_router(courses_router)
@@ -18,3 +19,4 @@ router.include_router(question_router)
 router.include_router(assessment_router)
 router.include_router(attempt_router)
 router.include_router(answer_router)
+router.include_router(curriculum_sources_router)

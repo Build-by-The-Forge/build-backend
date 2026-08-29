@@ -7,6 +7,7 @@ from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
 from app.domain.repositories.course import CourseRepository
+from app.domain.repositories.curriculum_source import CurriculumSourceRepository
 from app.domain.repositories.question import QuestionRepository
 from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
@@ -45,6 +46,11 @@ class IdentityUnitOfWorkPort(Protocol):
     def sessions(self) -> SessionRepository: ...
 
 
+class CurriculumUnitOfWorkPort(Protocol):
+    @property
+    def sources(self) -> CurriculumSourceRepository: ...
+
+
 AssessmentUnitOfWorkFactory = Callable[
     [], AbstractAsyncContextManager[AssessmentUnitOfWorkPort]
 ]
@@ -53,4 +59,7 @@ CourseUnitOfWorkFactory = Callable[
 ]
 IdentityUnitOfWorkFactory = Callable[
     [], AbstractAsyncContextManager[IdentityUnitOfWorkPort]
+]
+CurriculumUnitOfWorkFactory = Callable[
+    [], AbstractAsyncContextManager[CurriculumUnitOfWorkPort]
 ]
