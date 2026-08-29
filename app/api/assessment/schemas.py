@@ -169,3 +169,18 @@ class AttemptResultResponse(BaseModel):
     passed: bool
     graded_at: str
     breakdown: list[QuestionResultResponse]
+
+
+class AssessmentAttemptResultSummaryResponse(BaseModel):
+    attempt_id: str
+    user_id: str
+    total_score: int
+    max_score: int
+    percentage: float
+    passed: bool
+    graded_at: str
+
+
+class AssessmentResultsResponse(BaseModel):
+    assessment_id: str
+    results: list[AssessmentAttemptResultSummaryResponse]

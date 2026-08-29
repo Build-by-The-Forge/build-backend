@@ -3,8 +3,10 @@ from fastapi.responses import JSONResponse
 
 from app.api.assessment.schemas import (
     AddAssessmentQuestionRequest,
+    AssessmentAttemptResultSummaryResponse,
     AssessmentQuestionResponse,
     AssessmentResponse,
+    AssessmentResultsResponse,
     CreateAssessmentRequest,
     UpdateAssessmentRequest,
 )
@@ -123,6 +125,67 @@ async def add_question(
     if assessment is None:
         raise HTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
+
+
+@router.get("/{assessment_id}/results", status_code=status.HTTP_200_OK)
+async def get_assessment_results(
+    assessment_id: str,
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    context: TenantContext = Depends(
+        require_permission(Permission.ASSESSMENT_RESULT_READ)
+    ),
+) -> JSONResponse:
+    if limit < 1 or limit > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="limit must be between 1 and 100",
+        )
+    if offset < 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="offset must be greater than or equal to 0",
+        )
+
+    result_data = await service.get_assessment_results(
+        assessment_id=assessment_id,
+        tenant_id=context.tenant_id or "",
+        limit=limit,
+        offset=offset,
+    )
+    if result_data is None:
+        raise HTTPException(status_code=404, detail="assessment not found")
+
+    results, total = result_data
+    response = AssessmentResultsResponse(
+        assessment_id=assessment_id,
+        results=[
+            AssessmentAttemptResultSummaryResponse(
+                attempt_id=item.attempt_id,
+                user_id=item.user_id,
+                total_score=item.total_score,
+                max_score=item.max_score,
+                percentage=item.percentage,
+                passed=item.passed,
+                graded_at=item.graded_at.isoformat(),
+            )
+            for item in results
+        ],
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": response.model_dump(),
+            "meta": {
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            },
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
 
 
 def _assessment_payload(assessment: Assessment) -> dict[str, object]:

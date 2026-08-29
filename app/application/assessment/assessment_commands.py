@@ -44,3 +44,11 @@ class AddQuestionToAssessmentCommand:
     assessment_id: str
     question_id: str
     tenant_id: str
+
+
+@dataclass(slots=True)
+class GetAssessmentResultsCommand:
+    assessment_id: str
+    tenant_id: str
+    limit: int = 50
+    offset: int = 0

@@ -101,3 +101,66 @@ async def test_assessment_question_snapshot_correct_option_index_persistence(
     )
     assert len(snapshots) == 1
     assert snapshots[0].correct_option_index == 2
+
+
+@pytest.mark.asyncio
+async def test_list_by_assessment_pagination_and_isolation(
+    session: AsyncSession,
+) -> None:
+    repository = SqlAlchemyAttemptResultRepository(session)
+    for i in range(5):
+        res = AttemptResult.create(
+            tenant_id="tenant-100",
+            attempt_id=f"attempt-100-{i}",
+            assessment_id="assessment-100",
+            user_id=f"user-{i}",
+            total_score=i * 2,
+            max_score=10,
+            percentage=float(i * 20),
+            passed=i >= 3,
+        )
+        res.pull_events()
+        await repository.save(res)
+
+    # Different tenant / assessment
+    other_res = AttemptResult.create(
+        tenant_id="tenant-200",
+        attempt_id="attempt-other",
+        assessment_id="assessment-100",
+        user_id="user-other",
+        total_score=10,
+        max_score=10,
+        percentage=100.0,
+        passed=True,
+    )
+    other_res.pull_events()
+    await repository.save(other_res)
+
+    # Page 1 (limit 2, offset 0)
+    page1, total = await repository.list_by_assessment(
+        "assessment-100", tenant_id="tenant-100", limit=2, offset=0
+    )
+    assert total == 5
+    assert len(page1) == 2
+
+    # Page 2 (limit 2, offset 2)
+    page2, total2 = await repository.list_by_assessment(
+        "assessment-100", tenant_id="tenant-100", limit=2, offset=2
+    )
+    assert total2 == 5
+    assert len(page2) == 2
+
+    # Page 3 (limit 2, offset 4)
+    page3, total3 = await repository.list_by_assessment(
+        "assessment-100", tenant_id="tenant-100", limit=2, offset=4
+    )
+    assert total3 == 5
+    assert len(page3) == 1
+
+    # Isolation check: other tenant only sees 1 result
+    other_page, other_total = await repository.list_by_assessment(
+        "assessment-100", tenant_id="tenant-200", limit=10, offset=0
+    )
+    assert other_total == 1
+    assert len(other_page) == 1
+    assert other_page[0].attempt_id == "attempt-other"

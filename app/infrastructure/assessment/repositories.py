@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -376,6 +376,39 @@ class SqlAlchemyAttemptResultRepository(AttemptResultRepository):
         )
         models = (await self._session.scalars(statement)).all()
         return [attempt_result_model_to_domain(model) for model in models]
+
+    async def list_by_assessment(
+        self,
+        assessment_id: str,
+        tenant_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[AttemptResult], int]:
+        count_stmt = (
+            select(func.count())
+            .select_from(AssessmentAttemptResultModel)
+            .where(
+                AssessmentAttemptResultModel.assessment_id == assessment_id,
+                AssessmentAttemptResultModel.tenant_id == tenant_id,
+            )
+        )
+        total = (await self._session.scalar(count_stmt)) or 0
+
+        statement = (
+            select(AssessmentAttemptResultModel)
+            .where(
+                AssessmentAttemptResultModel.assessment_id == assessment_id,
+                AssessmentAttemptResultModel.tenant_id == tenant_id,
+            )
+            .order_by(
+                AssessmentAttemptResultModel.graded_at.desc(),
+                AssessmentAttemptResultModel.id.asc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        models = (await self._session.scalars(statement)).all()
+        return [attempt_result_model_to_domain(model) for model in models], total
 
     async def save(self, result: AttemptResult) -> AttemptResult:
         statement = select(AssessmentAttemptResultModel).where(

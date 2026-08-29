@@ -2,12 +2,15 @@ from app.application.assessment.assessment_commands import (
     AddQuestionToAssessmentCommand,
     CreateAssessmentCommand,
     GetAssessmentCommand,
+    GetAssessmentResultsCommand,
     ListAssessmentsCommand,
     PublishAssessmentCommand,
     UpdateAssessmentCommand,
 )
 from app.domain.assessment.assessment import Assessment
+from app.domain.assessment.result import AttemptResult
 from app.domain.repositories.assessment import AssessmentRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 
@@ -131,3 +134,28 @@ class AddQuestionToAssessmentHandler:
             correct_option_index=correct_idx,
         )
         return await self.repository.update(assessment, tenant_id=command.tenant_id)
+
+
+class GetAssessmentResultsHandler:
+    def __init__(
+        self,
+        assessment_repository: AssessmentRepository,
+        attempt_result_repository: AttemptResultRepository,
+    ) -> None:
+        self.assessment_repository = assessment_repository
+        self.attempt_result_repository = attempt_result_repository
+
+    async def handle(
+        self, command: GetAssessmentResultsCommand
+    ) -> tuple[list[AttemptResult], int] | None:
+        assessment = await self.assessment_repository.get_by_id(
+            command.assessment_id, tenant_id=command.tenant_id
+        )
+        if assessment is None:
+            return None
+        return await self.attempt_result_repository.list_by_assessment(
+            assessment_id=command.assessment_id,
+            tenant_id=command.tenant_id,
+            limit=command.limit,
+            offset=command.offset,
+        )
