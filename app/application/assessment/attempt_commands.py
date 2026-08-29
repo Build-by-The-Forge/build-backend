@@ -43,3 +43,11 @@ class GetAttemptQuestionsCommand:
     attempt_id: str
     tenant_id: str
     user_id: str
+
+
+@dataclass(slots=True)
+class GetAttemptResultCommand:
+    attempt_id: str
+    tenant_id: str
+    user_id: str
+    is_staff: bool = False

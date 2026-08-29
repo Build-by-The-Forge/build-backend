@@ -22,6 +22,7 @@ class Permission(StrEnum):
     ASSESSMENT_ATTEMPT_SUBMIT = "assessment.attempt.submit"
     ASSESSMENT_ATTEMPT_ANSWER_WRITE = "assessment.attempt.answer.write"
     ASSESSMENT_ATTEMPT_ANSWER_DELETE = "assessment.attempt.answer.delete"
+    ASSESSMENT_ATTEMPT_RESULT_READ = "assessment.attempt.result.read"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
@@ -34,6 +35,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_SUBMIT,
             Permission.ASSESSMENT_ATTEMPT_ANSWER_WRITE,
             Permission.ASSESSMENT_ATTEMPT_ANSWER_DELETE,
+            Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
         }
     ),
     "lecturer": frozenset(
@@ -49,6 +51,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_QUESTION_UPDATE,
             Permission.ASSESSMENT_QUESTION_PUBLISH,
             Permission.ASSESSMENT_QUESTION_ARCHIVE,
+            Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
         }
     ),
     "hod": frozenset(
@@ -64,6 +67,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_QUESTION_UPDATE,
             Permission.ASSESSMENT_QUESTION_PUBLISH,
             Permission.ASSESSMENT_QUESTION_ARCHIVE,
+            Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
         }
     ),
     "faculty_admin": frozenset(
@@ -81,6 +85,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_QUESTION_UPDATE,
             Permission.ASSESSMENT_QUESTION_PUBLISH,
             Permission.ASSESSMENT_QUESTION_ARCHIVE,
+            Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
         }
     ),
     "admin": frozenset(Permission),

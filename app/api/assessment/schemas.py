@@ -147,3 +147,25 @@ class AttemptAnswerResponse(BaseModel):
 class AttemptAnswersResponse(BaseModel):
     attempt_id: str
     answers: list[AttemptAnswerResponse]
+
+
+class QuestionResultResponse(BaseModel):
+    assessment_question_id: str
+    selected_option_index: int | None
+    awarded_marks: int
+    max_marks: int
+    is_correct: bool
+
+
+class AttemptResultResponse(BaseModel):
+    id: str
+    tenant_id: str
+    attempt_id: str
+    assessment_id: str
+    user_id: str
+    total_score: int
+    max_score: int
+    percentage: float
+    passed: bool
+    graded_at: str
+    breakdown: list[QuestionResultResponse]

@@ -24,6 +24,7 @@ class AssessmentQuestion:
     options: list[str]
     marks: int = 1
     assessment_question_id: str | None = None
+    correct_option_index: int | None = None
 
     def __post_init__(self) -> None:
         if not self.question_id or not self.question_id.strip():
@@ -34,6 +35,13 @@ class AssessmentQuestion:
             raise ValueError("question must contain at least one option")
         if self.marks <= 0:
             raise ValueError("question marks must be positive")
+        if self.correct_option_index is not None:
+            if self.correct_option_index < 0 or self.correct_option_index >= len(
+                self.options
+            ):
+                raise ValueError(
+                    "correct_option_index is outside the valid option range"
+                )
 
 
 @dataclass
@@ -116,6 +124,7 @@ class Assessment:
         prompt: str,
         options: list[str],
         marks: int = 1,
+        correct_option_index: int | None = None,
     ) -> AssessmentQuestion:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
@@ -131,6 +140,7 @@ class Assessment:
             prompt=prompt,
             options=list(options),
             marks=marks,
+            correct_option_index=correct_option_index,
         )
         self.questions.append(item)
         self.touch()

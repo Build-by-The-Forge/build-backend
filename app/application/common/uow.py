@@ -5,6 +5,7 @@ from typing import Protocol
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 from app.domain.repositories.session import SessionRepository
@@ -26,6 +27,9 @@ class AssessmentUnitOfWorkPort(Protocol):
 
     @property
     def attempt_answers(self) -> AttemptAnswerRepository: ...
+
+    @property
+    def attempt_results(self) -> AttemptResultRepository: ...
 
 
 class CourseUnitOfWorkPort(Protocol):

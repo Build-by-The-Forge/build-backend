@@ -115,10 +115,19 @@ class AddQuestionToAssessmentHandler:
         )
         if question is None:
             raise ValueError("question not found")
+        correct_idx = next(
+            (
+                index
+                for index, option in enumerate(question.options)
+                if option.is_correct
+            ),
+            0,
+        )
         assessment.add_question(
             question_id=question.id.value,
             prompt=question.prompt.value,
             options=[option.text.value for option in question.options],
             marks=question.marks.value,
+            correct_option_index=correct_idx,
         )
         return await self.repository.update(assessment, tenant_id=command.tenant_id)

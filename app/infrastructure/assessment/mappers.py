@@ -11,6 +11,7 @@ from app.domain.assessment.assessment import (
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.question import Question, QuestionOption
+from app.domain.assessment.result import AttemptResult, QuestionResult
 from app.domain.assessment.value_objects import (
     Difficulty,
     QuestionDisplayOrder,
@@ -25,6 +26,7 @@ from app.domain.assessment.value_objects import (
 )
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
+    AssessmentAttemptResultModel,
     AssessmentModel,
     AssessmentQuestionModel,
     AttemptAnswerModel,
@@ -129,6 +131,7 @@ def assessment_question_to_model(
     model.question_id = question.question_id
     model.prompt = question.prompt
     model.options_json = json.dumps(question.options)
+    model.correct_option_index = question.correct_option_index
     model.marks = question.marks
     model.is_active = True
     model.updated_at = datetime.now(timezone.utc)
@@ -174,6 +177,7 @@ def assessment_question_model_to_domain(
         options=json.loads(model.options_json),
         marks=model.marks,
         assessment_question_id=model.id,
+        correct_option_index=model.correct_option_index,
     )
 
 
@@ -251,6 +255,71 @@ def attempt_answer_model_to_domain(model: AttemptAnswerModel) -> AttemptAnswer:
         assessment_question_id=model.assessment_question_id,
         selected_option_index=model.selected_option_index,
         answer_id=model.id,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def attempt_result_to_model(
+    result: AttemptResult,
+    model: AssessmentAttemptResultModel | None = None,
+) -> AssessmentAttemptResultModel:
+    if model is None:
+        model = AssessmentAttemptResultModel(id=result.id)
+    model.tenant_id = result.tenant_id
+    model.attempt_id = result.attempt_id
+    model.assessment_id = result.assessment_id
+    model.user_id = result.user_id
+    model.total_score = result.total_score
+    model.max_score = result.max_score
+    model.percentage = result.percentage
+    model.passed = result.passed
+    model.breakdown_json = json.dumps(
+        [
+            {
+                "assessment_question_id": item.assessment_question_id,
+                "selected_option_index": item.selected_option_index,
+                "correct_option_index": item.correct_option_index,
+                "awarded_marks": item.awarded_marks,
+                "max_marks": item.max_marks,
+                "is_correct": item.is_correct,
+            }
+            for item in result.breakdown
+        ]
+    )
+    model.graded_at = result.graded_at
+    model.created_at = result.created_at
+    model.updated_at = result.updated_at
+    return model
+
+
+def attempt_result_model_to_domain(
+    model: AssessmentAttemptResultModel,
+) -> AttemptResult:
+    breakdown_data = json.loads(model.breakdown_json or "[]")
+    breakdown = [
+        QuestionResult(
+            assessment_question_id=item["assessment_question_id"],
+            selected_option_index=item.get("selected_option_index"),
+            correct_option_index=item["correct_option_index"],
+            awarded_marks=item["awarded_marks"],
+            max_marks=item["max_marks"],
+            is_correct=item["is_correct"],
+        )
+        for item in breakdown_data
+    ]
+    return AttemptResult(
+        tenant_id=model.tenant_id,
+        attempt_id=model.attempt_id,
+        assessment_id=model.assessment_id,
+        user_id=model.user_id,
+        total_score=model.total_score,
+        max_score=model.max_score,
+        percentage=model.percentage,
+        passed=model.passed,
+        breakdown=breakdown,
+        result_id=model.id,
+        graded_at=model.graded_at,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

@@ -2,14 +2,19 @@ from app.application.assessment.attempt_commands import (
     AttemptQuestionSnapshot,
     GetAttemptCommand,
     GetAttemptQuestionsCommand,
+    GetAttemptResultCommand,
     ListMyAttemptsCommand,
     StartAttemptCommand,
     SubmitAttemptCommand,
 )
 from app.domain.assessment.assessment import AssessmentStatus
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
+from app.domain.assessment.result import AttemptResult
+from app.domain.assessment.scoring import AssessmentScorer
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
+from app.domain.repositories.attempt_answer import AttemptAnswerRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository
 
 
 class StartAttemptHandler:
@@ -67,8 +72,17 @@ class ListMyAttemptsHandler:
 
 
 class SubmitAttemptHandler:
-    def __init__(self, repository: AttemptRepository) -> None:
+    def __init__(
+        self,
+        repository: AttemptRepository,
+        assessments: AssessmentRepository | None = None,
+        answers: AttemptAnswerRepository | None = None,
+        results: AttemptResultRepository | None = None,
+    ) -> None:
         self.repository = repository
+        self.assessments = assessments
+        self.answers = answers
+        self.results = results
 
     async def handle(self, command: SubmitAttemptCommand) -> AssessmentAttempt | None:
         attempt = await self.repository.get_by_id(
@@ -79,6 +93,32 @@ class SubmitAttemptHandler:
         if attempt is None:
             return None
         attempt.submit()
+
+        if (
+            self.assessments is not None
+            and self.answers is not None
+            and self.results is not None
+        ):
+            assessment = await self.assessments.get_by_id(
+                attempt.assessment_id, tenant_id=command.tenant_id
+            )
+            if assessment is None:
+                raise ValueError("assessment not found")
+            questions = await self.assessments.list_question_snapshots(
+                attempt.assessment_id, tenant_id=command.tenant_id
+            )
+            learner_answers = await self.answers.list_by_attempt(
+                command.attempt_id, tenant_id=command.tenant_id
+            )
+            result = AssessmentScorer.score(
+                attempt=attempt,
+                assessment=assessment,
+                questions=questions,
+                answers=learner_answers,
+            )
+            await self.results.save(result)
+            attempt._events.extend(result.pull_events())
+
         return await self.repository.update(attempt, tenant_id=command.tenant_id)
 
 
@@ -117,3 +157,27 @@ class GetAttemptQuestionsHandler:
             )
             for sequence, question in enumerate(snapshots)
         ]
+
+
+class GetAttemptResultHandler:
+    def __init__(
+        self,
+        attempts: AttemptRepository,
+        results: AttemptResultRepository,
+    ) -> None:
+        self.attempts = attempts
+        self.results = results
+
+    async def handle(self, command: GetAttemptResultCommand) -> AttemptResult | None:
+        attempt = await self.attempts.get_by_id(
+            command.attempt_id,
+            tenant_id=command.tenant_id,
+            user_id=None if command.is_staff else command.user_id,
+        )
+        if attempt is None:
+            return None
+        if attempt.status != AttemptStatus.SUBMITTED:
+            raise ValueError("attempt is not submitted")
+        return await self.results.get_by_attempt_id(
+            command.attempt_id, tenant_id=command.tenant_id
+        )

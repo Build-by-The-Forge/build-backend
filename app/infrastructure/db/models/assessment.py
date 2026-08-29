@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -140,6 +141,7 @@ class AssessmentQuestionModel(Base):
     question_id: Mapped[str] = mapped_column(String(255), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     options_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    correct_option_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     marks: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -259,4 +261,58 @@ class AttemptAnswerModel(Base):
         Index("ix_attempt_answers_tenant_id", "tenant_id"),
         Index("ix_attempt_answers_attempt_id", "attempt_id"),
         Index("ix_attempt_answers_assessment_question_id", "assessment_question_id"),
+    )
+
+
+class AssessmentAttemptResultModel(Base):
+    __tablename__ = "assessment_attempt_results"
+
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    attempt_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey("assessment_attempts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    assessment_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey("assessments.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    total_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    percentage: Mapped[float] = mapped_column(Float, nullable=False)
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    breakdown_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    graded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "attempt_id",
+            name="uq_attempt_result_tenant_attempt",
+        ),
+        Index("ix_attempt_results_tenant_id", "tenant_id"),
+        Index("ix_attempt_results_attempt_id", "attempt_id"),
+        Index("ix_attempt_results_assessment_id", "assessment_id"),
+        Index("ix_attempt_results_user_id", "user_id"),
     )

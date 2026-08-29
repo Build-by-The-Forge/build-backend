@@ -6,9 +6,11 @@ from app.domain.assessment.assessment import Assessment, AssessmentQuestion
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.question import Question
+from app.domain.assessment.result import AttemptResult
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository
 from app.domain.repositories.question import QuestionRepository
 from app.infrastructure.assessment.mappers import (
     assessment_model_to_domain,
@@ -17,12 +19,15 @@ from app.infrastructure.assessment.mappers import (
     attempt_answer_model_to_domain,
     attempt_answer_to_model,
     attempt_model_to_domain,
+    attempt_result_model_to_domain,
+    attempt_result_to_model,
     attempt_to_model,
     question_model_to_domain,
     question_to_model,
 )
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
+    AssessmentAttemptResultModel,
     AssessmentModel,
     AssessmentQuestionModel,
     AttemptAnswerModel,
@@ -336,3 +341,52 @@ class SqlAlchemyAttemptAnswerRepository(AttemptAnswerRepository):
         if model is not None:
             await self._session.delete(model)
             await self._session.flush()
+
+
+class SqlAlchemyAttemptResultRepository(AttemptResultRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get_by_attempt_id(
+        self, attempt_id: str, tenant_id: str
+    ) -> AttemptResult | None:
+        statement = select(AssessmentAttemptResultModel).where(
+            AssessmentAttemptResultModel.attempt_id == attempt_id,
+            AssessmentAttemptResultModel.tenant_id == tenant_id,
+        )
+        model = (await self._session.scalars(statement)).first()
+        return attempt_result_model_to_domain(model) if model is not None else None
+
+    async def get_by_id(self, result_id: str, tenant_id: str) -> AttemptResult | None:
+        statement = select(AssessmentAttemptResultModel).where(
+            AssessmentAttemptResultModel.id == result_id,
+            AssessmentAttemptResultModel.tenant_id == tenant_id,
+        )
+        model = (await self._session.scalars(statement)).first()
+        return attempt_result_model_to_domain(model) if model is not None else None
+
+    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AttemptResult]:
+        statement = (
+            select(AssessmentAttemptResultModel)
+            .where(
+                AssessmentAttemptResultModel.user_id == user_id,
+                AssessmentAttemptResultModel.tenant_id == tenant_id,
+            )
+            .order_by(AssessmentAttemptResultModel.graded_at.desc())
+        )
+        models = (await self._session.scalars(statement)).all()
+        return [attempt_result_model_to_domain(model) for model in models]
+
+    async def save(self, result: AttemptResult) -> AttemptResult:
+        statement = select(AssessmentAttemptResultModel).where(
+            AssessmentAttemptResultModel.id == result.id,
+            AssessmentAttemptResultModel.tenant_id == result.tenant_id,
+        )
+        model = (await self._session.scalars(statement)).first()
+        if model is None:
+            model = attempt_result_to_model(result)
+            self._session.add(model)
+        else:
+            attempt_result_to_model(result, model=model)
+        await self._session.flush()
+        return result

@@ -6,6 +6,8 @@ from app.api.assessment.schemas import (
     AttemptQuestionResponse,
     AttemptQuestionsResponse,
     AttemptResponse,
+    AttemptResultResponse,
+    QuestionResultResponse,
 )
 from app.application.assessment.attempt_commands import AttemptQuestionSnapshot
 from app.application.assessment.attempt_service import AttemptService
@@ -125,6 +127,72 @@ async def submit_attempt(
     if attempt is None:
         raise HTTPException(status_code=404, detail="attempt not found")
     return _response(request, attempt)
+
+
+@router.get("/attempts/{attempt_id}/result", status_code=status.HTTP_200_OK)
+async def get_attempt_result(
+    attempt_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.ASSESSMENT_ATTEMPT_RESULT_READ)
+    ),
+) -> JSONResponse:
+    is_staff = context.role in {"lecturer", "hod", "faculty_admin", "admin", "owner"}
+    try:
+        result = await service.get_attempt_result(
+            attempt_id=attempt_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            is_staff=is_staff,
+        )
+    except ValueError as exc:
+        if str(exc) == "attempt is not submitted":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="attempt is not submitted",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="attempt result not found",
+        )
+
+    response = AttemptResultResponse(
+        id=result.id,
+        tenant_id=result.tenant_id,
+        attempt_id=result.attempt_id,
+        assessment_id=result.assessment_id,
+        user_id=result.user_id,
+        total_score=result.total_score,
+        max_score=result.max_score,
+        percentage=result.percentage,
+        passed=result.passed,
+        graded_at=result.graded_at.isoformat(),
+        breakdown=[
+            QuestionResultResponse(
+                assessment_question_id=item.assessment_question_id,
+                selected_option_index=item.selected_option_index,
+                awarded_marks=item.awarded_marks,
+                max_marks=item.max_marks,
+                is_correct=item.is_correct,
+            )
+            for item in result.breakdown
+        ],
+    )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": response.model_dump(),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
 
 
 def _attempt_payload(attempt: AssessmentAttempt) -> dict[str, object]:
