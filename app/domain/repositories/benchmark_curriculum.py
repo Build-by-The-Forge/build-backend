@@ -18,6 +18,14 @@ class BenchmarkCurriculumRepository(Protocol):
     ) -> BenchmarkCurriculum | None:
         raise NotImplementedError
 
+    async def get_active_by_programme(
+        self,
+        discipline_group: str,
+        programme_code: str,
+        degree_level: str = "undergraduate",
+    ) -> BenchmarkCurriculum | None:
+        raise NotImplementedError
+
     async def list_curricula(
         self,
         programme_code: str | None = None,

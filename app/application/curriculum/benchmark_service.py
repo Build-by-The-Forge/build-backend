@@ -1,4 +1,10 @@
 from app.application.common.uow import CurriculumUnitOfWorkFactory
+from app.application.curriculum.activation_commands import (
+    ActivateBenchmarkCurriculumCommand,
+)
+from app.application.curriculum.activation_handlers import (
+    ActivateBenchmarkCurriculumHandler,
+)
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     GetBenchmarkCourseCommand,
@@ -149,6 +155,50 @@ class BenchmarkCurriculumService:
         ).handle(command)
         self._publish_events(events)
         return curriculum, result
+
+    async def activate_curriculum(
+        self,
+        curriculum_id: str,
+        activated_by: str | None = None,
+    ) -> tuple[BenchmarkCurriculum, BenchmarkCurriculum | None]:
+        command = ActivateBenchmarkCurriculumCommand(
+            curriculum_id=curriculum_id,
+            activated_by=activated_by,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                curriculum, superseded, events = (
+                    await ActivateBenchmarkCurriculumHandler(uow.benchmarks).handle(
+                        command
+                    )
+                )
+            self._publish_events(events)
+            return curriculum, superseded
+
+        curriculum, superseded, events = await ActivateBenchmarkCurriculumHandler(
+            self._required_repository()
+        ).handle(command)
+        self._publish_events(events)
+        return curriculum, superseded
+
+    async def get_active_curriculum(
+        self,
+        discipline_group: str,
+        programme_code: str,
+        degree_level: str = "undergraduate",
+    ) -> BenchmarkCurriculum | None:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.benchmarks.get_active_by_programme(
+                    discipline_group=discipline_group,
+                    programme_code=programme_code,
+                    degree_level=degree_level,
+                )
+        return await self._required_repository().get_active_by_programme(
+            discipline_group=discipline_group,
+            programme_code=programme_code,
+            degree_level=degree_level,
+        )
 
     def _required_repository(self) -> BenchmarkCurriculumRepository:
         if self.repository is None:

@@ -105,3 +105,8 @@ class ValidationResultResponse(BaseModel):
 class BenchmarkValidationResponse(BaseModel):
     curriculum: BenchmarkCurriculumSummaryResponse
     validation: ValidationResultResponse
+
+
+class BenchmarkActivationResponse(BaseModel):
+    activated: BenchmarkCurriculumSummaryResponse
+    superseded: BenchmarkCurriculumSummaryResponse | None = None

@@ -148,3 +148,36 @@ def test_benchmark_course_invalid_fields() -> None:
             level=100,
             semester=3,
         )
+
+
+def test_benchmark_lifecycle_activation_and_supersession() -> None:
+    curriculum = BenchmarkCurriculum.create_candidate(
+        source_snapshot_id="snap-123",
+        discipline_group="Computing",
+        programme_name="Computer Science",
+        programme_code="CSC",
+        version="2026.01",
+    )
+    # Direct activation from CANDIDATE must fail
+    with pytest.raises(ValueError, match="only validated benchmarks can be activated"):
+        curriculum.activate()
+
+    # Transition to VALIDATED
+    curriculum.mark_validated()
+    assert curriculum.status == BenchmarkStatus.VALIDATED
+
+    # Activate
+    curriculum.activate(activated_by="admin-user-1")
+    assert curriculum.status == BenchmarkStatus.ACTIVE
+
+    # Activating already active raises
+    with pytest.raises(ValueError, match="only validated benchmarks can be activated"):
+        curriculum.activate()
+
+    # Supersede
+    curriculum.supersede()
+    assert curriculum.status == BenchmarkStatus.SUPERSEDED
+
+    # Superseding non-active raises
+    with pytest.raises(ValueError, match="only active benchmarks can be superseded"):
+        curriculum.supersede()

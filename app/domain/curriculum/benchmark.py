@@ -252,7 +252,57 @@ class BenchmarkCurriculum:
                 payload={
                     "curriculum_id": self.id,
                     "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
                     "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
+                    "version": self.version,
+                },
+            )
+        )
+
+    def activate(
+        self,
+        superseded_id: str | None = None,
+        activated_by: str | None = None,
+    ) -> None:
+        if self.status != BenchmarkStatus.VALIDATED:
+            raise ValueError(
+                f"only validated benchmarks can be activated, current status is '{self.status.value}'"
+            )
+        self.status = BenchmarkStatus.ACTIVE
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_activated",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
+                    "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
+                    "version": self.version,
+                    "superseded_id": superseded_id,
+                    "activated_by": activated_by,
+                },
+            )
+        )
+
+    def supersede(self) -> None:
+        if self.status != BenchmarkStatus.ACTIVE:
+            raise ValueError(
+                f"only active benchmarks can be superseded, current status is '{self.status.value}'"
+            )
+        self.status = BenchmarkStatus.SUPERSEDED
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_superseded",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "discipline_group": self.discipline_group,
+                    "programme_code": self.programme_code,
+                    "degree_level": self.degree_level,
                     "version": self.version,
                 },
             )

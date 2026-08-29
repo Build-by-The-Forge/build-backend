@@ -71,6 +71,23 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
             benchmark_curriculum_model_to_domain(model) if model is not None else None
         )
 
+    async def get_active_by_programme(
+        self,
+        discipline_group: str,
+        programme_code: str,
+        degree_level: str = "undergraduate",
+    ) -> BenchmarkCurriculum | None:
+        statement = select(BenchmarkCurriculumModel).where(
+            BenchmarkCurriculumModel.discipline_group == discipline_group,
+            BenchmarkCurriculumModel.programme_code == programme_code.upper(),
+            BenchmarkCurriculumModel.degree_level == degree_level,
+            BenchmarkCurriculumModel.status == "active",
+        )
+        model = (await self._session.scalars(statement)).first()
+        return (
+            benchmark_curriculum_model_to_domain(model) if model is not None else None
+        )
+
     async def list_curricula(
         self,
         programme_code: str | None = None,

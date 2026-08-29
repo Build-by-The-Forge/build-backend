@@ -249,6 +249,80 @@ async def validate_candidate(
     )
 
 
+@router.post("/{curriculum_id}/activate", status_code=status.HTTP_200_OK)
+async def activate_curriculum(
+    curriculum_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
+    ),
+) -> JSONResponse:
+    try:
+        curriculum, superseded = await service.activate_curriculum(
+            curriculum_id=curriculum_id,
+            activated_by=context.tenant_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "activated": _curriculum_summary_payload(curriculum),
+                "superseded": (
+                    _curriculum_summary_payload(superseded)
+                    if superseded is not None
+                    else None
+                ),
+            },
+            "meta": {
+                "superseded_curriculum_id": (
+                    superseded.id if superseded is not None else None
+                )
+            },
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.get(
+    "/active/{discipline_group}/{programme_code}",
+    status_code=status.HTTP_200_OK,
+)
+async def get_active_benchmark(
+    discipline_group: str,
+    programme_code: str,
+    request: Request,
+    degree_level: str = "undergraduate",
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_READ)
+    ),
+) -> JSONResponse:
+    curriculum = await service.get_active_curriculum(
+        discipline_group=discipline_group,
+        programme_code=programme_code,
+        degree_level=degree_level,
+    )
+    if curriculum is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"no active benchmark found for {discipline_group}/{programme_code} ({degree_level})",
+        )
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": _curriculum_summary_payload(curriculum),
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
 def _curriculum_summary_payload(
     curriculum: BenchmarkCurriculum,
 ) -> dict[str, object]:
