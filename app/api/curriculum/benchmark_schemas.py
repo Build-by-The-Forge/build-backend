@@ -110,3 +110,60 @@ class BenchmarkValidationResponse(BaseModel):
 class BenchmarkActivationResponse(BaseModel):
     activated: BenchmarkCurriculumSummaryResponse
     superseded: BenchmarkCurriculumSummaryResponse | None = None
+
+
+class FieldDiffResponse(BaseModel):
+    field: str
+    old_value: object | None = None
+    new_value: object | None = None
+
+
+class OutcomeDiffResponse(BaseModel):
+    sequence: int
+    action: str
+    description: str
+    field_diffs: list[FieldDiffResponse] = Field(default_factory=list)
+
+
+class TopicDiffResponse(BaseModel):
+    sequence: int
+    title: str
+    action: str
+    field_diffs: list[FieldDiffResponse] = Field(default_factory=list)
+    outcome_diffs: list[OutcomeDiffResponse] = Field(default_factory=list)
+
+
+class CourseDiffResponse(BaseModel):
+    code: str
+    title: str
+    action: str
+    field_diffs: list[FieldDiffResponse] = Field(default_factory=list)
+    topic_diffs: list[TopicDiffResponse] = Field(default_factory=list)
+
+
+class DiffStatisticsResponse(BaseModel):
+    courses_added: int
+    courses_removed: int
+    courses_modified: int
+    topics_added: int
+    topics_removed: int
+    topics_modified: int
+    outcomes_added: int
+    outcomes_removed: int
+    outcomes_modified: int
+    credit_units_before: int
+    credit_units_after: int
+    credit_units_delta: int
+
+
+class BenchmarkCurriculumDiffResponse(BaseModel):
+    source_curriculum_id: str
+    target_curriculum_id: str
+    source_version: str
+    target_version: str
+    discipline_group: str
+    programme_code: str
+    degree_level: str
+    diff_fingerprint: str
+    statistics: DiffStatisticsResponse
+    course_diffs: list[CourseDiffResponse] = Field(default_factory=list)

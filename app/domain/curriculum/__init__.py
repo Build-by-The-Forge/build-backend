@@ -6,6 +6,16 @@ from app.domain.curriculum.benchmark import (
     BenchmarkTopic,
     BloomTaxonomyLevel,
 )
+from app.domain.curriculum.diff import (
+    BenchmarkCurriculumDiff,
+    BenchmarkCurriculumDiffEngine,
+    CourseDiff,
+    DiffAction,
+    DiffStatistics,
+    FieldDiff,
+    OutcomeDiff,
+    TopicDiff,
+)
 from app.domain.curriculum.source import (
     CurriculumSnapshot,
     CurriculumSource,
@@ -34,4 +44,12 @@ __all__ = [
     "IssueSeverity",
     "ValidationIssue",
     "ValidationResult",
+    "DiffAction",
+    "FieldDiff",
+    "OutcomeDiff",
+    "TopicDiff",
+    "CourseDiff",
+    "DiffStatistics",
+    "BenchmarkCurriculumDiff",
+    "BenchmarkCurriculumDiffEngine",
 ]

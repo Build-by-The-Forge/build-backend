@@ -20,6 +20,12 @@ from app.application.curriculum.benchmark_handlers import (
     ListBenchmarkCoursesHandler,
     ListBenchmarkCurriculaHandler,
 )
+from app.application.curriculum.diff_commands import (
+    CompareBenchmarkCurriculaCommand,
+)
+from app.application.curriculum.diff_handlers import (
+    CompareBenchmarkCurriculaHandler,
+)
 from app.application.curriculum.validation_commands import (
     ValidateBenchmarkCandidateCommand,
 )
@@ -27,6 +33,7 @@ from app.application.curriculum.validation_handlers import (
     ValidateBenchmarkCandidateHandler,
 )
 from app.domain.curriculum.benchmark import BenchmarkCourse, BenchmarkCurriculum
+from app.domain.curriculum.diff import BenchmarkCurriculumDiff
 from app.domain.curriculum.validator import ValidationResult
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
@@ -199,6 +206,24 @@ class BenchmarkCurriculumService:
             programme_code=programme_code,
             degree_level=degree_level,
         )
+
+    async def compare_curricula(
+        self,
+        source_curriculum_id: str,
+        target_curriculum_id: str,
+    ) -> BenchmarkCurriculumDiff:
+        command = CompareBenchmarkCurriculaCommand(
+            source_curriculum_id=source_curriculum_id,
+            target_curriculum_id=target_curriculum_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await CompareBenchmarkCurriculaHandler(uow.benchmarks).handle(
+                    command
+                )
+        return await CompareBenchmarkCurriculaHandler(
+            self._required_repository()
+        ).handle(command)
 
     def _required_repository(self) -> BenchmarkCurriculumRepository:
         if self.repository is None:

@@ -4,10 +4,16 @@ from fastapi.responses import JSONResponse
 from app.api.curriculum.benchmark_schemas import (
     BenchmarkCourseDetailResponse,
     BenchmarkCourseSummaryResponse,
+    BenchmarkCurriculumDiffResponse,
     BenchmarkCurriculumSummaryResponse,
     BenchmarkOutcomeResponse,
     BenchmarkTopicResponse,
+    CourseDiffResponse,
+    DiffStatisticsResponse,
+    FieldDiffResponse,
     IngestBenchmarkCandidateRequest,
+    OutcomeDiffResponse,
+    TopicDiffResponse,
     ValidationIssueResponse,
     ValidationResultResponse,
 )
@@ -27,6 +33,7 @@ from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,
 )
+from app.domain.curriculum.diff import BenchmarkCurriculumDiff
 from app.domain.curriculum.validator import ValidationResult
 
 router = APIRouter(prefix="/curriculum/benchmarks", tags=["curriculum-benchmarks"])
@@ -123,6 +130,39 @@ async def list_benchmarks(
             "success": True,
             "data": [_curriculum_summary_payload(c) for c in curricula],
             "meta": {"total": len(curricula)},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.get("/diff", status_code=status.HTTP_200_OK)
+async def compare_benchmarks(
+    source_id: str,
+    target_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_READ)
+    ),
+) -> JSONResponse:
+    try:
+        diff = await service.compare_curricula(
+            source_curriculum_id=source_id,
+            target_curriculum_id=target_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": _diff_payload(diff),
+            "meta": {
+                "fingerprint": diff.diff_fingerprint,
+                "credit_delta": diff.statistics.credit_units_delta,
+            },
             "request_id": getattr(request.state, "request_id", None),
         },
     )
@@ -414,4 +454,89 @@ def _validation_result_payload(
         error_count=result.error_count,
         warning_count=result.warning_count,
         issues=issues,
+    ).model_dump()
+
+
+def _diff_payload(diff: BenchmarkCurriculumDiff) -> dict[str, object]:
+    course_diffs = []
+    for c in diff.course_diffs:
+        field_diffs = [
+            FieldDiffResponse(
+                field=f.field,
+                old_value=f.old_value,
+                new_value=f.new_value,
+            )
+            for f in c.field_diffs
+        ]
+        topic_diffs = []
+        for t in c.topic_diffs:
+            t_field_diffs = [
+                FieldDiffResponse(
+                    field=f.field,
+                    old_value=f.old_value,
+                    new_value=f.new_value,
+                )
+                for f in t.field_diffs
+            ]
+            o_diffs = [
+                OutcomeDiffResponse(
+                    sequence=o.sequence,
+                    action=o.action.value,
+                    description=o.description,
+                    field_diffs=[
+                        FieldDiffResponse(
+                            field=f.field,
+                            old_value=f.old_value,
+                            new_value=f.new_value,
+                        )
+                        for f in o.field_diffs
+                    ],
+                )
+                for o in t.outcome_diffs
+            ]
+            topic_diffs.append(
+                TopicDiffResponse(
+                    sequence=t.sequence,
+                    title=t.title,
+                    action=t.action.value,
+                    field_diffs=t_field_diffs,
+                    outcome_diffs=o_diffs,
+                )
+            )
+        course_diffs.append(
+            CourseDiffResponse(
+                code=c.code,
+                title=c.title,
+                action=c.action.value,
+                field_diffs=field_diffs,
+                topic_diffs=topic_diffs,
+            )
+        )
+
+    stats = DiffStatisticsResponse(
+        courses_added=diff.statistics.courses_added,
+        courses_removed=diff.statistics.courses_removed,
+        courses_modified=diff.statistics.courses_modified,
+        topics_added=diff.statistics.topics_added,
+        topics_removed=diff.statistics.topics_removed,
+        topics_modified=diff.statistics.topics_modified,
+        outcomes_added=diff.statistics.outcomes_added,
+        outcomes_removed=diff.statistics.outcomes_removed,
+        outcomes_modified=diff.statistics.outcomes_modified,
+        credit_units_before=diff.statistics.credit_units_before,
+        credit_units_after=diff.statistics.credit_units_after,
+        credit_units_delta=diff.statistics.credit_units_delta,
+    )
+
+    return BenchmarkCurriculumDiffResponse(
+        source_curriculum_id=diff.source_curriculum_id,
+        target_curriculum_id=diff.target_curriculum_id,
+        source_version=diff.source_version,
+        target_version=diff.target_version,
+        discipline_group=diff.discipline_group,
+        programme_code=diff.programme_code,
+        degree_level=diff.degree_level,
+        diff_fingerprint=diff.diff_fingerprint,
+        statistics=stats,
+        course_diffs=course_diffs,
     ).model_dump()
