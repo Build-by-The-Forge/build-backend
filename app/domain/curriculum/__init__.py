@@ -26,6 +26,18 @@ from app.domain.curriculum.diff import (
     OutcomeDiff,
     TopicDiff,
 )
+from app.domain.curriculum.effective import (
+    RESOLUTION_ENGINE_VERSION,
+    AppliedOverrideProvenance,
+    EffectiveCourse,
+    EffectiveCurriculum,
+    EffectiveCurriculumResolver,
+    EffectiveCurriculumStatistics,
+    EffectiveOutcome,
+    EffectiveTopic,
+    EntityOrigin,
+    OmittedCourse,
+)
 from app.domain.curriculum.source import (
     CurriculumSnapshot,
     CurriculumSource,
@@ -68,4 +80,14 @@ __all__ = [
     "CurriculumOverride",
     "AdoptionStatus",
     "OverrideType",
+    "RESOLUTION_ENGINE_VERSION",
+    "EntityOrigin",
+    "AppliedOverrideProvenance",
+    "EffectiveOutcome",
+    "EffectiveTopic",
+    "EffectiveCourse",
+    "OmittedCourse",
+    "EffectiveCurriculumStatistics",
+    "EffectiveCurriculum",
+    "EffectiveCurriculumResolver",
 ]

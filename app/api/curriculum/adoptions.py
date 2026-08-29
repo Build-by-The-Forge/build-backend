@@ -7,6 +7,19 @@ from app.api.curriculum.adoption_schemas import (
     CurriculumOverrideResponse,
     InstitutionalAdoptionResponse,
 )
+from app.api.curriculum.effective_schemas import (
+    AppliedOverrideProvenanceResponse,
+    EffectiveCourseResponse,
+    EffectiveCurriculumResponse,
+    EffectiveCurriculumStatisticsResponse,
+    EffectiveOutcomeResponse,
+    EffectiveTopicResponse,
+    OmittedCourseResponse,
+    StudentCourseResponse,
+    StudentEffectiveCurriculumResponse,
+    StudentOutcomeResponse,
+    StudentTopicResponse,
+)
 from app.application.curriculum.institutional_adoption_service import (
     InstitutionalAdoptionService,
 )
@@ -17,6 +30,9 @@ from app.core.tenant_context import TenantContext
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
     InstitutionalAdoption,
+)
+from app.domain.curriculum.effective import (
+    EffectiveCurriculum,
 )
 
 router = APIRouter(prefix="/curriculum/adoptions", tags=["curriculum-adoptions"])
@@ -227,6 +243,70 @@ async def remove_override(
     )
 
 
+@router.get("/{adoption_id}/effective", status_code=status.HTTP_200_OK)
+async def get_effective_curriculum_by_adoption(
+    adoption_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_READ)
+    ),
+) -> JSONResponse:
+    try:
+        effective = await service.get_effective_curriculum(
+            adoption_id=adoption_id,
+            tenant_id=context.tenant_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": _effective_curriculum_payload(effective),
+            "meta": {
+                "effective_curriculum_fingerprint": effective.effective_curriculum_fingerprint,
+                "resolution_engine_version": effective.resolution_engine_version,
+            },
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@router.get("/effective/active/{programme_id}", status_code=status.HTTP_200_OK)
+async def get_active_effective_curriculum_student(
+    programme_id: str,
+    request: Request,
+    academic_session_id: str | None = None,
+    context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
+) -> JSONResponse:
+    try:
+        effective = await service.get_active_effective_curriculum(
+            tenant_id=context.tenant_id,
+            programme_id=programme_id,
+            academic_session_id=academic_session_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": _student_effective_curriculum_payload(effective),
+            "meta": {
+                "effective_curriculum_fingerprint": effective.effective_curriculum_fingerprint,
+                "resolution_engine_version": effective.resolution_engine_version,
+            },
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
 def _adoption_payload(adoption: InstitutionalAdoption) -> dict[str, object]:
     return InstitutionalAdoptionResponse(
         id=adoption.id,
@@ -259,4 +339,170 @@ def _override_payload(override: CurriculumOverride) -> dict[str, object]:
         created_by=override.created_by,
         created_by_email=override.created_by_email,
         created_at=override.created_at.isoformat(),
+    ).model_dump()
+
+
+def _effective_curriculum_payload(
+    effective: EffectiveCurriculum,
+) -> dict[str, object]:
+    courses_payload: list[EffectiveCourseResponse] = []
+    for c in effective.courses:
+        topics_payload: list[EffectiveTopicResponse] = []
+        for t in c.topics:
+            outcomes_payload = [
+                EffectiveOutcomeResponse(
+                    id=o.id,
+                    sequence=o.sequence,
+                    description=o.description,
+                    bloom_level=o.bloom_level.value,
+                    origin=o.origin.value,
+                    applied_overrides=[
+                        AppliedOverrideProvenanceResponse(
+                            override_id=p.override_id,
+                            override_type=p.override_type,
+                            reason=p.reason,
+                            field_overrides=p.field_overrides,
+                            created_by_email=p.created_by_email,
+                            created_at=p.created_at.isoformat(),
+                        )
+                        for p in o.applied_overrides
+                    ],
+                )
+                for o in t.outcomes
+            ]
+            topics_payload.append(
+                EffectiveTopicResponse(
+                    id=t.id,
+                    sequence=t.sequence,
+                    title=t.title,
+                    description=t.description,
+                    origin=t.origin.value,
+                    outcomes=outcomes_payload,
+                    applied_overrides=[
+                        AppliedOverrideProvenanceResponse(
+                            override_id=p.override_id,
+                            override_type=p.override_type,
+                            reason=p.reason,
+                            field_overrides=p.field_overrides,
+                            created_by_email=p.created_by_email,
+                            created_at=p.created_at.isoformat(),
+                        )
+                        for p in t.applied_overrides
+                    ],
+                )
+            )
+
+        courses_payload.append(
+            EffectiveCourseResponse(
+                code=c.code,
+                title=c.title,
+                credit_units=c.credit_units,
+                level=c.level,
+                semester=c.semester,
+                sequence=c.sequence,
+                is_compulsory=c.is_compulsory,
+                course_category=c.course_category,
+                description=c.description,
+                origin=c.origin.value,
+                topics=topics_payload,
+                applied_overrides=[
+                    AppliedOverrideProvenanceResponse(
+                        override_id=p.override_id,
+                        override_type=p.override_type,
+                        reason=p.reason,
+                        field_overrides=p.field_overrides,
+                        created_by_email=p.created_by_email,
+                        created_at=p.created_at.isoformat(),
+                    )
+                    for p in c.applied_overrides
+                ],
+                benchmark_course_id=c.benchmark_course_id,
+            )
+        )
+
+    omitted_payload = [
+        OmittedCourseResponse(
+            code=o.code,
+            title=o.title,
+            credit_units=o.credit_units,
+            level=o.level,
+            semester=o.semester,
+            reason=o.reason,
+            override_id=o.override_id,
+            created_by_email=o.created_by_email,
+            benchmark_course_id=o.benchmark_course_id,
+        )
+        for o in effective.omitted_courses
+    ]
+
+    stats_payload = EffectiveCurriculumStatisticsResponse(
+        total_credit_units=effective.statistics.total_credit_units,
+        total_courses=effective.statistics.total_courses,
+        national_courses_count=effective.statistics.national_courses_count,
+        modified_courses_count=effective.statistics.modified_courses_count,
+        custom_courses_count=effective.statistics.custom_courses_count,
+        omitted_courses_count=effective.statistics.omitted_courses_count,
+    )
+
+    return EffectiveCurriculumResponse(
+        adoption_id=effective.adoption_id,
+        tenant_id=effective.tenant_id,
+        programme_id=effective.programme_id,
+        academic_session_id=effective.academic_session_id,
+        benchmark_curriculum_id=effective.benchmark_curriculum_id,
+        benchmark_version=effective.benchmark_version,
+        benchmark_fingerprint=effective.benchmark_fingerprint,
+        effective_curriculum_fingerprint=effective.effective_curriculum_fingerprint,
+        resolution_engine_version=effective.resolution_engine_version,
+        status=effective.status.value,
+        statistics=stats_payload,
+        courses=courses_payload,
+        omitted_courses=omitted_payload,
+    ).model_dump()
+
+
+def _student_effective_curriculum_payload(
+    effective: EffectiveCurriculum,
+) -> dict[str, object]:
+    courses_payload: list[StudentCourseResponse] = []
+    for c in effective.courses:
+        topics_payload = [
+            StudentTopicResponse(
+                sequence=t.sequence,
+                title=t.title,
+                description=t.description,
+                outcomes=[
+                    StudentOutcomeResponse(
+                        sequence=o.sequence,
+                        description=o.description,
+                        bloom_level=o.bloom_level.value,
+                    )
+                    for o in t.outcomes
+                ],
+            )
+            for t in c.topics
+        ]
+        courses_payload.append(
+            StudentCourseResponse(
+                code=c.code,
+                title=c.title,
+                credit_units=c.credit_units,
+                level=c.level,
+                semester=c.semester,
+                is_compulsory=c.is_compulsory,
+                course_category=c.course_category,
+                description=c.description,
+                origin=c.origin.value,
+                topics=topics_payload,
+            )
+        )
+
+    return StudentEffectiveCurriculumResponse(
+        programme_id=effective.programme_id,
+        academic_session_id=effective.academic_session_id,
+        benchmark_version=effective.benchmark_version,
+        effective_curriculum_fingerprint=effective.effective_curriculum_fingerprint,
+        total_credit_units=effective.statistics.total_credit_units,
+        total_courses=effective.statistics.total_courses,
+        courses=courses_payload,
     ).model_dump()

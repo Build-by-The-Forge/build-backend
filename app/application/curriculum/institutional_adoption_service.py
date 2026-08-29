@@ -19,11 +19,20 @@ from app.application.curriculum.adoption_handlers import (
     ListAdoptionsHandler,
     RemoveCurriculumOverrideHandler,
 )
+from app.application.curriculum.effective_handlers import (
+    GetActiveEffectiveCurriculumHandler,
+    GetEffectiveCurriculumByAdoptionHandler,
+)
+from app.application.curriculum.effective_queries import (
+    GetActiveEffectiveCurriculumQuery,
+    GetEffectiveCurriculumByAdoptionQuery,
+)
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
     InstitutionalAdoption,
     OverrideType,
 )
+from app.domain.curriculum.effective import EffectiveCurriculum
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
 )
@@ -198,6 +207,48 @@ class InstitutionalAdoptionService:
         return await ListAdoptionsHandler(self._required_adoption_repo()).handle(
             command
         )
+
+    async def get_effective_curriculum(
+        self,
+        adoption_id: str,
+        tenant_id: str,
+    ) -> EffectiveCurriculum:
+        query = GetEffectiveCurriculumByAdoptionQuery(
+            adoption_id=adoption_id,
+            tenant_id=tenant_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await GetEffectiveCurriculumByAdoptionHandler(
+                    uow.adoptions, uow.benchmarks
+                ).handle(query)
+
+        return await GetEffectiveCurriculumByAdoptionHandler(
+            self._required_adoption_repo(),
+            self._required_benchmark_repo(),
+        ).handle(query)
+
+    async def get_active_effective_curriculum(
+        self,
+        tenant_id: str,
+        programme_id: str,
+        academic_session_id: str | None = None,
+    ) -> EffectiveCurriculum:
+        query = GetActiveEffectiveCurriculumQuery(
+            tenant_id=tenant_id,
+            programme_id=programme_id,
+            academic_session_id=academic_session_id,
+        )
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await GetActiveEffectiveCurriculumHandler(
+                    uow.adoptions, uow.benchmarks
+                ).handle(query)
+
+        return await GetActiveEffectiveCurriculumHandler(
+            self._required_adoption_repo(),
+            self._required_benchmark_repo(),
+        ).handle(query)
 
     def _required_adoption_repo(self) -> InstitutionalAdoptionRepository:
         if self.adoption_repository is None:
