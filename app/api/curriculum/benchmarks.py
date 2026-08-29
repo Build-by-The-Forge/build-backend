@@ -8,6 +8,8 @@ from app.api.curriculum.benchmark_schemas import (
     BenchmarkOutcomeResponse,
     BenchmarkTopicResponse,
     IngestBenchmarkCandidateRequest,
+    ValidationIssueResponse,
+    ValidationResultResponse,
 )
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
@@ -25,6 +27,7 @@ from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,
 )
+from app.domain.curriculum.validator import ValidationResult
 
 router = APIRouter(prefix="/curriculum/benchmarks", tags=["curriculum-benchmarks"])
 service = build_container().get(BenchmarkCurriculumService)
@@ -213,6 +216,39 @@ async def get_course_detail(
     )
 
 
+@router.post("/{curriculum_id}/validate", status_code=status.HTTP_200_OK)
+async def validate_candidate(
+    curriculum_id: str,
+    request: Request,
+    context: TenantContext = Depends(
+        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
+    ),
+) -> JSONResponse:
+    try:
+        curriculum, validation_result = await service.validate_candidate(curriculum_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "curriculum": _curriculum_summary_payload(curriculum),
+                "validation": _validation_result_payload(validation_result),
+            },
+            "meta": {
+                "is_valid": validation_result.is_valid,
+                "error_count": validation_result.error_count,
+                "warning_count": validation_result.warning_count,
+            },
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
 def _curriculum_summary_payload(
     curriculum: BenchmarkCurriculum,
 ) -> dict[str, object]:
@@ -282,4 +318,26 @@ def _course_detail_payload(course: BenchmarkCourse) -> dict[str, object]:
         description=course.description,
         sequence=course.sequence,
         topics=topics,
+    ).model_dump()
+
+
+def _validation_result_payload(
+    result: ValidationResult,
+) -> dict[str, object]:
+    issues = [
+        ValidationIssueResponse(
+            entity_type=i.entity_type,
+            entity_identifier=i.entity_identifier,
+            field=i.field,
+            rule=i.rule,
+            message=i.message,
+            severity=i.severity.value,
+        )
+        for i in result.issues
+    ]
+    return ValidationResultResponse(
+        is_valid=result.is_valid,
+        error_count=result.error_count,
+        warning_count=result.warning_count,
+        issues=issues,
     ).model_dump()

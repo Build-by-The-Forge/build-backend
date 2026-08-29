@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from app.application.common.uow import CurriculumUnitOfWorkFactory
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
@@ -16,7 +14,14 @@ from app.application.curriculum.benchmark_handlers import (
     ListBenchmarkCoursesHandler,
     ListBenchmarkCurriculaHandler,
 )
+from app.application.curriculum.validation_commands import (
+    ValidateBenchmarkCandidateCommand,
+)
+from app.application.curriculum.validation_handlers import (
+    ValidateBenchmarkCandidateHandler,
+)
 from app.domain.curriculum.benchmark import BenchmarkCourse, BenchmarkCurriculum
+from app.domain.curriculum.validator import ValidationResult
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
 )
@@ -126,6 +131,24 @@ class BenchmarkCurriculumService:
         return await GetBenchmarkCourseHandler(self._required_repository()).handle(
             command
         )
+
+    async def validate_candidate(
+        self, curriculum_id: str
+    ) -> tuple[BenchmarkCurriculum, ValidationResult]:
+        command = ValidateBenchmarkCandidateCommand(curriculum_id=curriculum_id)
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                curriculum, result, events = await ValidateBenchmarkCandidateHandler(
+                    uow.benchmarks
+                ).handle(command)
+            self._publish_events(events)
+            return curriculum, result
+
+        curriculum, result, events = await ValidateBenchmarkCandidateHandler(
+            self._required_repository()
+        ).handle(command)
+        self._publish_events(events)
+        return curriculum, result
 
     def _required_repository(self) -> BenchmarkCurriculumRepository:
         if self.repository is None:

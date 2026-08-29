@@ -239,6 +239,25 @@ class BenchmarkCurriculum:
     def is_mutable(self) -> bool:
         return self.status == BenchmarkStatus.CANDIDATE
 
+    def mark_validated(self) -> None:
+        if self.status != BenchmarkStatus.CANDIDATE:
+            raise ValueError(
+                f"only candidate benchmarks can be validated, current status is '{self.status.value}'"
+            )
+        self.status = BenchmarkStatus.VALIDATED
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="curriculum.benchmark_validated",
+                payload={
+                    "curriculum_id": self.id,
+                    "source_snapshot_id": self.source_snapshot_id,
+                    "programme_code": self.programme_code,
+                    "version": self.version,
+                },
+            )
+        )
+
     def touch(self) -> None:
         self.updated_at = datetime.now(timezone.utc)
 

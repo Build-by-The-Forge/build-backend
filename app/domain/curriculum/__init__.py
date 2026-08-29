@@ -12,6 +12,12 @@ from app.domain.curriculum.source import (
     SnapshotStatus,
     SourceStatus,
 )
+from app.domain.curriculum.validator import (
+    BenchmarkCurriculumValidator,
+    IssueSeverity,
+    ValidationIssue,
+    ValidationResult,
+)
 
 __all__ = [
     "CurriculumSource",
@@ -24,4 +30,8 @@ __all__ = [
     "BenchmarkOutcome",
     "BenchmarkStatus",
     "BloomTaxonomyLevel",
+    "BenchmarkCurriculumValidator",
+    "IssueSeverity",
+    "ValidationIssue",
+    "ValidationResult",
 ]

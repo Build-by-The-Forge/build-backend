@@ -84,3 +84,24 @@ class BenchmarkCourseSummaryResponse(BaseModel):
 
 class BenchmarkCourseDetailResponse(BenchmarkCourseSummaryResponse):
     topics: list[BenchmarkTopicResponse] = Field(default_factory=list)
+
+
+class ValidationIssueResponse(BaseModel):
+    entity_type: str
+    entity_identifier: str
+    field: str
+    rule: str
+    message: str
+    severity: str
+
+
+class ValidationResultResponse(BaseModel):
+    is_valid: bool
+    error_count: int
+    warning_count: int
+    issues: list[ValidationIssueResponse] = Field(default_factory=list)
+
+
+class BenchmarkValidationResponse(BaseModel):
+    curriculum: BenchmarkCurriculumSummaryResponse
+    validation: ValidationResultResponse
