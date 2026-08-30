@@ -8,6 +8,7 @@ from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
 from app.application.content.asset_service import ContentAssetService
+from app.application.content.job_service import ContentIngestionJobService
 from app.application.content.source_service import ContentSourceService
 from app.application.curriculum.benchmark_service import (
     BenchmarkCurriculumService,
@@ -141,6 +142,13 @@ def build_container() -> Container:
     container.register(
         ContentAssetService,
         ContentAssetService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_content_uow,
+        ),
+    )
+    container.register(
+        ContentIngestionJobService,
+        ContentIngestionJobService(
             event_bus=event_bus,
             uow_factory=sqlalchemy_content_uow,
         ),

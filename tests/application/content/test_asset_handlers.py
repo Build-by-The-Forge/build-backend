@@ -1,5 +1,4 @@
 import pytest
-
 from app.application.content.asset_commands import (
     CreateAssetVersionCommand,
     FindAssetByHashQuery,
@@ -101,7 +100,9 @@ class InMemoryContentAssetRepo:
         res = list(self.assets.values())
         if tenant_id is not None:
             if include_platform:
-                res = [a for a in res if a.tenant_id == tenant_id or a.tenant_id is None]
+                res = [
+                    a for a in res if a.tenant_id == tenant_id or a.tenant_id is None
+                ]
             else:
                 res = [a for a in res if a.tenant_id == tenant_id]
         if source_id is not None:
@@ -211,7 +212,9 @@ async def test_register_asset_validations() -> None:
     revoked_source.revoke("Decommissioned")
     await uow.sources.save_source(revoked_source)
 
-    with pytest.raises(ValueError, match="Cannot register asset against revoked source"):
+    with pytest.raises(
+        ValueError, match="Cannot register asset against revoked source"
+    ):
         await handler.handle(
             RegisterContentAssetCommand(
                 source_id=revoked_source.id,
@@ -324,17 +327,23 @@ async def test_revoke_and_query_handlers() -> None:
     assert found_by_id is not None
     assert found_by_id.id == asset.id
 
-    found_by_hash = await find_hash_handler.handle(FindAssetByHashQuery(content_sha256=sha))
+    found_by_hash = await find_hash_handler.handle(
+        FindAssetByHashQuery(content_sha256=sha)
+    )
     assert found_by_hash is not None
     assert found_by_hash.id == asset.id
 
     # List query
-    items, total = await list_handler.handle(ListContentAssetsQuery(source_id=source.id))
+    items, total = await list_handler.handle(
+        ListContentAssetsQuery(source_id=source.id)
+    )
     assert total == 1
     assert items[0].id == asset.id
 
     # Revoke
     revoked = await revoke_handler.handle(
-        RevokeContentAssetCommand(asset_id=asset.id, reason="Superseded by new release", revoked_by="admin")
+        RevokeContentAssetCommand(
+            asset_id=asset.id, reason="Superseded by new release", revoked_by="admin"
+        )
     )
     assert revoked.status == AssetStatus.REVOKED

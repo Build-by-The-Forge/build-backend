@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.domain.content.asset import ContentAsset
+from app.domain.content.enums import AssetStatus, IngestionStatus
 
 
 class ContentAssetRepository(Protocol):

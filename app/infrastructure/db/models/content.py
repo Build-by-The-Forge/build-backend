@@ -4,12 +4,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -124,6 +125,9 @@ class ContentAssetModel(Base):
     source: Mapped[ContentSourceModel] = relationship(
         "ContentSourceModel", back_populates="assets"
     )
+    jobs: Mapped[list[ContentIngestionJobModel]] = relationship(
+        "ContentIngestionJobModel", back_populates="asset", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_content_assets_source_id", "source_id"),
@@ -132,5 +136,72 @@ class ContentAssetModel(Base):
         Index("ix_content_assets_status", "status"),
         Index("ix_content_assets_ingestion_status", "ingestion_status"),
         Index("ix_content_assets_source_version", "source_id", "asset_version"),
-        UniqueConstraint("tenant_id", "content_sha256", name="uq_content_assets_tenant_hash"),
+        UniqueConstraint(
+            "tenant_id", "content_sha256", name="uq_content_assets_tenant_hash"
+        ),
+    )
+
+
+class ContentIngestionJobModel(Base):
+    __tablename__ = "content_ingestion_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    asset_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("content_assets.id", ondelete="CASCADE"), nullable=False
+    )
+    source_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True
+    )
+    run_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
+    current_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_details: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    is_retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    next_retry_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    metrics: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    attempt_history: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    asset: Mapped[ContentAssetModel] = relationship(
+        "ContentAssetModel", back_populates="jobs"
+    )
+
+    __table_args__ = (
+        Index("ix_content_ingestion_jobs_asset_id", "asset_id"),
+        Index("ix_content_ingestion_jobs_source_id", "source_id"),
+        Index("ix_content_ingestion_jobs_tenant_id", "tenant_id"),
+        Index("ix_content_ingestion_jobs_status", "status"),
+        Index("ix_content_ingestion_jobs_pending_retry", "status", "next_retry_at"),
+        Index("ix_content_ingestion_jobs_asset_created", "asset_id", "created_at"),
     )

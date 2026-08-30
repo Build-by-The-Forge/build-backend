@@ -1,6 +1,4 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.domain.content.enums import (
     AuthorityLevel,
     ContentSourceType,
@@ -9,6 +7,7 @@ from app.domain.content.enums import (
 )
 from app.domain.content.source import ContentSource
 from app.infrastructure.content.repositories import SqlAlchemyContentSourceRepository
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

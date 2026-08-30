@@ -1,5 +1,4 @@
 import pytest
-
 from app.application.content.source_commands import (
     ActivateContentSourceCommand,
     DeprecateContentSourceCommand,

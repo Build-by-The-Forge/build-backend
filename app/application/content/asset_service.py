@@ -155,9 +155,7 @@ class ContentAssetService:
         content_sha256: str,
         tenant_id: str | None = None,
     ) -> ContentAsset | None:
-        query = FindAssetByHashQuery(
-            content_sha256=content_sha256, tenant_id=tenant_id
-        )
+        query = FindAssetByHashQuery(content_sha256=content_sha256, tenant_id=tenant_id)
 
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:

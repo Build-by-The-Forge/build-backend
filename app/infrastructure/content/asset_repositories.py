@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.domain.repositories.content_asset import ContentAssetRepository
@@ -11,6 +8,8 @@ from app.infrastructure.content.asset_mappers import (
     content_asset_to_model,
 )
 from app.infrastructure.db.models.content import ContentAssetModel
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyContentAssetRepository(ContentAssetRepository):
@@ -63,7 +62,10 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         total = (await self._session.execute(count_stmt)).scalar_one()
 
         stmt = (
-            base.order_by(ContentAssetModel.asset_version.desc(), ContentAssetModel.created_at.desc())
+            base.order_by(
+                ContentAssetModel.asset_version.desc(),
+                ContentAssetModel.created_at.desc(),
+            )
             .limit(limit)
             .offset(offset)
         )
@@ -101,11 +103,17 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         if status is not None:
             stmt = stmt.where(ContentAssetModel.status == status.value)
         if ingestion_status is not None:
-            stmt = stmt.where(ContentAssetModel.ingestion_status == ingestion_status.value)
+            stmt = stmt.where(
+                ContentAssetModel.ingestion_status == ingestion_status.value
+            )
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
-        stmt = stmt.order_by(ContentAssetModel.created_at.desc()).limit(limit).offset(offset)
+        stmt = (
+            stmt.order_by(ContentAssetModel.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_asset_model_to_domain(m) for m in models], total

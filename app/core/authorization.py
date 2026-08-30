@@ -30,6 +30,8 @@ class Permission(StrEnum):
     CONTENT_SOURCE_MANAGE = "content.source.manage"
     CONTENT_ASSET_READ = "content.asset.read"
     CONTENT_ASSET_UPLOAD = "content.asset.upload"
+    CONTENT_JOB_READ = "content.job.read"
+    CONTENT_JOB_MANAGE = "content.job.manage"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
@@ -45,6 +47,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
             Permission.CONTENT_SOURCE_READ,
             Permission.CONTENT_ASSET_READ,
+            Permission.CONTENT_JOB_READ,
         }
     ),
     "lecturer": frozenset(
@@ -67,6 +70,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_SOURCE_MANAGE,
             Permission.CONTENT_ASSET_READ,
             Permission.CONTENT_ASSET_UPLOAD,
+            Permission.CONTENT_JOB_READ,
+            Permission.CONTENT_JOB_MANAGE,
         }
     ),
     "hod": frozenset(
@@ -89,6 +94,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_SOURCE_MANAGE,
             Permission.CONTENT_ASSET_READ,
             Permission.CONTENT_ASSET_UPLOAD,
+            Permission.CONTENT_JOB_READ,
+            Permission.CONTENT_JOB_MANAGE,
         }
     ),
     "faculty_admin": frozenset(
@@ -113,6 +120,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_SOURCE_MANAGE,
             Permission.CONTENT_ASSET_READ,
             Permission.CONTENT_ASSET_UPLOAD,
+            Permission.CONTENT_JOB_READ,
+            Permission.CONTENT_JOB_MANAGE,
         }
     ),
     "admin": frozenset(Permission),

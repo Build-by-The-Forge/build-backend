@@ -6,8 +6,8 @@ Create Date: 2026-08-30 18:00:00.000000
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0016"
@@ -27,9 +27,7 @@ def upgrade() -> None:
         sa.Column("file_size_bytes", sa.BigInteger(), nullable=False),
         sa.Column("content_sha256", sa.String(length=64), nullable=False),
         sa.Column("storage_uri", sa.String(length=1024), nullable=False),
-        sa.Column(
-            "asset_version", sa.Integer(), nullable=False, server_default="1"
-        ),
+        sa.Column("asset_version", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("parent_asset_id", sa.String(length=36), nullable=True),
         sa.Column(
             "status", sa.String(length=20), nullable=False, server_default="active"

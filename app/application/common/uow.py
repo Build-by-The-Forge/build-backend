@@ -71,7 +71,7 @@ class CurriculumUnitOfWorkPort(Protocol):
 
 
 from app.domain.repositories.content_asset import ContentAssetRepository
-from app.domain.repositories.content_source import ContentSourceRepository
+from app.domain.repositories.content_job import ContentIngestionJobRepository
 
 
 class ContentUnitOfWorkPort(Protocol):
@@ -81,6 +81,8 @@ class ContentUnitOfWorkPort(Protocol):
     @property
     def assets(self) -> ContentAssetRepository: ...
 
+    @property
+    def jobs(self) -> ContentIngestionJobRepository: ...
 
 
 AssessmentUnitOfWorkFactory = Callable[

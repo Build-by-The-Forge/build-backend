@@ -15,7 +15,9 @@ from app.events.event_bus import EventBus
 
 
 class RegisterContentAssetHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
+    def __init__(
+        self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None
+    ) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
@@ -28,14 +30,18 @@ class RegisterContentAssetHandler:
         if source is None:
             raise ValueError(f"ContentSource with id '{cmd.source_id}' does not exist")
         if source.status == SourceStatus.REVOKED:
-            raise ValueError(f"Cannot register asset against revoked source '{cmd.source_id}'")
+            raise ValueError(
+                f"Cannot register asset against revoked source '{cmd.source_id}'"
+            )
 
         # 2. Scope validation
         if source.visibility == VisibilityScope.PLATFORM:
             target_tenant_id = None
         else:
             if cmd.tenant_id is None:
-                raise ValueError("tenant_id is required for tenant-scoped content sources")
+                raise ValueError(
+                    "tenant_id is required for tenant-scoped content sources"
+                )
             if source.tenant_id != cmd.tenant_id:
                 raise ValueError(
                     f"tenant_id mismatch: source belongs to tenant '{source.tenant_id}', got '{cmd.tenant_id}'"
@@ -75,14 +81,18 @@ class RegisterContentAssetHandler:
 
 
 class CreateAssetVersionHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
+    def __init__(
+        self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None
+    ) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
     async def handle(self, cmd: CreateAssetVersionCommand) -> ContentAsset:
         parent = await self._uow.assets.get_asset_by_id(cmd.parent_asset_id)
         if parent is None:
-            raise ValueError(f"Parent asset with id '{cmd.parent_asset_id}' does not exist")
+            raise ValueError(
+                f"Parent asset with id '{cmd.parent_asset_id}' does not exist"
+            )
         if parent.status == AssetStatus.REVOKED:
             raise ValueError("Cannot create a new version of a revoked asset")
 
@@ -113,7 +123,9 @@ class CreateAssetVersionHandler:
 
 
 class RevokeContentAssetHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
+    def __init__(
+        self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None
+    ) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
@@ -122,7 +134,11 @@ class RevokeContentAssetHandler:
         if asset is None:
             raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
 
-        if cmd.tenant_id is not None and asset.tenant_id is not None and asset.tenant_id != cmd.tenant_id:
+        if (
+            cmd.tenant_id is not None
+            and asset.tenant_id is not None
+            and asset.tenant_id != cmd.tenant_id
+        ):
             raise ValueError("Permission denied: asset belongs to another tenant")
 
         asset.revoke(cmd.reason)
@@ -143,7 +159,11 @@ class GetContentAssetHandler:
         asset = await self._uow.assets.get_asset_by_id(query.asset_id)
         if asset is None:
             return None
-        if query.tenant_id is not None and asset.tenant_id is not None and asset.tenant_id != query.tenant_id:
+        if (
+            query.tenant_id is not None
+            and asset.tenant_id is not None
+            and asset.tenant_id != query.tenant_id
+        ):
             return None
         return asset
 

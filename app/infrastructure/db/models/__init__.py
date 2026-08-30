@@ -21,6 +21,7 @@ from app.infrastructure.db.models.catalogue import (
 )
 from app.infrastructure.db.models.content import (
     ContentAssetModel,
+    ContentIngestionJobModel,
     ContentSourceModel,
 )
 from app.infrastructure.db.models.tenant_core import (
@@ -57,4 +58,5 @@ __all__ = [
     "QuestionOptionModel",
     "ContentSourceModel",
     "ContentAssetModel",
+    "ContentIngestionJobModel",
 ]

@@ -108,7 +108,10 @@ async def list_source_assets(
     ]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"data": items, "meta": {"total": total, "limit": limit, "offset": offset}},
+        content={
+            "data": items,
+            "meta": {"total": total, "limit": limit, "offset": offset},
+        },
     )
 
 
@@ -135,7 +138,10 @@ async def list_all_assets(
     ]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"data": items, "meta": {"total": total, "limit": limit, "offset": offset}},
+        content={
+            "data": items,
+            "meta": {"total": total, "limit": limit, "offset": offset},
+        },
     )
 
 

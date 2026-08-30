@@ -75,4 +75,3 @@ class AssetMimeType(StrEnum):
     MARKDOWN = "text/markdown"
     HTML = "text/html"
     EPUB = "application/epub+zip"
-

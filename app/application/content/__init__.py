@@ -15,6 +15,31 @@ from app.application.content.asset_handlers import (
     RevokeContentAssetHandler,
 )
 from app.application.content.asset_service import ContentAssetService
+from app.application.content.job_commands import (
+    CompleteIngestionJobCommand,
+    CreateIngestionJobCommand,
+    FailIngestionJobCommand,
+    GetIngestionJobQuery,
+    GetLatestJobForAssetQuery,
+    ListIngestionJobsQuery,
+    ProgressIngestionJobCommand,
+    ReprocessAssetCommand,
+    RetryIngestionJobCommand,
+    StartIngestionJobCommand,
+)
+from app.application.content.job_handlers import (
+    CompleteIngestionJobHandler,
+    CreateIngestionJobHandler,
+    FailIngestionJobHandler,
+    GetIngestionJobHandler,
+    GetLatestJobForAssetHandler,
+    ListIngestionJobsHandler,
+    ProgressIngestionJobHandler,
+    ReprocessAssetHandler,
+    RetryIngestionJobHandler,
+    StartIngestionJobHandler,
+)
+from app.application.content.job_service import ContentIngestionJobService
 from app.application.content.source_commands import (
     ActivateContentSourceCommand,
     DeprecateContentSourceCommand,
@@ -66,4 +91,26 @@ __all__ = [
     "FindAssetByHashHandler",
     "ListContentAssetsHandler",
     "ContentAssetService",
+    # Job
+    "CreateIngestionJobCommand",
+    "StartIngestionJobCommand",
+    "ProgressIngestionJobCommand",
+    "CompleteIngestionJobCommand",
+    "FailIngestionJobCommand",
+    "RetryIngestionJobCommand",
+    "ReprocessAssetCommand",
+    "GetIngestionJobQuery",
+    "GetLatestJobForAssetQuery",
+    "ListIngestionJobsQuery",
+    "CreateIngestionJobHandler",
+    "StartIngestionJobHandler",
+    "ProgressIngestionJobHandler",
+    "CompleteIngestionJobHandler",
+    "FailIngestionJobHandler",
+    "RetryIngestionJobHandler",
+    "ReprocessAssetHandler",
+    "GetIngestionJobHandler",
+    "GetLatestJobForAssetHandler",
+    "ListIngestionJobsHandler",
+    "ContentIngestionJobService",
 ]

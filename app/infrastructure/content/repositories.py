@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.domain.content.enums import (
     AuthorityLevel,
     ContentSourceType,
@@ -16,6 +13,8 @@ from app.infrastructure.content.mappers import (
     content_source_to_model,
 )
 from app.infrastructure.db.models.content import ContentSourceModel
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyContentSourceRepository(ContentSourceRepository):

@@ -8,6 +8,7 @@ from app.domain.content.enums import (
     SourceStatus,
     VisibilityScope,
 )
+from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "AssetMimeType",
     "ContentSource",
     "ContentAsset",
+    "ContentIngestionJob",
 ]
