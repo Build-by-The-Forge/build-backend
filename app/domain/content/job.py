@@ -31,6 +31,10 @@ class ContentIngestionJob:
     metrics: dict[str, Any] = field(default_factory=dict)
     attempt_history: list[dict[str, Any]] = field(default_factory=list)
     correlation_id: str | None = None
+    external_task_id: str | None = None
+    last_dispatched_at: datetime | None = None
+    last_callback_at: datetime | None = None
+    processed_event_ids: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
@@ -109,10 +113,37 @@ class ContentIngestionJob:
             )
         )
 
-    def start(self, stage: str = "parsing") -> None:
+    def record_dispatch(self, external_task_id: str) -> None:
         if self.status != IngestionStatus.QUEUED:
             raise ValueError(
-                f"Cannot start job in status '{self.status.value}'. Must be QUEUED."
+                f"Cannot dispatch job in status '{self.status.value}'. Must be QUEUED."
+            )
+
+        now = datetime.now(timezone.utc)
+        self.status = IngestionStatus.PROCESSING
+        self.current_stage = "dispatched_to_ai"
+        self.external_task_id = external_task_id.strip()
+        self.last_dispatched_at = now
+        if self.started_at is None:
+            self.started_at = now
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="content.ingestion_job_dispatched",
+                payload={
+                    "job_id": self.id,
+                    "asset_id": self.asset_id,
+                    "external_task_id": self.external_task_id,
+                    "attempt_count": self.attempt_count,
+                    "run_number": self.run_number,
+                },
+            )
+        )
+
+    def start(self, stage: str = "parsing") -> None:
+        if self.status not in (IngestionStatus.QUEUED, IngestionStatus.PROCESSING):
+            raise ValueError(
+                f"Cannot start job in status '{self.status.value}'. Must be QUEUED or PROCESSING."
             )
 
         self.status = IngestionStatus.PROCESSING
@@ -298,10 +329,37 @@ class ContentIngestionJob:
             )
         )
 
+    def is_stale_callback(
+        self,
+        run_number: int | None = None,
+        attempt_count: int | None = None,
+        external_task_id: str | None = None,
+    ) -> bool:
+        """Determines if an incoming callback belongs to a stale / superseded attempt or run."""
+        if run_number is not None and run_number < self.run_number:
+            return True
+        if attempt_count is not None and attempt_count < self.attempt_count:
+            return True
+        if (
+            external_task_id is not None
+            and self.external_task_id is not None
+            and external_task_id != self.external_task_id
+        ):
+            return True
+        return False
+
+    def is_event_processed(self, event_id: str) -> bool:
+        return event_id in self.processed_event_ids
+
+    def record_event_processed(self, event_id: str) -> None:
+        if event_id not in self.processed_event_ids:
+            self.processed_event_ids.append(event_id)
+        self.last_callback_at = datetime.now(timezone.utc)
+        self.touch()
+
     def create_reprocess_run(
         self, created_by: str, correlation_id: str | None = None
     ) -> ContentIngestionJob:
-        """Spawns a new authoritative execution run for reprocessing, preserving previous run history."""
         if self.status not in (IngestionStatus.READY, IngestionStatus.FAILED):
             raise ValueError(
                 f"Cannot reprocess job in active status '{self.status.value}'. Must be READY or FAILED."

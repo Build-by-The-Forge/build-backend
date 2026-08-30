@@ -57,6 +57,9 @@ class IngestionJobResponse(BaseModel):
     metrics: dict[str, Any] = Field(default_factory=dict)
     attempt_history: list[dict[str, Any]] = Field(default_factory=list)
     correlation_id: str | None = None
+    external_task_id: str | None = None
+    last_dispatched_at: datetime | None = None
+    last_callback_at: datetime | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -83,6 +86,9 @@ class IngestionJobResponse(BaseModel):
             metrics=job.metrics,
             attempt_history=job.attempt_history,
             correlation_id=job.correlation_id,
+            external_task_id=job.external_task_id,
+            last_dispatched_at=job.last_dispatched_at,
+            last_callback_at=job.last_callback_at,
             created_by=job.created_by,
             created_at=job.created_at,
             updated_at=job.updated_at,

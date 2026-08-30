@@ -45,6 +45,10 @@ def upgrade() -> None:
         sa.Column("metrics", sa.JSON(), nullable=False),
         sa.Column("attempt_history", sa.JSON(), nullable=False),
         sa.Column("correlation_id", sa.String(length=100), nullable=True),
+        sa.Column("external_task_id", sa.String(length=100), nullable=True),
+        sa.Column("last_dispatched_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_callback_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("processed_event_ids", sa.JSON(), nullable=False),
         sa.Column("created_by", sa.String(length=36), nullable=False),
         sa.Column(
             "created_at",

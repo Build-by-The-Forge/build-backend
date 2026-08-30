@@ -180,6 +180,16 @@ class ContentIngestionJobModel(Base):
         JSON, nullable=False, default=list
     )
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    external_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_dispatched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_callback_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    processed_event_ids: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(

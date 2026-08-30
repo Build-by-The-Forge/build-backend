@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.responses import JSONResponse
 
+from app.api.content.callback_schemas import (
+    AICallbackRequest,
+    AICallbackResponse,
+    AIDispatchRequest,
+)
 from app.api.content.job_schemas import (
     IngestionJobCompleteRequest,
     IngestionJobCreateRequest,
@@ -15,9 +20,11 @@ from app.api.content.job_schemas import (
 from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
+from app.core.config import settings
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import IngestionStatus
+from app.infrastructure.content.ai_gateway import verify_webhook_signature
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
 service = build_container().get(ContentIngestionJobService)
@@ -340,4 +347,115 @@ async def reprocess_asset(
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
     return JSONResponse(
         status_code=status.HTTP_201_CREATED, content={"data": resp_data}
+    )
+
+
+@router.post(
+    "/jobs/{job_id}/dispatch",
+    response_model=IngestionJobResponse,
+)
+async def dispatch_ingestion_job(
+    job_id: str,
+    payload: AIDispatchRequest | None = None,
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+) -> JSONResponse:
+    callback_url = payload.callback_url if payload else None
+    try:
+        job = await service.dispatch_job(job_id=job_id, callback_url=callback_url)
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": {"code": "DISPATCH_FAILED", "message": str(exc)}},
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "error": {
+                    "code": getattr(exc, "error_code", "AI_GATEWAY_ERROR"),
+                    "message": str(exc),
+                }
+            },
+        )
+
+    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
+
+
+@router.post(
+    "/ingestion/callbacks",
+    response_model=AICallbackResponse,
+)
+async def handle_ai_callback(
+    request: Request,
+    x_build_signature: str | None = Header(default=None, alias="X-Build-Signature"),
+    authorization: str | None = Header(default=None),
+) -> JSONResponse:
+    body_bytes = await request.body()
+
+    # Authenticate webhook signature or bearer token
+    is_valid_hmac = verify_webhook_signature(
+        payload_bytes=body_bytes,
+        signature_header=x_build_signature,
+        secret=settings.ai_service_webhook_secret,
+    )
+    is_valid_bearer = (
+        authorization is not None
+        and authorization.strip() == f"Bearer {settings.ai_service_api_key}"
+    )
+
+    if not is_valid_hmac and not is_valid_bearer:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "error": {
+                    "code": "INVALID_CALLBACK_AUTH",
+                    "message": "Missing or invalid HMAC signature / API Key",
+                }
+            },
+        )
+
+    try:
+        payload = AICallbackRequest.model_validate_json(body_bytes)
+    except Exception as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={"error": {"code": "INVALID_PAYLOAD", "message": str(exc)}},
+        )
+
+    job, already_processed = await service.handle_callback(
+        job_id=payload.job_id,
+        event_id=payload.event_id,
+        event_type=payload.event_type,
+        stage=payload.stage,
+        external_task_id=payload.external_task_id,
+        run_number=payload.run_number,
+        attempt_count=payload.attempt_count,
+        metrics=payload.metrics,
+        error_code=payload.error_code,
+        error_message=payload.error_message,
+        is_retryable=payload.is_retryable,
+        details=payload.details,
+    )
+
+    if job is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": {
+                    "code": "JOB_NOT_FOUND",
+                    "message": f"Job '{payload.job_id}' not found",
+                }
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "data": {
+                "status": "accepted",
+                "job_id": job.id,
+                "already_processed": already_processed,
+            }
+        },
     )

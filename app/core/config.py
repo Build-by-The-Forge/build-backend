@@ -12,6 +12,21 @@ class Settings(BaseSettings):
     request_timeout_seconds: int = Field(default=30)
     tenant_header: str = Field(default="x-tenant-id")
 
+    # AI Service Settings
+    ai_service_url: str = Field(
+        default_factory=lambda: os.getenv("AI_SERVICE_URL", "http://localhost:8001")
+    )
+    ai_service_api_key: str = Field(
+        default_factory=lambda: os.getenv("AI_SERVICE_API_KEY", "build-ai-dev-secret-key")
+    )
+    ai_service_webhook_secret: str = Field(
+        default_factory=lambda: os.getenv(
+            "AI_SERVICE_WEBHOOK_SECRET", "build-ai-dev-webhook-secret"
+        )
+    )
+    ai_service_timeout_seconds: int = Field(default=60)
+    ai_service_max_retries: int = Field(default=3)
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("app_environment")
@@ -27,6 +42,13 @@ class Settings(BaseSettings):
     def validate_timeout(cls, value: int, info: ValidationInfo) -> int:
         if value <= 0:
             raise ValueError("request_timeout_seconds must be greater than 0")
+        return value
+
+    @field_validator("ai_service_timeout_seconds")
+    @classmethod
+    def validate_ai_timeout(cls, value: int, info: ValidationInfo) -> int:
+        if value <= 0:
+            raise ValueError("ai_service_timeout_seconds must be greater than 0")
         return value
 
     @property
