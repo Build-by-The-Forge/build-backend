@@ -1,5 +1,6 @@
 import app.infrastructure.db.models.assessment  # noqa: F401
 import app.infrastructure.db.models.catalogue  # noqa: F401
+import app.infrastructure.db.models.content  # noqa: F401
 import app.infrastructure.db.models.institutional_curriculum  # noqa: F401
 import app.infrastructure.identity.models  # noqa: F401
 from app.db.base import Base
@@ -18,6 +19,7 @@ from app.infrastructure.db.models.catalogue import (
     ReferenceMaterialModel,
     TopicModel,
 )
+from app.infrastructure.db.models.content import ContentSourceModel
 from app.infrastructure.db.models.tenant_core import (
     AcademicSessionModel,
     DepartmentModel,
@@ -50,4 +52,5 @@ __all__ = [
     "AssessmentQuestionModel",
     "QuestionModel",
     "QuestionOptionModel",
+    "ContentSourceModel",
 ]

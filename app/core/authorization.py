@@ -26,6 +26,8 @@ class Permission(StrEnum):
     ASSESSMENT_RESULT_READ = "assessment.result.read"
     CURRICULUM_SOURCE_READ = "curriculum.source.read"
     CURRICULUM_SOURCE_MANAGE = "curriculum.source.manage"
+    CONTENT_SOURCE_READ = "content.source.read"
+    CONTENT_SOURCE_MANAGE = "content.source.manage"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
@@ -39,6 +41,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_ANSWER_WRITE,
             Permission.ASSESSMENT_ATTEMPT_ANSWER_DELETE,
             Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
+            Permission.CONTENT_SOURCE_READ,
         }
     ),
     "lecturer": frozenset(
@@ -57,6 +60,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
             Permission.ASSESSMENT_RESULT_READ,
             Permission.CURRICULUM_SOURCE_READ,
+            Permission.CONTENT_SOURCE_READ,
+            Permission.CONTENT_SOURCE_MANAGE,
         }
     ),
     "hod": frozenset(
@@ -75,6 +80,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
             Permission.ASSESSMENT_RESULT_READ,
             Permission.CURRICULUM_SOURCE_READ,
+            Permission.CONTENT_SOURCE_READ,
+            Permission.CONTENT_SOURCE_MANAGE,
         }
     ),
     "faculty_admin": frozenset(
@@ -95,6 +102,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.ASSESSMENT_ATTEMPT_RESULT_READ,
             Permission.ASSESSMENT_RESULT_READ,
             Permission.CURRICULUM_SOURCE_READ,
+            Permission.CONTENT_SOURCE_READ,
+            Permission.CONTENT_SOURCE_MANAGE,
         }
     ),
     "admin": frozenset(Permission),

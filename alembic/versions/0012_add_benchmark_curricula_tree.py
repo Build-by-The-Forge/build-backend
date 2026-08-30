@@ -60,16 +60,12 @@ def upgrade() -> None:
         "benchmark_curricula",
         ["programme_code"],
     )
-    op.create_index(
-        "ix_benchmark_curricula_status", "benchmark_curricula", ["status"]
-    )
+    op.create_index("ix_benchmark_curricula_status", "benchmark_curricula", ["status"])
 
     op.create_table(
         "benchmark_courses",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column(
-            "benchmark_curriculum_id", sa.String(length=36), nullable=False
-        ),
+        sa.Column("benchmark_curriculum_id", sa.String(length=36), nullable=False),
         sa.Column("code", sa.String(length=20), nullable=False),
         sa.Column("title", sa.String(length=200), nullable=False),
         sa.Column("credit_units", sa.Integer(), nullable=False),
@@ -88,9 +84,7 @@ def upgrade() -> None:
             server_default="core",
         ),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column(
-            "sequence", sa.Integer(), nullable=False, server_default="1"
-        ),
+        sa.Column("sequence", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["benchmark_curriculum_id"],
@@ -171,20 +165,12 @@ def downgrade() -> None:
         table_name="benchmark_learning_outcomes",
     )
     op.drop_table("benchmark_learning_outcomes")
-    op.drop_index(
-        "ix_benchmark_topics_course_id", table_name="benchmark_topics"
-    )
+    op.drop_index("ix_benchmark_topics_course_id", table_name="benchmark_topics")
     op.drop_table("benchmark_topics")
-    op.drop_index(
-        "ix_benchmark_courses_level_semester", table_name="benchmark_courses"
-    )
-    op.drop_index(
-        "ix_benchmark_courses_curriculum_id", table_name="benchmark_courses"
-    )
+    op.drop_index("ix_benchmark_courses_level_semester", table_name="benchmark_courses")
+    op.drop_index("ix_benchmark_courses_curriculum_id", table_name="benchmark_courses")
     op.drop_table("benchmark_courses")
-    op.drop_index(
-        "ix_benchmark_curricula_status", table_name="benchmark_curricula"
-    )
+    op.drop_index("ix_benchmark_curricula_status", table_name="benchmark_curricula")
     op.drop_index(
         "ix_benchmark_curricula_programme_code",
         table_name="benchmark_curricula",

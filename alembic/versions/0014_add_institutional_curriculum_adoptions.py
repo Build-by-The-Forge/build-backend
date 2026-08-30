@@ -9,7 +9,6 @@ Create Date: 2026-08-29 18:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision = "0014"
 down_revision = "0013"
@@ -27,7 +26,9 @@ def upgrade() -> None:
         sa.Column("benchmark_version", sa.String(length=50), nullable=False),
         sa.Column("benchmark_fingerprint", sa.String(length=64), nullable=True),
         sa.Column("academic_session_id", sa.String(length=36), nullable=True),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="draft"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="draft"
+        ),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("adopted_by", sa.String(length=36), nullable=False),
         sa.Column("adopted_by_email", sa.String(length=255), nullable=False),

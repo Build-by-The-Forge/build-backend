@@ -7,6 +7,7 @@ from app.application.assessment.attempt_answer_service import AttemptAnswerServi
 from app.application.assessment.attempt_service import AttemptService
 from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
+from app.application.content.source_service import ContentSourceService
 from app.application.curriculum.benchmark_service import (
     BenchmarkCurriculumService,
 )
@@ -26,6 +27,10 @@ from app.infrastructure.assessment.unit_of_work import (
 from app.infrastructure.catalogue.unit_of_work import (
     CourseUnitOfWork,
     catalogue_unit_of_work,
+)
+from app.infrastructure.content.unit_of_work import (
+    ContentUnitOfWork,
+    content_unit_of_work,
 )
 from app.infrastructure.curriculum.unit_of_work import (
     CurriculumUnitOfWork,
@@ -124,6 +129,14 @@ def build_container() -> Container:
             uow_factory=sqlalchemy_curriculum_uow,
         ),
     )
+    container.register(ContentUnitOfWork, sqlalchemy_content_uow)
+    container.register(
+        ContentSourceService,
+        ContentSourceService(
+            event_bus=event_bus,
+            uow_factory=sqlalchemy_content_uow,
+        ),
+    )
     return container
 
 
@@ -152,6 +165,13 @@ async def sqlalchemy_assessment_uow() -> AsyncIterator[AssessmentUnitOfWork]:
 async def sqlalchemy_curriculum_uow() -> AsyncIterator[CurriculumUnitOfWork]:
     async with SessionLocal() as session:
         async with curriculum_unit_of_work(session) as uow:
+            yield uow
+
+
+@asynccontextmanager
+async def sqlalchemy_content_uow() -> AsyncIterator[ContentUnitOfWork]:
+    async with SessionLocal() as session:
+        async with content_unit_of_work(session) as uow:
             yield uow
 
 
