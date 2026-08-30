@@ -19,7 +19,10 @@ from app.infrastructure.db.models.catalogue import (
     ReferenceMaterialModel,
     TopicModel,
 )
-from app.infrastructure.db.models.content import ContentSourceModel
+from app.infrastructure.db.models.content import (
+    ContentAssetModel,
+    ContentSourceModel,
+)
 from app.infrastructure.db.models.tenant_core import (
     AcademicSessionModel,
     DepartmentModel,
@@ -53,4 +56,5 @@ __all__ = [
     "QuestionModel",
     "QuestionOptionModel",
     "ContentSourceModel",
+    "ContentAssetModel",
 ]

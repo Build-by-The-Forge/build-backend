@@ -47,3 +47,32 @@ class VisibilityScope(StrEnum):
     DEPARTMENT = "department"
     PROGRAMME = "programme"
     COURSE_ONLY = "course_only"
+
+
+class AssetStatus(StrEnum):
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"
+    REVOKED = "revoked"
+    DRAFT = "draft"
+
+
+class IngestionStatus(StrEnum):
+    UPLOADED = "uploaded"
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    EXTRACTED = "extracted"
+    CHUNKED = "chunked"
+    INDEXED = "indexed"
+    READY = "ready"
+    FAILED = "failed"
+
+
+class AssetMimeType(StrEnum):
+    PDF = "application/pdf"
+    DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    TXT = "text/plain"
+    MARKDOWN = "text/markdown"
+    HTML = "text/html"
+    EPUB = "application/epub+zip"
+

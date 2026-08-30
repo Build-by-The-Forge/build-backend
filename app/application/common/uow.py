@@ -70,9 +70,17 @@ class CurriculumUnitOfWorkPort(Protocol):
     def adoptions(self) -> InstitutionalAdoptionRepository: ...
 
 
+from app.domain.repositories.content_asset import ContentAssetRepository
+from app.domain.repositories.content_source import ContentSourceRepository
+
+
 class ContentUnitOfWorkPort(Protocol):
     @property
     def sources(self) -> ContentSourceRepository: ...
+
+    @property
+    def assets(self) -> ContentAssetRepository: ...
+
 
 
 AssessmentUnitOfWorkFactory = Callable[

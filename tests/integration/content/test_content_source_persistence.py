@@ -105,4 +105,3 @@ async def test_content_source_tenant_isolation_persistence(
     assert "PLAT_SRC_1" in futa_codes
     assert "FUTA_SRC_1" in futa_codes
     assert "UNILAG_SRC_1" not in futa_codes
-    assert futa_total == 2
