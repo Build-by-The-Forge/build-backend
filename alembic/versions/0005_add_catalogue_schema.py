@@ -53,7 +53,7 @@ def upgrade() -> None:
         sa.Column("course_id", sa.String(length=36), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column(
-            "is_published", sa.Boolean(), nullable=False, server_default=sa.text("0")
+            "is_published", sa.Boolean(), nullable=False, server_default=sa.text("false")
         ),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -108,7 +108,7 @@ def upgrade() -> None:
         sa.Column("citation", sa.Text(), nullable=True),
         sa.Column("url", sa.String(length=1024), nullable=True),
         sa.Column(
-            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")
+            "is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")
         ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["course_id"], ["courses.id"], ondelete="CASCADE"),
