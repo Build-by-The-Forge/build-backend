@@ -19,11 +19,9 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
 
-    # Inspect existing columns in programmes
-    cols = [
-        row[1]
-        for row in conn.execute(sa.text("PRAGMA table_info('programmes')")).fetchall()
-    ]
+    # Inspect existing columns in programmes (Inspector is dialect-portable;
+    # PRAGMA only exists on SQLite)
+    cols = [col["name"] for col in sa.inspect(conn).get_columns("programmes")]
 
     # Add column if it does not exist
     if "faculty_id" not in cols:
@@ -40,10 +38,7 @@ def upgrade() -> None:
     """))
 
     # Ensure index exists
-    indexes = [
-        row[1]
-        for row in conn.execute(sa.text("PRAGMA index_list('programmes')")).fetchall()
-    ]
+    indexes = [idx["name"] for idx in sa.inspect(conn).get_indexes("programmes")]
     if "ix_programmes_faculty_id" not in indexes:
         op.create_index("ix_programmes_faculty_id", "programmes", ["faculty_id"])
 
@@ -53,13 +48,10 @@ def upgrade() -> None:
             "faculty_id", existing_type=sa.String(length=36), nullable=False
         )
         # create_foreign_key will be ignored on sqlite if it cannot be applied; create if not present
-        fk_list = [
-            r
-            for r in conn.execute(
-                sa.text("PRAGMA foreign_key_list('programmes')")
-            ).fetchall()
-        ]
-        fk_exists = any(r[3] == "faculty_id" and r[2] == "faculties" for r in fk_list)
+        fk_exists = any(
+            fk["referred_table"] == "faculties" and "faculty_id" in fk["constrained_columns"]
+            for fk in sa.inspect(conn).get_foreign_keys("programmes")
+        )
         if not fk_exists:
             batch_op.create_foreign_key(
                 "fk_programmes_faculty_id",
