@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from app.domain.identity.user import RefreshToken, Session, User
 from app.domain.identity.value_objects import (
+    AccountStatus,
     DeviceId,
     Email,
     PasswordHash,
@@ -14,6 +15,7 @@ from app.infrastructure.identity.models import (
     RefreshTokenModel,
     SessionModel,
     UserModel,
+    UserStatus,
 )
 
 
@@ -28,6 +30,7 @@ def user_model_to_domain(model: UserModel) -> User:
         is_active=model.is_active,
         created_at=model.created_at,
         roles=[],
+        status=AccountStatus(model.status.value),
     )
 
 
@@ -40,12 +43,14 @@ def domain_user_to_model(user: User, model: UserModel | None = None) -> UserMode
             password_hash=user.password_hash.value,
             is_active=user.is_active,
             created_at=created_at,
+            status=UserStatus(user.status.value),
         )
     else:
         model.email = user.email.value
         model.password_hash = user.password_hash.value
         model.is_active = user.is_active
         model.created_at = created_at
+        model.status = UserStatus(user.status.value)
     return model
 
 

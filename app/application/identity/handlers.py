@@ -28,6 +28,9 @@ from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 
 
+DEFAULT_SESSION_LIFETIME = timedelta(days=30)
+
+
 def hash_token(raw_token: str) -> str:
     # One-time tokens are looked up by their hash, so the hash must be
     # deterministic (unlike a salted password hash).
@@ -81,11 +84,13 @@ class AuthenticateUserHandler:
         password_hasher: PasswordHasher,
         token_service: TokenService,
         session_repository: SessionRepository | None = None,
+        session_lifetime: timedelta = DEFAULT_SESSION_LIFETIME,
     ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
         self.token_service = token_service
         self.session_repository = session_repository
+        self.session_lifetime = session_lifetime
 
     async def handle(self, command: AuthenticateUserCommand) -> Session:
         # Validate input before touching the account, so the outcome cannot
@@ -104,6 +109,11 @@ class AuthenticateUserHandler:
         if not self.password_hasher.verify(password, user.password_hash):
             raise AppError("invalid credentials", status_code=401)
 
+        # Checked only after the password verifies, so this reveals the
+        # account state only to someone who already holds the credentials.
+        if not user.can_authenticate:
+            raise AppError("account is not active", status_code=403)
+
         if self.password_hasher.needs_rehash(user.password_hash):
             user.change_password(password, self.password_hasher)
             await self.repository.save(user)
@@ -115,6 +125,7 @@ class AuthenticateUserHandler:
             device_id=DeviceId(command.device_id) if command.device_id else None,
             refresh_token_hash=RefreshTokenHash(refresh_token),
             user_agent=command.user_agent,
+            expires_at=datetime.now(timezone.utc) + self.session_lifetime,
         )
         if self.session_repository is not None:
             await self.session_repository.save(session)

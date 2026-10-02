@@ -1,5 +1,6 @@
 import re
 from dataclasses import dataclass
+from enum import Enum
 from typing import Protocol
 
 PASSWORD_MIN_LENGTH = 12
@@ -32,6 +33,21 @@ class Password:
 @dataclass(frozen=True, slots=True)
 class PasswordHash:
     value: str
+
+
+class AccountStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    PENDING_VERIFICATION = "PENDING_VERIFICATION"
+    LOCKED = "LOCKED"
+    DISABLED = "DISABLED"
+    DELETED = "DELETED"
+
+
+# Unverified accounts may sign in; their tenant capabilities are restricted
+# elsewhere. Every other non-active status is refused outright.
+AUTHENTICATABLE_STATUSES = frozenset(
+    {AccountStatus.ACTIVE, AccountStatus.PENDING_VERIFICATION}
+)
 
 
 @dataclass(frozen=True, slots=True)

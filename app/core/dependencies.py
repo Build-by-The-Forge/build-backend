@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
+from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -7,6 +8,9 @@ from app.core.authorization import Permission, authorization
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
 from app.db.session import SessionLocal
+from app.infrastructure.identity.sqlalchemy_session_repository import (
+    SQLAlchemySessionRepository,
+)
 from app.infrastructure.identity.sqlalchemy_user_repository import (
     SQLAlchemyUserRepository,
 )
@@ -49,8 +53,18 @@ async def get_current_principal(
     except InvalidTokenError:
         raise _unauthorized() from None
 
+    # Checked on every request so logout, revocation, expiry and account
+    # disablement take effect immediately, not when the token expires.
+    session = await SQLAlchemySessionRepository(uow.session).get_by_id(claims.session_id)
+    if (
+        session is None
+        or session.user_id.value != claims.user_id
+        or not session.is_active_at(datetime.now(timezone.utc))
+    ):
+        raise _unauthorized()
+
     user = await SQLAlchemyUserRepository(uow.session).get_by_id(claims.user_id)
-    if user is None:
+    if user is None or not user.can_authenticate:
         raise _unauthorized()
 
     return AuthenticatedPrincipal(user_id=user.id.value, session_id=claims.session_id)

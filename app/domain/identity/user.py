@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.domain.identity.value_objects import (
+    AUTHENTICATABLE_STATUSES,
+    AccountStatus,
     DeviceId,
     Email,
     Password,
@@ -25,6 +27,8 @@ class User:
     is_active: bool = True
     created_at: datetime | None = None
     roles: list[Role] = field(default_factory=list)
+    # Matches the database default: new accounts start unverified.
+    status: AccountStatus = AccountStatus.PENDING_VERIFICATION
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -32,6 +36,10 @@ class User:
             self.id = UserId(str(uuid4()))
         if self.created_at is None:
             self.created_at = datetime.now(timezone.utc)
+
+    @property
+    def can_authenticate(self) -> bool:
+        return self.is_active and self.status in AUTHENTICATABLE_STATUSES
 
     def change_password(self, new_password: Password, hasher: PasswordHasher) -> None:
         self.password_hash = hasher.hash(new_password)
@@ -74,6 +82,16 @@ class Session:
 
     def touch(self) -> None:
         self.last_seen_at = datetime.now(timezone.utc)
+
+    def is_active_at(self, now: datetime) -> bool:
+        if self.revoked_at is not None:
+            return False
+        if self.expires_at is None:
+            return True
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:  # SQLite returns naive UTC datetimes
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return expires_at > now
 
     def record_event(self, event: DomainEvent) -> None:
         self._events.append(event)

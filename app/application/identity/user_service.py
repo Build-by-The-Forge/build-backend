@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.commands import (
     AuthenticateUserCommand,
@@ -19,6 +21,7 @@ from app.application.identity.handlers import (
 )
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
+from app.core.config import settings
 from app.domain.identity.user import Session, User
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
@@ -78,6 +81,9 @@ class UserService:
                     session_repository=uow.sessions,
                     password_hasher=self.password_hasher,
                     token_service=self.token_service,
+                    session_lifetime=timedelta(
+                        seconds=settings.auth_session_absolute_ttl_seconds
+                    ),
                 )
                 session = await handler.handle(command)
             self._publish_events(session.pull_events())
