@@ -1,7 +1,7 @@
 # Phase 1 — Milestone 2: Identity & Tenant Architecture (Design)
 
 **Date:** 2026-10-02
-**Status:** Proposal — for review. **No M2 code changes until approved.**
+**Status:** **Accepted 2026-10-02** with the decisions recorded in §11 (which take precedence over the recommendations in §10).
 **Repositories inspected:** `build-backend` (branch `feat/learning-content`), `ai-service` (branch `main`)
 **Governing documents:** `docs/BUILD_MASTER_PRD.md`; `docs/PHASE_1_PLAN.md` (Revision 1 governs); `docs/phase1-m1-identity-audit.md`
 
@@ -311,3 +311,23 @@ Stop after each commit's verification; M2 is complete when the M2 slice of the P
 - **Cut-over** invalidates all existing sessions; acceptable pre-launch.
 - **Scope creep** into authorization redesign (D8) or platform administration (D6) — explicitly deferred.
 - **Secret handling** overlaps M6; only the JWT-key requirement is pulled forward because M2 is meaningless without it.
+
+---
+
+## 11. Accepted Decisions (2026-10-02)
+
+The design is accepted with these decisions. They take precedence over the recommendations in §10.
+
+| ID | Decision | Effect on the sequence (§9) |
+|---|---|---|
+| D1 | Verify whether real accounts exist; if none, no re-hash migration. **Verified:** no backend database exists in the repository or on the development machine (no `.env`, no configured database URL, no deployment configuration or deploy workflow, no backend database container or volume). The only persisted database volume found, `ai-service_postgres_data`, belongs to AI-service's legacy identity (retired in M4), not the backend. Environments outside this machine cannot be checked; if a deployed backend exists, the re-hash migration must be reinstated before commit 1. | Commit 2 (migration 0021) **dropped**. |
+| D2 | HS256 initially, with key-rotation design (`kid`); ES256 later if independent verifiers appear. | As designed. |
+| D3 | Bearer access token; refresh token in platform secure storage. | As designed. |
+| D4 | Unverified accounts may log in but have restricted tenant capabilities. | As designed (commit 8). |
+| D5 | Support **both** invitation and verified institutional-email auto-join; auto-join is **configurable per tenant** (allowed domains, default role, enabled flag) — never hard-coded to FUTA. | Adds per-tenant join-policy storage and an auto-join path to commits 12–15. |
+| D6 | Operator command now; platform-admin API later. | As designed (commit 13). |
+| D7 | Remove the unused global role system in a dedicated migration, **if nothing depends on it. Confirmed:** `UserModel.roles` is eager-loaded by the user repository but the mapper discards it (`roles=[]`); no authorization decision reads it; the only consumer is one domain unit test of `User.assign_role`. | Commit 17 kept: remove `RoleModel`, `PermissionModel`, `RoleAssignmentModel`, `role_permissions`, `User.roles`/`assign_role`, the domain `Role` value object, its unit test, and drop the four tables. |
+| D8 | Faculty/department-scoped roles deferred to Phase 2; M2 roles are tenant-wide. | As designed. |
+| D9 | Access 15 min; refresh 14-day idle / 30-day absolute. | As designed. |
+
+**Reaffirmed principle:** the access JWT establishes only *"authenticated user X, session Y"*. Tenant, membership, role and permissions are resolved from the database on every request, so downgrades, membership revocation and account disablement take effect immediately rather than at token expiry.
