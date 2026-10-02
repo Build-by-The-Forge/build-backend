@@ -125,7 +125,6 @@ class AuthenticateUserHandler:
                 payload={"user_id": user.id.value, "session_id": session.id.value},
             )
         )
-        self.token_service.issue_access_token(user.id.value)
         return session
 
 
@@ -160,8 +159,6 @@ class RefreshSessionHandler:
                 },
             )
         )
-        self.token_service.issue_access_token(session.user_id.value)
-        self.token_service.issue_refresh_token(session.user_id.value)
         return session
 
 

@@ -1,6 +1,4 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.application.identity.user_service import UserService
@@ -77,7 +75,9 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
             },
         )
 
-    access_token = service.token_service.issue_access_token(session.user_id.value)
+    access_token = service.token_service.issue_access_token(
+        session.user_id.value, session.id.value
+    )
     refresh_token = (
         session.refresh_token_hash.value if session.refresh_token_hash else None
     )
@@ -118,7 +118,9 @@ async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResp
             },
         )
 
-    access_token = service.token_service.issue_access_token(session.user_id.value)
+    access_token = service.token_service.issue_access_token(
+        session.user_id.value, session.id.value
+    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -215,54 +217,12 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
 @router.get("/me", status_code=status.HTTP_200_OK)
 async def get_current_user(
     request: Request,
-    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
 
-    if authorization is None or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": "missing bearer token"},
-                "request_id": request_id,
-            },
-        )
-
-    token = authorization.split(" ", 1)[1]
-    decoded = service.token_service.decode(token)
-    user_id = decoded.get("sub")
-    if user_id is None:
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": "invalid token"},
-                "request_id": request_id,
-            },
-        )
-
-    if user_id.startswith("access:"):
-        user_id = user_id.split(":", 1)[1]
-
-    if user_id.startswith("refresh:"):
-        user_id = user_id.split(":", 1)[1]
-
-    if user_id is None:
-        return JSONResponse(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": "invalid token"},
-                "request_id": request_id,
-            },
-        )
-
     try:
-        user = await service.get_current_user(user_id)
+        user = await service.get_current_user(principal.user_id)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
