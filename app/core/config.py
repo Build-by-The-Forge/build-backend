@@ -1,7 +1,12 @@
 import os
+import secrets
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Environments where a missing or weak signing key must stop startup.
+STRICT_ENVIRONMENTS = frozenset({"staging", "production"})
+MIN_JWT_SECRET_BYTES = 32
 
 
 class Settings(BaseSettings):
@@ -27,6 +32,16 @@ class Settings(BaseSettings):
     ai_service_timeout_seconds: int = Field(default=60)
     ai_service_max_retries: int = Field(default=3)
 
+    # Access-token signing (HS256). The current key signs; the previous key,
+    # if set, is still accepted for verification during a rotation.
+    auth_jwt_secret: str | None = Field(default=None)
+    auth_jwt_kid: str = Field(default="primary")
+    auth_jwt_previous_secret: str | None = Field(default=None)
+    auth_jwt_previous_kid: str | None = Field(default=None)
+    auth_jwt_issuer: str = Field(default="build-backend")
+    auth_jwt_audience: str = Field(default="build-api")
+    auth_access_token_ttl_seconds: int = Field(default=900)
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @field_validator("app_environment")
@@ -50,6 +65,42 @@ class Settings(BaseSettings):
         if value <= 0:
             raise ValueError("ai_service_timeout_seconds must be greater than 0")
         return value
+
+    @model_validator(mode="after")
+    def validate_jwt_signing_keys(self) -> "Settings":
+        if not self.auth_jwt_secret:
+            if self.app_environment in STRICT_ENVIRONMENTS:
+                raise ValueError(
+                    f"AUTH_JWT_SECRET is required when app_environment is {self.app_environment!r}"
+                )
+            # No usable default may live in the repository: development and
+            # tests get a random per-process key instead.
+            self.auth_jwt_secret = secrets.token_urlsafe(48)
+
+        for name, secret in (
+            ("AUTH_JWT_SECRET", self.auth_jwt_secret),
+            ("AUTH_JWT_PREVIOUS_SECRET", self.auth_jwt_previous_secret),
+        ):
+            if secret is not None and len(secret.encode("utf-8")) < MIN_JWT_SECRET_BYTES:
+                raise ValueError(f"{name} must be at least {MIN_JWT_SECRET_BYTES} bytes")
+
+        if self.auth_jwt_previous_secret is not None:
+            if not self.auth_jwt_previous_kid:
+                raise ValueError("AUTH_JWT_PREVIOUS_KID is required with AUTH_JWT_PREVIOUS_SECRET")
+            if self.auth_jwt_previous_kid == self.auth_jwt_kid:
+                raise ValueError("AUTH_JWT_PREVIOUS_KID must differ from AUTH_JWT_KID")
+
+        if self.auth_access_token_ttl_seconds <= 0:
+            raise ValueError("auth_access_token_ttl_seconds must be greater than 0")
+        return self
+
+    @property
+    def jwt_verification_keys(self) -> dict[str, str]:
+        """kid -> secret for every key currently accepted for verification."""
+        keys = {self.auth_jwt_kid: self.auth_jwt_secret or ""}
+        if self.auth_jwt_previous_secret and self.auth_jwt_previous_kid:
+            keys[self.auth_jwt_previous_kid] = self.auth_jwt_previous_secret
+        return keys
 
     @property
     def effective_postgres_url(self) -> str:
