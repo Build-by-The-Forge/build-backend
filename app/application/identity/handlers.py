@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -25,6 +26,12 @@ from app.domain.identity.value_objects import (
 from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
+
+
+def hash_token(raw_token: str) -> str:
+    # One-time tokens are looked up by their hash, so the hash must be
+    # deterministic (unlike a salted password hash).
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 class RegisterUserHandler:
@@ -81,18 +88,25 @@ class AuthenticateUserHandler:
         self.session_repository = session_repository
 
     async def handle(self, command: AuthenticateUserCommand) -> Session:
-        email = Email(command.email)
-        user = await self.repository.get_by_email(email.value)
-        if user is None:
-            raise AppError("invalid credentials", status_code=401)
-
+        # Validate input before touching the account, so the outcome cannot
+        # differ between existing and unknown emails.
         try:
+            email = Email(command.email)
             password = Password(command.password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise AppError("invalid credentials", status_code=401) from exc
+
+        user = await self.repository.get_by_email(email.value)
+        if user is None:
+            self.password_hasher.dummy_verify(password)
+            raise AppError("invalid credentials", status_code=401)
 
         if not self.password_hasher.verify(password, user.password_hash):
             raise AppError("invalid credentials", status_code=401)
+
+        if self.password_hasher.needs_rehash(user.password_hash):
+            user.change_password(password, self.password_hasher)
+            await self.repository.save(user)
 
         refresh_token = self.token_service.issue_refresh_token(user.id.value)
         session = Session(
@@ -182,10 +196,9 @@ class ForgotPasswordHandler:
             return ""
 
         raw_token = str(uuid4())
-        token_hash = self.password_hasher.hash(Password(raw_token))
         await self.repository.save_password_reset_token(
             user.id.value,
-            token_hash.value,
+            hash_token(raw_token),
             expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         )
         return raw_token
@@ -207,8 +220,9 @@ class ResetPasswordHandler:
         except ValueError as exc:
             raise AppError(str(exc), status_code=422) from exc
 
-        token_hash = self.password_hasher.hash(Password(command.token)).value
-        user_id = await self.repository.consume_password_reset_token(token_hash)
+        user_id = await self.repository.consume_password_reset_token(
+            hash_token(command.token)
+        )
         if user_id is None:
             raise AppError("invalid reset token", status_code=401)
 

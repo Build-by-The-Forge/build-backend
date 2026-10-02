@@ -5,7 +5,6 @@ from app.domain.identity.value_objects import (
     Email,
     Password,
     PasswordHash,
-    PasswordHasher,
     RefreshTokenHash,
     RefreshTokenId,
     Role,
@@ -14,6 +13,7 @@ from app.domain.identity.value_objects import (
     UserId,
 )
 from app.events.event_bus import EventBus
+from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
 from app.main import app
 from fastapi.testclient import TestClient
 from starlette import status
@@ -99,10 +99,10 @@ def test_user_aggregate_can_change_password_to_hash() -> None:
     )
 
     new_password = Password("NewStrongPass123!")
-    user.change_password(new_password, PasswordHasher())
+    user.change_password(new_password, Argon2PasswordHasher())
 
     assert user.password_hash.value != new_password.value
-    assert user.password_hash.value.startswith("hashed:")
+    assert user.password_hash.value.startswith("$argon2id$")
 
 
 def test_user_can_assign_role() -> None:
