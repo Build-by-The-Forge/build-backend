@@ -3416,8 +3416,8 @@ Workstreams should be implemented incrementally rather than attempting a single 
 BUILD should preserve separation between:
 
 ```text
-build-cbt-backend
-build-ai-service
+ai-service
+build-backend
 build-frontend
 ```
 
