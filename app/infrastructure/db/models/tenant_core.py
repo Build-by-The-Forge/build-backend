@@ -210,8 +210,12 @@ class MembershipModel(Base):
         String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[str] = mapped_column(
-        String(36), nullable=False
-    )  # FK to users.id if you have it
+        String(36),
+        ForeignKey(
+            "users.id", ondelete="CASCADE", name="fk_memberships_user_id_users"
+        ),
+        nullable=False,
+    )
     role: Mapped[str] = mapped_column(
         String(30), nullable=False
     )  # owner, admin, hod, lecturer, student
