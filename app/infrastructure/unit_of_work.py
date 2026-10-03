@@ -23,11 +23,21 @@ class UnitOfWork:
         traceback: TracebackType | None,
     ) -> None:
         if exc_type is not None:
-            logger.error(
-                "unit_of_work_rollback",
-                exception_type=exc_type.__name__,
-                exception=str(exc_value),
-            )
+            status_code = getattr(exc_value, "status_code", None)
+            if isinstance(status_code, int) and status_code < 500:
+                # An expected client error (bad credentials, not found, ...):
+                # routine, so not an ERROR, and its message is not logged.
+                logger.info(
+                    "unit_of_work_rollback",
+                    exception_type=exc_type.__name__,
+                    status_code=status_code,
+                )
+            else:
+                logger.error(
+                    "unit_of_work_rollback",
+                    exception_type=exc_type.__name__,
+                    exception=str(exc_value),
+                )
             try:
                 await self.rollback()
             except Exception:
