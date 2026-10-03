@@ -14,6 +14,9 @@ if settings.effective_postgres_url.startswith("sqlite"):
 engine = create_async_engine(
     settings.effective_postgres_url,
     echo=False,
+    # Keep bound parameters (emails, hashes, token hashes) out of exception
+    # messages and therefore out of logs.
+    hide_parameters=True,
     connect_args=connect_args,
     poolclass=poolclass,
 )
