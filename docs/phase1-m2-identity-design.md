@@ -331,3 +331,13 @@ The design is accepted with these decisions. They take precedence over the recom
 | D9 | Access 15 min; refresh 14-day idle / 30-day absolute. | As designed. |
 
 **Reaffirmed principle:** the access JWT establishes only *"authenticated user X, session Y"*. Tenant, membership, role and permissions are resolved from the database on every request, so downgrades, membership revocation and account disablement take effect immediately rather than at token expiry.
+
+## 12. Implementation Notes
+
+Deviations from §6 made during implementation, recorded so the design stays accurate.
+
+**Commit 9 — temporary lock is not an account status (2026-10-03).** §6 described the temporary lock as setting `users.status = LOCKED` with automatic unlock. It is implemented instead as a short-lived Redis key that blocks sign-in attempts and expires on its own; `users.status` is never changed by abuse controls. This keeps three states separate: *rate limit* (fixed-window request counts per IP or email → 429), *temporary lock* (after 5 failures per email+IP pair or 20 per email in 15 minutes → 15-minute lock), and *account status* (administrative; `LOCKED` remains available for that). It also means a third party who knows an email cannot leave persistent state on the account: the lock expires, a successful password reset lifts it, and failures are counted per email whether or not the account exists so a 429 reveals nothing.
+
+**Commit 9 — Redis unavailable is an explicit choice.** `AUTH_RATE_LIMIT_FAILURE_MODE=local` (default) keeps enforcing limits with per-process counters (weaker across replicas, never off); `closed` answers 503. There is no fail-open mode.
+
+**Known deployment dependency.** Per-IP limits use the direct peer address. Behind a reverse proxy this must become the proxy-reported client address (M6); until then all clients behind one proxy share per-IP limits.
