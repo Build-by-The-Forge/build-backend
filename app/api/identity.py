@@ -167,6 +167,64 @@ async def logout_session(
     )
 
 
+@router.post("/verify-email", status_code=status.HTTP_200_OK)
+async def verify_email(request: Request, payload: dict[str, str]) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        user = await service.verify_email(payload.get("token", ""))
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {"email_verified": user.email_verified},
+            "meta": {},
+            "request_id": request_id,
+        },
+    )
+
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+async def resend_verification(request: Request, payload: dict[str, str]) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+
+    try:
+        await service.request_email_verification(payload.get("email", ""))
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {},
+            "meta": {
+                "message": "If this email needs verification, a new code has been sent."
+            },
+            "request_id": request_id,
+        },
+    )
+
+
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
 async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResponse:
     email = payload.get("email", "")

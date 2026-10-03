@@ -52,5 +52,15 @@ class ChangePasswordCommand:
 
 
 @dataclass(slots=True)
+class RequestEmailVerificationCommand:
+    email: str
+
+
+@dataclass(slots=True)
+class VerifyEmailCommand:
+    token: str
+
+
+@dataclass(slots=True)
 class GetCurrentUserCommand:
     user_id: str

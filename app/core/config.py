@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     # Idle lifetime of a refresh token; each rotation starts a new window.
     auth_refresh_idle_ttl_seconds: int = Field(default=14 * 24 * 3600)
     auth_password_reset_ttl_seconds: int = Field(default=3600)
+    auth_email_verification_ttl_seconds: int = Field(default=24 * 3600)
     # Development only: also append outgoing email (with its one-time codes)
     # to this JSONL file. Ignored in staging/production.
     email_outbox_path: str | None = Field(default=None)
@@ -106,6 +107,8 @@ class Settings(BaseSettings):
             raise ValueError("auth_refresh_idle_ttl_seconds must be greater than 0")
         if self.auth_password_reset_ttl_seconds <= 0:
             raise ValueError("auth_password_reset_ttl_seconds must be greater than 0")
+        if self.auth_email_verification_ttl_seconds <= 0:
+            raise ValueError("auth_email_verification_ttl_seconds must be greater than 0")
         return self
 
     @property

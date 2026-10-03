@@ -15,6 +15,7 @@ from app.infrastructure.identity.models import (
 PASSWORD = "StrongPass123!"
 NEW_PASSWORD = "BrandNew-Passphrase-42"
 GENERIC = "If an account exists for this email, a reset code has been sent."
+RESET_SUBJECT = "Reset your BUILD password"
 
 
 def _db(client, fn):
@@ -42,7 +43,7 @@ def _forgot(client, email):
 
 
 def _code_for(email):
-    message = _outbox().latest_to(email)
+    message = _outbox().latest_to(email, RESET_SUBJECT)
     assert message is not None
     return message.body.split("\n\n")[1]
 
@@ -76,7 +77,7 @@ def test_unknown_email_gets_the_same_response_and_no_email(client):
     assert resp.status_code == 200
     assert resp.json()["data"] == {}
     assert resp.json()["meta"]["message"] == GENERIC
-    assert _outbox().latest_to(email) is None
+    assert _outbox().latest_to(email, RESET_SUBJECT) is None
 
 
 def test_blocked_account_gets_the_same_response_and_no_email(client):
@@ -86,7 +87,7 @@ def test_blocked_account_gets_the_same_response_and_no_email(client):
     resp = _forgot(client, email)
 
     assert resp.json()["meta"]["message"] == GENERIC
-    assert _outbox().latest_to(email) is None
+    assert _outbox().latest_to(email, RESET_SUBJECT) is None
 
 
 def test_reset_code_is_stored_only_as_sha256(client):

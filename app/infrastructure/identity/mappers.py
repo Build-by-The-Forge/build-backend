@@ -44,6 +44,7 @@ def domain_user_to_model(user: User, model: UserModel | None = None) -> UserMode
             is_active=user.is_active,
             created_at=created_at,
             status=UserStatus(user.status.value),
+            is_verified=user.email_verified,
         )
     else:
         model.email = user.email.value
@@ -51,6 +52,10 @@ def domain_user_to_model(user: User, model: UserModel | None = None) -> UserMode
         model.is_active = user.is_active
         model.created_at = created_at
         model.status = UserStatus(user.status.value)
+        # Status is authoritative; is_verified only ever follows it upward
+        # (a verified account that is later locked stays verified).
+        if user.email_verified:
+            model.is_verified = True
     return model
 
 

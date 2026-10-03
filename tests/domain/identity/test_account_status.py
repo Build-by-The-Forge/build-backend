@@ -59,3 +59,26 @@ def session(**kwargs) -> Session:
 )
 def test_session_activity(kwargs, active):
     assert session(**kwargs).is_active_at(NOW) is active
+
+
+def test_verify_email_activates_only_pending_accounts():
+    account = user(status=AccountStatus.PENDING_VERIFICATION)
+    assert account.email_verified is False
+
+    account.verify_email()
+
+    assert account.status is AccountStatus.ACTIVE
+    assert account.email_verified is True
+
+
+@pytest.mark.parametrize(
+    "status",
+    [AccountStatus.ACTIVE, AccountStatus.LOCKED, AccountStatus.DISABLED, AccountStatus.DELETED],
+)
+def test_verify_email_never_changes_other_statuses(status):
+    account = user(status=status)
+
+    with pytest.raises(ValueError):
+        account.verify_email()
+
+    assert account.status is status

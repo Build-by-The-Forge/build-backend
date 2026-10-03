@@ -102,7 +102,7 @@ def test_malformed_payload_is_rejected(client):
 def test_change_password_cancels_outstanding_reset_codes(client):
     email, user_id, (mine,) = _signed_in(client)
     client.post("/identity/forgot-password", json={"email": email})
-    code = identity_api.service.email_sender.latest_to(email).body.split("\n\n")[1]
+    code = identity_api.service.email_sender.latest_to(email, "Reset your BUILD password").body.split("\n\n")[1]
 
     assert _change(client, mine["access_token"]).status_code == 200
 

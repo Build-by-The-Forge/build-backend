@@ -13,7 +13,11 @@ from app.infrastructure.identity.mappers import (
     domain_user_to_model,
     user_model_to_domain,
 )
-from app.infrastructure.identity.models import PasswordResetTokenModel, UserModel
+from app.infrastructure.identity.models import (
+    PasswordResetTokenModel,
+    UserModel,
+    VerificationTokenModel,
+)
 
 
 class SQLAlchemyUserRepository(UserRepository):
@@ -98,6 +102,51 @@ class SQLAlchemyUserRepository(UserRepository):
             .where(
                 PasswordResetTokenModel.user_id == user_id,
                 PasswordResetTokenModel.consumed_at.is_(None),
+            )
+            .values(consumed_at=datetime.now(timezone.utc))
+        )
+
+    async def save_verification_token(
+        self, user_id: str, token_hash: str, expires_at: datetime
+    ) -> None:
+        self._session.add(
+            VerificationTokenModel(
+                id=str(uuid4()),
+                user_id=user_id,
+                token_hash=token_hash,
+                expires_at=expires_at,
+            )
+        )
+        await self._session.flush()
+
+    async def consume_verification_token(self, token_hash: str) -> str | None:
+        now = datetime.now(timezone.utc)
+        model = await self._session.scalar(
+            select(VerificationTokenModel).where(
+                VerificationTokenModel.token_hash == token_hash,
+                VerificationTokenModel.consumed_at.is_(None),
+                VerificationTokenModel.expires_at > now,
+            )
+        )
+        if model is None:
+            return None
+
+        result = await self._session.execute(
+            update(VerificationTokenModel)
+            .where(
+                VerificationTokenModel.id == model.id,
+                VerificationTokenModel.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+        return model.user_id if result.rowcount == 1 else None
+
+    async def invalidate_verification_tokens(self, user_id: str) -> None:
+        await self._session.execute(
+            update(VerificationTokenModel)
+            .where(
+                VerificationTokenModel.user_id == user_id,
+                VerificationTokenModel.consumed_at.is_(None),
             )
             .values(consumed_at=datetime.now(timezone.utc))
         )

@@ -30,9 +30,9 @@ class OutboxEmailSender:
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")
 
-    def latest_to(self, address: str) -> EmailMessage | None:
+    def latest_to(self, address: str, subject: str | None = None) -> EmailMessage | None:
         for message in reversed(self.messages):
-            if message.to == address:
+            if message.to == address and (subject is None or message.subject == subject):
                 return message
         return None
 

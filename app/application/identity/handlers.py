@@ -13,7 +13,9 @@ from app.application.identity.commands import (
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
+    RequestEmailVerificationCommand,
     ResetPasswordCommand,
+    VerifyEmailCommand,
 )
 from app.application.identity.ports.email_sender import EmailMessage
 from app.application.identity.ports.password_hasher import PasswordHasher
@@ -21,6 +23,7 @@ from app.application.identity.ports.token_service import TokenService
 from app.core.exceptions import AppError
 from app.domain.identity.user import Session, User
 from app.domain.identity.value_objects import (
+    AccountStatus,
     DeviceId,
     Email,
     Password,
@@ -416,6 +419,106 @@ class ResetPasswordHandler:
         await revoke_user_sessions(
             self.session_repository, self.refresh_token_repository, user_id
         )
+
+
+DEFAULT_EMAIL_VERIFICATION_LIFETIME = timedelta(hours=24)
+
+
+@dataclass(frozen=True, slots=True)
+class EmailVerificationRequest:
+    """A verification code to deliver out of band; never returned to the caller."""
+
+    email: str
+    raw_token: str
+    expires_in: timedelta
+
+
+def email_verification_email(request: EmailVerificationRequest) -> EmailMessage:
+    hours = int(request.expires_in.total_seconds() // 3600)
+    return EmailMessage(
+        to=request.email,
+        subject="Verify your BUILD email address",
+        body=(
+            "Use this code to verify your email address for BUILD:\n\n"
+            f"{request.raw_token}\n\n"
+            f"It expires in {hours} hours and can be used once."
+        ),
+    )
+
+
+async def issue_email_verification(
+    repository: UserRepository, user: User, lifetime: timedelta
+) -> EmailVerificationRequest:
+    """Replace any outstanding verification code of the user with a new one."""
+    await repository.invalidate_verification_tokens(user.id.value)
+    raw_token = secrets.token_urlsafe(32)
+    await repository.save_verification_token(
+        user.id.value,
+        hash_token(raw_token),
+        expires_at=datetime.now(timezone.utc) + lifetime,
+    )
+    return EmailVerificationRequest(
+        email=user.email.value, raw_token=raw_token, expires_in=lifetime
+    )
+
+
+class RequestEmailVerificationHandler:
+    def __init__(
+        self,
+        repository: UserRepository,
+        lifetime: timedelta = DEFAULT_EMAIL_VERIFICATION_LIFETIME,
+    ) -> None:
+        self.repository = repository
+        self.lifetime = lifetime
+
+    async def handle(
+        self, command: RequestEmailVerificationCommand
+    ) -> EmailVerificationRequest | None:
+        try:
+            email = Email(command.email)
+        except ValueError as exc:
+            raise AppError("invalid email format", status_code=422) from exc
+
+        user = await self.repository.get_by_email(email.value)
+        # Only pending accounts that may sign in get a code; the caller's
+        # response must not reveal which case applied.
+        if (
+            user is None
+            or not user.can_authenticate
+            or user.status is not AccountStatus.PENDING_VERIFICATION
+        ):
+            return None
+        return await issue_email_verification(self.repository, user, self.lifetime)
+
+
+class VerifyEmailHandler:
+    def __init__(self, repository: UserRepository) -> None:
+        self.repository = repository
+
+    async def handle(self, command: VerifyEmailCommand) -> User:
+        if not command.token:
+            raise AppError("invalid verification token", status_code=422)
+
+        user_id = await self.repository.consume_verification_token(
+            hash_token(command.token)
+        )
+        if user_id is None:
+            raise AppError("invalid verification token", status_code=401)
+
+        user = await self.repository.get_by_id(user_id)
+        # Verification only ever activates a pending account; it must not
+        # bring back one that was locked, disabled or deleted.
+        if (
+            user is None
+            or not user.can_authenticate
+            or user.status is not AccountStatus.PENDING_VERIFICATION
+        ):
+            raise AppError("invalid verification token", status_code=401)
+
+        user.verify_email()
+        await self.repository.save(user)
+        await self.repository.invalidate_verification_tokens(user_id)
+        return user
 
 
 class ChangePasswordHandler:

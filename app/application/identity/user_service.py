@@ -10,7 +10,9 @@ from app.application.identity.commands import (
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
+    RequestEmailVerificationCommand,
     ResetPasswordCommand,
+    VerifyEmailCommand,
 )
 from app.application.identity.handlers import (
     AuthenticateUserHandler,
@@ -23,8 +25,12 @@ from app.application.identity.handlers import (
     RefreshSessionHandler,
     RefreshTokenReuseError,
     RegisterUserHandler,
+    RequestEmailVerificationHandler,
     ResetPasswordHandler,
     RevokeSessionHandler,
+    VerifyEmailHandler,
+    email_verification_email,
+    issue_email_verification,
     password_reset_email,
 )
 from app.application.identity.ports.email_sender import EmailSender
@@ -64,6 +70,11 @@ class UserService:
                     repository=uow.users, password_hasher=self.password_hasher
                 )
                 user = await handler.handle(command)
+                verification = await issue_email_verification(
+                    uow.users, user, self._verification_lifetime()
+                )
+            # Sent only after the account and code are committed.
+            await self.email_sender.send(email_verification_email(verification))
             self._publish_events(user.pull_events())
             return user
 
@@ -198,6 +209,24 @@ class UserService:
             return await ChangePasswordHandler(
                 uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
             ).handle(command)
+
+    async def request_email_verification(self, email: str) -> None:
+        async with self._require_uow()() as uow:
+            verification = await RequestEmailVerificationHandler(
+                uow.users, self._verification_lifetime()
+            ).handle(RequestEmailVerificationCommand(email=email))
+        if verification is not None:
+            await self.email_sender.send(email_verification_email(verification))
+
+    async def verify_email(self, token: str) -> User:
+        async with self._require_uow()() as uow:
+            return await VerifyEmailHandler(uow.users).handle(
+                VerifyEmailCommand(token=token)
+            )
+
+    @staticmethod
+    def _verification_lifetime() -> timedelta:
+        return timedelta(seconds=settings.auth_email_verification_ttl_seconds)
 
     async def get_current_user(self, user_id: str) -> User:
         command = GetCurrentUserCommand(user_id=user_id)

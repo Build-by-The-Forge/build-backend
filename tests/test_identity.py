@@ -225,7 +225,7 @@ def test_password_reset_flow_allows_sign_in_with_new_password(client) -> None:
 
     assert forgot_response.status_code == 200
     assert forgot_response.json()["data"] == {}
-    reset_token = identity_api.service.email_sender.latest_to(email).body.split("\n\n")[1]
+    reset_token = identity_api.service.email_sender.latest_to(email, "Reset your BUILD password").body.split("\n\n")[1]
 
     reset_response = client.post(
         "/identity/reset-password",

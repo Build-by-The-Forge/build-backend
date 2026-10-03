@@ -41,6 +41,16 @@ class User:
     def can_authenticate(self) -> bool:
         return self.is_active and self.status in AUTHENTICATABLE_STATUSES
 
+    @property
+    def email_verified(self) -> bool:
+        return self.status is AccountStatus.ACTIVE
+
+    def verify_email(self) -> None:
+        """Activate a pending account. Never lifts a lock, disable or delete."""
+        if self.status is not AccountStatus.PENDING_VERIFICATION:
+            raise ValueError(f"cannot verify an account that is {self.status.value}")
+        self.status = AccountStatus.ACTIVE
+
     def change_password(self, new_password: Password, hasher: PasswordHasher) -> None:
         self.password_hash = hasher.hash(new_password)
 
