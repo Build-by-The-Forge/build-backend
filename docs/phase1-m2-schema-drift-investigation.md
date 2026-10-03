@@ -77,3 +77,16 @@ No drift was reported for tenancy, assessment, curriculum-source/benchmark/adopt
 - Fix bucket **D** before M2 continues: one corrective migration plus a PostgreSQL smoke run of the catalogue endpoints and question creation. Commit 12 (invitations) does not touch these tables, but leaving the academic core unusable on the production database type undermines every later verification.
 - Make production-schema verification a standing gate (M6 at the latest, ideally sooner): a CI job on PostgreSQL 17 that runs `alembic upgrade head`, `alembic check` (zero diff, or an explicit allow-list for bucket A), and the integration suite against the migrated database without `create_all`. SQLite stays for fast unit tests. This would have caught this drift, the `device_id` FK 500 and the `seed_tenant_membership` FK ordering.
 - Migration numbering: the M2 design (§4) reserves `0019` for `tenant_invitations`; a corrective catalogue migration would take `0019` and shift the later numbers.
+
+## 7. Decisions (2026-10-03)
+
+| Item | Decision |
+|---|---|
+| `topics`, `learning_outcomes`, `reference_materials` (bucket D) | Fixed before M2 commit 12 by migration `0019` (commit `25038db`): tables recreated to the models; refuses to run while old-shape rows exist. Verified on PostgreSQL 17 with a course carrying related records, through question creation and read. |
+| `curriculum_versions` | **Deferred** to the curriculum work, where its relationship to programme, session/effective period, CCMAS, FUTA adoption, benchmarks and curriculum sources is settled. The model is marked "NOT MIGRATED" in code. |
+| `course_prerequisites` | **Deferred** (no endpoint depends on it). Marked "NOT MIGRATED" in code. |
+| Bucket A differences | Documented; not blocking. |
+| PostgreSQL production-schema gate | Brought forward from M6 (next commit). |
+| Repository-wide re-audit | Not done; the drift check covers every model table. |
+
+**Schema ownership rule:** a change to a persistent ORM model is incomplete until it has an Alembic migration and has been verified against a migrated PostgreSQL database. See `docs/alembic.md`.
