@@ -172,18 +172,10 @@ class UserService:
 
     async def reset_password(self, token: str, password: str) -> None:
         command = ResetPasswordCommand(token=token, password=password)
-        if self.uow_factory is not None:
-            async with self.uow_factory() as uow:
-                handler = ResetPasswordHandler(
-                    repository=uow.users, password_hasher=self.password_hasher
-                )
-                await handler.handle(command)
-            return
-
-        handler = ResetPasswordHandler(
-            repository=self.repository, password_hasher=self.password_hasher
-        )
-        await handler.handle(command)
+        async with self._require_uow()() as uow:
+            await ResetPasswordHandler(
+                uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
+            ).handle(command)
 
     async def get_current_user(self, user_id: str) -> User:
         command = GetCurrentUserCommand(user_id=user_id)

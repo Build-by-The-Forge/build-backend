@@ -285,6 +285,18 @@ class LogoutSessionHandler:
         ).handle(command.session_id)
 
 
+async def revoke_user_sessions(
+    session_repository: SessionRepository,
+    refresh_token_repository: RefreshTokenRepository,
+    user_id: str,
+) -> int:
+    """Revoke every live session of the user together with its refresh tokens."""
+    session_ids = await session_repository.revoke_all_for_user(user_id)
+    for session_id in session_ids:
+        await refresh_token_repository.revoke_for_session(session_id)
+    return len(session_ids)
+
+
 class LogoutAllSessionsHandler:
     def __init__(
         self,
@@ -295,10 +307,9 @@ class LogoutAllSessionsHandler:
         self.refresh_token_repository = refresh_token_repository
 
     async def handle(self, command: LogoutAllSessionsCommand) -> int:
-        session_ids = await self.session_repository.revoke_all_for_user(command.user_id)
-        for session_id in session_ids:
-            await self.refresh_token_repository.revoke_for_session(session_id)
-        return len(session_ids)
+        return await revoke_user_sessions(
+            self.session_repository, self.refresh_token_repository, command.user_id
+        )
 
 
 DEFAULT_PASSWORD_RESET_LIFETIME = timedelta(hours=1)
@@ -362,10 +373,16 @@ class ForgotPasswordHandler:
 
 class ResetPasswordHandler:
     def __init__(
-        self, repository: UserRepository, password_hasher: PasswordHasher
+        self,
+        repository: UserRepository,
+        password_hasher: PasswordHasher,
+        session_repository: SessionRepository,
+        refresh_token_repository: RefreshTokenRepository,
     ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
+        self.session_repository = session_repository
+        self.refresh_token_repository = refresh_token_repository
 
     async def handle(self, command: ResetPasswordCommand) -> None:
         if not command.token:
@@ -383,11 +400,18 @@ class ResetPasswordHandler:
             raise AppError("invalid reset token", status_code=401)
 
         user = await self.repository.get_by_id(user_id)
-        if user is None:
-            raise AppError("user not found", status_code=404)
+        # A blocked account must not regain access through reset; answer as
+        # for a bad code so the response says nothing about the account.
+        if user is None or not user.can_authenticate:
+            raise AppError("invalid reset token", status_code=401)
 
         user.change_password(password, self.password_hasher)
         await self.repository.save(user)
+        await self.repository.invalidate_password_reset_tokens(user_id)
+        # Whoever prompted the reset may hold a live session; end them all.
+        await revoke_user_sessions(
+            self.session_repository, self.refresh_token_repository, user_id
+        )
 
 
 class GetCurrentUserHandler:

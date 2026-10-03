@@ -59,6 +59,23 @@ class FakeUsers:
         self.reset_tokens = {h: u for h, u in self.reset_tokens.items() if u != user_id}
 
 
+class FakeSessions:
+    def __init__(self, live: list[str] | None = None):
+        self.live = list(live or [])
+
+    async def revoke_all_for_user(self, user_id):
+        revoked, self.live = self.live, []
+        return revoked
+
+
+class FakeRefreshTokens:
+    def __init__(self):
+        self.revoked_sessions: list[str] = []
+
+    async def revoke_for_session(self, session_id):
+        self.revoked_sessions.append(session_id)
+
+
 def make_user(hasher) -> User:
     return User(
         id=UserId(""),
@@ -157,9 +174,12 @@ async def test_reset_token_is_stored_only_as_sha256_and_resets_the_password():
     assert list(repo.reset_tokens) == [hashlib.sha256(raw.encode()).hexdigest()]
 
     new_password = "BrandNew-Passphrase-42"
-    await ResetPasswordHandler(repo, hasher).handle(
+    sessions, refresh_tokens = FakeSessions(["s1", "s2"]), FakeRefreshTokens()
+    await ResetPasswordHandler(repo, hasher, sessions, refresh_tokens).handle(
         ResetPasswordCommand(token=raw, password=new_password)
     )
 
     assert hasher.verify(Password(new_password), user.password_hash)
+    assert sessions.live == []
+    assert refresh_tokens.revoked_sessions == ["s1", "s2"]
     assert repo.reset_tokens == {}

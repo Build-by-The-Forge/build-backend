@@ -162,3 +162,36 @@ def test_reset_rejects_garbage_and_weak_passwords(client):
     assert _reset(client, "").status_code == 422
     assert _reset(client, "not-a-real-code").status_code == 401
     assert _reset(client, _code_for(email), "short").status_code == 422
+
+
+def _whoami(client, access_token):
+    return client.get("/identity/whoami", headers={"Authorization": f"Bearer {access_token}"})
+
+
+def test_reset_ends_every_existing_session(client):
+    email, _ = _register(client)
+    sessions = [_login(client, email, PASSWORD).json()["data"] for _ in range(2)]
+    _forgot(client, email)
+
+    assert _reset(client, _code_for(email)).status_code == 200
+
+    for session in sessions:
+        assert _whoami(client, session["access_token"]).status_code == 401
+        refresh = client.post("/identity/refresh", json={"refresh_token": session["refresh_token"]})
+        assert refresh.status_code == 401
+    fresh = _login(client, email, NEW_PASSWORD).json()["data"]
+    assert _whoami(client, fresh["access_token"]).status_code == 200
+
+
+def test_account_blocked_after_the_code_was_sent_cannot_reset(client):
+    email, user_id = _register(client)
+    _forgot(client, email)
+    code = _code_for(email)
+    _db(client, lambda db: db.execute(update(UserModel).where(UserModel.id == user_id).values(status=UserStatus.DISABLED)))
+
+    resp = _reset(client, code)
+
+    assert resp.status_code == 401
+    assert resp.json()["meta"]["error"] == "invalid reset token"
+    _db(client, lambda db: db.execute(update(UserModel).where(UserModel.id == user_id).values(status=UserStatus.ACTIVE)))
+    assert _login(client, email, PASSWORD).status_code == 200
