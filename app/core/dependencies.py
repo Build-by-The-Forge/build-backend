@@ -67,12 +67,33 @@ async def get_current_principal(
     if user is None or not user.can_authenticate:
         raise _unauthorized()
 
-    return AuthenticatedPrincipal(user_id=user.id.value, session_id=claims.session_id)
+    return AuthenticatedPrincipal(
+        user_id=user.id.value,
+        session_id=claims.session_id,
+        email_verified=user.email_verified,
+    )
+
+
+def _verification_required() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="email verification required",
+    )
+
+
+async def get_verified_principal(
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> AuthenticatedPrincipal:
+    """For actions that need a verified email outside a tenant (e.g. accepting
+    an invitation)."""
+    if not principal.email_verified:
+        raise _verification_required()
+    return principal
 
 
 async def get_current_tenant_context(
     request: Request,
-    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+    principal: AuthenticatedPrincipal = Depends(get_verified_principal),
     uow: UnitOfWork = Depends(get_unit_of_work),
 ) -> TenantContext:
     tenant_slug = request.headers.get("x-tenant-slug")

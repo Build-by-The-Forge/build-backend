@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantModel
+from tests.integration.identity_helpers import verify_email
 
 
 async def seed_tenant_membership(
@@ -42,6 +43,7 @@ async def authenticate_user(client, email: str) -> tuple[str, str]:
     payload = {"email": email, "password": "StrongPass123!"}
     registered = client.post("/identity/users", json=payload)
     assert registered.status_code == 201
+    verify_email(client, payload["email"])
     user_id = registered.json()["data"]["id"]
 
     authenticated = client.post("/identity/authenticate", json=payload)

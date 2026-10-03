@@ -356,6 +356,8 @@ async def get_current_user(
                 "id": user.id.value,
                 "email": user.email.value,
                 "is_active": user.is_active,
+                "status": user.status.value,
+                "email_verified": user.email_verified,
             },
             "meta": {},
             "request_id": request_id,

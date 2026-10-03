@@ -14,6 +14,7 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
+from tests.integration.identity_helpers import verify_email
 
 
 async def seed_tenant_context(user_id: str, role: str) -> tuple[str, str, str, str]:
@@ -123,6 +124,7 @@ async def register_and_authenticate(client, email: str) -> tuple[str, str]:
     payload = {"email": email, "password": "StrongPass123!"}
     registered = client.post("/identity/users", json=payload)
     assert registered.status_code == 201
+    verify_email(client, payload["email"])
     user_id = registered.json()["data"]["id"]
     authenticated = client.post("/identity/authenticate", json=payload)
     assert authenticated.status_code == 200
