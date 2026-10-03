@@ -78,8 +78,3 @@ class JWTTokenService(TokenService):
             session_id=session_id,
             expires_at=datetime.fromtimestamp(claims["exp"], tz=timezone.utc),
         )
-
-    def issue_refresh_token(self, subject: str) -> str:
-        # Placeholder kept until refresh tokens are replaced by opaque
-        # rotating tokens in a later commit.
-        return f"refresh:{subject}"

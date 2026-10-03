@@ -3,6 +3,9 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.identity.sqlalchemy_refresh_token_repository import (
+    SQLAlchemyRefreshTokenRepository,
+)
 from app.infrastructure.identity.sqlalchemy_session_repository import (
     SQLAlchemySessionRepository,
 )
@@ -17,6 +20,7 @@ class IdentityUnitOfWork(UnitOfWork):
         super().__init__(session)
         self.users = SQLAlchemyUserRepository(session)
         self.sessions = SQLAlchemySessionRepository(session)
+        self.refresh_tokens = SQLAlchemyRefreshTokenRepository(session)
 
 
 @asynccontextmanager

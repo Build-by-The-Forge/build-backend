@@ -17,13 +17,18 @@ class AuthenticateUserCommand:
 
 @dataclass(slots=True)
 class RefreshSessionCommand:
-    session_id: str
     refresh_token: str
 
 
 @dataclass(slots=True)
 class LogoutSessionCommand:
     session_id: str
+    user_id: str
+
+
+@dataclass(slots=True)
+class LogoutAllSessionsCommand:
+    user_id: str
 
 
 @dataclass(slots=True)

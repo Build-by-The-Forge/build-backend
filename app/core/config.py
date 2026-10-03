@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     auth_access_token_ttl_seconds: int = Field(default=900)
     # Absolute session lifetime: no refresh can extend a session past this.
     auth_session_absolute_ttl_seconds: int = Field(default=30 * 24 * 3600)
+    # Idle lifetime of a refresh token; each rotation starts a new window.
+    auth_refresh_idle_ttl_seconds: int = Field(default=14 * 24 * 3600)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -96,6 +98,8 @@ class Settings(BaseSettings):
             raise ValueError("auth_access_token_ttl_seconds must be greater than 0")
         if self.auth_session_absolute_ttl_seconds <= 0:
             raise ValueError("auth_session_absolute_ttl_seconds must be greater than 0")
+        if self.auth_refresh_idle_ttl_seconds <= 0:
+            raise ValueError("auth_refresh_idle_ttl_seconds must be greater than 0")
         return self
 
     @property

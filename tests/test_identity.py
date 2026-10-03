@@ -167,20 +167,18 @@ def test_refresh_and_logout_flow_round_trips_through_identity_api(client) -> Non
 
     refresh_response = client.post(
         "/identity/refresh",
-        json={
-            "session_id": auth_payload["data"]["session_id"],
-            "refresh_token": auth_payload["data"]["refresh_token"],
-        },
+        json={"refresh_token": auth_payload["data"]["refresh_token"]},
     )
 
     assert refresh_response.status_code == 200
     refresh_payload = refresh_response.json()
     assert refresh_payload["success"] is True
     assert refresh_payload["data"]["session_id"] == auth_payload["data"]["session_id"]
+    assert refresh_payload["data"]["refresh_token"] != auth_payload["data"]["refresh_token"]
 
     logout_response = client.post(
         "/identity/logout",
-        json={"session_id": auth_payload["data"]["session_id"]},
+        headers={"Authorization": f"Bearer {refresh_payload['data']['access_token']}"},
     )
 
     assert logout_response.status_code == 200

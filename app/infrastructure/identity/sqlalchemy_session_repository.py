@@ -60,5 +60,23 @@ class SQLAlchemySessionRepository(SessionRepository):
         )
         await self._session.execute(statement)
 
+    async def revoke_all_for_user(self, user_id: str) -> list[str]:
+        """Revoke every unrevoked session of the user; return their ids."""
+        session_ids = list(
+            await self._session.scalars(
+                select(SessionModel.id).where(
+                    SessionModel.user_id == user_id,
+                    SessionModel.revoked_at.is_(None),
+                )
+            )
+        )
+        if session_ids:
+            await self._session.execute(
+                update(SessionModel)
+                .where(SessionModel.id.in_(session_ids))
+                .values(revoked_at=datetime.now(timezone.utc))
+            )
+        return session_ids
+
     async def _find_by_id(self, session_id: str) -> SessionModel | None:
         return await self._session.get(SessionModel, session_id)

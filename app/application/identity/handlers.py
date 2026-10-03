@@ -1,4 +1,6 @@
 import hashlib
+import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -6,6 +8,7 @@ from app.application.identity.commands import (
     AuthenticateUserCommand,
     ForgotPasswordCommand,
     GetCurrentUserCommand,
+    LogoutAllSessionsCommand,
     LogoutSessionCommand,
     RefreshSessionCommand,
     RegisterUserCommand,
@@ -19,22 +22,51 @@ from app.domain.identity.value_objects import (
     DeviceId,
     Email,
     Password,
-    RefreshTokenHash,
     SessionId,
     UserId,
 )
+from app.domain.repositories.refresh_token import RefreshTokenRepository
 from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 
 
 DEFAULT_SESSION_LIFETIME = timedelta(days=30)
+DEFAULT_REFRESH_IDLE_LIFETIME = timedelta(days=14)
 
 
 def hash_token(raw_token: str) -> str:
     # One-time tokens are looked up by their hash, so the hash must be
     # deterministic (unlike a salted password hash).
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def generate_refresh_token() -> str:
+    return secrets.token_urlsafe(32)  # 256 bits
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def refresh_token_expiry(session: Session, idle: timedelta, now: datetime) -> datetime:
+    """Idle expiry, never beyond the session's absolute expiry."""
+    expiry = now + idle
+    if session.expires_at is not None:
+        expiry = min(expiry, _as_utc(session.expires_at))
+    return expiry
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedSession:
+    session: Session
+    refresh_token: str
+
+
+class RefreshTokenReuseError(Exception):
+    def __init__(self, session_id: str) -> None:
+        super().__init__("refresh token reuse detected")
+        self.session_id = session_id
 
 
 class RegisterUserHandler:
@@ -85,14 +117,18 @@ class AuthenticateUserHandler:
         token_service: TokenService,
         session_repository: SessionRepository | None = None,
         session_lifetime: timedelta = DEFAULT_SESSION_LIFETIME,
+        refresh_token_repository: RefreshTokenRepository | None = None,
+        refresh_idle_lifetime: timedelta = DEFAULT_REFRESH_IDLE_LIFETIME,
     ) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
         self.token_service = token_service
         self.session_repository = session_repository
         self.session_lifetime = session_lifetime
+        self.refresh_token_repository = refresh_token_repository
+        self.refresh_idle_lifetime = refresh_idle_lifetime
 
-    async def handle(self, command: AuthenticateUserCommand) -> Session:
+    async def handle(self, command: AuthenticateUserCommand) -> "IssuedSession":
         # Validate input before touching the account, so the outcome cannot
         # differ between existing and unknown emails.
         try:
@@ -118,17 +154,24 @@ class AuthenticateUserHandler:
             user.change_password(password, self.password_hasher)
             await self.repository.save(user)
 
-        refresh_token = self.token_service.issue_refresh_token(user.id.value)
+        now = datetime.now(timezone.utc)
         session = Session(
             id=SessionId(str(uuid4())),
             user_id=user.id,
             device_id=DeviceId(command.device_id) if command.device_id else None,
-            refresh_token_hash=RefreshTokenHash(refresh_token),
             user_agent=command.user_agent,
-            expires_at=datetime.now(timezone.utc) + self.session_lifetime,
+            expires_at=now + self.session_lifetime,
         )
         if self.session_repository is not None:
             await self.session_repository.save(session)
+
+        refresh_token = generate_refresh_token()
+        if self.refresh_token_repository is not None:
+            await self.refresh_token_repository.add(
+                session.id.value,
+                hash_token(refresh_token),
+                refresh_token_expiry(session, self.refresh_idle_lifetime, now),
+            )
 
         session.record_event(
             DomainEvent(
@@ -136,31 +179,63 @@ class AuthenticateUserHandler:
                 payload={"user_id": user.id.value, "session_id": session.id.value},
             )
         )
-        return session
+        return IssuedSession(session=session, refresh_token=refresh_token)
 
 
 class RefreshSessionHandler:
+    """Rotate a refresh token. Presenting an already-rotated token is treated
+    as theft: RefreshTokenReuseError is raised so the caller can revoke the
+    whole session outside this (rolled-back) unit of work."""
+
     def __init__(
-        self, session_repository: SessionRepository, token_service: TokenService
+        self,
+        session_repository: SessionRepository,
+        refresh_token_repository: RefreshTokenRepository,
+        user_repository: UserRepository,
+        refresh_idle_lifetime: timedelta = DEFAULT_REFRESH_IDLE_LIFETIME,
     ) -> None:
         self.session_repository = session_repository
-        self.token_service = token_service
+        self.refresh_token_repository = refresh_token_repository
+        self.user_repository = user_repository
+        self.refresh_idle_lifetime = refresh_idle_lifetime
 
-    async def handle(self, command: RefreshSessionCommand) -> Session:
-        session = await self.session_repository.get_by_id(command.session_id)
-        if session is None:
-            raise AppError("session not found", status_code=404)
+    async def handle(self, command: RefreshSessionCommand) -> IssuedSession:
+        invalid = AppError("invalid refresh token", status_code=401)
+        if not command.refresh_token:
+            raise invalid
 
-        if session.revoked_at is not None:
-            raise AppError("session revoked", status_code=401)
+        stored = await self.refresh_token_repository.get_by_hash(
+            hash_token(command.refresh_token)
+        )
+        if stored is None or stored.revoked_at is not None:
+            raise invalid
+        if stored.rotated_at is not None:
+            raise RefreshTokenReuseError(stored.session_id)
 
-        if session.refresh_token_hash is None:
-            raise AppError("invalid refresh token", status_code=401)
+        now = datetime.now(timezone.utc)
+        if stored.expires_at is not None and _as_utc(stored.expires_at) <= now:
+            raise invalid
 
-        if command.refresh_token != session.refresh_token_hash.value:
-            raise AppError("invalid refresh token", status_code=401)
+        session = await self.session_repository.get_by_id(stored.session_id)
+        if session is None or not session.is_active_at(now):
+            raise invalid
+        user = await self.user_repository.get_by_id(session.user_id.value)
+        if user is None or not user.can_authenticate:
+            raise invalid
 
+        # Atomic: if a concurrent request rotated it first, this is reuse.
+        if not await self.refresh_token_repository.consume(stored.id):
+            raise RefreshTokenReuseError(stored.session_id)
+
+        refresh_token = generate_refresh_token()
+        await self.refresh_token_repository.add(
+            session.id.value,
+            hash_token(refresh_token),
+            refresh_token_expiry(session, self.refresh_idle_lifetime, now),
+        )
         session.touch()
+        await self.session_repository.save(session)
+
         session.record_event(
             DomainEvent(
                 event_type="session.refreshed",
@@ -170,20 +245,59 @@ class RefreshSessionHandler:
                 },
             )
         )
-        return session
+        return IssuedSession(session=session, refresh_token=refresh_token)
+
+
+class RevokeSessionHandler:
+    def __init__(
+        self,
+        session_repository: SessionRepository,
+        refresh_token_repository: RefreshTokenRepository,
+    ) -> None:
+        self.session_repository = session_repository
+        self.refresh_token_repository = refresh_token_repository
+
+    async def handle(self, session_id: str) -> None:
+        session = await self.session_repository.get_by_id(session_id)
+        if session is not None and session.revoked_at is None:
+            session.revoke()
+            await self.session_repository.save(session)
+        await self.refresh_token_repository.revoke_for_session(session_id)
 
 
 class LogoutSessionHandler:
-    def __init__(self, session_repository: SessionRepository) -> None:
+    def __init__(
+        self,
+        session_repository: SessionRepository,
+        refresh_token_repository: RefreshTokenRepository,
+    ) -> None:
         self.session_repository = session_repository
+        self.refresh_token_repository = refresh_token_repository
 
     async def handle(self, command: LogoutSessionCommand) -> None:
         session = await self.session_repository.get_by_id(command.session_id)
-        if session is None:
+        if session is None or session.user_id.value != command.user_id:
             raise AppError("session not found", status_code=404)
 
-        session.revoke()
-        await self.session_repository.save(session)
+        await RevokeSessionHandler(
+            self.session_repository, self.refresh_token_repository
+        ).handle(command.session_id)
+
+
+class LogoutAllSessionsHandler:
+    def __init__(
+        self,
+        session_repository: SessionRepository,
+        refresh_token_repository: RefreshTokenRepository,
+    ) -> None:
+        self.session_repository = session_repository
+        self.refresh_token_repository = refresh_token_repository
+
+    async def handle(self, command: LogoutAllSessionsCommand) -> int:
+        session_ids = await self.session_repository.revoke_all_for_user(command.user_id)
+        for session_id in session_ids:
+            await self.refresh_token_repository.revoke_for_session(session_id)
+        return len(session_ids)
 
 
 class ForgotPasswordHandler:

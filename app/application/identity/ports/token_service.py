@@ -21,6 +21,3 @@ class TokenService(Protocol):
     def decode_access_token(self, token: str) -> AccessTokenClaims:
         """Verify and decode an access token; raise InvalidTokenError otherwise."""
         raise NotImplementedError
-
-    def issue_refresh_token(self, subject: str) -> str:
-        raise NotImplementedError

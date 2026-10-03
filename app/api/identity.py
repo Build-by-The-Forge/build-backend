@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
+from app.application.identity.handlers import IssuedSession
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
+from app.core.config import settings
 from app.core.dependencies import (
     get_current_principal,
     get_current_tenant_context,
@@ -61,7 +63,7 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        session = await service.authenticate_user(
+        issued = await service.authenticate_user(
             email, password, device_id=device_id, user_agent=user_agent
         )
     except AppError as exc:
@@ -75,38 +77,16 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
             },
         )
 
-    access_token = service.token_service.issue_access_token(
-        session.user_id.value, session.id.value
-    )
-    refresh_token = (
-        session.refresh_token_hash.value if session.refresh_token_hash else None
-    )
-
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={
-            "success": True,
-            "data": {
-                "user_id": session.user_id.value,
-                "session_id": session.id.value,
-                "device_id": session.device_id.value if session.device_id else None,
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-            },
-            "meta": {},
-            "request_id": request_id,
-        },
-    )
+    return _issued_session_response(issued, request_id)
 
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)
 async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResponse:
-    session_id = payload.get("session_id", "")
     refresh_token = payload.get("refresh_token", "")
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        session = await service.refresh_session(session_id, refresh_token)
+        issued = await service.refresh_session(refresh_token)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -118,9 +98,11 @@ async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResp
             },
         )
 
-    access_token = service.token_service.issue_access_token(
-        session.user_id.value, session.id.value
-    )
+    return _issued_session_response(issued, request_id)
+
+
+def _issued_session_response(issued: IssuedSession, request_id: str | None) -> JSONResponse:
+    session = issued.session
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -128,7 +110,13 @@ async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResp
             "data": {
                 "user_id": session.user_id.value,
                 "session_id": session.id.value,
-                "access_token": access_token,
+                "device_id": session.device_id.value if session.device_id else None,
+                "access_token": service.token_service.issue_access_token(
+                    session.user_id.value, session.id.value
+                ),
+                "token_type": "Bearer",
+                "expires_in": settings.auth_access_token_ttl_seconds,
+                "refresh_token": issued.refresh_token,
             },
             "meta": {},
             "request_id": request_id,
@@ -136,13 +124,32 @@ async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResp
     )
 
 
+@router.post("/logout-all", status_code=status.HTTP_200_OK)
+async def logout_all_sessions(
+    request: Request,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> JSONResponse:
+    revoked = await service.logout_all_sessions(principal.user_id)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {"revoked_sessions": revoked},
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout_session(request: Request, payload: dict[str, str]) -> JSONResponse:
-    session_id = payload.get("session_id", "")
+async def logout_session(
+    request: Request,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        await service.logout_session(session_id)
+        await service.logout_session(principal.session_id, principal.user_id)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,

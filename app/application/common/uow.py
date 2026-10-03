@@ -19,6 +19,7 @@ from app.domain.repositories.institutional_adoption import (
     InstitutionalAdoptionRepository,
 )
 from app.domain.repositories.question import QuestionRepository
+from app.domain.repositories.refresh_token import RefreshTokenRepository
 from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
 
@@ -54,6 +55,9 @@ class IdentityUnitOfWorkPort(Protocol):
 
     @property
     def sessions(self) -> SessionRepository: ...
+
+    @property
+    def refresh_tokens(self) -> RefreshTokenRepository: ...
 
 
 class CurriculumUnitOfWorkPort(Protocol):

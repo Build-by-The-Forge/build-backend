@@ -109,7 +109,7 @@ def test_existing_token_stops_working_when_the_session_is_revoked(client):
     data = _login(client, email).json()["data"]
     assert _whoami(client, data["access_token"]).status_code == 200
 
-    client.post("/identity/logout", json={"session_id": data["session_id"]})
+    client.post("/identity/logout", headers={"Authorization": f"Bearer {data['access_token']}"})
 
     assert _whoami(client, data["access_token"]).status_code == 401
 
