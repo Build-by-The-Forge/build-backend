@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -231,4 +232,46 @@ class MembershipModel(Base):
         UniqueConstraint("tenant_id", "user_id", name="uq_memberships_tenant_user"),
         Index("ix_memberships_tenant_id", "tenant_id"),
         Index("ix_memberships_user_id", "user_id"),
+    )
+
+
+class TenantInvitationModel(Base):
+    __tablename__ = "tenant_invitations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    role: Mapped[str] = mapped_column(String(30), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    invited_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    accepted_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_tenant_invitations_token_hash"),
+        # At most one pending invitation per address per tenant.
+        Index(
+            "uq_tenant_invitations_pending_email",
+            "tenant_id",
+            "email",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+            sqlite_where=text("status = 'pending'"),
+        ),
+        Index("ix_tenant_invitations_tenant_id", "tenant_id"),
     )
