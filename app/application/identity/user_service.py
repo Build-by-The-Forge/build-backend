@@ -16,7 +16,9 @@ from app.application.identity.commands import (
 )
 from app.application.identity.handlers import (
     AuthenticateUserHandler,
+    AuthenticationFailed,
     ChangePasswordHandler,
+    CurrentPasswordIncorrect,
     ForgotPasswordHandler,
     GetCurrentUserHandler,
     IssuedSession,
@@ -34,6 +36,11 @@ from app.application.identity.handlers import (
     password_reset_email,
 )
 from app.application.identity.ports.email_sender import EmailSender
+from app.application.identity.ports.security_events import (
+    LoginFailureReason,
+    SecurityEvent,
+    SecurityEventRecorder,
+)
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.core.config import settings
@@ -54,6 +61,7 @@ class UserService:
         uow_factory: IdentityUnitOfWorkFactory | None = None,
         *,
         email_sender: EmailSender,
+        security_events: SecurityEventRecorder,
     ) -> None:
         self.repository = repository
         self.event_bus = event_bus
@@ -61,6 +69,7 @@ class UserService:
         self.token_service = token_service
         self.uow_factory = uow_factory
         self.email_sender = email_sender
+        self.security_events = security_events
 
     async def register_user(self, email: str, password: str) -> User:
         command = RegisterUserCommand(email=email, password=password)
@@ -75,6 +84,9 @@ class UserService:
                 )
             # Sent only after the account and code are committed.
             await self.email_sender.send(email_verification_email(verification))
+            await self.security_events.record(
+                SecurityEvent.ACCOUNT_REGISTERED, user_id=user.id.value
+            )
             self._publish_events(user.pull_events())
             return user
 
@@ -98,6 +110,22 @@ class UserService:
             device_id=device_id,
             user_agent=user_agent,
         )
+        try:
+            issued = await self._authenticate(command)
+        except AuthenticationFailed as failure:
+            await self.security_events.record_login(
+                user_id=failure.user_id,
+                successful=False,
+                reason=LoginFailureReason(failure.reason),
+            )
+            raise
+        await self.security_events.record_login(
+            user_id=issued.session.user_id.value, successful=True
+        )
+        self._publish_events(issued.session.pull_events())
+        return issued
+
+    async def _authenticate(self, command: AuthenticateUserCommand) -> IssuedSession:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = AuthenticateUserHandler(
@@ -113,18 +141,13 @@ class UserService:
                         seconds=settings.auth_refresh_idle_ttl_seconds
                     ),
                 )
-                issued = await handler.handle(command)
-            self._publish_events(issued.session.pull_events())
-            return issued
+                return await handler.handle(command)
 
-        handler = AuthenticateUserHandler(
+        return await AuthenticateUserHandler(
             repository=self.repository,
             password_hasher=self.password_hasher,
             token_service=self.token_service,
-        )
-        issued = await handler.handle(command)
-        self._publish_events(issued.session.pull_events())
-        return issued
+        ).handle(command)
 
     async def refresh_session(self, refresh_token: str) -> IssuedSession:
         uow_factory = self._require_uow()
@@ -143,9 +166,14 @@ class UserService:
             # the whole session. Done in its own unit of work because the one
             # above rolled back.
             async with uow_factory() as uow:
-                await RevokeSessionHandler(uow.sessions, uow.refresh_tokens).handle(
-                    reuse.session_id
-                )
+                session = await RevokeSessionHandler(
+                    uow.sessions, uow.refresh_tokens
+                ).handle(reuse.session_id)
+            await self.security_events.record(
+                SecurityEvent.REFRESH_TOKEN_REUSE,
+                user_id=session.user_id.value if session else None,
+                metadata={"session_id": reuse.session_id},
+            )
             raise AppError("invalid refresh token", status_code=401) from None
 
         self._publish_events(issued.session.pull_events())
@@ -156,12 +184,21 @@ class UserService:
             await LogoutSessionHandler(uow.sessions, uow.refresh_tokens).handle(
                 LogoutSessionCommand(session_id=session_id, user_id=user_id)
             )
+        await self.security_events.record(
+            SecurityEvent.LOGOUT, user_id=user_id, metadata={"session_id": session_id}
+        )
 
     async def logout_all_sessions(self, user_id: str) -> int:
         async with self._require_uow()() as uow:
-            return await LogoutAllSessionsHandler(
+            revoked = await LogoutAllSessionsHandler(
                 uow.sessions, uow.refresh_tokens
             ).handle(LogoutAllSessionsCommand(user_id=user_id))
+        await self.security_events.record(
+            SecurityEvent.LOGOUT_ALL,
+            user_id=user_id,
+            metadata={"revoked_sessions": revoked},
+        )
+        return revoked
 
     def _require_uow(self) -> IdentityUnitOfWorkFactory:
         if self.uow_factory is None:
@@ -182,13 +219,20 @@ class UserService:
         # Sent only after the token is committed, so a delivered code always works.
         if request is not None:
             await self.email_sender.send(password_reset_email(request))
+            await self.security_events.record(
+                SecurityEvent.PASSWORD_RESET_REQUESTED, user_id=request.user_id
+            )
 
     async def reset_password(self, token: str, password: str) -> str:
         command = ResetPasswordCommand(token=token, password=password)
         async with self._require_uow()() as uow:
-            return await ResetPasswordHandler(
+            user = await ResetPasswordHandler(
                 uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
             ).handle(command)
+        await self.security_events.record(
+            SecurityEvent.PASSWORD_RESET_COMPLETED, user_id=user.id.value
+        )
+        return user.email.value
 
     async def change_password(
         self,
@@ -205,10 +249,26 @@ class UserService:
             new_password=new_password,
             revoke_other_sessions=revoke_other_sessions,
         )
-        async with self._require_uow()() as uow:
-            return await ChangePasswordHandler(
-                uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
-            ).handle(command)
+        try:
+            async with self._require_uow()() as uow:
+                revoked = await ChangePasswordHandler(
+                    uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
+                ).handle(command)
+        except CurrentPasswordIncorrect:
+            # With a valid session, a wrong current password can mean a
+            # stolen token being used to take the account over.
+            await self.security_events.record(
+                SecurityEvent.PASSWORD_CHANGE_FAILED,
+                user_id=user_id,
+                metadata={"session_id": session_id},
+            )
+            raise
+        await self.security_events.record(
+            SecurityEvent.PASSWORD_CHANGED,
+            user_id=user_id,
+            metadata={"session_id": session_id, "revoked_sessions": revoked},
+        )
+        return revoked
 
     async def request_email_verification(self, email: str) -> None:
         async with self._require_uow()() as uow:
@@ -220,9 +280,13 @@ class UserService:
 
     async def verify_email(self, token: str) -> User:
         async with self._require_uow()() as uow:
-            return await VerifyEmailHandler(uow.users).handle(
+            user = await VerifyEmailHandler(uow.users).handle(
                 VerifyEmailCommand(token=token)
             )
+        await self.security_events.record(
+            SecurityEvent.EMAIL_VERIFIED, user_id=user.id.value
+        )
+        return user
 
     @staticmethod
     def _verification_lifetime() -> timedelta:

@@ -162,13 +162,20 @@ class AuthThrottle:
         await self._guard(self.store.lock(keys["account_lock"], ACCOUNT_LOCK_SECONDS))
         logger.warning("temporary sign-in lock applied to an account")
 
-    async def login_failed(self, attempt: "LoginAttempt") -> None:
-        """The admitted attempt had a wrong password (already counted)."""
+    async def login_failed(self, attempt: "LoginAttempt") -> list[str]:
+        """The admitted attempt had a wrong password (already counted).
+
+        Returns the scopes ("pair", "account") locked as a result.
+        """
         keys = self._login_keys(attempt.email, attempt.ip)
+        locked = []
         if attempt.pair_count >= LOGIN_FAILURES_PER_PAIR.limit:
             await self._lock_pair(keys)
+            locked.append("pair")
         if attempt.account_count >= LOGIN_FAILURES_PER_ACCOUNT.limit:
             await self._lock_account(keys)
+            locked.append("account")
+        return locked
 
     async def login_succeeded(self, email: str, ip: str) -> None:
         """The password was correct (even if the account is blocked)."""

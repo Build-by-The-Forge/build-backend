@@ -50,6 +50,9 @@ from app.infrastructure.ratelimit.fallback_counter_store import (
 )
 from app.infrastructure.ratelimit.memory_counter_store import InMemoryCounterStore
 from app.infrastructure.ratelimit.redis_counter_store import RedisCounterStore
+from app.infrastructure.identity.security_event_recorder import (
+    SQLAlchemySecurityEventRecorder,
+)
 from app.infrastructure.identity.unit_of_work import (
     IdentityUnitOfWork,
     identity_unit_of_work,
@@ -100,6 +103,8 @@ def build_container() -> Container:
     password_hasher = Argon2PasswordHasher()
     token_service = JWTTokenService()
     email_sender = build_email_sender()
+    security_events = SQLAlchemySecurityEventRecorder(SessionLocal)
+    container.register(SQLAlchemySecurityEventRecorder, security_events)
     container.register(AuthThrottle, build_auth_throttle())
 
     container.register(EventBus, event_bus)
@@ -115,6 +120,7 @@ def build_container() -> Container:
             token_service=token_service,
             uow_factory=sqlalchemy_identity_uow,
             email_sender=email_sender,
+            security_events=security_events,
         ),
     )
     container.register(CourseUnitOfWork, sqlalchemy_catalogue_uow)
@@ -233,6 +239,8 @@ def build_sqlalchemy_container() -> Container:
     password_hasher = Argon2PasswordHasher()
     token_service = JWTTokenService()
     email_sender = build_email_sender()
+    security_events = SQLAlchemySecurityEventRecorder(SessionLocal)
+    container.register(SQLAlchemySecurityEventRecorder, security_events)
     container.register(AuthThrottle, build_auth_throttle())
 
     container.register(EventBus, event_bus)
@@ -248,6 +256,7 @@ def build_sqlalchemy_container() -> Container:
             token_service=token_service,
             uow_factory=sqlalchemy_identity_uow,
             email_sender=email_sender,
+            security_events=security_events,
         ),
     )
     return container

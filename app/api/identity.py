@@ -1,10 +1,21 @@
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
-from app.application.identity.handlers import IssuedSession
+from app.application.identity.handlers import (
+    AuthenticationFailed,
+    CurrentPasswordIncorrect,
+    IssuedSession,
+)
+from app.application.identity.ports.security_events import (
+    LoginFailureReason,
+    SecurityEvent,
+)
 from app.application.identity.throttle import AuthThrottle
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
+from app.infrastructure.identity.security_event_recorder import (
+    SQLAlchemySecurityEventRecorder,
+)
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
 from app.core.dependencies import (
@@ -12,20 +23,16 @@ from app.core.dependencies import (
     get_current_tenant_context,
     require_permission,
 )
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, RateLimitedError
 from app.core.principal import AuthenticatedPrincipal
+from app.core.request_context import client_ip as _client_ip
 from app.core.tenant_context import TenantContext
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
 service = container.get(UserService)
 throttle = container.get(AuthThrottle)
-
-
-def _client_ip(request: Request) -> str:
-    # The direct peer. Behind a reverse proxy this must become the
-    # proxy-reported client address (deployment work, M6).
-    return request.client.host if request.client else "unknown"
+security_events = container.get(SQLAlchemySecurityEventRecorder)
 
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)
@@ -71,7 +78,13 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
     user_agent = payload.get("user_agent")
     request_id = getattr(request.state, "request_id", None)
     ip = _client_ip(request)
-    attempt = await throttle.before_login(email, ip)
+    try:
+        attempt = await throttle.before_login(email, ip)
+    except RateLimitedError:
+        await security_events.record_login(
+            user_id=None, successful=False, reason=LoginFailureReason.RATE_LIMITED
+        )
+        raise
 
     try:
         issued = await service.authenticate_user(
@@ -79,7 +92,13 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
         )
     except AppError as exc:
         if exc.status_code == status.HTTP_401_UNAUTHORIZED:
-            await throttle.login_failed(attempt)
+            locked = await throttle.login_failed(attempt)
+            if locked:
+                await security_events.record(
+                    SecurityEvent.SIGN_IN_TEMPORARILY_LOCKED,
+                    user_id=exc.user_id if isinstance(exc, AuthenticationFailed) else None,
+                    metadata={"scopes": locked},
+                )
         elif exc.status_code == status.HTTP_403_FORBIDDEN:
             # Only reachable with the right password: not a guessing failure.
             await throttle.login_succeeded(email, ip)
@@ -333,7 +352,7 @@ async def change_password(
             revoke_other_sessions=revoke_other_sessions,
         )
     except AppError as exc:
-        if exc.message == "current password is incorrect":
+        if isinstance(exc, CurrentPasswordIncorrect):
             await throttle.password_change_failed(principal.user_id)
         return JSONResponse(
             status_code=exc.status_code,

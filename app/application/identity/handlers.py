@@ -114,6 +114,23 @@ class RegisterUserHandler:
         return saved_user
 
 
+class AuthenticationFailed(AppError):
+    """Sign-in refused. Carries the account (if one matched) for the audit
+    trail; the HTTP response is the same as a plain AppError."""
+
+    def __init__(
+        self, message: str, status_code: int, reason: str, user_id: str | None
+    ) -> None:
+        super().__init__(message, status_code=status_code)
+        self.reason = reason
+        self.user_id = user_id
+
+
+class CurrentPasswordIncorrect(AppError):
+    def __init__(self) -> None:
+        super().__init__("current password is incorrect", status_code=400)
+
+
 class AuthenticateUserHandler:
     def __init__(
         self,
@@ -140,20 +157,22 @@ class AuthenticateUserHandler:
             email = Email(command.email)
             password = Password(command.password)
         except ValueError as exc:
-            raise AppError("invalid credentials", status_code=401) from exc
+            raise _invalid_credentials(None) from exc
 
         user = await self.repository.get_by_email(email.value)
         if user is None:
             self.password_hasher.dummy_verify(password)
-            raise AppError("invalid credentials", status_code=401)
+            raise _invalid_credentials(None)
 
         if not self.password_hasher.verify(password, user.password_hash):
-            raise AppError("invalid credentials", status_code=401)
+            raise _invalid_credentials(user.id.value)
 
         # Checked only after the password verifies, so this reveals the
         # account state only to someone who already holds the credentials.
         if not user.can_authenticate:
-            raise AppError("account is not active", status_code=403)
+            raise AuthenticationFailed(
+                "account is not active", 403, "account_not_active", user.id.value
+            )
 
         if self.password_hasher.needs_rehash(user.password_hash):
             user.change_password(password, self.password_hasher)
@@ -185,6 +204,10 @@ class AuthenticateUserHandler:
             )
         )
         return IssuedSession(session=session, refresh_token=refresh_token)
+
+
+def _invalid_credentials(user_id: str | None) -> AuthenticationFailed:
+    return AuthenticationFailed("invalid credentials", 401, "invalid_credentials", user_id)
 
 
 class RefreshSessionHandler:
@@ -262,12 +285,13 @@ class RevokeSessionHandler:
         self.session_repository = session_repository
         self.refresh_token_repository = refresh_token_repository
 
-    async def handle(self, session_id: str) -> None:
+    async def handle(self, session_id: str) -> Session | None:
         session = await self.session_repository.get_by_id(session_id)
         if session is not None and session.revoked_at is None:
             session.revoke()
             await self.session_repository.save(session)
         await self.refresh_token_repository.revoke_for_session(session_id)
+        return session
 
 
 class LogoutSessionHandler:
@@ -329,6 +353,7 @@ class PasswordResetRequest:
     email: str
     raw_token: str
     expires_in: timedelta
+    user_id: str
 
 
 def password_reset_email(request: PasswordResetRequest) -> EmailMessage:
@@ -374,7 +399,10 @@ class ForgotPasswordHandler:
             expires_at=datetime.now(timezone.utc) + self.reset_lifetime,
         )
         return PasswordResetRequest(
-            email=user.email.value, raw_token=raw_token, expires_in=self.reset_lifetime
+            email=user.email.value,
+            raw_token=raw_token,
+            expires_in=self.reset_lifetime,
+            user_id=user.id.value,
         )
 
 
@@ -391,8 +419,8 @@ class ResetPasswordHandler:
         self.session_repository = session_repository
         self.refresh_token_repository = refresh_token_repository
 
-    async def handle(self, command: ResetPasswordCommand) -> str:
-        """Reset the password; return the account's email."""
+    async def handle(self, command: ResetPasswordCommand) -> User:
+        """Reset the password; return the account."""
         if not command.token:
             raise AppError("invalid reset token", status_code=422)
 
@@ -420,7 +448,7 @@ class ResetPasswordHandler:
         await revoke_user_sessions(
             self.session_repository, self.refresh_token_repository, user_id
         )
-        return user.email.value
+        return user
 
 
 DEFAULT_EMAIL_VERIFICATION_LIFETIME = timedelta(hours=24)
@@ -557,7 +585,7 @@ class ChangePasswordHandler:
         if current_password is None or not self.password_hasher.verify(
             current_password, user.password_hash
         ):
-            raise AppError("current password is incorrect", status_code=400)
+            raise CurrentPasswordIncorrect()
         if command.new_password == command.current_password:
             raise AppError(
                 "new password must differ from the current password", status_code=422
