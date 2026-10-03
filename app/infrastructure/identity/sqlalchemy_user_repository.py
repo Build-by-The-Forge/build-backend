@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -67,22 +67,40 @@ class SQLAlchemyUserRepository(UserRepository):
         await self._session.flush()
 
     async def consume_password_reset_token(self, token_hash: str) -> str | None:
-        statement = select(PasswordResetTokenModel).where(
-            PasswordResetTokenModel.token_hash == token_hash,
-            PasswordResetTokenModel.consumed_at.is_(None),
-            or_(
-                PasswordResetTokenModel.expires_at.is_(None),
-                PasswordResetTokenModel.expires_at > datetime.now(timezone.utc),
-            ),
+        now = datetime.now(timezone.utc)
+        model = await self._session.scalar(
+            select(PasswordResetTokenModel).where(
+                PasswordResetTokenModel.token_hash == token_hash,
+                PasswordResetTokenModel.consumed_at.is_(None),
+                or_(
+                    PasswordResetTokenModel.expires_at.is_(None),
+                    PasswordResetTokenModel.expires_at > now,
+                ),
+            )
         )
-        result = await self._session.scalars(statement)
-        model = result.first()
         if model is None:
             return None
 
-        model.consumed_at = datetime.now(timezone.utc)
-        await self._session.flush()
-        return model.user_id
+        # Conditional update so two concurrent requests cannot both use the token.
+        result = await self._session.execute(
+            update(PasswordResetTokenModel)
+            .where(
+                PasswordResetTokenModel.id == model.id,
+                PasswordResetTokenModel.consumed_at.is_(None),
+            )
+            .values(consumed_at=now)
+        )
+        return model.user_id if result.rowcount == 1 else None
+
+    async def invalidate_password_reset_tokens(self, user_id: str) -> None:
+        await self._session.execute(
+            update(PasswordResetTokenModel)
+            .where(
+                PasswordResetTokenModel.user_id == user_id,
+                PasswordResetTokenModel.consumed_at.is_(None),
+            )
+            .values(consumed_at=datetime.now(timezone.utc))
+        )
 
     async def _find_by_id(self, user_id: str) -> UserModel | None:
         return await self._session.get(UserModel, user_id)

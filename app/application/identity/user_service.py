@@ -23,7 +23,9 @@ from app.application.identity.handlers import (
     RegisterUserHandler,
     ResetPasswordHandler,
     RevokeSessionHandler,
+    password_reset_email,
 )
+from app.application.identity.ports.email_sender import EmailSender
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.core.config import settings
@@ -42,12 +44,15 @@ class UserService:
         password_hasher: PasswordHasher,
         token_service: TokenService,
         uow_factory: IdentityUnitOfWorkFactory | None = None,
+        *,
+        email_sender: EmailSender,
     ) -> None:
         self.repository = repository
         self.event_bus = event_bus
         self.password_hasher = password_hasher
         self.token_service = token_service
         self.uow_factory = uow_factory
+        self.email_sender = email_sender
 
     async def register_user(self, email: str, password: str) -> User:
         command = RegisterUserCommand(email=email, password=password)
@@ -150,19 +155,20 @@ class UserService:
             raise RuntimeError("session operations require a unit of work")
         return self.uow_factory
 
-    async def forgot_password(self, email: str) -> str:
+    async def forgot_password(self, email: str) -> None:
+        lifetime = timedelta(seconds=settings.auth_password_reset_ttl_seconds)
         command = ForgotPasswordCommand(email=email)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                handler = ForgotPasswordHandler(
-                    repository=uow.users, password_hasher=self.password_hasher
-                )
-                return await handler.handle(command)
+                request = await ForgotPasswordHandler(uow.users, lifetime).handle(command)
+        else:
+            request = await ForgotPasswordHandler(self.repository, lifetime).handle(
+                command
+            )
 
-        handler = ForgotPasswordHandler(
-            repository=self.repository, password_hasher=self.password_hasher
-        )
-        return await handler.handle(command)
+        # Sent only after the token is committed, so a delivered code always works.
+        if request is not None:
+            await self.email_sender.send(password_reset_email(request))
 
     async def reset_password(self, token: str, password: str) -> None:
         command = ResetPasswordCommand(token=token, password=password)

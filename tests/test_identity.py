@@ -12,6 +12,7 @@ from app.domain.identity.value_objects import (
     SessionId,
     UserId,
 )
+from app.api import identity as identity_api
 from app.events.event_bus import EventBus
 from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
 from app.main import app
@@ -223,7 +224,8 @@ def test_password_reset_flow_allows_sign_in_with_new_password(client) -> None:
     )
 
     assert forgot_response.status_code == 200
-    reset_token = forgot_response.json()["data"]["reset_token"]
+    assert forgot_response.json()["data"] == {}
+    reset_token = identity_api.service.email_sender.latest_to(email).body.split("\n\n")[1]
 
     reset_response = client.post(
         "/identity/reset-password",

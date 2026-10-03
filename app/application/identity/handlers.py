@@ -14,6 +14,7 @@ from app.application.identity.commands import (
     RegisterUserCommand,
     ResetPasswordCommand,
 )
+from app.application.identity.ports.email_sender import EmailMessage
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.core.exceptions import AppError
@@ -300,30 +301,63 @@ class LogoutAllSessionsHandler:
         return len(session_ids)
 
 
+DEFAULT_PASSWORD_RESET_LIFETIME = timedelta(hours=1)
+
+
+@dataclass(frozen=True, slots=True)
+class PasswordResetRequest:
+    """A reset token to deliver out of band; never returned to the caller."""
+
+    email: str
+    raw_token: str
+    expires_in: timedelta
+
+
+def password_reset_email(request: PasswordResetRequest) -> EmailMessage:
+    minutes = int(request.expires_in.total_seconds() // 60)
+    return EmailMessage(
+        to=request.email,
+        subject="Reset your BUILD password",
+        body=(
+            "Use this code to reset your BUILD password:\n\n"
+            f"{request.raw_token}\n\n"
+            f"It expires in {minutes} minutes and can be used once. "
+            "If you did not ask for this, you can ignore this email."
+        ),
+    )
+
+
 class ForgotPasswordHandler:
     def __init__(
-        self, repository: UserRepository, password_hasher: PasswordHasher
+        self,
+        repository: UserRepository,
+        reset_lifetime: timedelta = DEFAULT_PASSWORD_RESET_LIFETIME,
     ) -> None:
         self.repository = repository
-        self.password_hasher = password_hasher
+        self.reset_lifetime = reset_lifetime
 
-    async def handle(self, command: ForgotPasswordCommand) -> str:
+    async def handle(self, command: ForgotPasswordCommand) -> PasswordResetRequest | None:
         try:
             email = Email(command.email)
         except ValueError as exc:
             raise AppError("invalid email format", status_code=422) from exc
 
         user = await self.repository.get_by_email(email.value)
-        if user is None:
-            return ""
+        # Unknown and blocked accounts get no token; the caller's response
+        # must not reveal which case applied.
+        if user is None or not user.can_authenticate:
+            return None
 
-        raw_token = str(uuid4())
+        await self.repository.invalidate_password_reset_tokens(user.id.value)
+        raw_token = secrets.token_urlsafe(32)
         await self.repository.save_password_reset_token(
             user.id.value,
             hash_token(raw_token),
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + self.reset_lifetime,
         )
-        return raw_token
+        return PasswordResetRequest(
+            email=user.email.value, raw_token=raw_token, expires_in=self.reset_lifetime
+        )
 
 
 class ResetPasswordHandler:

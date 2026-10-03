@@ -19,7 +19,9 @@ from app.application.curriculum.curriculum_source_service import (
 from app.application.curriculum.institutional_adoption_service import (
     InstitutionalAdoptionService,
 )
+from app.application.identity.ports.email_sender import EmailSender
 from app.application.identity.user_service import UserService
+from app.core.config import STRICT_ENVIRONMENTS, settings
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
 from app.infrastructure.assessment.unit_of_work import (
@@ -38,6 +40,10 @@ from app.infrastructure.curriculum.unit_of_work import (
     CurriculumUnitOfWork,
     curriculum_unit_of_work,
 )
+from app.infrastructure.email.outbox_email_sender import (
+    OutboxEmailSender,
+    UnconfiguredEmailSender,
+)
 from app.infrastructure.identity.unit_of_work import (
     IdentityUnitOfWork,
     identity_unit_of_work,
@@ -46,6 +52,14 @@ from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHas
 from app.infrastructure.security.jwt_token_service import JWTTokenService
 
 ServiceT = TypeVar("ServiceT")
+
+
+def build_email_sender() -> EmailSender:
+    # The outbox keeps one-time codes in memory/on disk, so it is never used
+    # in staging or production. No real provider is wired yet.
+    if settings.app_environment in STRICT_ENVIRONMENTS:
+        return UnconfiguredEmailSender()
+    return OutboxEmailSender(settings.email_outbox_path)
 
 
 class Container:
@@ -66,6 +80,7 @@ def build_container() -> Container:
     event_bus = EventBus()
     password_hasher = Argon2PasswordHasher()
     token_service = JWTTokenService()
+    email_sender = build_email_sender()
 
     container.register(EventBus, event_bus)
     container.register(Argon2PasswordHasher, password_hasher)
@@ -79,6 +94,7 @@ def build_container() -> Container:
             password_hasher=password_hasher,
             token_service=token_service,
             uow_factory=sqlalchemy_identity_uow,
+            email_sender=email_sender,
         ),
     )
     container.register(CourseUnitOfWork, sqlalchemy_catalogue_uow)
@@ -196,6 +212,7 @@ def build_sqlalchemy_container() -> Container:
     event_bus = EventBus()
     password_hasher = Argon2PasswordHasher()
     token_service = JWTTokenService()
+    email_sender = build_email_sender()
 
     container.register(EventBus, event_bus)
     container.register(Argon2PasswordHasher, password_hasher)
@@ -209,6 +226,7 @@ def build_sqlalchemy_container() -> Container:
             password_hasher=password_hasher,
             token_service=token_service,
             uow_factory=sqlalchemy_identity_uow,
+            email_sender=email_sender,
         ),
     )
     return container

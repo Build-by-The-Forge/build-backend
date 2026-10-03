@@ -55,6 +55,9 @@ class FakeUsers:
     async def consume_password_reset_token(self, token_hash):
         return self.reset_tokens.pop(token_hash, None)
 
+    async def invalidate_password_reset_tokens(self, user_id):
+        self.reset_tokens = {h: u for h, u in self.reset_tokens.items() if u != user_id}
+
 
 def make_user(hasher) -> User:
     return User(
@@ -147,9 +150,8 @@ async def test_reset_token_is_stored_only_as_sha256_and_resets_the_password():
     user = make_user(hasher)
     repo = FakeUsers(user)
 
-    raw = await ForgotPasswordHandler(repo, hasher).handle(
-        ForgotPasswordCommand(email=EMAIL)
-    )
+    request = await ForgotPasswordHandler(repo).handle(ForgotPasswordCommand(email=EMAIL))
+    raw = request.raw_token
 
     assert raw not in repo.reset_tokens
     assert list(repo.reset_tokens) == [hashlib.sha256(raw.encode()).hexdigest()]

@@ -173,7 +173,7 @@ async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResp
     request_id = getattr(request.state, "request_id", None)
 
     try:
-        reset_token = await service.forgot_password(email)
+        await service.forgot_password(email)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -189,8 +189,10 @@ async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResp
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": {"reset_token": reset_token},
-            "meta": {},
+            "data": {},
+            "meta": {
+                "message": "If an account exists for this email, a reset code has been sent."
+            },
             "request_id": request_id,
         },
     )

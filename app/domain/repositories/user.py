@@ -24,3 +24,7 @@ class UserRepository(Protocol):
 
     async def consume_password_reset_token(self, token_hash: str) -> str | None:
         raise NotImplementedError
+
+    async def invalidate_password_reset_tokens(self, user_id: str) -> None:
+        """Mark every outstanding reset token of the user as used."""
+        raise NotImplementedError
