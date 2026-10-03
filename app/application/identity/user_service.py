@@ -183,10 +183,10 @@ class UserService:
         if request is not None:
             await self.email_sender.send(password_reset_email(request))
 
-    async def reset_password(self, token: str, password: str) -> None:
+    async def reset_password(self, token: str, password: str) -> str:
         command = ResetPasswordCommand(token=token, password=password)
         async with self._require_uow()() as uow:
-            await ResetPasswordHandler(
+            return await ResetPasswordHandler(
                 uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
             ).handle(command)
 

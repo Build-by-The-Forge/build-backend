@@ -1,5 +1,6 @@
 import os
 import secrets
+from typing import Literal
 
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,6 +48,10 @@ class Settings(BaseSettings):
     auth_refresh_idle_ttl_seconds: int = Field(default=14 * 24 * 3600)
     auth_password_reset_ttl_seconds: int = Field(default=3600)
     auth_email_verification_ttl_seconds: int = Field(default=24 * 3600)
+    # What the auth rate limiter does when Redis is unreachable: "local" keeps
+    # enforcing limits with per-process counters, "closed" refuses requests
+    # with 503. There is deliberately no fail-open option.
+    auth_rate_limit_failure_mode: Literal["local", "closed"] = Field(default="local")
     # Development only: also append outgoing email (with its one-time codes)
     # to this JSONL file. Ignored in staging/production.
     email_outbox_path: str | None = Field(default=None)

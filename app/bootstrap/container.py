@@ -20,6 +20,7 @@ from app.application.curriculum.institutional_adoption_service import (
     InstitutionalAdoptionService,
 )
 from app.application.identity.ports.email_sender import EmailSender
+from app.application.identity.throttle import AuthThrottle
 from app.application.identity.user_service import UserService
 from app.core.config import STRICT_ENVIRONMENTS, settings
 from app.db.session import SessionLocal
@@ -44,6 +45,11 @@ from app.infrastructure.email.outbox_email_sender import (
     OutboxEmailSender,
     UnconfiguredEmailSender,
 )
+from app.infrastructure.ratelimit.fallback_counter_store import (
+    FallbackCounterStore,
+)
+from app.infrastructure.ratelimit.memory_counter_store import InMemoryCounterStore
+from app.infrastructure.ratelimit.redis_counter_store import RedisCounterStore
 from app.infrastructure.identity.unit_of_work import (
     IdentityUnitOfWork,
     identity_unit_of_work,
@@ -60,6 +66,19 @@ def build_email_sender() -> EmailSender:
     if settings.app_environment in STRICT_ENVIRONMENTS:
         return UnconfiguredEmailSender()
     return OutboxEmailSender(settings.email_outbox_path)
+
+
+def build_auth_throttle() -> AuthThrottle:
+    # Tests run without Redis; every other environment shares counters
+    # through Redis so limits hold across replicas.
+    if settings.app_environment == "testing":
+        return AuthThrottle(InMemoryCounterStore())
+    return AuthThrottle(
+        FallbackCounterStore(
+            RedisCounterStore.from_url(settings.redis_url),
+            mode=settings.auth_rate_limit_failure_mode,
+        )
+    )
 
 
 class Container:
@@ -81,6 +100,7 @@ def build_container() -> Container:
     password_hasher = Argon2PasswordHasher()
     token_service = JWTTokenService()
     email_sender = build_email_sender()
+    container.register(AuthThrottle, build_auth_throttle())
 
     container.register(EventBus, event_bus)
     container.register(Argon2PasswordHasher, password_hasher)
@@ -213,6 +233,7 @@ def build_sqlalchemy_container() -> Container:
     password_hasher = Argon2PasswordHasher()
     token_service = JWTTokenService()
     email_sender = build_email_sender()
+    container.register(AuthThrottle, build_auth_throttle())
 
     container.register(EventBus, event_bus)
     container.register(Argon2PasswordHasher, password_hasher)

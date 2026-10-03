@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.application.identity.handlers import IssuedSession
+from app.application.identity.throttle import AuthThrottle
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
@@ -18,6 +19,13 @@ from app.core.tenant_context import TenantContext
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
 service = container.get(UserService)
+throttle = container.get(AuthThrottle)
+
+
+def _client_ip(request: Request) -> str:
+    # The direct peer. Behind a reverse proxy this must become the
+    # proxy-reported client address (deployment work, M6).
+    return request.client.host if request.client else "unknown"
 
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)
@@ -25,6 +33,7 @@ async def register_user(request: Request, payload: dict[str, str]) -> JSONRespon
     email = payload.get("email", "")
     password = payload.get("password", "")
     request_id = getattr(request.state, "request_id", None)
+    await throttle.register(_client_ip(request))
 
     try:
         user = await service.register_user(email, password)
@@ -61,12 +70,19 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
     device_id = payload.get("device_id")
     user_agent = payload.get("user_agent")
     request_id = getattr(request.state, "request_id", None)
+    ip = _client_ip(request)
+    attempt = await throttle.before_login(email, ip)
 
     try:
         issued = await service.authenticate_user(
             email, password, device_id=device_id, user_agent=user_agent
         )
     except AppError as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            await throttle.login_failed(attempt)
+        elif exc.status_code == status.HTTP_403_FORBIDDEN:
+            # Only reachable with the right password: not a guessing failure.
+            await throttle.login_succeeded(email, ip)
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -77,6 +93,7 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
             },
         )
 
+    await throttle.login_succeeded(email, ip)
     return _issued_session_response(issued, request_id)
 
 
@@ -84,6 +101,7 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
 async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResponse:
     refresh_token = payload.get("refresh_token", "")
     request_id = getattr(request.state, "request_id", None)
+    await throttle.refresh(_client_ip(request))
 
     try:
         issued = await service.refresh_session(refresh_token)
@@ -170,6 +188,7 @@ async def logout_session(
 @router.post("/verify-email", status_code=status.HTTP_200_OK)
 async def verify_email(request: Request, payload: dict[str, str]) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
+    await throttle.verify_email(_client_ip(request))
 
     try:
         user = await service.verify_email(payload.get("token", ""))
@@ -198,9 +217,11 @@ async def verify_email(request: Request, payload: dict[str, str]) -> JSONRespons
 @router.post("/resend-verification", status_code=status.HTTP_200_OK)
 async def resend_verification(request: Request, payload: dict[str, str]) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
+    email = payload.get("email", "")
+    await throttle.resend_verification(email, _client_ip(request))
 
     try:
-        await service.request_email_verification(payload.get("email", ""))
+        await service.request_email_verification(email)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -229,6 +250,7 @@ async def resend_verification(request: Request, payload: dict[str, str]) -> JSON
 async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResponse:
     email = payload.get("email", "")
     request_id = getattr(request.state, "request_id", None)
+    await throttle.forgot_password(email, _client_ip(request))
 
     try:
         await service.forgot_password(email)
@@ -261,9 +283,11 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
     token = payload.get("token", "")
     password = payload.get("password", "")
     request_id = getattr(request.state, "request_id", None)
+    ip = _client_ip(request)
+    await throttle.reset_password(ip)
 
     try:
-        await service.reset_password(token, password)
+        email = await service.reset_password(token, password)
     except AppError as exc:
         return JSONResponse(
             status_code=exc.status_code,
@@ -275,6 +299,7 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
             },
         )
 
+    await throttle.password_reset_completed(email, ip)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={"success": True, "data": {}, "meta": {}, "request_id": request_id},
@@ -291,6 +316,7 @@ async def change_password(
     current_password = payload.get("current_password", "")
     new_password = payload.get("new_password", "")
     revoke_other_sessions = payload.get("revoke_other_sessions", True)
+    await throttle.before_password_change(principal.user_id)
 
     try:
         if not (
@@ -307,6 +333,8 @@ async def change_password(
             revoke_other_sessions=revoke_other_sessions,
         )
     except AppError as exc:
+        if exc.message == "current password is incorrect":
+            await throttle.password_change_failed(principal.user_id)
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -317,6 +345,7 @@ async def change_password(
             },
         )
 
+    await throttle.password_change_succeeded(principal.user_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

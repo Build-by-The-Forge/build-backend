@@ -17,6 +17,17 @@ class AppError(Exception):
         super().__init__(message)
 
 
+class RateLimitedError(AppError):
+    """429 with a Retry-After hint. One message for every limit and lock, so
+    the response never reveals which rule fired or whether an account exists."""
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(
+            "too many requests", status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+        self.retry_after = max(int(retry_after), 1)
+
+
 class NotFoundError(AppError):
     def __init__(self, message: str = "Resource not found") -> None:
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
@@ -78,6 +89,11 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
         status_code=exc.status_code,
         path=request.url.path,
     )
+    headers = (
+        {"Retry-After": str(exc.retry_after)}
+        if isinstance(exc, RateLimitedError)
+        else None
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -86,4 +102,5 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
             "meta": {"error": exc.message},
             **({"request_id": request_id} if request_id is not None else {}),
         },
+        headers=headers,
     )

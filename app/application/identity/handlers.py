@@ -391,7 +391,8 @@ class ResetPasswordHandler:
         self.session_repository = session_repository
         self.refresh_token_repository = refresh_token_repository
 
-    async def handle(self, command: ResetPasswordCommand) -> None:
+    async def handle(self, command: ResetPasswordCommand) -> str:
+        """Reset the password; return the account's email."""
         if not command.token:
             raise AppError("invalid reset token", status_code=422)
 
@@ -419,6 +420,7 @@ class ResetPasswordHandler:
         await revoke_user_sessions(
             self.session_repository, self.refresh_token_repository, user_id
         )
+        return user.email.value
 
 
 DEFAULT_EMAIL_VERIFICATION_LIFETIME = timedelta(hours=24)
