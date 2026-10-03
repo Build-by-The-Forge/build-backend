@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from app.application.identity.commands import (
     AuthenticateUserCommand,
+    ChangePasswordCommand,
     ForgotPasswordCommand,
     GetCurrentUserCommand,
     LogoutAllSessionsCommand,
@@ -289,9 +290,12 @@ async def revoke_user_sessions(
     session_repository: SessionRepository,
     refresh_token_repository: RefreshTokenRepository,
     user_id: str,
+    except_session_id: str | None = None,
 ) -> int:
     """Revoke every live session of the user together with its refresh tokens."""
-    session_ids = await session_repository.revoke_all_for_user(user_id)
+    session_ids = await session_repository.revoke_all_for_user(
+        user_id, except_session_id=except_session_id
+    )
     for session_id in session_ids:
         await refresh_token_repository.revoke_for_session(session_id)
     return len(session_ids)
@@ -411,6 +415,59 @@ class ResetPasswordHandler:
         # Whoever prompted the reset may hold a live session; end them all.
         await revoke_user_sessions(
             self.session_repository, self.refresh_token_repository, user_id
+        )
+
+
+class ChangePasswordHandler:
+    def __init__(
+        self,
+        repository: UserRepository,
+        password_hasher: PasswordHasher,
+        session_repository: SessionRepository,
+        refresh_token_repository: RefreshTokenRepository,
+    ) -> None:
+        self.repository = repository
+        self.password_hasher = password_hasher
+        self.session_repository = session_repository
+        self.refresh_token_repository = refresh_token_repository
+
+    async def handle(self, command: ChangePasswordCommand) -> int:
+        """Change the caller's password; return how many other sessions ended."""
+        try:
+            new_password = Password(command.new_password)
+        except ValueError as exc:
+            raise AppError(str(exc), status_code=422) from exc
+
+        user = await self.repository.get_by_id(command.user_id)
+        if user is None or not user.can_authenticate:
+            raise AppError("invalid credentials", status_code=401)
+
+        # Not 401: the caller's token is fine, and a 401 would push clients
+        # into a pointless refresh. Input that cannot be a valid password
+        # cannot be the current one.
+        try:
+            current_password = Password(command.current_password)
+        except ValueError:
+            current_password = None
+        if current_password is None or not self.password_hasher.verify(
+            current_password, user.password_hash
+        ):
+            raise AppError("current password is incorrect", status_code=400)
+        if command.new_password == command.current_password:
+            raise AppError(
+                "new password must differ from the current password", status_code=422
+            )
+
+        user.change_password(new_password, self.password_hasher)
+        await self.repository.save(user)
+        await self.repository.invalidate_password_reset_tokens(user.id.value)
+        if not command.revoke_other_sessions:
+            return 0
+        return await revoke_user_sessions(
+            self.session_repository,
+            self.refresh_token_repository,
+            user.id.value,
+            except_session_id=command.session_id,
         )
 
 

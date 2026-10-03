@@ -43,5 +43,14 @@ class ResetPasswordCommand:
 
 
 @dataclass(slots=True)
+class ChangePasswordCommand:
+    user_id: str
+    session_id: str
+    current_password: str
+    new_password: str
+    revoke_other_sessions: bool = True
+
+
+@dataclass(slots=True)
 class GetCurrentUserCommand:
     user_id: str

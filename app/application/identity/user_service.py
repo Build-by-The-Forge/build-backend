@@ -3,6 +3,7 @@ from datetime import timedelta
 from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.commands import (
     AuthenticateUserCommand,
+    ChangePasswordCommand,
     ForgotPasswordCommand,
     GetCurrentUserCommand,
     LogoutAllSessionsCommand,
@@ -13,6 +14,7 @@ from app.application.identity.commands import (
 )
 from app.application.identity.handlers import (
     AuthenticateUserHandler,
+    ChangePasswordHandler,
     ForgotPasswordHandler,
     GetCurrentUserHandler,
     IssuedSession,
@@ -174,6 +176,26 @@ class UserService:
         command = ResetPasswordCommand(token=token, password=password)
         async with self._require_uow()() as uow:
             await ResetPasswordHandler(
+                uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
+            ).handle(command)
+
+    async def change_password(
+        self,
+        user_id: str,
+        session_id: str,
+        current_password: str,
+        new_password: str,
+        revoke_other_sessions: bool = True,
+    ) -> int:
+        command = ChangePasswordCommand(
+            user_id=user_id,
+            session_id=session_id,
+            current_password=current_password,
+            new_password=new_password,
+            revoke_other_sessions=revoke_other_sessions,
+        )
+        async with self._require_uow()() as uow:
+            return await ChangePasswordHandler(
                 uow.users, self.password_hasher, uow.sessions, uow.refresh_tokens
             ).handle(command)
 

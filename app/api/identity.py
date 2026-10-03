@@ -223,6 +223,53 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
     )
 
 
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    request: Request,
+    payload: dict[str, object],
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    current_password = payload.get("current_password", "")
+    new_password = payload.get("new_password", "")
+    revoke_other_sessions = payload.get("revoke_other_sessions", True)
+
+    try:
+        if not (
+            isinstance(current_password, str)
+            and isinstance(new_password, str)
+            and isinstance(revoke_other_sessions, bool)
+        ):
+            raise AppError("invalid change-password payload", status_code=422)
+        revoked = await service.change_password(
+            principal.user_id,
+            principal.session_id,
+            current_password,
+            new_password,
+            revoke_other_sessions=revoke_other_sessions,
+        )
+    except AppError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "data": {},
+                "meta": {"error": str(exc)},
+                "request_id": request_id,
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {"revoked_sessions": revoked},
+            "meta": {},
+            "request_id": request_id,
+        },
+    )
+
+
 @router.get("/me", status_code=status.HTTP_200_OK)
 async def get_current_user(
     request: Request,

@@ -63,7 +63,7 @@ class FakeSessions:
     def __init__(self, live: list[str] | None = None):
         self.live = list(live or [])
 
-    async def revoke_all_for_user(self, user_id):
+    async def revoke_all_for_user(self, user_id, except_session_id=None):
         revoked, self.live = self.live, []
         return revoked
 
