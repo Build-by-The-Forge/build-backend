@@ -33,6 +33,7 @@ from app.infrastructure.db.models.tenant_core import (
     ProgrammeModel,
     SemesterModel,
     TenantInvitationModel,
+    TenantJoinPolicyModel,
     TenantModel,
 )
 
@@ -47,6 +48,7 @@ __all__ = [
     "SemesterModel",
     "MembershipModel",
     "TenantInvitationModel",
+    "TenantJoinPolicyModel",
     "CourseModel",
     "CurriculumVersionModel",
     "TopicModel",
