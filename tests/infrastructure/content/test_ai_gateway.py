@@ -71,7 +71,7 @@ async def test_ai_gateway_dispatch_success() -> None:
 
     async def mock_handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/v1/ingest/dispatch"
-        assert request.headers["authorization"] == "Bearer test-api-key"
+        assert "authorization" not in request.headers  # no static Bearer key
         assert "X-Idempotency-Key" in request.headers
         assert "X-Correlation-ID" in request.headers
         return httpx.Response(
@@ -87,7 +87,6 @@ async def test_ai_gateway_dispatch_success() -> None:
     client = httpx.AsyncClient(transport=transport)
     gateway = HttpAIServiceIngestionGateway(
         base_url="http://ai-service.internal",
-        api_key="test-api-key",
         client=client,
     )
 

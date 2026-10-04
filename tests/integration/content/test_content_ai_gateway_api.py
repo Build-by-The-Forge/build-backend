@@ -126,7 +126,7 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
     assert unauth_cb.status_code == 401
 
     # E. Webhook callback with valid HMAC signature -> 200 OK (EXTRACTED)
-    sig_1 = compute_webhook_signature(raw_cb_1, settings.ai_service_webhook_secret)
+    sig_1 = compute_webhook_signature(raw_cb_1, settings.ai_to_backend_secret)
     auth_cb_1 = client.post(
         "/content/ingestion/callbacks",
         content=raw_cb_1,
@@ -161,7 +161,7 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
             "metrics": {"duration_ms": 500},
         }
         raw_cb = json.dumps(cb_payload).encode("utf-8")
-        sig = compute_webhook_signature(raw_cb, settings.ai_service_webhook_secret)
+        sig = compute_webhook_signature(raw_cb, settings.ai_to_backend_secret)
         res = client.post(
             "/content/ingestion/callbacks",
             content=raw_cb,

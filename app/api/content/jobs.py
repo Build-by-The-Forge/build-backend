@@ -268,22 +268,19 @@ async def dispatch_ingestion_job(
 async def handle_ai_callback(
     request: Request,
     x_build_signature: str | None = Header(default=None, alias="X-Build-Signature"),
-    authorization: str | None = Header(default=None),
 ) -> JSONResponse:
     body_bytes = await request.body()
 
-    # Authenticate webhook signature or bearer token
+    # Interim HMAC check with the AI-to-backend secret until M3-07/M3-08
+    # replace it with BUILD Service Signature v1. No static Bearer key is
+    # accepted, and an unset secret verifies nothing.
     is_valid_hmac = verify_webhook_signature(
         payload_bytes=body_bytes,
         signature_header=x_build_signature,
-        secret=settings.ai_service_webhook_secret,
-    )
-    is_valid_bearer = (
-        authorization is not None
-        and authorization.strip() == f"Bearer {settings.ai_service_api_key}"
+        secret=settings.ai_to_backend_secret or "",
     )
 
-    if not is_valid_hmac and not is_valid_bearer:
+    if not is_valid_hmac:
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={

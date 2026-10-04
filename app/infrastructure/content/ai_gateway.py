@@ -61,12 +61,10 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
     def __init__(
         self,
         base_url: str | None = None,
-        api_key: str | None = None,
         timeout_seconds: int | None = None,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = (base_url or settings.ai_service_url).rstrip("/")
-        self._api_key = api_key or settings.ai_service_api_key
         self._timeout_seconds = (
             timeout_seconds or settings.ai_service_timeout_seconds
         )
@@ -89,8 +87,8 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         tenant_id = job.tenant_id or "platform"
 
         url = f"{self._base_url}/v1/ingest/dispatch"
+        # No static Bearer key; requests are signed from M3-06.
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
             "X-Idempotency-Key": idempotency_key,
             "X-Correlation-ID": correlation_id,
             "X-Tenant-ID": tenant_id,
@@ -179,9 +177,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         self, external_task_id: str
     ) -> AIServiceStatusResult:
         url = f"{self._base_url}/v1/ingest/tasks/{external_task_id}"
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-        }
+        headers: dict[str, str] = {}
 
         should_close = self._client is None
         client = await self._get_client()
@@ -217,9 +213,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
 
     async def cancel_ingestion_job(self, external_task_id: str) -> bool:
         url = f"{self._base_url}/v1/ingest/tasks/{external_task_id}/cancel"
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-        }
+        headers: dict[str, str] = {}
 
         should_close = self._client is None
         client = await self._get_client()
