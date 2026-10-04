@@ -23,6 +23,8 @@ class SecurityEvent(tuple[str, str], Enum):
     MEMBERSHIP_ROLE_CHANGED = ("membership", "role_changed")
     MEMBERSHIP_REVOKED = ("membership", "revoked")
     MEMBERSHIP_REACTIVATED = ("membership", "reactivated")
+    MEMBERSHIP_JOINED_BY_EMAIL_DOMAIN = ("membership", "joined_by_email_domain")
+    TENANT_JOIN_POLICY_UPDATED = ("tenant", "join_policy_updated")
 
 
 class LoginFailureReason(str, Enum):

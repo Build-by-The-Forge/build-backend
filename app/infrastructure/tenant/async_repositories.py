@@ -1,6 +1,8 @@
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.tenant.errors import MembershipAlreadyExistsError
 from app.domain.tenant.membership import Membership
 from app.domain.tenant.tenant import Tenant
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantModel
@@ -82,7 +84,11 @@ class AsyncSqlAlchemyMembershipRepository:
 
     async def add(self, membership: Membership) -> None:
         self.session.add(membership_to_model(membership))
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            # uq_memberships_tenant_user: a concurrent request got there first.
+            raise MembershipAlreadyExistsError("user already has a membership in this tenant") from exc
 
     async def save(self, membership: Membership) -> None:
         model = await self.session.get(MembershipModel, membership.id.value)
