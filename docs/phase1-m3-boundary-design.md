@@ -1,6 +1,6 @@
 # Phase 1 — Milestone 3: Backend ↔ AI-Service Security Boundary — Design
 
-**Status:** Draft for review · **Date:** 2026-10-04 · **No code has been changed.**
+**Status:** Implementation-locked (review amendments of 2026-10-04 applied; Part E decided) · **Date:** 2026-10-04
 **Inputs:** `docs/phase1-m3-reconnaissance.md` (findings X-*, A-*, N-*), the M3 rulings of 2026-10-04 (decisions 1–7 accepted, with refinements), `docs/PHASE_1_PLAN.md` §19.1–19.4, §21.
 
 This document has three parts: **A** the wire protocol, **B** the security and sequence model (including what changes on each side), **C** the acceptance matrix. Part D lists the implementation sequence, and Part E the points still needing a decision.
@@ -89,6 +89,13 @@ The context is a JSON object serialised canonically: keys sorted by Unicode code
 - Unknown fields are rejected, as are missing required fields and wrong types. The receiver re-serialises the decoded object canonically and requires the result to be **byte-identical** to the decoded header bytes. This rules out ambiguous encodings such as duplicate keys or different spacing.
 - `system` context is used where no end user is acting: AI-service callbacks, status reconciliation, scheduled retries. It always names the tenant the message concerns.
 - The context is **not** an authorization source for AI-service. AI-service may only *narrow* behaviour with it (scope retrieval and memory to `tenant_id`/`user_id`, and refuse if the route's declared permission is missing from `permissions`). It can never widen behaviour.
+- **Exact permission membership.** Each AI-service route declares exactly one required permission string, and AI-service checks only `required_permission ∈ context.permissions` (exact string equality). AI-service never:
+  - derives permissions from `role`;
+  - expands hierarchies or wildcards;
+  - treats one permission as implying another (`ai.use` does not imply `ai.questions.generate`).
+
+  Resolving roles to permissions is the backend's job alone. `role` is carried for audit only.
+- **Direction matters.** Backend → AI: `permissions` records an authorization decision the backend already made. AI → backend: the context only identifies *which AI-service task is reporting about which tenant*. It grants AI-service no permission to change backend resources; the backend independently validates resource ownership and that the state transition is allowed (B.3).
 
 ### A.5 Verification (receiver)
 
@@ -99,7 +106,7 @@ The steps below run in this order. Every failure returns `401` with the body `{"
 3. Timestamp matches `^[1-9][0-9]{0,11}$` and is within **±60 seconds** of the receiver's clock.
 4. Request id is a canonical lowercase UUIDv4.
 5. Context header decodes (base64url, no padding, ≤ 4096 chars), parses as JSON, passes the schema in A.4, and re-serialises byte-identically.
-6. Body is read in full, up to **1 MiB** (larger → `413`, before any hashing of the remainder), and hashed.
+6. The receiver enforces a **1 MiB** maximum request-body size *while consuming the body*. It hashes incrementally as chunks arrive and stops reading at the limit; it never buffers the whole body and then checks its size. A body that exceeds the limit (or a `Content-Length` above it) is rejected with `413`, and route logic never sees it.
 7. Signature recomputed with the current secret, then the previous one; compared in constant time (`hmac.compare_digest`).
 8. Replay check, **only after the signature is valid** (so an attacker cannot burn request ids): Redis `SET svcauth:<receiver-id>:<sender-id>:<request-id> 1 NX EX 180`. If the key already exists, reject. The TTL of 180 s is longer than the whole acceptance window (±60 s), so an id cannot be reused before its timestamp has gone stale.
 9. Route-level checks (Part B), for example: the context tenant matches the resource's tenant, and the declared permission is present.
@@ -110,7 +117,7 @@ The steps below run in this order. Every failure returns `401` with the body `{"
 
 ### A.6 Responses
 
-Responses are not signed in M3. The caller authenticated the receiver by sending to its configured URL; confidentiality and integrity in transit come from TLS on the internal network (M6). This residual risk is recorded in E.4.
+**M3 provides authenticated request delivery, not authenticated response delivery.** Responses are not signed. The caller knows which service it addressed, because it sent to its configured URL, but a party able to tamper with the internal connection could alter a response. Response integrity and confidentiality are a documented residual risk until TLS/mTLS is enforced on the internal network in M6 (E.4). This risk is accepted for M3 and does not block it.
 
 ### A.7 Test vector (both repositories must reproduce it exactly)
 
@@ -193,7 +200,8 @@ User ─► Backend POST /content/jobs/{id}/dispatch
   4. context {actor:user, tenant_id: job.tenant_id, user_id, membership_id, role, permissions:["content.job.manage"], correlation_id}
   5. sign, POST AI_SERVICE_URL/v1/ingest/dispatch
 AI-service:
-  6. verify (A.5); tenant for the task = context.tenant_id (string UUID)
+  6. verify (A.5); tenant for the task = context.tenant_id (string UUID). The request schema has no
+     tenant_id or user_id field at all; an unknown field such as tenant_id is rejected (422), never used
   7. idempotency: Redis key ingest:<tenant_id>:<idempotency_key> (existing store, string tenant)
   8. enqueue task recording {external_task_id, job_id, tenant_id, run_number, attempt_count}
   9. 202 {external_task_id, status}
@@ -211,10 +219,45 @@ Backend /content/ingestion/callbacks:
   1. verify (A.5) against AI_TO_BACKEND_SECRET; X-BUILD-Service must be ai-service. Bearer no longer accepted (X-4)
   2. job = get by job_id; unknown → 404, no state created
   3. job.tenant_id == context.tenant_id, else 404 (a callback for tenant A cannot touch tenant B's job)
-  4. external_task_id == job's recorded external_task_id, else stale (ignored, 200 already_processed)
-  5. existing: event_id dedupe, run/attempt staleness, state-machine transitions only (no regression)
-  6. metrics/details bounded: ≤ 64 KiB total, JSON objects only, stored as data, never interpreted as commands
+  4. event_id, external_task_id, run_number, attempt_count are all required (a missing one → 422).
+     external_task_id ≠ job's recorded task id, or run/attempt ≠ the job's current run/attempt → stale:
+     ignored, 200 {already_processed: true}, no change
+  5. event identity (below): same event again → idempotent 200; same id with different content → 409, security event
+  6. transition must be in the table below for the job's current status, else ignored (200, no change) and logged
+  7. metrics/details bounded: ≤ 64 KiB total, JSON objects only, stored as data, never interpreted as commands
 ```
+
+**Authoritative ingestion state machine.** Statuses: `uploaded`, `queued`, `processing`, `extracted`, `chunked`, `indexed`, `ready`, `failed`.
+
+| From | To | Caused by | Who may cause it |
+|---|---|---|---|
+| `uploaded` | `queued` | job created / queued | backend business operation |
+| `queued` | `processing` | successful dispatch (`record_dispatch`) | backend business operation (dispatch) |
+| `processing` | `extracted` | `stage_progress` stage `extracted` | verified AI callback |
+| `extracted` | `chunked` | `stage_progress` stage `chunked` | verified AI callback |
+| `chunked` | `indexed` | `stage_progress` stage `indexed` | verified AI callback |
+| `indexed` | `ready` | `job_completed` | verified AI callback |
+| `processing`, `extracted`, `chunked`, `indexed` | `failed` | `job_failed` | verified AI callback |
+| `queued` | `failed` | dispatch to AI-service failed | backend business operation (dispatch) |
+| `failed` (retryable, attempts left) | `queued` | retry | backend business operation only |
+| `ready` or `failed` | — (a new job run is created) | reprocess | backend business operation only |
+| any status | the same or an earlier stage | — | **never** |
+
+Every pair not listed is rejected. In particular:
+- `ready` is terminal for a run;
+- `failed → ready`, `queued → ready` and any skipped stage are impossible;
+- `uploaded`/`queued → failed` can never come from a callback, because AI-service has never seen the job.
+
+The domain methods enforce this table themselves (each transition method checks its allowed source states). The callback handler cannot bypass it, and no public endpoint exposes a processing transition.
+
+**Event identity.**
+- `event_id` is a UUIDv4 chosen by AI-service, globally unique, and deduplicated independently of job, run and attempt.
+- The backend records each processed event with a SHA-256 digest of its canonical event content: the callback body re-serialised canonically as in A.4.
+- An `event_id` is processed at most once:
+  - **same id and same digest** → idempotent success, no change;
+  - **same id, different digest** → integrity failure: `409`, the event is not applied, and a `security_events` record (`ai_callback.event_conflict`) is written.
+
+  Reusing an event id for different content is never treated as a harmless duplicate.
 
 **Callback destination (N-2):**
 - The dispatch request carries no callback URL. AI-service ignores any URL found in a request and uses only `BACKEND_CALLBACK_URL` from its own configuration: an absolute URL to the one fixed path `/content/ingestion/callbacks`.
@@ -242,6 +285,8 @@ Backend /content/ingestion/callbacks:
 Tenant type: the paths touched in M3 use a `ContextVar[str]` tenant id (UUID string) set from the verified context. These are ingestion, intake, retrieval, memory, chat, explain and question generation. The integer `school_id` remains only inside the legacy routes M4 deletes (A-5 completed in M4).
 
 Chat memory is keyed by the context `user_id`. The caller-supplied `user_id` parameter is removed (A-1).
+
+**Identity fields are removed from request schemas, not just ignored.** No M3-touched request body on either side has a `tenant_id`, `user_id`, `membership_id` or `role` field: not the AI-service routes, not the backend AI endpoints, not the dispatch body. These schemas forbid extra fields, so a body that tries to name a tenant or user is rejected with 422 rather than silently dropped. Identity and tenant reach AI-service only through the signed context.
 
 ### B.5 Backend AI endpoints (minimal surface)
 
@@ -326,7 +371,7 @@ M3 is complete when every row passes. Rows marked **real** must run against the 
 | C18 | Callback destination not attacker-controlled | dispatch body with `callback_url` → ignored; AI-service posts only to `BACKEND_CALLBACK_URL`; redirect not followed | **real** + AI unit |
 | C19 | Callback cannot cross tenants | signed callback whose context tenant ≠ job tenant → 404, job unchanged | **real** |
 | C20 | Callback cannot create state | callback for unknown job → 404, nothing created | **real** |
-| C21 | Callbacks cannot regress or duplicate | replayed event, stale run/attempt, wrong external task id, illegal transition → no change | backend integration + **real** |
+| C21 | Callbacks cannot regress or duplicate | replayed event (same id, same content) → idempotent, no change; same `event_id` with different content → 409 + security event, no change; stale run/attempt, wrong or missing external task id → no change; every transition not in the B.3 table (including `ready → processing`, `failed → ready`, `queued → ready`, skipped stages, `queued → failed` by callback) → no change | backend unit + integration + **real** |
 | C22 | Full ingestion path works | upload → dispatch → AI processes → signed callbacks → job `ready`, scoped to the tenant | **real** |
 | C23 | Status reconciliation | reconcile reflects AI-service task state; other tenant's task → 404 | **real** |
 | C24 | AI-service cannot write backend tables | as `build_ai_app`: `UPDATE memberships`, `SELECT users`, `INSERT INTO questions` → permission denied | **real** (DB) |
@@ -334,6 +379,7 @@ M3 is complete when every row passes. Rows marked **real** must run against the 
 | C26 | Secrets enforced | each service refuses to start in production with missing/short/equal/default secrets; Bearer settings gone | unit, both repos |
 | C27 | User-facing AI flow works | client → backend `/ai/chat` (and explain, generate-questions) → AI-service → response, with tenant/user scoping visible in AI-service | **real** |
 | C28 | No regressions | backend full suite, `postgres-gate`, AI-service suite | CI / local |
+| C29 | Body cannot override the signed identity | validly signed requests whose body names a different tenant or user (`tenant_id`, `user_id`) → 422 on every M3 route; with that field absent, retrieval and memory are scoped to the context tenant and user only (verified by data visible in the response and in AI-service storage) | **real** |
 
 ---
 
@@ -360,7 +406,21 @@ Commits 1–4 change no behaviour across the boundary on their own. From 5 to 8 
 
 ---
 
-## Part E — Decisions still needed
+## Part E — Decisions (ruled 2026-10-04)
+
+| Item | Ruling |
+|---|---|
+| E.1 Redis unavailable | **Fail closed, 503** |
+| E.2 Legacy AI-service user routes | **Default-off in M3 (flag refused outside development); deleted in M4** |
+| E.3 Proxied operations | **chat, explain, generate-questions only** |
+| E.4 Unsigned responses | **Accepted for M3 as an explicit residual risk until M6 TLS/mTLS** |
+| E.5 Hosted CI | **Attempt a hosted two-repository `boundary-gate` in M3**; if cross-repository checkout cannot be made reliable, M3 exits on the documented local real-service gate and the hosted job moves to M6 |
+| E.6 Forwarded permissions | **Only those checked for the operation, with exact-membership semantics (A.4)** |
+| E.7 Tenant-less jobs | **Not operable through the tenant API in M3** |
+
+Explicitly **out of scope for M3**: mTLS, signed responses, a generic SSRF filter, an AI-side authorization engine, scheduled reconciliation, a platform-admin API, faculty/department-scoped authorization, an AI memory redesign, M4 legacy deletion, M5 AI contracts, M6 production networking.
+
+### Original options (for the record)
 
 1. **E.1 Redis unavailable → fail closed (503)** for service authentication. *Recommended.* The alternative is a per-process fallback, which would allow replays across replicas.
 2. **E.2 Legacy AI-service user routes in M3:** unmount behind a default-off development flag now, delete in M4. *Recommended.* The alternative is leaving them mounted until M4: they are authenticated only by a JWT signed with `"dev-secret"` unless configured, so effectively forgeable.
