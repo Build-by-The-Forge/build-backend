@@ -21,6 +21,10 @@ class AsyncSqlAlchemyTenantRepository:
         model = result.first()
         return tenant_to_domain(model) if model is not None else None
 
+    async def get_by_id(self, tenant_id: str) -> Tenant | None:
+        model = await self.session.get(TenantModel, tenant_id)
+        return tenant_to_domain(model) if model is not None else None
+
     async def add(self, tenant: Tenant) -> None:
         self.session.add(tenant_to_model(tenant))
         await self.session.flush()

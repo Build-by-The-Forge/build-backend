@@ -102,6 +102,22 @@ async def get_current_tenant_context(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="tenant context is required",
         )
+    return await _resolve_tenant_context(tenant_slug, principal, uow)
+
+
+async def get_path_tenant_context(
+    slug: str,
+    principal: AuthenticatedPrincipal = Depends(get_verified_principal),
+    uow: UnitOfWork = Depends(get_unit_of_work),
+) -> TenantContext:
+    """Tenant context for /tenants/{slug}/... routes: the path names the
+    tenant and any x-tenant-slug header is ignored."""
+    return await _resolve_tenant_context(slug, principal, uow)
+
+
+async def _resolve_tenant_context(
+    tenant_slug: str, principal: AuthenticatedPrincipal, uow: UnitOfWork
+) -> TenantContext:
     tenant_slug = tenant_slug.strip().lower()
 
     tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(tenant_slug)
@@ -126,6 +142,24 @@ async def get_current_tenant_context(
         membership_id=membership.id.value,
         role=membership.role.value,
     )
+
+
+def require_tenant_permission(
+    permission: Permission,
+) -> Callable[..., Awaitable[TenantContext]]:
+    """require_permission for /tenants/{slug}/... routes."""
+
+    async def dependency(
+        context: TenantContext = Depends(get_path_tenant_context),
+    ) -> TenantContext:
+        if not authorization.can(context, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="permission denied",
+            )
+        return context
+
+    return dependency
 
 
 def require_permission(

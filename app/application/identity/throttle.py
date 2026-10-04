@@ -53,6 +53,8 @@ VERIFY_PER_IP = Rule("verify:ip", 20, 15 * 60)
 RESEND_PER_IP = Rule("resend:ip", 20, 60 * 60)
 RESEND_PER_EMAIL = Rule("resend:email", 3, 60 * 60)
 REFRESH_PER_IP = Rule("refresh:ip", 120, 60)
+INVITATION_ACCEPT_PER_IP = Rule("invite-accept:ip", 20, 15 * 60)
+INVITATION_CREATE_PER_USER = Rule("invite-create:user", 100, 60 * 60)
 
 # Failure counters that lead to a temporary lock. Each counter's window is
 # no longer than its lock, so the counter has expired by the time the lock
@@ -231,3 +233,9 @@ class AuthThrottle:
 
     async def refresh(self, ip: str) -> None:
         await self._limit(REFRESH_PER_IP, ip)
+
+    async def accept_invitation(self, ip: str) -> None:
+        await self._limit(INVITATION_ACCEPT_PER_IP, ip)
+
+    async def create_invitation(self, user_id: str) -> None:
+        await self._limit(INVITATION_CREATE_PER_USER, user_id)

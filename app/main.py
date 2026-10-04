@@ -7,6 +7,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.health import router as health_router
 from app.api.identity import router as identity_router
+from app.api.tenant_invitations import router as tenant_invitations_router
 from app.api.router import router as api_router
 from app.core.config import settings
 from app.core.exceptions import (
@@ -51,6 +52,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(health_router)
 app.include_router(api_router)
 app.include_router(identity_router)
+app.include_router(tenant_invitations_router)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(AppError, app_exception_handler)
