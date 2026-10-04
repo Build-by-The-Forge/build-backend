@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")
     debug: bool = Field(default=False)
     request_timeout_seconds: int = Field(default=30)
-    tenant_header: str = Field(default="x-tenant-id")
 
     # AI Service Settings
     ai_service_url: str = Field(
