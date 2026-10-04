@@ -20,6 +20,11 @@ from enum import Enum
 from typing import Any
 from uuid import uuid4
 
+from app.infrastructure.security.service_context import (
+    InvalidServiceContext,
+    ServiceContext,
+)
+
 VERSION = "v1"
 
 HEADER_SERVICE = "X-BUILD-Service"
@@ -76,7 +81,7 @@ class VerifiedServiceRequest:
     service: str
     timestamp: int
     request_id: str
-    context: dict[str, Any]
+    context: ServiceContext
     context_bytes: bytes
 
 
@@ -201,13 +206,14 @@ def sign_request(
     method: str,
     target: str,
     body: bytes,
-    context: Mapping[str, Any],
+    context: ServiceContext,
     timestamp: int,
     request_id: str | None = None,
 ) -> dict[str, str]:
     """Return the five signed headers for one outgoing request."""
     request_id = request_id or str(uuid4())
-    context_header = encode_context(context)
+    context_body = context.to_dict()
+    context_header = encode_context(context_body)
     canonical = canonical_request(
         service=direction.sender,
         method=method,
@@ -215,7 +221,7 @@ def sign_request(
         timestamp=str(timestamp),
         request_id=request_id,
         body_sha256=sha256_hex(body),
-        context_sha256=sha256_hex(canonical_context_bytes(context)),
+        context_sha256=sha256_hex(canonical_context_bytes(context_body)),
     )
     return {
         HEADER_SERVICE: direction.sender,
@@ -272,7 +278,11 @@ def verify_request(
     if not _UUID4_RE.fullmatch(request_id):
         raise ServiceAuthError("request id is not a canonical UUIDv4")
 
-    context_bytes, context = decode_context(values[HEADER_CONTEXT])
+    context_bytes, decoded = decode_context(values[HEADER_CONTEXT])
+    try:
+        context = ServiceContext.from_dict(decoded)
+    except InvalidServiceContext as exc:
+        raise ServiceAuthError(f"invalid context: {exc}") from exc
 
     canonical = canonical_request(
         service=service,

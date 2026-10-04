@@ -4,6 +4,7 @@ verification steps of A.5 that do not need Redis or a request body stream."""
 import base64
 
 import pytest
+from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
     EMPTY_BODY_SHA256,
     HEADER_CONTEXT,
@@ -68,6 +69,7 @@ CONTEXT = {
     "permissions": ["ai.questions.generate"],
     "correlation_id": "corr-001",
 }
+CONTEXT_OBJ = ServiceContext.from_dict(CONTEXT)
 KEYS = ServiceKeys(current=SECRET)
 NOW = int(TIMESTAMP)
 
@@ -142,7 +144,7 @@ def test_sign_request_reproduces_the_vector_headers() -> None:
         method=METHOD,
         target=TARGET,
         body=BODY,
-        context=CONTEXT,
+        context=CONTEXT_OBJ,
         timestamp=NOW,
         request_id=REQUEST_ID,
     )
@@ -154,7 +156,7 @@ def test_vector_verifies() -> None:
     assert verified.service == SERVICE
     assert verified.timestamp == NOW
     assert verified.request_id == REQUEST_ID
-    assert verified.context == CONTEXT
+    assert verified.context == CONTEXT_OBJ
     assert verified.context_bytes == CONTEXT_JSON
 
 
@@ -257,7 +259,7 @@ def test_a_request_signed_with_the_other_directions_secret_is_refused() -> None:
         method="POST",
         target="/content/ingestion/callbacks",
         body=b"{}",
-        context=CONTEXT,
+        context=CONTEXT_OBJ,
         timestamp=NOW,
     )
     verify_request(
@@ -292,7 +294,7 @@ def test_rotation_accepts_the_previous_secret_and_signs_with_the_current() -> No
         method=METHOD,
         target=TARGET,
         body=BODY,
-        context=CONTEXT,
+        context=CONTEXT_OBJ,
         timestamp=NOW,
         request_id=REQUEST_ID,
     )
@@ -352,7 +354,7 @@ def test_sign_request_generates_a_fresh_uuid4_per_request() -> None:
             method=METHOD,
             target=TARGET,
             body=BODY,
-            context=CONTEXT,
+            context=CONTEXT_OBJ,
             timestamp=NOW,
         )[HEADER_REQUEST_ID]
         for _ in range(3)
@@ -366,7 +368,7 @@ def test_sign_request_generates_a_fresh_uuid4_per_request() -> None:
                 method=METHOD,
                 target=TARGET,
                 body=BODY,
-                context=CONTEXT,
+                context=CONTEXT_OBJ,
                 timestamp=NOW,
                 request_id=request_id,
             )
@@ -505,7 +507,7 @@ def test_percent_encoding_is_part_of_the_signed_target() -> None:
         method="GET",
         target="/v1/ai/read/a%2Fb",
         body=b"",
-        context=CONTEXT,
+        context=CONTEXT_OBJ,
         timestamp=NOW,
     )
     _verify(headers, method="GET", target="/v1/ai/read/a%2Fb", body=b"")
