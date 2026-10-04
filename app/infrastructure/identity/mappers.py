@@ -1,18 +1,16 @@
 from datetime import datetime, timezone
 
-from app.domain.identity.user import RefreshToken, Session, User
+from app.domain.identity.user import Session, User
 from app.domain.identity.value_objects import (
     AccountStatus,
     DeviceId,
     Email,
     PasswordHash,
     RefreshTokenHash,
-    RefreshTokenId,
     SessionId,
     UserId,
 )
 from app.infrastructure.identity.models import (
-    RefreshTokenModel,
     SessionModel,
     UserModel,
     UserStatus,
@@ -111,14 +109,3 @@ def domain_session_to_model(
         model.last_seen_at = last_seen_at
         model.revoked_at = session.revoked_at
     return model
-
-
-def refresh_token_model_to_domain(model: RefreshTokenModel) -> RefreshToken:
-    return RefreshToken(
-        id=RefreshTokenId(model.id),
-        session_id=SessionId(model.session_id),
-        token_hash=RefreshTokenHash(model.token_hash),
-        expires_at=model.expires_at,
-        rotated_at=model.rotated_at,
-        revoked_at=model.revoked_at,
-    )

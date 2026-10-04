@@ -11,7 +11,6 @@ from app.domain.identity.value_objects import (
     PasswordHash,
     PasswordHasher,
     RefreshTokenHash,
-    RefreshTokenId,
     Role,
     SessionId,
     UserId,
@@ -131,26 +130,3 @@ class Device:
 
     def touch(self) -> None:
         self.last_seen = datetime.now(timezone.utc)
-
-
-@dataclass(slots=True)
-class RefreshToken:
-    id: RefreshTokenId
-    session_id: SessionId
-    token_hash: RefreshTokenHash
-    expires_at: datetime | None = None
-    rotated_at: datetime | None = None
-    revoked_at: datetime | None = None
-
-    def __post_init__(self) -> None:
-        if self.expires_at is None:
-            self.expires_at = datetime.now(timezone.utc)
-        if self.rotated_at is None:
-            self.rotated_at = datetime.now(timezone.utc)
-
-    def revoke(self) -> None:
-        self.revoked_at = datetime.now(timezone.utc)
-
-    def rotate(self, new_hash: RefreshTokenHash) -> None:
-        self.token_hash = new_hash
-        self.rotated_at = datetime.now(timezone.utc)

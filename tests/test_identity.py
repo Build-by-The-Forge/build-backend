@@ -1,12 +1,11 @@
 import pytest
-from app.domain.identity.user import Device, RefreshToken, Session, User
+from app.domain.identity.user import Device, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
     Email,
     Password,
     PasswordHash,
     RefreshTokenHash,
-    RefreshTokenId,
     Role,
     RoleId,
     SessionId,
@@ -266,18 +265,3 @@ def test_device_can_be_marked_trusted_and_touched() -> None:
 
     assert device.last_seen is not None
     assert device.trusted is True
-
-
-def test_refresh_token_can_be_rotated_and_revoked() -> None:
-    token = RefreshToken(
-        id=RefreshTokenId("refresh-1"),
-        session_id=SessionId("session-1"),
-        token_hash=RefreshTokenHash("old-hash"),
-    )
-
-    token.rotate(RefreshTokenHash("new-hash"))
-    token.revoke()
-
-    assert token.token_hash.value == "new-hash"
-    assert token.rotated_at is not None
-    assert token.revoked_at is not None

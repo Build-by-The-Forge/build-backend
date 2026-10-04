@@ -96,8 +96,3 @@ class DeviceId:
 @dataclass(frozen=True, slots=True)
 class RefreshTokenHash:
     value: str
-
-
-@dataclass(frozen=True, slots=True)
-class RefreshTokenId:
-    value: str
