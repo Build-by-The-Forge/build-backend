@@ -15,6 +15,8 @@ class SecurityEvent(tuple[str, str], Enum):
     LOGOUT = ("session", "logout")
     LOGOUT_ALL = ("session", "logout_all")
     SIGN_IN_TEMPORARILY_LOCKED = ("auth", "temporary_lock")
+    ACCOUNT_PROVISIONED = ("account", "provisioned")
+    TENANT_OWNER_GRANTED = ("membership", "owner_granted")
 
 
 class LoginFailureReason(str, Enum):
