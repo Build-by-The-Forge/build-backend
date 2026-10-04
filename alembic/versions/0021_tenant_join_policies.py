@@ -36,4 +36,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Dropping the table would silently delete tenants' join settings.
+    rows = op.get_bind().execute(sa.text("SELECT COUNT(*) FROM tenant_join_policies")).scalar_one()
+    if rows:
+        raise RuntimeError(
+            f"cannot downgrade from 0021: tenant_join_policies holds {rows} row(s); remove or export them explicitly first"
+        )
     op.drop_table("tenant_join_policies")

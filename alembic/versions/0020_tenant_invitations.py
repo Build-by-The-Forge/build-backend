@@ -55,6 +55,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Dropping the table would silently delete invitations and their history.
+    rows = op.get_bind().execute(sa.text("SELECT COUNT(*) FROM tenant_invitations")).scalar_one()
+    if rows:
+        raise RuntimeError(
+            f"cannot downgrade from 0020: tenant_invitations holds {rows} row(s); remove or export them explicitly first"
+        )
     op.drop_index("ix_tenant_invitations_tenant_id", table_name="tenant_invitations")
     op.drop_index("uq_tenant_invitations_pending_email", table_name="tenant_invitations")
     op.drop_table("tenant_invitations")
