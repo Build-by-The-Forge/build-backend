@@ -27,7 +27,6 @@ def user_model_to_domain(model: UserModel) -> User:
         password_hash=PasswordHash(model.password_hash),
         is_active=model.is_active,
         created_at=model.created_at,
-        roles=[],
         status=AccountStatus(model.status.value),
     )
 

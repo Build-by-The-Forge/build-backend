@@ -60,30 +60,6 @@ class PasswordHasher(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class RoleId:
-    value: str
-
-
-@dataclass(frozen=True, slots=True)
-class PermissionId:
-    value: str
-
-
-@dataclass(frozen=True, slots=True)
-class Permission:
-    id: PermissionId
-    resource: str
-    action: str
-
-
-@dataclass(frozen=True, slots=True)
-class Role:
-    id: RoleId
-    name: str
-    permissions: tuple[Permission, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class SessionId:
     value: str
 

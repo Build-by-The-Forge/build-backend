@@ -30,8 +30,6 @@ ALLOWED_DB_ONLY_INDEXES = frozenset(
         "idx_sessions_user_id",
     }
 )
-# On the global role tables, which M2 commit 17 removes.
-ALLOWED_DB_ONLY_CONSTRAINTS = frozenset({"uq_permissions_resource_action", "uq_role_assignments_user_role", "roles_name_key"})
 # users.status: VARCHAR(50) in the database, non-native enum on the model.
 ALLOWED_TYPE_CHANGES = frozenset({("users", "status")})
 
@@ -52,8 +50,6 @@ def is_allowed(diff: tuple[Any, ...]) -> bool:
         return True
     if op == "remove_index":
         return diff[1].name in ALLOWED_DB_ONLY_INDEXES
-    if op == "remove_constraint":
-        return diff[1].name in ALLOWED_DB_ONLY_CONSTRAINTS
     if op == "modify_type":
         return (diff[2], diff[3]) in ALLOWED_TYPE_CHANGES
     return False

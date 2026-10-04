@@ -5,13 +5,11 @@ from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     Enum,
     ForeignKey,
     Integer,
     String,
-    Table,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,24 +22,6 @@ class UserStatus(PyEnum):
     LOCKED = "LOCKED"
     DISABLED = "DISABLED"
     DELETED = "DELETED"
-
-
-role_permissions_table = Table(
-    "role_permissions",
-    Base.metadata,
-    Column(
-        "role_id",
-        String(36),
-        ForeignKey("roles.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-    Column(
-        "permission_id",
-        String(36),
-        ForeignKey("permissions.id", ondelete="CASCADE"),
-        primary_key=True,
-    ),
-)
 
 
 class UserModel(Base):
@@ -71,13 +51,6 @@ class UserModel(Base):
         nullable=False,
     )
     version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    roles: Mapped[list["RoleModel"]] = relationship(
-        "RoleModel",
-        secondary="role_assignments",
-        back_populates="users",
-        lazy="selectin",
-        overlaps="role_assignments,user,role",
-    )
     sessions: Mapped[list["SessionModel"]] = relationship(
         "SessionModel",
         back_populates="user",
@@ -96,13 +69,6 @@ class UserModel(Base):
         uselist=False,
         cascade="all, delete-orphan",
         lazy="selectin",
-    )
-    role_assignments: Mapped[list["RoleAssignmentModel"]] = relationship(
-        "RoleAssignmentModel",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        overlaps="roles",
     )
     verification_tokens: Mapped[list["VerificationTokenModel"]] = relationship(
         "VerificationTokenModel",
@@ -244,66 +210,6 @@ class SessionModel(Base):
         back_populates="session",
         cascade="all, delete-orphan",
         lazy="selectin",
-    )
-
-
-class RoleModel(Base):
-    __tablename__ = "roles"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    name: Mapped[str] = mapped_column(String, nullable=False)
-    users: Mapped[list[UserModel]] = relationship(
-        "UserModel",
-        secondary="role_assignments",
-        back_populates="roles",
-        lazy="selectin",
-        overlaps="role_assignments,user,role",
-    )
-    permissions: Mapped[list["PermissionModel"]] = relationship(
-        "PermissionModel",
-        secondary=role_permissions_table,
-        back_populates="roles",
-        lazy="selectin",
-    )
-    role_assignments: Mapped[list["RoleAssignmentModel"]] = relationship(
-        "RoleAssignmentModel",
-        back_populates="role",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        overlaps="roles,users",
-    )
-
-
-class PermissionModel(Base):
-    __tablename__ = "permissions"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    resource: Mapped[str] = mapped_column(String, nullable=False)
-    action: Mapped[str] = mapped_column(String, nullable=False)
-    roles: Mapped[list[RoleModel]] = relationship(
-        "RoleModel",
-        secondary=role_permissions_table,
-        back_populates="permissions",
-        lazy="selectin",
-    )
-
-
-class RoleAssignmentModel(Base):
-    __tablename__ = "role_assignments"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    role_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
-    )
-
-    user: Mapped[UserModel] = relationship(
-        "UserModel", back_populates="role_assignments", overlaps="roles,users"
-    )
-    role: Mapped[RoleModel] = relationship(
-        "RoleModel", back_populates="role_assignments", overlaps="roles,users"
     )
 
 

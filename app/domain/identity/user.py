@@ -11,7 +11,6 @@ from app.domain.identity.value_objects import (
     PasswordHash,
     PasswordHasher,
     RefreshTokenHash,
-    Role,
     SessionId,
     UserId,
 )
@@ -25,7 +24,6 @@ class User:
     password_hash: PasswordHash
     is_active: bool = True
     created_at: datetime | None = None
-    roles: list[Role] = field(default_factory=list)
     # Matches the database default: new accounts start unverified.
     status: AccountStatus = AccountStatus.PENDING_VERIFICATION
     _events: list[DomainEvent] = field(default_factory=list, init=False, repr=False)
@@ -52,10 +50,6 @@ class User:
 
     def change_password(self, new_password: Password, hasher: PasswordHasher) -> None:
         self.password_hash = hasher.hash(new_password)
-
-    def assign_role(self, role: Role) -> None:
-        if role not in self.roles:
-            self.roles.append(role)
 
     def record_event(self, event: DomainEvent) -> None:
         self._events.append(event)

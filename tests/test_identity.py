@@ -6,8 +6,6 @@ from app.domain.identity.value_objects import (
     Password,
     PasswordHash,
     RefreshTokenHash,
-    Role,
-    RoleId,
     SessionId,
     UserId,
 )
@@ -103,19 +101,6 @@ def test_user_aggregate_can_change_password_to_hash() -> None:
 
     assert user.password_hash.value != new_password.value
     assert user.password_hash.value.startswith("$argon2id$")
-
-
-def test_user_can_assign_role() -> None:
-    user = User(
-        id=UserId(""),
-        email=Email("owner@example.com"),
-        password_hash=PasswordHash("initial"),
-    )
-    role = Role(id=RoleId("role-1"), name="student")
-
-    user.assign_role(role)
-
-    assert role in user.roles
 
 
 def test_event_bus_notifies_subscribers() -> None:
