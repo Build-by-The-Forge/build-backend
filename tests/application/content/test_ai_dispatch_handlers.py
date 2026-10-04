@@ -7,6 +7,7 @@ from app.application.content.job_commands import (
     HandleAICallbackCommand,
 )
 from app.application.content.job_handlers import (
+    INGESTION_CALLBACK_PATH,
     CreateIngestionJobHandler,
     DispatchIngestionJobHandler,
     HandleAICallbackHandler,
@@ -29,11 +30,13 @@ from tests.application.content.test_job_handlers import FakeContentUnitOfWork
 class FakeAIGateway:
     def __init__(self) -> None:
         self.dispatched_jobs: list[str] = []
+        self.callback_urls: list[str] = []
 
     async def dispatch_ingestion_job(
         self, job, asset, source, callback_url
     ) -> AIServiceDispatchResult:
         self.dispatched_jobs.append(job.id)
+        self.callback_urls.append(callback_url)
         return AIServiceDispatchResult(
             external_task_id=f"aitask-{job.id}",
             accepted_at=datetime.now(timezone.utc),
@@ -65,6 +68,7 @@ async def test_dispatch_ingestion_handler() -> None:
         file_size_bytes=2048,
         content_sha256="c" * 64,
         storage_uri="s3://build/slides.pdf",
+        tenant_id="tenant-1",
         created_by="usr-1",
         created_by_email="u@example.com",
     )
@@ -73,20 +77,22 @@ async def test_dispatch_ingestion_handler() -> None:
     # 1. Create job
     create_handler = CreateIngestionJobHandler(uow, bus)
     job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, created_by="usr-1")
+        CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1")
     )
     assert job.status == IngestionStatus.QUEUED
 
     # 2. Dispatch job
     dispatch_handler = DispatchIngestionJobHandler(uow, gateway, bus)
     dispatched_job = await dispatch_handler.handle(
-        DispatchIngestionJobCommand(job_id=job.id, callback_url="/cb")
+        DispatchIngestionJobCommand(job_id=job.id, tenant_id="tenant-1")
     )
 
     assert dispatched_job.status == IngestionStatus.PROCESSING
     assert dispatched_job.current_stage == "dispatched_to_ai"
     assert dispatched_job.external_task_id == f"aitask-{job.id}"
     assert len(gateway.dispatched_jobs) == 1
+    # The callback destination is fixed internally, never taken from a request.
+    assert gateway.callback_urls == [INGESTION_CALLBACK_PATH]
     assert asset.ingestion_status == IngestionStatus.PROCESSING
 
 
@@ -114,6 +120,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
         file_size_bytes=1024,
         content_sha256="d" * 64,
         storage_uri="s3://build/doc.pdf",
+        tenant_id="tenant-1",
         created_by="usr-1",
         created_by_email="u@example.com",
     )
@@ -121,10 +128,10 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
 
     create_handler = CreateIngestionJobHandler(uow, bus)
     job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, created_by="usr-1")
+        CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1")
     )
     await DispatchIngestionJobHandler(uow, gateway, bus).handle(
-        DispatchIngestionJobCommand(job_id=job.id)
+        DispatchIngestionJobCommand(job_id=job.id, tenant_id="tenant-1")
     )
 
     callback_handler = HandleAICallbackHandler(uow, bus)
@@ -271,3 +278,20 @@ async def test_stale_attempt_protection() -> None:
     assert job_res.attempt_count == 2
     assert job_res.external_task_id == "aitask-attempt-2"
     assert job_res.status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("job_tenant", ["tenant-2", None])
+async def test_dispatch_of_another_tenants_or_platform_job_is_refused(job_tenant) -> None:
+    uow, bus, gateway = FakeContentUnitOfWork(), EventBus(), FakeAIGateway()
+    job = ContentIngestionJob.create(asset_id="asset-x", source_id="src-x", tenant_id=job_tenant, created_by="usr-1")
+    job.queue()
+    await uow.jobs.save_job(job)
+
+    with pytest.raises(ValueError, match="does not exist"):
+        await DispatchIngestionJobHandler(uow, gateway, bus).handle(
+            DispatchIngestionJobCommand(job_id=job.id, tenant_id="tenant-1")
+        )
+
+    assert gateway.dispatched_jobs == []
+    assert job.status == IngestionStatus.QUEUED

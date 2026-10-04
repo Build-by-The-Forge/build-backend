@@ -24,7 +24,3 @@ class AICallbackResponse(BaseModel):
     status: str = "accepted"
     job_id: str
     already_processed: bool = False
-
-
-class AIDispatchRequest(BaseModel):
-    callback_url: str | None = None

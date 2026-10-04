@@ -16,32 +16,24 @@ from app.application.content.asset_handlers import (
 )
 from app.application.content.asset_service import ContentAssetService
 from app.application.content.job_commands import (
-    CompleteIngestionJobCommand,
     CreateIngestionJobCommand,
     DispatchIngestionJobCommand,
-    FailIngestionJobCommand,
     GetIngestionJobQuery,
     GetLatestJobForAssetQuery,
     HandleAICallbackCommand,
     ListIngestionJobsQuery,
-    ProgressIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
-    StartIngestionJobCommand,
 )
 from app.application.content.job_handlers import (
-    CompleteIngestionJobHandler,
     CreateIngestionJobHandler,
     DispatchIngestionJobHandler,
-    FailIngestionJobHandler,
     GetIngestionJobHandler,
     GetLatestJobForAssetHandler,
     HandleAICallbackHandler,
     ListIngestionJobsHandler,
-    ProgressIngestionJobHandler,
     ReprocessAssetHandler,
     RetryIngestionJobHandler,
-    StartIngestionJobHandler,
 )
 from app.application.content.job_service import ContentIngestionJobService
 from app.application.content.source_commands import (
@@ -97,10 +89,6 @@ __all__ = [
     "ContentAssetService",
     # Job
     "CreateIngestionJobCommand",
-    "StartIngestionJobCommand",
-    "ProgressIngestionJobCommand",
-    "CompleteIngestionJobCommand",
-    "FailIngestionJobCommand",
     "RetryIngestionJobCommand",
     "ReprocessAssetCommand",
     "DispatchIngestionJobCommand",
@@ -109,10 +97,6 @@ __all__ = [
     "GetLatestJobForAssetQuery",
     "ListIngestionJobsQuery",
     "CreateIngestionJobHandler",
-    "StartIngestionJobHandler",
-    "ProgressIngestionJobHandler",
-    "CompleteIngestionJobHandler",
-    "FailIngestionJobHandler",
     "RetryIngestionJobHandler",
     "ReprocessAssetHandler",
     "DispatchIngestionJobHandler",

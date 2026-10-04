@@ -2,28 +2,14 @@ from datetime import datetime, timezone
 import pytest
 
 from app.application.content.job_commands import (
-    CompleteIngestionJobCommand,
     CreateIngestionJobCommand,
-    FailIngestionJobCommand,
-    GetIngestionJobQuery,
-    GetLatestJobForAssetQuery,
-    ListIngestionJobsQuery,
-    ProgressIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
-    StartIngestionJobCommand,
 )
 from app.application.content.job_handlers import (
-    CompleteIngestionJobHandler,
     CreateIngestionJobHandler,
-    FailIngestionJobHandler,
-    GetIngestionJobHandler,
-    GetLatestJobForAssetHandler,
-    ListIngestionJobsHandler,
-    ProgressIngestionJobHandler,
     ReprocessAssetHandler,
     RetryIngestionJobHandler,
-    StartIngestionJobHandler,
 )
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import (
@@ -200,12 +186,7 @@ class FakeContentUnitOfWork:
         self.jobs = InMemoryContentJobRepo()
 
 
-@pytest.mark.asyncio
-async def test_create_and_start_job_handler() -> None:
-    uow = FakeContentUnitOfWork()
-    bus = EventBus()
-
-    # Create Asset
+async def _asset(uow, tenant_id="tenant-1") -> ContentAsset:
     asset = ContentAsset.create(
         source_id="csrc-1",
         file_name="intro.pdf",
@@ -215,174 +196,100 @@ async def test_create_and_start_job_handler() -> None:
         storage_uri="s3://bucket/intro.pdf",
         created_by="usr-1",
         created_by_email="usr-1@example.com",
-        tenant_id="tenant-1",
+        tenant_id=tenant_id,
     )
     await uow.assets.save_asset(asset)
+    return asset
 
-    create_handler = CreateIngestionJobHandler(uow, bus)
-    job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, created_by="usr-1")
+
+async def _job(uow, bus, asset, tenant_id="tenant-1", **kwargs) -> ContentIngestionJob:
+    return await CreateIngestionJobHandler(uow, bus).handle(
+        CreateIngestionJobCommand(asset_id=asset.id, tenant_id=tenant_id, created_by="usr-1", **kwargs)
     )
 
-    assert job.asset_id == asset.id
-    assert job.status == IngestionStatus.QUEUED
+
+def _to_ready(job: ContentIngestionJob) -> None:
+    """Processing transitions now happen only through verified AI callbacks."""
+    job.record_dispatch(external_task_id=f"aitask-{job.id}")
+    job.progress_to_extracted()
+    job.progress_to_chunked()
+    job.progress_to_indexed()
+    job.complete()
+
+
+@pytest.mark.asyncio
+async def test_create_job_queues_it_for_the_owning_tenant() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    asset = await _asset(uow)
+
+    job = await _job(uow, bus, asset)
+
+    assert (job.asset_id, job.tenant_id, job.status) == (asset.id, "tenant-1", IngestionStatus.QUEUED)
     assert asset.ingestion_status == IngestionStatus.QUEUED
     assert len(uow.jobs.jobs) == 1
 
-    # Start job
-    start_handler = StartIngestionJobHandler(uow, bus)
-    started_job = await start_handler.handle(
-        StartIngestionJobCommand(job_id=job.id, stage="parsing")
-    )
 
-    assert started_job.status == IngestionStatus.PROCESSING
-    assert started_job.current_stage == "parsing"
-    assert asset.ingestion_status == IngestionStatus.PROCESSING
+@pytest.mark.asyncio
+@pytest.mark.parametrize("asset_tenant", ["tenant-2", None])
+async def test_create_job_for_another_tenants_or_platform_asset_is_refused(asset_tenant) -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    asset = await _asset(uow, tenant_id=asset_tenant)
+
+    with pytest.raises(ValueError, match="does not exist"):
+        await _job(uow, bus, asset, tenant_id="tenant-1")
+    assert uow.jobs.jobs == {}
 
 
 @pytest.mark.asyncio
-async def test_progress_and_complete_job_handler() -> None:
-    uow = FakeContentUnitOfWork()
-    bus = EventBus()
+async def test_retry_of_a_failed_job_requeues_it() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    asset = await _asset(uow)
+    job = await _job(uow, bus, asset, max_attempts=3)
+    job.record_dispatch(external_task_id="aitask-1")
+    job.fail(error_code="TIMEOUT", error_message="Gateway timeout", is_retryable=True)
 
-    asset = ContentAsset.create(
-        source_id="csrc-1",
-        file_name="intro.pdf",
-        mime_type=AssetMimeType.PDF,
-        file_size_bytes=1024,
-        content_sha256="a" * 64,
-        storage_uri="s3://bucket/intro.pdf",
-        created_by="usr-1",
-        created_by_email="usr-1@example.com",
-        tenant_id="tenant-1",
-    )
-    await uow.assets.save_asset(asset)
-
-    create_handler = CreateIngestionJobHandler(uow, bus)
-    job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, created_by="usr-1")
+    job = await RetryIngestionJobHandler(uow, bus).handle(
+        RetryIngestionJobCommand(job_id=job.id, tenant_id="tenant-1", delay_seconds=15)
     )
 
-    start_handler = StartIngestionJobHandler(uow, bus)
-    job = await start_handler.handle(
-        StartIngestionJobCommand(job_id=job.id, stage="parsing")
-    )
-
-    progress_handler = ProgressIngestionJobHandler(uow, bus)
-
-    # 1. Extracted
-    job = await progress_handler.handle(
-        ProgressIngestionJobCommand(job_id=job.id, target_stage="extracted")
-    )
-    assert job.status == IngestionStatus.EXTRACTED
-    assert asset.ingestion_status == IngestionStatus.EXTRACTED
-
-    # 2. Chunked
-    job = await progress_handler.handle(
-        ProgressIngestionJobCommand(job_id=job.id, target_stage="chunked")
-    )
-    assert job.status == IngestionStatus.CHUNKED
-    assert asset.ingestion_status == IngestionStatus.CHUNKED
-
-    # 3. Indexed
-    job = await progress_handler.handle(
-        ProgressIngestionJobCommand(job_id=job.id, target_stage="indexed")
-    )
-    assert job.status == IngestionStatus.INDEXED
-    assert asset.ingestion_status == IngestionStatus.INDEXED
-
-    # 4. Complete
-    complete_handler = CompleteIngestionJobHandler(uow, bus)
-    job = await complete_handler.handle(
-        CompleteIngestionJobCommand(job_id=job.id, metrics={"indexed": 50})
-    )
-    assert job.status == IngestionStatus.READY
-    assert asset.ingestion_status == IngestionStatus.READY
+    assert (job.status, job.attempt_count) == (IngestionStatus.QUEUED, 2)
+    assert asset.ingestion_status == IngestionStatus.QUEUED
 
 
 @pytest.mark.asyncio
-async def test_fail_and_retry_job_handler() -> None:
-    uow = FakeContentUnitOfWork()
-    bus = EventBus()
+async def test_retry_of_another_tenants_job_is_refused() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = await _job(uow, bus, await _asset(uow))
+    job.record_dispatch(external_task_id="aitask-1")
+    job.fail(error_code="TIMEOUT", error_message="Gateway timeout", is_retryable=True)
 
-    asset = ContentAsset.create(
-        source_id="csrc-1",
-        file_name="intro.pdf",
-        mime_type=AssetMimeType.PDF,
-        file_size_bytes=1024,
-        content_sha256="a" * 64,
-        storage_uri="s3://bucket/intro.pdf",
-        created_by="usr-1",
-        created_by_email="usr-1@example.com",
-        tenant_id="tenant-1",
-    )
-    await uow.assets.save_asset(asset)
-
-    create_handler = CreateIngestionJobHandler(uow, bus)
-    job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, created_by="usr-1", max_attempts=3)
-    )
-
-    start_handler = StartIngestionJobHandler(uow, bus)
-    job = await start_handler.handle(
-        StartIngestionJobCommand(job_id=job.id, stage="parsing")
-    )
-
-    fail_handler = FailIngestionJobHandler(uow, bus)
-    job = await fail_handler.handle(
-        FailIngestionJobCommand(
-            job_id=job.id,
-            error_code="TIMEOUT",
-            error_message="Gateway timeout",
-            is_retryable=True,
-        )
-    )
+    with pytest.raises(ValueError, match="does not exist"):
+        await RetryIngestionJobHandler(uow, bus).handle(RetryIngestionJobCommand(job_id=job.id, tenant_id="tenant-2"))
     assert job.status == IngestionStatus.FAILED
-    assert asset.ingestion_status == IngestionStatus.FAILED
 
-    retry_handler = RetryIngestionJobHandler(uow, bus)
-    job = await retry_handler.handle(
-        RetryIngestionJobCommand(job_id=job.id, delay_seconds=15)
+
+@pytest.mark.asyncio
+async def test_reprocess_asset_starts_a_new_run() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    asset = await _asset(uow)
+    _to_ready(await _job(uow, bus, asset))
+
+    new_job = await ReprocessAssetHandler(uow, bus).handle(
+        ReprocessAssetCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-admin")
     )
-    assert job.status == IngestionStatus.QUEUED
-    assert job.attempt_count == 2
+
+    assert (new_job.run_number, new_job.status, new_job.attempt_count) == (2, IngestionStatus.QUEUED, 1)
     assert asset.ingestion_status == IngestionStatus.QUEUED
 
 
 @pytest.mark.asyncio
-async def test_reprocess_asset_handler() -> None:
-    uow = FakeContentUnitOfWork()
-    bus = EventBus()
+@pytest.mark.parametrize("asset_tenant", ["tenant-2", None])
+async def test_reprocess_of_another_tenants_or_platform_asset_is_refused(asset_tenant) -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    asset = await _asset(uow, tenant_id=asset_tenant)
 
-    asset = ContentAsset.create(
-        source_id="csrc-1",
-        file_name="intro.pdf",
-        mime_type=AssetMimeType.PDF,
-        file_size_bytes=1024,
-        content_sha256="a" * 64,
-        storage_uri="s3://bucket/intro.pdf",
-        created_by="usr-1",
-        created_by_email="usr-1@example.com",
-        tenant_id="tenant-1",
-    )
-    await uow.assets.save_asset(asset)
-
-    create_handler = CreateIngestionJobHandler(uow, bus)
-    job1 = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, created_by="usr-1")
-    )
-    await StartIngestionJobHandler(uow, bus).handle(StartIngestionJobCommand(job_id=job1.id))
-    await ProgressIngestionJobHandler(uow, bus).handle(ProgressIngestionJobCommand(job_id=job1.id, target_stage="extracted"))
-    await ProgressIngestionJobHandler(uow, bus).handle(ProgressIngestionJobCommand(job_id=job1.id, target_stage="chunked"))
-    await ProgressIngestionJobHandler(uow, bus).handle(ProgressIngestionJobCommand(job_id=job1.id, target_stage="indexed"))
-    await CompleteIngestionJobHandler(uow, bus).handle(CompleteIngestionJobCommand(job_id=job1.id))
-
-    reprocess_handler = ReprocessAssetHandler(uow, bus)
-    new_job = await reprocess_handler.handle(
-        ReprocessAssetCommand(asset_id=asset.id, created_by="usr-admin")
-    )
-
-    assert new_job.run_number == 2
-    assert new_job.status == IngestionStatus.QUEUED
-    assert new_job.attempt_count == 1
-    assert asset.ingestion_status == IngestionStatus.QUEUED
+    with pytest.raises(ValueError, match="does not exist"):
+        await ReprocessAssetHandler(uow, bus).handle(
+            ReprocessAssetCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-admin")
+        )
+    assert uow.jobs.jobs == {}

@@ -4,32 +4,24 @@ from typing import Any
 
 from app.application.common.uow import ContentUnitOfWorkFactory, ContentUnitOfWorkPort
 from app.application.content.job_commands import (
-    CompleteIngestionJobCommand,
     CreateIngestionJobCommand,
     DispatchIngestionJobCommand,
-    FailIngestionJobCommand,
     GetIngestionJobQuery,
     GetLatestJobForAssetQuery,
     HandleAICallbackCommand,
     ListIngestionJobsQuery,
-    ProgressIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
-    StartIngestionJobCommand,
 )
 from app.application.content.job_handlers import (
-    CompleteIngestionJobHandler,
     CreateIngestionJobHandler,
     DispatchIngestionJobHandler,
-    FailIngestionJobHandler,
     GetIngestionJobHandler,
     GetLatestJobForAssetHandler,
     HandleAICallbackHandler,
     ListIngestionJobsHandler,
-    ProgressIngestionJobHandler,
     ReprocessAssetHandler,
     RetryIngestionJobHandler,
-    StartIngestionJobHandler,
 )
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import AIServiceIngestionGateway
@@ -54,6 +46,7 @@ class ContentIngestionJobService:
     async def create_job(
         self,
         asset_id: str,
+        tenant_id: str,
         created_by: str,
         max_attempts: int = 3,
         correlation_id: str | None = None,
@@ -61,6 +54,7 @@ class ContentIngestionJobService:
     ) -> ContentIngestionJob:
         cmd = CreateIngestionJobCommand(
             asset_id=asset_id,
+            tenant_id=tenant_id,
             created_by=created_by,
             max_attempts=max_attempts,
             correlation_id=correlation_id,
@@ -73,72 +67,10 @@ class ContentIngestionJobService:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
         return await CreateIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
 
-    async def start_job(
-        self, job_id: str, stage: str = "parsing"
-    ) -> ContentIngestionJob:
-        cmd = StartIngestionJobCommand(job_id=job_id, stage=stage)
-        if self._uow_factory is not None:
-            async with self._uow_factory() as uow:
-                return await StartIngestionJobHandler(uow, self._event_bus).handle(cmd)
-        if self._uow is None:
-            raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await StartIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
-
-    async def progress_job(
-        self,
-        job_id: str,
-        target_stage: str,
-        metrics: dict[str, Any] | None = None,
-    ) -> ContentIngestionJob:
-        cmd = ProgressIngestionJobCommand(
-            job_id=job_id,
-            target_stage=target_stage,
-            metrics=metrics or {},
-        )
-        if self._uow_factory is not None:
-            async with self._uow_factory() as uow:
-                return await ProgressIngestionJobHandler(uow, self._event_bus).handle(cmd)
-        if self._uow is None:
-            raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await ProgressIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
-
-    async def complete_job(
-        self, job_id: str, metrics: dict[str, Any] | None = None
-    ) -> ContentIngestionJob:
-        cmd = CompleteIngestionJobCommand(job_id=job_id, metrics=metrics or {})
-        if self._uow_factory is not None:
-            async with self._uow_factory() as uow:
-                return await CompleteIngestionJobHandler(uow, self._event_bus).handle(cmd)
-        if self._uow is None:
-            raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await CompleteIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
-
-    async def fail_job(
-        self,
-        job_id: str,
-        error_code: str,
-        error_message: str,
-        is_retryable: bool = False,
-        details: dict[str, Any] | None = None,
-    ) -> ContentIngestionJob:
-        cmd = FailIngestionJobCommand(
-            job_id=job_id,
-            error_code=error_code,
-            error_message=error_message,
-            is_retryable=is_retryable,
-            details=details or {},
-        )
-        if self._uow_factory is not None:
-            async with self._uow_factory() as uow:
-                return await FailIngestionJobHandler(uow, self._event_bus).handle(cmd)
-        if self._uow is None:
-            raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await FailIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
-
     async def retry_job(
-        self, job_id: str, delay_seconds: int = 30
+        self, job_id: str, tenant_id: str, delay_seconds: int = 30
     ) -> ContentIngestionJob:
-        cmd = RetryIngestionJobCommand(job_id=job_id, delay_seconds=delay_seconds)
+        cmd = RetryIngestionJobCommand(job_id=job_id, tenant_id=tenant_id, delay_seconds=delay_seconds)
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
                 return await RetryIngestionJobHandler(uow, self._event_bus).handle(cmd)
@@ -149,11 +81,13 @@ class ContentIngestionJobService:
     async def reprocess_asset(
         self,
         asset_id: str,
+        tenant_id: str,
         created_by: str,
         correlation_id: str | None = None,
     ) -> ContentIngestionJob:
         cmd = ReprocessAssetCommand(
             asset_id=asset_id,
+            tenant_id=tenant_id,
             created_by=created_by,
             correlation_id=correlation_id,
         )
@@ -164,12 +98,8 @@ class ContentIngestionJobService:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
         return await ReprocessAssetHandler(self._uow, self._event_bus).handle(cmd)
 
-    async def dispatch_job(
-        self,
-        job_id: str,
-        callback_url: str | None = None,
-    ) -> ContentIngestionJob:
-        cmd = DispatchIngestionJobCommand(job_id=job_id, callback_url=callback_url)
+    async def dispatch_job(self, job_id: str, tenant_id: str) -> ContentIngestionJob:
+        cmd = DispatchIngestionJobCommand(job_id=job_id, tenant_id=tenant_id)
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
                 return await DispatchIngestionJobHandler(

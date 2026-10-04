@@ -6,13 +6,9 @@ from fastapi.responses import JSONResponse
 from app.api.content.callback_schemas import (
     AICallbackRequest,
     AICallbackResponse,
-    AIDispatchRequest,
 )
 from app.api.content.job_schemas import (
-    IngestionJobCompleteRequest,
     IngestionJobCreateRequest,
-    IngestionJobFailRequest,
-    IngestionJobProgressRequest,
     IngestionJobReprocessRequest,
     IngestionJobResponse,
     IngestionJobRetryRequest,
@@ -44,6 +40,7 @@ async def trigger_ingestion_job(
     try:
         job = await service.create_job(
             asset_id=asset_id,
+            tenant_id=context.tenant_id,
             created_by=context.user_id,
             max_attempts=payload.max_attempts,
             correlation_id=payload.correlation_id,
@@ -170,124 +167,6 @@ async def list_ingestion_jobs(
 
 
 @router.post(
-    "/jobs/{job_id}/start",
-    response_model=IngestionJobResponse,
-)
-async def start_job(
-    job_id: str,
-    stage: str = Query(default="parsing"),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.start_job(job_id=job_id, stage=stage)
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "START_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
-    "/jobs/{job_id}/progress",
-    response_model=IngestionJobResponse,
-)
-async def progress_job(
-    job_id: str,
-    payload: IngestionJobProgressRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.progress_job(
-            job_id=job_id,
-            target_stage=payload.target_stage,
-            metrics=payload.metrics,
-        )
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "PROGRESS_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
-    "/jobs/{job_id}/complete",
-    response_model=IngestionJobResponse,
-)
-async def complete_job(
-    job_id: str,
-    payload: IngestionJobCompleteRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.complete_job(job_id=job_id, metrics=payload.metrics)
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "COMPLETE_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
-    "/jobs/{job_id}/fail",
-    response_model=IngestionJobResponse,
-)
-async def fail_job(
-    job_id: str,
-    payload: IngestionJobFailRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.fail_job(
-            job_id=job_id,
-            error_code=payload.error_code,
-            error_message=payload.error_message,
-            is_retryable=payload.is_retryable,
-            details=payload.details,
-        )
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "FAIL_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
     "/jobs/{job_id}/retry",
     response_model=IngestionJobResponse,
 )
@@ -298,7 +177,7 @@ async def retry_job(
 ) -> JSONResponse:
     try:
         job = await service.retry_job(
-            job_id=job_id, delay_seconds=payload.delay_seconds
+            job_id=job_id, tenant_id=context.tenant_id, delay_seconds=payload.delay_seconds
         )
     except ValueError as exc:
         msg = str(exc).lower()
@@ -329,6 +208,7 @@ async def reprocess_asset(
     try:
         job = await service.reprocess_asset(
             asset_id=asset_id,
+            tenant_id=context.tenant_id,
             created_by=context.user_id,
             correlation_id=payload.correlation_id,
         )
@@ -356,12 +236,11 @@ async def reprocess_asset(
 )
 async def dispatch_ingestion_job(
     job_id: str,
-    payload: AIDispatchRequest | None = None,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
-    callback_url = payload.callback_url if payload else None
+    # No request body: where AI-service reports back is never chosen by the caller.
     try:
-        job = await service.dispatch_job(job_id=job_id, callback_url=callback_url)
+        job = await service.dispatch_job(job_id=job_id, tenant_id=context.tenant_id)
     except ValueError as exc:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,

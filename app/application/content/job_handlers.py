@@ -2,23 +2,42 @@ from __future__ import annotations
 
 from app.application.common.uow import ContentUnitOfWorkPort
 from app.application.content.job_commands import (
-    CompleteIngestionJobCommand,
     CreateIngestionJobCommand,
     DispatchIngestionJobCommand,
-    FailIngestionJobCommand,
     GetIngestionJobQuery,
     GetLatestJobForAssetQuery,
     HandleAICallbackCommand,
     ListIngestionJobsQuery,
-    ProgressIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
-    StartIngestionJobCommand,
 )
+from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import AIServiceIngestionGateway
 from app.domain.content.job import ContentIngestionJob
 from app.events.event_bus import EventBus
+
+
+# Where AI-service reports processing events. Never taken from a request
+# (M3 design B.3); AI-service will use its own configured URL from M3-07.
+INGESTION_CALLBACK_PATH = "/content/ingestion/callbacks"
+
+
+def owned_job(job: ContentIngestionJob | None, tenant_id: str, job_id: str) -> ContentIngestionJob:
+    """The job if it belongs to ``tenant_id``.
+
+    A job of another tenant, or a tenant-less (platform) job, is reported
+    exactly like a missing one, so a caller learns nothing about it.
+    """
+    if job is None or job.tenant_id is None or job.tenant_id != tenant_id:
+        raise ValueError(f"ContentIngestionJob with id '{job_id}' does not exist")
+    return job
+
+
+def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> ContentAsset:
+    if asset is None or asset.tenant_id is None or asset.tenant_id != tenant_id:
+        raise ValueError(f"ContentAsset with id '{asset_id}' does not exist")
+    return asset
 
 
 class CreateIngestionJobHandler:
@@ -27,9 +46,9 @@ class CreateIngestionJobHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
-        asset = await self._uow.assets.get_asset_by_id(cmd.asset_id)
-        if asset is None:
-            raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
+        asset = owned_asset(
+            await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id
+        )
 
         job = ContentIngestionJob.create(
             asset_id=asset.id,
@@ -57,140 +76,13 @@ class CreateIngestionJobHandler:
         return saved_job
 
 
-class StartIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: StartIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        job.start(stage=cmd.stage)
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(IngestionStatus.PROCESSING)
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
-class ProgressIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: ProgressIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        target = cmd.target_stage.strip().lower()
-        if target == "extracted":
-            job.progress_to_extracted(cmd.metrics)
-            asset_status = IngestionStatus.EXTRACTED
-        elif target == "chunked":
-            job.progress_to_chunked(cmd.metrics)
-            asset_status = IngestionStatus.CHUNKED
-        elif target == "indexed":
-            job.progress_to_indexed(cmd.metrics)
-            asset_status = IngestionStatus.INDEXED
-        else:
-            raise ValueError(f"Unknown target stage '{cmd.target_stage}'")
-
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(asset_status)
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
-class CompleteIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: CompleteIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        job.complete(cmd.metrics)
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(IngestionStatus.READY)
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
-class FailIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: FailIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        job.fail(
-            error_code=cmd.error_code,
-            error_message=cmd.error_message,
-            is_retryable=cmd.is_retryable,
-            details=cmd.details,
-        )
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(
-                IngestionStatus.FAILED,
-                error_code=cmd.error_code,
-                error_message=cmd.error_message,
-            )
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
 class RetryIngestionJobHandler:
     def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
     async def handle(self, cmd: RetryIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
+        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
 
         job.schedule_retry(delay_seconds=cmd.delay_seconds)
         job_events = job.pull_events()
@@ -214,9 +106,9 @@ class ReprocessAssetHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
-        asset = await self._uow.assets.get_asset_by_id(cmd.asset_id)
-        if asset is None:
-            raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
+        asset = owned_asset(
+            await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id
+        )
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
         if latest_job is not None:
@@ -261,9 +153,7 @@ class DispatchIngestionJobHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: DispatchIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
+        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
 
         asset = await self._uow.assets.get_asset_by_id(job.asset_id)
         if asset is None:
@@ -273,7 +163,7 @@ class DispatchIngestionJobHandler:
         if source is None:
             raise ValueError(f"ContentSource with id '{job.source_id}' does not exist")
 
-        callback_url = cmd.callback_url or "/content/ingestion/callbacks"
+        callback_url = INGESTION_CALLBACK_PATH
 
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
