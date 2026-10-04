@@ -32,6 +32,10 @@ class Permission(StrEnum):
     CONTENT_ASSET_UPLOAD = "content.asset.upload"
     CONTENT_JOB_READ = "content.job.read"
     CONTENT_JOB_MANAGE = "content.job.manage"
+    TENANT_MEMBER_READ = "tenant.member.read"
+    TENANT_MEMBER_INVITE = "tenant.member.invite"
+    TENANT_MEMBER_MANAGE = "tenant.member.manage"
+    TENANT_SETTINGS_MANAGE = "tenant.settings.manage"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
@@ -96,6 +100,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_ASSET_UPLOAD,
             Permission.CONTENT_JOB_READ,
             Permission.CONTENT_JOB_MANAGE,
+            Permission.TENANT_MEMBER_READ,
+            Permission.TENANT_MEMBER_INVITE,
         }
     ),
     "faculty_admin": frozenset(
@@ -122,6 +128,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_ASSET_UPLOAD,
             Permission.CONTENT_JOB_READ,
             Permission.CONTENT_JOB_MANAGE,
+            Permission.TENANT_MEMBER_READ,
+            Permission.TENANT_MEMBER_INVITE,
         }
     ),
     "admin": frozenset(Permission),
