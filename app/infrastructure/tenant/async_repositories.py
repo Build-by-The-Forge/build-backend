@@ -63,6 +63,20 @@ class AsyncSqlAlchemyMembershipRepository:
         rows = await self.session.execute(statement)
         return [(membership_to_domain(model), email) for model, email in rows]
 
+    async def list_active_for_user(self, user_id: str) -> list[tuple[Membership, Tenant]]:
+        """The user's active memberships in active tenants, oldest first."""
+        rows = await self.session.execute(
+            select(MembershipModel, TenantModel)
+            .join(TenantModel, TenantModel.id == MembershipModel.tenant_id)
+            .where(
+                MembershipModel.user_id == user_id,
+                MembershipModel.status == "active",
+                TenantModel.status == "active",
+            )
+            .order_by(MembershipModel.created_at)
+        )
+        return [(membership_to_domain(m), tenant_to_domain(t)) for m, t in rows]
+
     async def lock_active_owner_ids(self, tenant_id: str) -> list[str]:
         """Lock the tenant's active owner memberships and return their ids.
 

@@ -62,6 +62,11 @@ class TenantMembershipService:
             rows = await uow.memberships.list_with_emails(context.tenant_id, status)
         return [MemberView(membership, email) for membership, email in rows]
 
+    async def for_user(self, user_id: str) -> list[tuple[Membership, Any]]:
+        """The caller's active memberships with their tenants (tenant switching)."""
+        async with self._uow() as uow:
+            return await uow.memberships.list_active_for_user(user_id)
+
     async def change_role(self, context: TenantContext, membership_id: str, role: str) -> Membership:
         new_role = _role(role)
         async with self._uow() as uow:

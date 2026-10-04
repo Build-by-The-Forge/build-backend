@@ -59,3 +59,5 @@ async def test_concurrent_domain_joins_create_exactly_one_student_membership(cli
             )
         ).all()
     assert [tuple(r) for r in rows] == [("student", "active")]
+    listed = await client.get("/identity/memberships", headers=student)
+    assert [(m["tenant_slug"], m["role"]) for m in listed.json()["data"]] == [(slug, "student")]

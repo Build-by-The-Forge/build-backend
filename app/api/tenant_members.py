@@ -4,8 +4,9 @@ from fastapi.responses import JSONResponse
 from app.application.tenant.membership_service import TenantMembershipService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
-from app.core.dependencies import require_tenant_permission
+from app.core.dependencies import get_current_principal, require_tenant_permission
 from app.core.exceptions import AppError
+from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.membership import Membership
 
@@ -37,6 +38,30 @@ def _envelope(request: Request, data: object) -> JSONResponse:
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
+    )
+
+
+@router.get("/identity/memberships", status_code=status.HTTP_200_OK)
+async def my_memberships(
+    request: Request,
+    principal: AuthenticatedPrincipal = Depends(get_current_principal),
+) -> JSONResponse:
+    """Tenants the caller can switch to. The client then sends the chosen
+    slug with each request; membership is still checked every time. An
+    unverified account sees its memberships but cannot use them yet (D4)."""
+    rows = await service.for_user(principal.user_id)
+    return _envelope(
+        request,
+        [
+            {
+                "tenant_id": tenant.id.value,
+                "tenant_slug": tenant.slug.value,
+                "tenant_name": tenant.name.value,
+                "membership_id": membership.id.value,
+                "role": membership.role.value,
+            }
+            for membership, tenant in rows
+        ],
     )
 
 
