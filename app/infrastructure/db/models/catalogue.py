@@ -68,6 +68,14 @@ class CourseModel(Base):
 
 
 class CurriculumVersionModel(Base):
+    """NOT MIGRATED - do not use as-is.
+
+    This model does not match the migrated table (migration 0005 shape) and no
+    code path uses it. Its design is deferred to the curriculum work (decision
+    of 2026-10-03, docs/phase1-m2-schema-drift-investigation.md section 7); it
+    may be superseded by the benchmark/adoption curriculum tables.
+    """
+
     __tablename__ = "curriculum_versions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -219,6 +227,14 @@ class ReferenceMaterialModel(Base):
 
 
 class CoursePrerequisiteModel(Base):
+    """NOT MIGRATED - do not use as-is.
+
+    This model does not match the migrated table (migration 0005 shape) and no
+    code path uses it. Its design is deferred to the curriculum work (decision
+    of 2026-10-03, docs/phase1-m2-schema-drift-investigation.md section 7); it
+    may be superseded by the benchmark/adoption curriculum tables.
+    """
+
     __tablename__ = "course_prerequisites"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)

@@ -350,7 +350,6 @@ Configuration uses environment variables and an optional `.env` file.
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
 | `DEBUG` | `false` | Debug configuration flag |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | Request timeout setting |
-| `TENANT_HEADER` | `x-tenant-id` | Legacy setting name; actual runtime tenant context is selected from the `X-Tenant-Slug` header (`x-tenant-slug` at runtime) |
 
 Example:
 

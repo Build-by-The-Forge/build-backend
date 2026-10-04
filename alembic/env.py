@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # ensure app is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -51,22 +54,45 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def do_run_migrations(connection: Connection) -> None:
+    # enable batch mode for sqlite to support operations that require table copy-and-move
+    render_as_batch = connection.dialect.name == "sqlite"
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        render_as_batch=render_as_batch,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_async_migrations() -> None:
+    connectable = async_engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+    await connectable.dispose()
+
+
 def run_migrations_online() -> None:
+    url = config.get_main_option("sqlalchemy.url")
+    # The application uses async drivers (asyncpg, aiosqlite); a sync engine
+    # cannot drive them and fails with MissingGreenlet. Sync URLs (such as the
+    # sqlite:/// default in alembic.ini) keep using the sync engine.
+    if url is not None and make_url(url).get_dialect().is_async:
+        asyncio.run(run_async_migrations())
+        return
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        # enable batch mode for sqlite to support operations that require table copy-and-move
-        render_as_batch = connection.dialect.name == "sqlite"
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            render_as_batch=render_as_batch,
-        )
-        with context.begin_transaction():
-            context.run_migrations()
+        do_run_migrations(connection)
 
 
 if context.is_offline_mode():

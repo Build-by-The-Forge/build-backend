@@ -24,3 +24,19 @@ class UserRepository(Protocol):
 
     async def consume_password_reset_token(self, token_hash: str) -> str | None:
         raise NotImplementedError
+
+    async def invalidate_password_reset_tokens(self, user_id: str) -> None:
+        """Mark every outstanding reset token of the user as used."""
+        raise NotImplementedError
+
+    async def save_verification_token(
+        self, user_id: str, token_hash: str, expires_at: datetime
+    ) -> None:
+        raise NotImplementedError
+
+    async def consume_verification_token(self, token_hash: str) -> str | None:
+        """Atomically mark a live verification token used; return its user id."""
+        raise NotImplementedError
+
+    async def invalidate_verification_tokens(self, user_id: str) -> None:
+        raise NotImplementedError

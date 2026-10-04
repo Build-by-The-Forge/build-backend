@@ -4,15 +4,34 @@ from uuid import uuid4
 import pytest
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantModel
+from app.infrastructure.identity.models import UserModel, UserStatus
+from tests.integration.identity_helpers import verify_email
 
 
 async def seed_tenant_membership(
     tenant_slug: str, user_id: str, role: str = "student"
 ) -> tuple[str, str]:
+    """Create a tenant with one membership for ``user_id``.
+
+    Valid on PostgreSQL, where foreign keys are enforced: the tenant row is
+    flushed before the membership, and a user id with no account behind it
+    (tests use a random id for "someone else") gets a placeholder user.
+    """
     tenant_id = str(uuid4())
     membership_id = str(uuid4())
     now = datetime.now(timezone.utc)
     async with SessionLocal() as session:
+        if await session.get(UserModel, user_id) is None:
+            session.add(
+                UserModel(
+                    id=user_id,
+                    email=f"placeholder-{user_id}@example.com",
+                    password_hash="unusable",
+                    status=UserStatus.ACTIVE,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         session.add(
             TenantModel(
                 id=tenant_id,
@@ -23,6 +42,7 @@ async def seed_tenant_membership(
                 updated_at=now,
             )
         )
+        await session.flush()
         session.add(
             MembershipModel(
                 id=membership_id,
@@ -42,6 +62,7 @@ async def authenticate_user(client, email: str) -> tuple[str, str]:
     payload = {"email": email, "password": "StrongPass123!"}
     registered = client.post("/identity/users", json=payload)
     assert registered.status_code == 201
+    verify_email(client, payload["email"])
     user_id = registered.json()["data"]["id"]
 
     authenticated = client.post("/identity/authenticate", json=payload)

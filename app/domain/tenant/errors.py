@@ -39,3 +39,7 @@ class MembershipAlreadyArchivedError(TenantDomainError):
 
 class MembershipRoleInvalidError(TenantDomainError):
     pass
+
+
+class MembershipAlreadyExistsError(TenantDomainError):
+    """The user already has a membership in this tenant (unique per tenant)."""

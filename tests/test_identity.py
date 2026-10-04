@@ -1,19 +1,17 @@
 import pytest
-from app.domain.identity.user import Device, RefreshToken, Session, User
+from app.domain.identity.user import Device, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
     Email,
     Password,
     PasswordHash,
-    PasswordHasher,
     RefreshTokenHash,
-    RefreshTokenId,
-    Role,
-    RoleId,
     SessionId,
     UserId,
 )
+from app.api import identity as identity_api
 from app.events.event_bus import EventBus
+from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
 from app.main import app
 from fastapi.testclient import TestClient
 from starlette import status
@@ -99,23 +97,10 @@ def test_user_aggregate_can_change_password_to_hash() -> None:
     )
 
     new_password = Password("NewStrongPass123!")
-    user.change_password(new_password, PasswordHasher())
+    user.change_password(new_password, Argon2PasswordHasher())
 
     assert user.password_hash.value != new_password.value
-    assert user.password_hash.value.startswith("hashed:")
-
-
-def test_user_can_assign_role() -> None:
-    user = User(
-        id=UserId(""),
-        email=Email("owner@example.com"),
-        password_hash=PasswordHash("initial"),
-    )
-    role = Role(id=RoleId("role-1"), name="student")
-
-    user.assign_role(role)
-
-    assert role in user.roles
+    assert user.password_hash.value.startswith("$argon2id$")
 
 
 def test_event_bus_notifies_subscribers() -> None:
@@ -167,20 +152,18 @@ def test_refresh_and_logout_flow_round_trips_through_identity_api(client) -> Non
 
     refresh_response = client.post(
         "/identity/refresh",
-        json={
-            "session_id": auth_payload["data"]["session_id"],
-            "refresh_token": auth_payload["data"]["refresh_token"],
-        },
+        json={"refresh_token": auth_payload["data"]["refresh_token"]},
     )
 
     assert refresh_response.status_code == 200
     refresh_payload = refresh_response.json()
     assert refresh_payload["success"] is True
     assert refresh_payload["data"]["session_id"] == auth_payload["data"]["session_id"]
+    assert refresh_payload["data"]["refresh_token"] != auth_payload["data"]["refresh_token"]
 
     logout_response = client.post(
         "/identity/logout",
-        json={"session_id": auth_payload["data"]["session_id"]},
+        headers={"Authorization": f"Bearer {refresh_payload['data']['access_token']}"},
     )
 
     assert logout_response.status_code == 200
@@ -225,7 +208,8 @@ def test_password_reset_flow_allows_sign_in_with_new_password(client) -> None:
     )
 
     assert forgot_response.status_code == 200
-    reset_token = forgot_response.json()["data"]["reset_token"]
+    assert forgot_response.json()["data"] == {}
+    reset_token = identity_api.service.email_sender.latest_to(email, "Reset your BUILD password").body.split("\n\n")[1]
 
     reset_response = client.post(
         "/identity/reset-password",
@@ -266,18 +250,3 @@ def test_device_can_be_marked_trusted_and_touched() -> None:
 
     assert device.last_seen is not None
     assert device.trusted is True
-
-
-def test_refresh_token_can_be_rotated_and_revoked() -> None:
-    token = RefreshToken(
-        id=RefreshTokenId("refresh-1"),
-        session_id=SessionId("session-1"),
-        token_hash=RefreshTokenHash("old-hash"),
-    )
-
-    token.rotate(RefreshTokenHash("new-hash"))
-    token.revoke()
-
-    assert token.token_hash.value == "new-hash"
-    assert token.rotated_at is not None
-    assert token.revoked_at is not None

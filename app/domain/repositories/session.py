@@ -9,3 +9,8 @@ class SessionRepository(Protocol):
 
     async def get_by_id(self, session_id: str) -> Session | None:
         raise NotImplementedError
+
+    async def revoke_all_for_user(
+        self, user_id: str, except_session_id: str | None = None
+    ) -> list[str]:
+        raise NotImplementedError

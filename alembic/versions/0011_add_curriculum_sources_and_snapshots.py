@@ -50,12 +50,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint("code", name="uq_curriculum_sources_code"),
     )
-    op.create_index(
-        "ix_curriculum_sources_code", "curriculum_sources", ["code"]
-    )
-    op.create_index(
-        "ix_curriculum_sources_status", "curriculum_sources", ["status"]
-    )
+    op.create_index("ix_curriculum_sources_code", "curriculum_sources", ["code"])
+    op.create_index("ix_curriculum_sources_status", "curriculum_sources", ["status"])
 
     op.create_table(
         "curriculum_snapshots",

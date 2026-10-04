@@ -87,6 +87,19 @@ class Membership:
             )
         )
 
+    def reactivate(self) -> None:
+        """Bring an archived or invited membership back to active."""
+        if self.status == MembershipStatus.ACTIVE:
+            return
+        self.status = MembershipStatus.ACTIVE
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="membership.reactivated",
+                payload={"membership_id": self.id.value},
+            )
+        )
+
     def touch(self) -> None:
         self.updated_at = datetime.now(timezone.utc)
 

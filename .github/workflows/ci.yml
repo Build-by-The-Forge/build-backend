@@ -18,7 +18,61 @@ jobs:
           pip install -e '.[dev]'
       - name: Lint
         run: |
-          ruff check app tests scripts
-          ruff format --check app tests scripts
+          ruff check app tests scripts pg_smoke
+          ruff format --check app tests scripts pg_smoke
       - name: Test
         run: pytest -q
+  postgres-gate:
+    # The suite above builds its SQLite schema from the ORM models, so it
+    # cannot see migrations that disagree with the models. This job checks
+    # the schema production actually gets (docs/alembic.md).
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: build
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d build"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/build
+      POSTGRES_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/build
+      REDIS_URL: redis://localhost:6379/0
+      TEST_REDIS_URL: redis://localhost:6379/15
+      # Test-only key for a throwaway database; never used outside CI.
+      AUTH_JWT_SECRET: ci-postgres-gate-signing-key-0123456789abcdef
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+      - name: Migrate an empty database to head
+        run: alembic upgrade head
+      - name: Single head, database at head
+        run: |
+          test "$(alembic heads | wc -l)" -eq 1
+          alembic current | grep -q "(head)"
+      - name: Latest migration round-trips
+        run: |
+          alembic downgrade -1
+          alembic upgrade head
+      - name: Models match the migrated schema
+        run: python scripts/check_schema_drift.py
+      - name: Smoke tests against the migrated schema
+        run: pytest pg_smoke -q
+      - name: Rate-limit store against real Redis
+        run: pytest tests/infrastructure/test_redis_counter_store.py -q

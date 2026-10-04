@@ -17,13 +17,18 @@ class AuthenticateUserCommand:
 
 @dataclass(slots=True)
 class RefreshSessionCommand:
-    session_id: str
     refresh_token: str
 
 
 @dataclass(slots=True)
 class LogoutSessionCommand:
     session_id: str
+    user_id: str
+
+
+@dataclass(slots=True)
+class LogoutAllSessionsCommand:
+    user_id: str
 
 
 @dataclass(slots=True)
@@ -35,6 +40,25 @@ class ForgotPasswordCommand:
 class ResetPasswordCommand:
     token: str
     password: str
+
+
+@dataclass(slots=True)
+class ChangePasswordCommand:
+    user_id: str
+    session_id: str
+    current_password: str
+    new_password: str
+    revoke_other_sessions: bool = True
+
+
+@dataclass(slots=True)
+class RequestEmailVerificationCommand:
+    email: str
+
+
+@dataclass(slots=True)
+class VerifyEmailCommand:
+    token: str
 
 
 @dataclass(slots=True)
