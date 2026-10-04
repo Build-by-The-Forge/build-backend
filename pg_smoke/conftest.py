@@ -26,3 +26,28 @@ async def client():
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://smoke") as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def reset_auth_rate_limits():
+    """Each test starts with clean auth rate-limit counters, as in tests/.
+
+    The smoke suite registers and signs in many accounts from one address,
+    which would otherwise exhaust the per-IP limits it is not testing.
+    """
+    import redis
+    from app.bootstrap.container import shared_auth_throttle
+
+    client = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+    try:
+        keys = list(client.scan_iter("auth:*"))
+        if keys:
+            client.delete(*keys)
+    except redis.exceptions.RedisError:
+        pass  # Redis absent: the throttle runs on its local fallback
+    finally:
+        client.close()
+    local = getattr(shared_auth_throttle().store, "_local", None)
+    if local is not None:
+        local.reset()
+    yield

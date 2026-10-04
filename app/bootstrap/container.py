@@ -24,6 +24,7 @@ from app.application.identity.ports.email_sender import EmailSender
 from app.application.identity.throttle import AuthThrottle
 from app.application.identity.user_service import UserService
 from app.application.tenant.invitation_service import TenantInvitationService
+from app.application.tenant.membership_service import TenantMembershipService
 from app.core.config import STRICT_ENVIRONMENTS, settings
 from app.db.session import SessionLocal
 from app.events.event_bus import EventBus
@@ -145,6 +146,13 @@ def build_container() -> Container:
         TenantInvitationService(
             uow_factory=sqlalchemy_tenant_membership_uow,
             email_sender=email_sender,
+            security_events=security_events,
+        ),
+    )
+    container.register(
+        TenantMembershipService,
+        TenantMembershipService(
+            uow_factory=sqlalchemy_tenant_membership_uow,
             security_events=security_events,
         ),
     )

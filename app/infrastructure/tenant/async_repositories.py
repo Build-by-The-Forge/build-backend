@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.tenant.membership import Membership
 from app.domain.tenant.tenant import Tenant
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantModel
+from app.infrastructure.identity.models import UserModel
 from app.infrastructure.tenant.mappers import (
     membership_to_domain,
     membership_to_model,
@@ -43,6 +44,41 @@ class AsyncSqlAlchemyMembershipRepository:
         )
         model = result.first()
         return membership_to_domain(model) if model is not None else None
+
+    async def get_by_id(self, membership_id: str) -> Membership | None:
+        model = await self.session.get(MembershipModel, membership_id)
+        return membership_to_domain(model) if model is not None else None
+
+    async def list_with_emails(self, tenant_id: str, status: str | None = None) -> list[tuple[Membership, str]]:
+        statement = (
+            select(MembershipModel, UserModel.email)
+            .join(UserModel, UserModel.id == MembershipModel.user_id)
+            .where(MembershipModel.tenant_id == tenant_id)
+            .order_by(MembershipModel.created_at)
+        )
+        if status is not None:
+            statement = statement.where(MembershipModel.status == status)
+        rows = await self.session.execute(statement)
+        return [(membership_to_domain(model), email) for model, email in rows]
+
+    async def lock_active_owner_ids(self, tenant_id: str) -> list[str]:
+        """Lock the tenant's active owner memberships and return their ids.
+
+        Taken before any change that could remove an owner, so two such
+        changes in the same tenant run one after the other and the second
+        sees the first's result (PostgreSQL re-checks locked rows).
+        """
+        rows = await self.session.scalars(
+            select(MembershipModel.id)
+            .where(
+                MembershipModel.tenant_id == tenant_id,
+                MembershipModel.role == "owner",
+                MembershipModel.status == "active",
+            )
+            .order_by(MembershipModel.id)
+            .with_for_update()
+        )
+        return list(rows)
 
     async def add(self, membership: Membership) -> None:
         self.session.add(membership_to_model(membership))
