@@ -247,18 +247,23 @@ def _signed_headers(headers: Mapping[str, str]) -> dict[str, str]:
     return {wanted[key]: value for key, value in found.items()}
 
 
-def verify_request(
-    *,
-    direction: Direction,
-    keys: ServiceKeys,
-    method: str,
-    target: str,
-    headers: Mapping[str, str],
-    body_sha256: str,
-    now: int,
-) -> VerifiedServiceRequest:
-    """A.5 steps 1-5 and 7, in order. ``direction`` is the direction this
-    receiver accepts; ``body_sha256`` is computed while the body is read."""
+@dataclass(frozen=True)
+class CheckedHeaders:
+    """Headers that passed A.5 steps 1-5; the signature is not yet checked."""
+
+    service: str
+    timestamp: str
+    request_id: str
+    signature: str
+    context: ServiceContext
+    context_bytes: bytes
+
+
+def check_headers(
+    *, direction: Direction, headers: Mapping[str, str], now: int
+) -> CheckedHeaders:
+    """A.5 steps 1-5, in order. ``direction`` is the direction this receiver
+    accepts. Runs before the body is read."""
     values = _signed_headers(headers)
     signature = values[HEADER_SIGNATURE]
     if not _SIGNATURE_RE.fullmatch(signature):
@@ -284,25 +289,62 @@ def verify_request(
     except InvalidServiceContext as exc:
         raise ServiceAuthError(f"invalid context: {exc}") from exc
 
-    canonical = canonical_request(
+    return CheckedHeaders(
         service=service,
-        method=method,
-        target=target,
         timestamp=timestamp,
         request_id=request_id,
+        signature=signature,
+        context=context,
+        context_bytes=context_bytes,
+    )
+
+
+def check_signature(
+    checked: CheckedHeaders,
+    *,
+    keys: ServiceKeys,
+    method: str,
+    target: str,
+    body_sha256: str,
+) -> VerifiedServiceRequest:
+    """A.5 step 7: constant-time comparison against the current secret, then
+    the previous one."""
+    canonical = canonical_request(
+        service=checked.service,
+        method=method,
+        target=target,
+        timestamp=checked.timestamp,
+        request_id=checked.request_id,
         body_sha256=body_sha256,
-        context_sha256=sha256_hex(context_bytes),
+        context_sha256=sha256_hex(checked.context_bytes),
     )
     if not any(
-        hmac.compare_digest(compute_signature(secret, canonical), signature)
+        hmac.compare_digest(compute_signature(secret, canonical), checked.signature)
         for secret in keys.verification_secrets
     ):
         raise ServiceAuthError("signature mismatch")
 
     return VerifiedServiceRequest(
-        service=service,
-        timestamp=int(timestamp),
-        request_id=request_id,
-        context=context,
-        context_bytes=context_bytes,
+        service=checked.service,
+        timestamp=int(checked.timestamp),
+        request_id=checked.request_id,
+        context=checked.context,
+        context_bytes=checked.context_bytes,
+    )
+
+
+def verify_request(
+    *,
+    direction: Direction,
+    keys: ServiceKeys,
+    method: str,
+    target: str,
+    headers: Mapping[str, str],
+    body_sha256: str,
+    now: int,
+) -> VerifiedServiceRequest:
+    """A.5 steps 1-5 and 7 for an already-hashed body."""
+    checked = check_headers(direction=direction, headers=headers, now=now)
+    return check_signature(
+        checked, keys=keys, method=method, target=target, body_sha256=body_sha256
     )
