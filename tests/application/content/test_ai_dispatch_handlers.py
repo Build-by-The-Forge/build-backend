@@ -7,7 +7,6 @@ from app.application.content.job_commands import (
     HandleAICallbackCommand,
 )
 from app.application.content.job_handlers import (
-    INGESTION_CALLBACK_PATH,
     CreateIngestionJobHandler,
     DispatchIngestionJobHandler,
     HandleAICallbackHandler,
@@ -20,23 +19,37 @@ from app.domain.content.enums import (
     IngestionStatus,
     VisibilityScope,
 )
-from app.domain.content.gateway import AIServiceDispatchResult
+from app.domain.content.gateway import AIServiceDispatchResult, IngestionDispatchActor
 from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
 from tests.application.content.test_job_handlers import FakeContentUnitOfWork
 
 
+def dispatch_cmd(job_id: str, tenant_id: str = "tenant-1") -> DispatchIngestionJobCommand:
+    return DispatchIngestionJobCommand(
+        job_id=job_id,
+        tenant_id=tenant_id,
+        user_id="usr-1",
+        membership_id="mem-1",
+        role="lecturer",
+        permission="content.job.manage",
+    )
+
+
 class FakeAIGateway:
-    def __init__(self) -> None:
+    def __init__(self, error: Exception | None = None) -> None:
         self.dispatched_jobs: list[str] = []
-        self.callback_urls: list[str] = []
+        self.actors: list[IngestionDispatchActor] = []
+        self.error = error
 
     async def dispatch_ingestion_job(
-        self, job, asset, source, callback_url
+        self, job, asset, source, actor
     ) -> AIServiceDispatchResult:
         self.dispatched_jobs.append(job.id)
-        self.callback_urls.append(callback_url)
+        self.actors.append(actor)
+        if self.error is not None:
+            raise self.error
         return AIServiceDispatchResult(
             external_task_id=f"aitask-{job.id}",
             accepted_at=datetime.now(timezone.utc),
@@ -84,15 +97,24 @@ async def test_dispatch_ingestion_handler() -> None:
     # 2. Dispatch job
     dispatch_handler = DispatchIngestionJobHandler(uow, gateway, bus)
     dispatched_job = await dispatch_handler.handle(
-        DispatchIngestionJobCommand(job_id=job.id, tenant_id="tenant-1")
+        dispatch_cmd(job.id)
     )
 
     assert dispatched_job.status == IngestionStatus.PROCESSING
     assert dispatched_job.current_stage == "dispatched_to_ai"
     assert dispatched_job.external_task_id == f"aitask-{job.id}"
     assert len(gateway.dispatched_jobs) == 1
-    # The callback destination is fixed internally, never taken from a request.
-    assert gateway.callback_urls == [INGESTION_CALLBACK_PATH]
+    # The signed context will name the job's tenant, the caller and the one
+    # checked permission; no callback destination is passed at all.
+    assert gateway.actors == [
+        IngestionDispatchActor(
+            tenant_id="tenant-1",
+            user_id="usr-1",
+            membership_id="mem-1",
+            role="lecturer",
+            permission="content.job.manage",
+        )
+    ]
     assert asset.ingestion_status == IngestionStatus.PROCESSING
 
 
@@ -131,7 +153,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
         CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1")
     )
     await DispatchIngestionJobHandler(uow, gateway, bus).handle(
-        DispatchIngestionJobCommand(job_id=job.id, tenant_id="tenant-1")
+        dispatch_cmd(job.id)
     )
 
     callback_handler = HandleAICallbackHandler(uow, bus)
@@ -290,8 +312,53 @@ async def test_dispatch_of_another_tenants_or_platform_job_is_refused(job_tenant
 
     with pytest.raises(ValueError, match="does not exist"):
         await DispatchIngestionJobHandler(uow, gateway, bus).handle(
-            DispatchIngestionJobCommand(job_id=job.id, tenant_id="tenant-1")
+            dispatch_cmd(job.id)
         )
 
     assert gateway.dispatched_jobs == []
     assert job.status == IngestionStatus.QUEUED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("retryable", [True, False])
+async def test_failed_dispatch_is_recorded_not_raised(retryable) -> None:
+    """queued -> failed is a business outcome the unit of work must commit."""
+    from app.infrastructure.content.ai_gateway import AIServiceGatewayError
+
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    error = AIServiceGatewayError("AI down", error_code="AI_SERVICE_UNAVAILABLE", is_retryable=retryable)
+    gateway = FakeAIGateway(error=error)
+    asset = ContentAsset.create(
+        source_id="src-x",
+        file_name="x.pdf",
+        mime_type=AssetMimeType.PDF,
+        file_size_bytes=10,
+        content_sha256="f" * 64,
+        storage_uri="s3://build/x.pdf",
+        tenant_id="tenant-1",
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    await uow.assets.save_asset(asset)
+    source = ContentSource.create(
+        code="SRC_X",
+        name="X",
+        source_type=ContentSourceType.CCMAS,
+        authority_level=AuthorityLevel.REGULATORY,
+        visibility=VisibilityScope.PLATFORM,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    await uow.sources.save_source(source)
+    job = ContentIngestionJob.create(
+        asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1"
+    )
+    job.queue()
+    await uow.jobs.save_job(job)
+
+    result = await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
+
+    assert result.status == IngestionStatus.FAILED
+    assert (result.error_code, result.is_retryable) == ("AI_SERVICE_UNAVAILABLE", retryable)
+    assert uow.jobs.jobs[job.id].status == IngestionStatus.FAILED
+    assert asset.ingestion_status == IngestionStatus.FAILED

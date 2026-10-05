@@ -13,14 +13,9 @@ from app.application.content.job_commands import (
 )
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
-from app.domain.content.gateway import AIServiceIngestionGateway
+from app.domain.content.gateway import AIServiceIngestionGateway, IngestionDispatchActor
 from app.domain.content.job import ContentIngestionJob
 from app.events.event_bus import EventBus
-
-
-# Where AI-service reports processing events. Never taken from a request
-# (M3 design B.3); AI-service will use its own configured URL from M3-07.
-INGESTION_CALLBACK_PATH = "/content/ingestion/callbacks"
 
 
 def owned_job(job: ContentIngestionJob | None, tenant_id: str, job_id: str) -> ContentIngestionJob:
@@ -163,14 +158,23 @@ class DispatchIngestionJobHandler:
         if source is None:
             raise ValueError(f"ContentSource with id '{job.source_id}' does not exist")
 
-        callback_url = INGESTION_CALLBACK_PATH
+        # The signed context names the job's own tenant (owned_job checked it
+        # is the caller's). No callback URL is sent: AI-service reports only
+        # to its configured BACKEND_CALLBACK_URL.
+        actor = IngestionDispatchActor(
+            tenant_id=job.tenant_id or cmd.tenant_id,
+            user_id=cmd.user_id,
+            membership_id=cmd.membership_id,
+            role=cmd.role,
+            permission=cmd.permission,
+        )
 
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
                 job=job,
                 asset=asset,
                 source=source,
-                callback_url=callback_url,
+                actor=actor,
             )
             job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
@@ -187,9 +191,15 @@ class DispatchIngestionJobHandler:
                 error_code=error_code,
                 error_message=str(exc),
             )
-            await self._uow.jobs.save_job(job)
+            # queued -> failed is a recorded business outcome, not an error to
+            # roll back: return normally so the unit of work commits it, and
+            # let the caller report the failure from the job's state.
+            saved_failed = await self._uow.jobs.save_job(job)
             await self._uow.assets.save_asset(asset)
-            raise
+            failure_events = job.pull_events() + asset.pull_events()
+            if self._event_bus and failure_events:
+                self._event_bus.publish_all(failure_events)
+            return saved_failed
 
         job_events = job.pull_events()
         asset_events = asset.pull_events()

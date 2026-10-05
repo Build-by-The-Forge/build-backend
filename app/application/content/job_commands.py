@@ -35,6 +35,12 @@ class ReprocessAssetCommand:
 class DispatchIngestionJobCommand:
     job_id: str
     tenant_id: str
+    user_id: str
+    membership_id: str
+    role: str
+    # The permission the caller was authorized with; forwarded as the only
+    # permission in the signed context (decision E.6).
+    permission: str
 
 
 @dataclass(frozen=True, slots=True)

@@ -83,7 +83,10 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
     from app.domain.content.gateway import AIServiceDispatchResult
     from datetime import datetime, timezone
 
-    async def mock_dispatch(self, job, asset, source, callback_url):
+    actors = []
+
+    async def mock_dispatch(self, job, asset, source, actor):
+        actors.append(actor)
         return AIServiceDispatchResult(
             external_task_id=f"aitask-mock-{job.id}",
             accepted_at=datetime.now(timezone.utc),
@@ -104,6 +107,15 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
     disp_data = disp_res.json()["data"]
     assert disp_data["status"] == "processing"
     assert disp_data["external_task_id"] == f"aitask-mock-{job_id}"
+    # The signed context is built from the database-verified tenant context
+    # and carries only the permission checked for this operation (C15, E.6).
+    [actor] = actors
+    assert (actor.tenant_id, actor.user_id, actor.role, actor.permission) == (
+        tenant_a_id,
+        lecturer_a_id,
+        "lecturer",
+        "content.job.manage",
+    )
 
     # D. Webhook callback without signature -> 401 Unauthorized
     cb_payload_1 = {
@@ -176,3 +188,69 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
     )
     assert asset_check.status_code == 200
     assert asset_check.json()["data"]["ingestion_status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_failed_dispatch_is_persisted_and_reported(client, monkeypatch) -> None:
+    from app.infrastructure.content.ai_gateway import AIServiceGatewayError
+
+    admin_id, admin_token = await register_and_authenticate(
+        client, f"aigate-fail-{uuid4()}@example.com"
+    )
+    _, tenant_slug, _, _ = await seed_tenant_context(admin_id, "admin")
+    admin_headers = headers(admin_token, tenant_slug)
+    source_id = client.post(
+        "/content/sources",
+        json={
+            "code": f"SRC_AF_{uuid4().hex[:6].upper()}",
+            "name": "Fail path",
+            "source_type": "lecturer_upload",
+            "authority_level": "institutional",
+            "visibility": "tenant",
+        },
+        headers=admin_headers,
+    ).json()["data"]["id"]
+    asset_id = client.post(
+        f"/content/sources/{source_id}/assets",
+        json={
+            "file_name": "f.pdf",
+            "mime_type": "application/pdf",
+            "file_size_bytes": 10,
+            "content_sha256": "9" * 64,
+            "storage_uri": "s3://build-assets/f.pdf",
+        },
+        headers=admin_headers,
+    ).json()["data"]["id"]
+    job_id = client.post(
+        f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=admin_headers
+    ).json()["data"]["id"]
+
+    async def failing_dispatch(self, job, asset, source, actor):
+        raise AIServiceGatewayError(
+            "AI Service transient error (HTTP 503)",
+            error_code="AI_SERVICE_UNAVAILABLE",
+            is_retryable=True,
+        )
+
+    monkeypatch.setattr(
+        "app.infrastructure.content.ai_gateway.HttpAIServiceIngestionGateway.dispatch_ingestion_job",
+        failing_dispatch,
+    )
+
+    resp = client.post(f"/content/jobs/{job_id}/dispatch", headers=admin_headers)
+    assert resp.status_code == 502, resp.text
+    assert resp.json()["error"]["code"] == "AI_SERVICE_UNAVAILABLE"
+
+    # The failure survived the request: before M3-06 it was rolled back.
+    stored = client.get(f"/content/jobs/{job_id}", headers=admin_headers).json()["data"]
+    assert (stored["status"], stored["error_code"], stored["is_retryable"]) == (
+        "failed",
+        "AI_SERVICE_UNAVAILABLE",
+        True,
+    )
+    # ... so the retry business operation is now possible.
+    retry = client.post(
+        f"/content/jobs/{job_id}/retry", json={"delay_seconds": 1}, headers=admin_headers
+    )
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["data"]["status"] == "queued"

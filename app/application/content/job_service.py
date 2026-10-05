@@ -98,8 +98,23 @@ class ContentIngestionJobService:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
         return await ReprocessAssetHandler(self._uow, self._event_bus).handle(cmd)
 
-    async def dispatch_job(self, job_id: str, tenant_id: str) -> ContentIngestionJob:
-        cmd = DispatchIngestionJobCommand(job_id=job_id, tenant_id=tenant_id)
+    async def dispatch_job(
+        self,
+        job_id: str,
+        tenant_id: str,
+        user_id: str,
+        membership_id: str,
+        role: str,
+        permission: str,
+    ) -> ContentIngestionJob:
+        cmd = DispatchIngestionJobCommand(
+            job_id=job_id,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            membership_id=membership_id,
+            role=role,
+            permission=permission,
+        )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
                 return await DispatchIngestionJobHandler(

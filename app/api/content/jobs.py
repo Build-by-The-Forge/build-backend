@@ -238,9 +238,18 @@ async def dispatch_ingestion_job(
     job_id: str,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
-    # No request body: where AI-service reports back is never chosen by the caller.
+    # No request body: where AI-service reports back is never chosen by the
+    # caller. The signed context carries this caller and the one permission
+    # checked here (design B.2, decision E.6).
     try:
-        job = await service.dispatch_job(job_id=job_id, tenant_id=context.tenant_id)
+        job = await service.dispatch_job(
+            job_id=job_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            membership_id=context.membership_id,
+            role=context.role,
+            permission=Permission.CONTENT_JOB_MANAGE.value,
+        )
     except ValueError as exc:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -258,6 +267,18 @@ async def dispatch_ingestion_job(
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
+    if job.status == IngestionStatus.FAILED:
+        # The dispatch failed and the job's failed state was saved; report it.
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "error": {
+                    "code": job.error_code or "AI_DISPATCH_FAILED",
+                    "message": job.error_message or "AI-service dispatch failed",
+                },
+                "data": resp_data,
+            },
+        )
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
 
 
