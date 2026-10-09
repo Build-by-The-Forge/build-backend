@@ -81,7 +81,7 @@ class ContentAsset:
 
         now = datetime.now(timezone.utc)
         asset = cls(
-            id=asset_id or f"cass-{uuid4()}",
+            id=asset_id or str(uuid4()),
             source_id=source_id.strip(),
             tenant_id=tenant_id.strip() if tenant_id else None,
             file_name=file_name.strip(),

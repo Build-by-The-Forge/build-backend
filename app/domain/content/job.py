@@ -64,7 +64,7 @@ class ContentIngestionJob:
 
         now = datetime.now(timezone.utc)
         job = cls(
-            id=job_id or f"cjob-{uuid4()}",
+            id=job_id or str(uuid4()),
             asset_id=asset_id.strip(),
             source_id=source_id.strip(),
             tenant_id=tenant_id.strip() if tenant_id else None,

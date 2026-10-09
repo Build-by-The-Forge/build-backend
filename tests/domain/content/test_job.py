@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.job import ContentIngestionJob
@@ -13,7 +15,7 @@ def test_job_creation_and_full_linear_lifecycle() -> None:
         correlation_id="corr-1",
     )
 
-    assert job.id.startswith("cjob-")
+    assert str(UUID(job.id)) == job.id and UUID(job.id).version == 4  # fits VARCHAR(36)
     assert job.asset_id == "cass-1234"
     assert job.source_id == "csrc-5678"
     assert job.tenant_id == "tenant-futa"

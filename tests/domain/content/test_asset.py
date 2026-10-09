@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, IngestionStatus
@@ -18,7 +20,7 @@ def test_create_content_asset_success() -> None:
         metadata={"pages": 24},
     )
 
-    assert asset.id.startswith("cass-")
+    assert str(UUID(asset.id)) == asset.id and UUID(asset.id).version == 4  # fits VARCHAR(36)
     assert asset.source_id == "csrc-1234"
     assert asset.tenant_id == "tenant-futa"
     assert asset.file_name == "CSC301_Lecture_01.pdf"
