@@ -78,3 +78,5 @@ jobs:
         run: pytest tests/infrastructure/test_redis_counter_store.py -q
       - name: Service authentication against real Redis
         run: pytest tests/infrastructure/test_service_auth_middleware.py -q
+      - name: Signed AI-service callbacks against real Redis
+        run: pytest tests/integration/content/test_signed_callbacks.py -q
