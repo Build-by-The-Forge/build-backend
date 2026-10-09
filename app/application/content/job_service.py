@@ -129,6 +129,7 @@ class ContentIngestionJobService:
     async def handle_callback(
         self,
         job_id: str,
+        tenant_id: str,
         event_id: str,
         event_type: str,
         stage: str | None = None,
@@ -143,6 +144,7 @@ class ContentIngestionJobService:
     ) -> tuple[ContentIngestionJob | None, bool]:
         cmd = HandleAICallbackCommand(
             job_id=job_id,
+            tenant_id=tenant_id,
             event_id=event_id,
             event_type=event_type,
             stage=stage,

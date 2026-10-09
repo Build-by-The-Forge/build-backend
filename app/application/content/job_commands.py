@@ -46,6 +46,9 @@ class DispatchIngestionJobCommand:
 @dataclass(frozen=True, slots=True)
 class HandleAICallbackCommand:
     job_id: str
+    # The signed system context's tenant: a callback may only touch a job of
+    # that tenant (design B.3 step 3).
+    tenant_id: str
     event_id: str
     event_type: str  # "stage_progress" | "job_completed" | "job_failed"
     stage: str | None = None  # "extracted" | "chunked" | "indexed"

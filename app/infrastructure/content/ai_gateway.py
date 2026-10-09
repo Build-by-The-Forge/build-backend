@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import hashlib
-import hmac
 import json
 import re
 import time
@@ -51,31 +49,6 @@ class AIServiceGatewayError(Exception):
         self.error_code = error_code
         self.is_retryable = is_retryable
         self.details = details or {}
-
-
-def compute_webhook_signature(payload_bytes: bytes, secret: str) -> str:
-    digest = hmac.new(
-        secret.encode("utf-8"), payload_bytes, hashlib.sha256
-    ).hexdigest()
-    return f"sha256={digest}"
-
-
-def verify_webhook_signature(
-    payload_bytes: bytes, signature_header: str | None, secret: str
-) -> bool:
-    if not signature_header or not secret:
-        return False
-
-    parts = signature_header.strip().split("=")
-    if len(parts) == 2 and parts[0] == "sha256":
-        provided_digest = parts[1].strip()
-    else:
-        provided_digest = signature_header.strip()
-
-    expected_digest = hmac.new(
-        secret.encode("utf-8"), payload_bytes, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(provided_digest, expected_digest)
 
 
 class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):

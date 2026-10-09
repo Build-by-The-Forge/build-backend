@@ -231,7 +231,9 @@ class HandleAICallbackHandler:
         Returns (job, already_processed_or_stale).
         """
         job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
+        # Unknown, platform-owned and other tenants' jobs all look the same:
+        # absent. Nothing is created or changed.
+        if job is None or job.tenant_id is None or job.tenant_id != cmd.tenant_id:
             return None, False
 
         # 1. Event Idempotency Check

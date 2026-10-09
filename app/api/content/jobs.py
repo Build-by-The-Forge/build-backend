@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.api.content.callback_schemas import (
     AICallbackRequest,
@@ -16,11 +17,12 @@ from app.api.content.job_schemas import (
 from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
-from app.core.config import settings
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import IngestionStatus
-from app.infrastructure.content.ai_gateway import verify_webhook_signature
+from app.infrastructure.security.service_context import ACTOR_SYSTEM
+from app.infrastructure.security.service_signature import VerifiedServiceRequest
+from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
 service = build_container().get(ContentIngestionJobService)
@@ -286,42 +288,47 @@ async def dispatch_ingestion_job(
     "/ingestion/callbacks",
     response_model=AICallbackResponse,
 )
-async def handle_ai_callback(
-    request: Request,
-    x_build_signature: str | None = Header(default=None, alias="X-Build-Signature"),
-) -> JSONResponse:
-    body_bytes = await request.body()
+async def handle_ai_callback(request: Request) -> JSONResponse:
+    """Processing events from AI-service (design B.3).
 
-    # Interim HMAC check with the AI-to-backend secret until M3-07/M3-08
-    # replace it with BUILD Service Signature v1. No static Bearer key is
-    # accepted, and an unset secret verifies nothing.
-    is_valid_hmac = verify_webhook_signature(
-        payload_bytes=body_bytes,
-        signature_header=x_build_signature,
-        secret=settings.ai_to_backend_secret or "",
-    )
-
-    if not is_valid_hmac:
+    ServiceAuthMiddleware has already verified the BUILD Service Signature v1
+    request (AI_TO_BACKEND_SECRET, sender ai-service, replay, 1 MiB body)
+    before this runs; there is no other way in.
+    """
+    verified = getattr(request.state, SERVICE_AUTH_STATE_KEY, None)
+    if not isinstance(verified, VerifiedServiceRequest):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "invalid service authentication"},
+        )
+    # A callback is a system operation: it carries no user and grants
+    # nothing. A user context here is a misuse of the AI-to-backend secret.
+    context = verified.context
+    if context.actor != ACTOR_SYSTEM:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"error": "callbacks require a system context"},
+        )
+
+    try:
+        payload = AICallbackRequest.model_validate_json(await request.body())
+    except ValidationError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "error": {
-                    "code": "INVALID_CALLBACK_AUTH",
-                    "message": "Missing or invalid HMAC signature / API Key",
+                    "code": "INVALID_PAYLOAD",
+                    "message": "callback body failed validation",
+                    "details": exc.errors(
+                        include_url=False, include_input=False, include_context=False
+                    ),
                 }
             },
         )
 
-    try:
-        payload = AICallbackRequest.model_validate_json(body_bytes)
-    except Exception as exc:
-        return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"error": {"code": "INVALID_PAYLOAD", "message": str(exc)}},
-        )
-
     job, already_processed = await service.handle_callback(
         job_id=payload.job_id,
+        tenant_id=context.tenant_id,
         event_id=payload.event_id,
         event_type=payload.event_type,
         stage=payload.stage,
@@ -338,12 +345,7 @@ async def handle_ai_callback(
     if job is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={
-                "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": f"Job '{payload.job_id}' not found",
-                }
-            },
+            content={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}},
         )
 
     return JSONResponse(

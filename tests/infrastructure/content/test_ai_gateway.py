@@ -16,8 +16,6 @@ from app.domain.content.source import ContentSource
 from app.infrastructure.content.ai_gateway import (
     AIServiceGatewayError,
     HttpAIServiceIngestionGateway,
-    compute_webhook_signature,
-    verify_webhook_signature,
 )
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
@@ -49,27 +47,6 @@ DISPATCH_FIELDS = {
     "storage_uri",
     "correlation_id",
 }
-
-
-def test_hmac_signature_generation_and_verification() -> None:
-    payload = b'{"job_id":"cjob-123","event_type":"job_completed"}'
-    secret = "super-secret-key-123"
-
-    sig = compute_webhook_signature(payload, secret)
-    assert sig.startswith("sha256=")
-
-    # Valid verification
-    assert verify_webhook_signature(payload, sig, secret) is True
-
-    # Invalid secret
-    assert verify_webhook_signature(payload, sig, "wrong-secret") is False
-
-    # Tampered payload
-    assert verify_webhook_signature(payload + b"tampered", sig, secret) is False
-
-    # Missing signature or secret
-    assert verify_webhook_signature(payload, None, secret) is False
-    assert verify_webhook_signature(payload, sig, "") is False
 
 
 def _material(correlation_id: str | None = "corr-42"):

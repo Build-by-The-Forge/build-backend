@@ -1,9 +1,6 @@
 from uuid import uuid4
-import json
 import pytest
 
-from app.core.config import settings
-from app.infrastructure.content.ai_gateway import compute_webhook_signature
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
@@ -116,78 +113,7 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
         "lecturer",
         "content.job.manage",
     )
-
-    # D. Webhook callback without signature -> 401 Unauthorized
-    cb_payload_1 = {
-        "job_id": job_id,
-        "event_id": "evt-ai-1",
-        "event_type": "stage_progress",
-        "stage": "extracted",
-        "external_task_id": f"aitask-mock-{job_id}",
-        "run_number": 1,
-        "attempt_count": 1,
-        "metrics": {"pages_extracted": 25},
-    }
-    raw_cb_1 = json.dumps(cb_payload_1).encode("utf-8")
-
-    unauth_cb = client.post(
-        "/content/ingestion/callbacks",
-        content=raw_cb_1,
-        headers={"Content-Type": "application/json"},
-    )
-    assert unauth_cb.status_code == 401
-
-    # E. Webhook callback with valid HMAC signature -> 200 OK (EXTRACTED)
-    sig_1 = compute_webhook_signature(raw_cb_1, settings.ai_to_backend_secret)
-    auth_cb_1 = client.post(
-        "/content/ingestion/callbacks",
-        content=raw_cb_1,
-        headers={"Content-Type": "application/json", "X-Build-Signature": sig_1},
-    )
-    assert auth_cb_1.status_code == 200, auth_cb_1.text
-    assert auth_cb_1.json()["data"]["already_processed"] is False
-
-    # F. Duplicate callback with same event_id -> 200 OK with already_processed=True
-    dup_cb = client.post(
-        "/content/ingestion/callbacks",
-        content=raw_cb_1,
-        headers={"Content-Type": "application/json", "X-Build-Signature": sig_1},
-    )
-    assert dup_cb.status_code == 200
-    assert dup_cb.json()["data"]["already_processed"] is True
-
-    # G. Webhook callback: CHUNKED -> INDEXED -> COMPLETED
-    for stage, ev_type in [
-        ("chunked", "stage_progress"),
-        ("indexed", "stage_progress"),
-        ("ready", "job_completed"),
-    ]:
-        cb_payload = {
-            "job_id": job_id,
-            "event_id": f"evt-ai-{stage}",
-            "event_type": ev_type,
-            "stage": stage if ev_type != "job_completed" else None,
-            "external_task_id": f"aitask-mock-{job_id}",
-            "run_number": 1,
-            "attempt_count": 1,
-            "metrics": {"duration_ms": 500},
-        }
-        raw_cb = json.dumps(cb_payload).encode("utf-8")
-        sig = compute_webhook_signature(raw_cb, settings.ai_to_backend_secret)
-        res = client.post(
-            "/content/ingestion/callbacks",
-            content=raw_cb,
-            headers={"Content-Type": "application/json", "X-Build-Signature": sig},
-        )
-        assert res.status_code == 200, res.text
-
-    # H. Verify final asset status projection is READY
-    asset_check = client.get(
-        f"/content/assets/{asset_id}",
-        headers=lecturer_headers,
-    )
-    assert asset_check.status_code == 200
-    assert asset_check.json()["data"]["ingestion_status"] == "ready"
+    # Signed AI-service callbacks for this flow: test_signed_callbacks.py.
 
 
 @pytest.mark.asyncio

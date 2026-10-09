@@ -162,6 +162,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     job_res, already_proc = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
+            tenant_id="tenant-1",
             event_id="evt-1",
             event_type="stage_progress",
             stage="extracted",
@@ -179,6 +180,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     job_dup, is_dup = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
+            tenant_id="tenant-1",
             event_id="evt-1",
             event_type="stage_progress",
             stage="extracted",
@@ -194,6 +196,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     job_res, _ = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
+            tenant_id="tenant-1",
             event_id="evt-2",
             event_type="stage_progress",
             stage="chunked",
@@ -209,6 +212,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     job_res, _ = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
+            tenant_id="tenant-1",
             event_id="evt-3",
             event_type="stage_progress",
             stage="indexed",
@@ -224,6 +228,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     job_res, _ = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
+            tenant_id="tenant-1",
             event_id="evt-4",
             event_type="job_completed",
             external_task_id=job.external_task_id,
@@ -268,6 +273,7 @@ async def test_stale_attempt_protection() -> None:
     job = ContentIngestionJob.create(
         asset_id=asset.id,
         source_id=source.id,
+        tenant_id="tenant-1",
         created_by="usr-1",
     )
     job.queue()
@@ -286,6 +292,7 @@ async def test_stale_attempt_protection() -> None:
     job_res, is_stale = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
+            tenant_id="tenant-1",
             event_id="evt-delayed-attempt-1",
             event_type="stage_progress",
             stage="extracted",
@@ -362,3 +369,32 @@ async def test_failed_dispatch_is_recorded_not_raised(retryable) -> None:
     assert (result.error_code, result.is_retryable) == ("AI_SERVICE_UNAVAILABLE", retryable)
     assert uow.jobs.jobs[job.id].status == IngestionStatus.FAILED
     assert asset.ingestion_status == IngestionStatus.FAILED
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("job_tenant", ["tenant-2", None])
+async def test_callback_for_another_tenants_or_platform_job_changes_nothing(job_tenant) -> None:
+    """A signed callback for tenant-1 cannot touch a job it does not own (B.3 step 3)."""
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = ContentIngestionJob.create(
+        asset_id="asset-x", source_id="src-x", tenant_id=job_tenant, created_by="usr-1"
+    )
+    job.queue()
+    job.record_dispatch(external_task_id="task-x")
+    await uow.jobs.save_job(job)
+
+    result, processed = await HandleAICallbackHandler(uow, bus).handle(
+        HandleAICallbackCommand(
+            job_id=job.id,
+            tenant_id="tenant-1",
+            event_id="evt-cross",
+            event_type="job_failed",
+            external_task_id="task-x",
+            run_number=1,
+            attempt_count=1,
+        )
+    )
+
+    assert (result, processed) == (None, False)
+    assert job.status == IngestionStatus.PROCESSING
+    assert not job.is_event_processed("evt-cross")
