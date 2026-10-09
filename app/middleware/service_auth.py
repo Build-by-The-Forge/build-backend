@@ -39,6 +39,9 @@ logger = structlog.get_logger(__name__)
 
 MAX_BODY_BYTES = 1024 * 1024
 STATE_KEY = "service_auth"
+# Where an app keeps its replay store when the middleware is not given one,
+# so it can be replaced (for example by a test Redis) after start-up.
+REPLAY_STORE_STATE_KEY = "service_replay_store"
 
 
 class ReplayStore(Protocol):
@@ -60,9 +63,9 @@ class ServiceAuthMiddleware:
         *,
         receiver: str,
         direction: Direction,
-        keys: ServiceKeys,
-        replay_store: ReplayStore,
+        keys: ServiceKeys | None,
         is_protected: Callable[[str], bool],
+        replay_store: ReplayStore | None = None,
         max_body_bytes: int = MAX_BODY_BYTES,
         clock: Callable[[], float] = time.time,
     ) -> None:
@@ -78,6 +81,17 @@ class ServiceAuthMiddleware:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not self.is_protected(scope["path"]):
             await self.app(scope, receive, send)
+            return
+
+        if self.keys is None:
+            # No inbound secret configured (development only): nothing verifies.
+            await self._reject(scope, receive, send, 401, "service secret not configured")
+            return
+        replay_store = self.replay_store or getattr(
+            scope["app"].state, REPLAY_STORE_STATE_KEY, None
+        )
+        if replay_store is None:
+            await self._reject(scope, receive, send, 503, "no replay store configured")
             return
 
         try:
@@ -113,7 +127,7 @@ class ServiceAuthMiddleware:
             return
 
         try:
-            fresh = await self.replay_store.claim(
+            fresh = await replay_store.claim(
                 self.receiver, verified.service, verified.request_id
             )
         except ReplayStoreUnavailable as exc:

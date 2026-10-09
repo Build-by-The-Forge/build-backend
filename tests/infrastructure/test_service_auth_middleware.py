@@ -390,3 +390,56 @@ async def test_redis_unavailable_still_answers_401_for_a_bad_signature(dead_stor
         resp = await client.post(PATH, content=event_body("tampered"), headers=signed(body))
     assert resp.status_code == 401
     assert calls == []
+
+
+# --- configuration -------------------------------------------------------------------
+
+
+def _app_without_explicit_store(keys):
+    app = FastAPI()
+    calls: list[str] = []
+
+    @app.post(PATH)
+    async def callback(request: Request) -> dict:
+        calls.append(getattr(request.state, STATE_KEY).request_id)
+        return {}
+
+    app.add_middleware(
+        ServiceAuthMiddleware,
+        receiver=RECEIVER,
+        direction=Direction.AI_TO_BACKEND,
+        keys=keys,
+        is_protected=lambda path: path == PATH,
+    )
+    return app, calls
+
+
+async def test_without_an_inbound_secret_every_request_is_refused():
+    app, calls = _app_without_explicit_store(keys=None)
+    body = event_body()
+    async with client_for(app) as client:
+        resp = await client.post(PATH, content=body, headers=signed(body))
+    assert (resp.status_code, resp.json()) == (401, UNIFORM_401)
+    assert calls == []
+
+
+async def test_without_any_replay_store_requests_fail_closed():
+    app, calls = _app_without_explicit_store(keys=KEYS)
+    body = event_body()
+    async with client_for(app) as client:
+        resp = await client.post(PATH, content=body, headers=signed(body))
+    assert resp.status_code == 503
+    assert calls == []
+
+
+@needs_redis
+async def test_the_replay_store_can_come_from_app_state(store):
+    app, calls = _app_without_explicit_store(keys=KEYS)
+    app.state.service_replay_store = store
+    body = event_body()
+    headers = signed(body)
+    async with client_for(app) as client:
+        first = await client.post(PATH, content=body, headers=headers)
+        replay = await client.post(PATH, content=body, headers=headers)
+    assert (first.status_code, replay.status_code) == (200, 401)
+    assert len(calls) == 1
