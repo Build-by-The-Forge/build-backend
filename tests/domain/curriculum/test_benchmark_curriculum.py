@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
@@ -19,7 +21,7 @@ def test_create_benchmark_candidate_success() -> None:
         minimum_credit_units=120,
     )
 
-    assert curriculum.id.startswith("bmcurr-")
+    assert str(UUID(curriculum.id)) == curriculum.id  # fits VARCHAR(36)
     assert curriculum.source_snapshot_id == "snap-123"
     assert curriculum.discipline_group == "Computing"
     assert curriculum.programme_name == "Computer Science"

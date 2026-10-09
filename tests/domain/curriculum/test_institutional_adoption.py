@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from app.domain.curriculum.adoption import (
     AdoptionStatus,
@@ -101,7 +103,7 @@ def test_curriculum_override_validation() -> None:
     )
     assert mod_override.target_course_code == "COS102"
     assert mod_override.field_overrides == {"credit_units": 3}
-    assert mod_override.id.startswith("ovr-")
+    assert str(UUID(mod_override.id)) == mod_override.id  # fits VARCHAR(36)
 
     # 5. Valid custom course addition override
     add_override = CurriculumOverride.create(

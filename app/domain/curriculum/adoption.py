@@ -100,7 +100,7 @@ class CurriculumOverride:
                 )
 
         return cls(
-            id=override_id or f"ovr-{uuid4()}",
+            id=override_id or str(uuid4()),
             adoption_id=adoption_id.strip(),
             override_type=ov_type,
             target_course_code=norm_course_code,
@@ -161,7 +161,7 @@ class InstitutionalAdoption:
 
         now = datetime.now(timezone.utc)
         adoption = cls(
-            id=adoption_id or f"adopt-{uuid4()}",
+            id=adoption_id or str(uuid4()),
             tenant_id=tenant_id.strip(),
             programme_id=programme_id.strip(),
             benchmark_curriculum_id=benchmark_curriculum_id.strip(),
