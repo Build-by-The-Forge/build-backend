@@ -518,3 +518,17 @@ async def test_a_late_failure_after_ready_is_409(client, monkeypatch):
     resp = client.post(PATH, content=late, headers=signed(late, tenant_id))
     assert resp.status_code == 409
     assert status_of(client, job, h) == "ready"
+
+
+async def test_reusing_an_event_id_for_different_content_is_409(client, monkeypatch):
+    job, tenant_id, h = await processing_job(client, monkeypatch)
+    body = json.loads(event(job, stage="extracted"))
+    raw = json.dumps(body).encode()
+    assert client.post(PATH, content=raw, headers=signed(raw, tenant_id)).status_code == 200
+    forged = json.dumps({**body, "metrics": {**body["metrics"], "pages": 99}}).encode()
+    resp = client.post(PATH, content=forged, headers=signed(forged, tenant_id))
+    assert (resp.status_code, resp.json()["error"]["code"]) == (409, "EVENT_CONFLICT")
+    reordered = json.dumps(dict(reversed(list(body.items())))).encode()
+    again = client.post(PATH, content=reordered, headers=signed(reordered, tenant_id))
+    assert again.json()["data"]["outcome"] == "duplicate"  # same meaning, other key order
+    assert status_of(client, job, h) == "extracted"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.application.identity.ports.security_events import SecurityEventRecorder
 from app.application.common.uow import ContentUnitOfWorkFactory, ContentUnitOfWorkPort
 from app.application.content.job_commands import (
     CreateIngestionJobCommand,
@@ -37,11 +38,13 @@ class ContentIngestionJobService:
         event_bus: EventBus | None = None,
         uow_factory: ContentUnitOfWorkFactory | None = None,
         gateway: AIServiceIngestionGateway | None = None,
+        security_events: SecurityEventRecorder | None = None,
     ) -> None:
         self._uow = uow
         self._event_bus = event_bus or EventBus()
         self._uow_factory = uow_factory
         self._gateway = gateway or HttpAIServiceIngestionGateway()
+        self._security_events = security_events
 
     async def create_job(
         self,
@@ -159,10 +162,14 @@ class ContentIngestionJobService:
         )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await HandleAICallbackHandler(uow, self._event_bus).handle(cmd)
+                return await HandleAICallbackHandler(
+                    uow, self._event_bus, self._security_events
+                ).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await HandleAICallbackHandler(self._uow, self._event_bus).handle(cmd)
+        return await HandleAICallbackHandler(
+            self._uow, self._event_bus, self._security_events
+        ).handle(cmd)
 
     async def get_job(
         self, job_id: str, tenant_id: str | None = None

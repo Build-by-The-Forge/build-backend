@@ -131,7 +131,6 @@ class ContentIngestionJob:
     external_task_id: str | None = None
     last_dispatched_at: datetime | None = None
     last_callback_at: datetime | None = None
-    processed_event_ids: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
@@ -494,14 +493,6 @@ class ContentIngestionJob:
 
         self.last_callback_at = datetime.now(timezone.utc)
         return CallbackOutcome.APPLIED
-
-    def is_event_processed(self, event_id: str) -> bool:
-        return event_id in self.processed_event_ids
-
-    def record_event_processed(self, event_id: str) -> None:
-        if event_id not in self.processed_event_ids:
-            self.processed_event_ids.append(event_id)
-        self.touch()
 
     def create_reprocess_run(
         self, created_by: str, correlation_id: str | None = None

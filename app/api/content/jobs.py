@@ -375,6 +375,19 @@ async def handle_ai_callback(request: Request) -> JSONResponse:
             content={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}},
         )
 
+    if outcome is CallbackOutcome.CONFLICT:
+        # The event id was already used for different content.
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": {
+                    "code": "EVENT_CONFLICT",
+                    "message": "event_id was already recorded with different content",
+                },
+                "data": {"job_id": job.id, "outcome": outcome.value},
+            },
+        )
+
     if outcome is CallbackOutcome.NOT_ALLOWED:
         # Not consumed: the job is not in a state this event can move it from.
         return JSONResponse(

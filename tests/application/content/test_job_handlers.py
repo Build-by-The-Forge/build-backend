@@ -21,6 +21,7 @@ from app.domain.content.enums import (
     SourceStatus,
     VisibilityScope,
 )
+from app.domain.content.ingestion_event import IngestionEventRecord
 from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
@@ -121,6 +122,9 @@ class InMemoryContentJobRepo:
     async def get_job_by_id(self, job_id: str) -> ContentIngestionJob | None:
         return self.jobs.get(job_id)
 
+    async def get_job_for_update(self, job_id: str) -> ContentIngestionJob | None:
+        return self.jobs.get(job_id)
+
     async def get_latest_job_for_asset(
         self, asset_id: str
     ) -> ContentIngestionJob | None:
@@ -179,11 +183,24 @@ class InMemoryContentJobRepo:
         return res[offset : offset + limit], len(res)
 
 
+class InMemoryIngestionEventRepo:
+    def __init__(self) -> None:
+        self.records: dict[str, IngestionEventRecord] = {}
+
+    async def get(self, event_id: str) -> IngestionEventRecord | None:
+        return self.records.get(event_id)
+
+    async def add(self, record: IngestionEventRecord) -> None:
+        assert record.event_id not in self.records  # the table's primary key
+        self.records[record.event_id] = record
+
+
 class FakeContentUnitOfWork:
     def __init__(self) -> None:
         self.sources = InMemoryContentSourceRepo()
         self.assets = InMemoryContentAssetRepo()
         self.jobs = InMemoryContentJobRepo()
+        self.ingestion_events = InMemoryIngestionEventRepo()
 
 
 async def _asset(uow, tenant_id="tenant-1") -> ContentAsset:

@@ -176,7 +176,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     assert job_res.status == IngestionStatus.EXTRACTED
     assert asset.ingestion_status == IngestionStatus.EXTRACTED
 
-    # 2. Duplicate callback with same event_id: returns already_processed=True without error
+    # 2. The identical event delivered again is an idempotent duplicate
     job_dup, is_dup = await callback_handler.handle(
         HandleAICallbackCommand(
             job_id=job.id,
@@ -187,6 +187,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
             external_task_id=job.external_task_id,
             run_number=1,
             attempt_count=1,
+            metrics={"characters": 5000, "pages": 10, "method": "native_text"},
         )
     )
     assert is_dup is CallbackOutcome.DUPLICATE
@@ -397,7 +398,7 @@ async def test_callback_for_another_tenants_or_platform_job_changes_nothing(job_
 
     assert (result, processed) == (None, None)
     assert job.status == IngestionStatus.PROCESSING
-    assert not job.is_event_processed("evt-cross")
+    assert uow.ingestion_events.records == {}
 
 
 # --- M3-08: outcomes through the handler -----------------------------------------------
@@ -441,7 +442,7 @@ async def test_an_event_that_is_not_allowed_yet_is_not_consumed() -> None:
 
     early, outcome = await handler.handle(_cb(job, "evt-done", "job_completed"))
     assert outcome is CallbackOutcome.NOT_ALLOWED
-    assert not job.is_event_processed("evt-done")
+    assert "evt-done" not in uow.ingestion_events.records
     assert early.status == IngestionStatus.PROCESSING
 
 
@@ -456,7 +457,7 @@ async def test_missing_evidence_changes_and_consumes_nothing() -> None:
             _cb(job, "evt-x", "stage_progress", "extracted", metrics={"pages": 2})
         )
     assert job.status == IngestionStatus.PROCESSING
-    assert not job.is_event_processed("evt-x")
+    assert uow.ingestion_events.records == {}
 
 
 @pytest.mark.asyncio
@@ -514,3 +515,116 @@ async def test_a_retried_job_is_not_dispatched_before_its_delay() -> None:
         await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
     assert gateway.dispatched_jobs == []
     assert job.status == IngestionStatus.QUEUED
+
+
+# --- M3-08: the event ledger -----------------------------------------------------------
+
+
+class RecordingSecurityEvents:
+    def __init__(self) -> None:
+        self.events: list[tuple] = []
+
+    async def record(self, event, *, user_id=None, metadata=None) -> None:
+        self.events.append((event, metadata))
+
+
+@pytest.mark.asyncio
+async def test_same_event_id_with_different_content_is_a_conflict() -> None:
+    from app.application.identity.ports.security_events import SecurityEvent
+
+    uow, bus, security = FakeContentUnitOfWork(), EventBus(), RecordingSecurityEvents()
+    job = await _dispatched_job(uow)
+    handler = HandleAICallbackHandler(uow, bus, security)
+
+    first = _cb(job, "evt-1", "stage_progress", "extracted", metrics=EXTRACTED_EVIDENCE)
+    assert (await handler.handle(first))[1] is CallbackOutcome.APPLIED
+    assert (await handler.handle(first))[1] is CallbackOutcome.DUPLICATE
+
+    forged = _cb(
+        job, "evt-1", "stage_progress", "extracted", metrics={**EXTRACTED_EVIDENCE, "pages": 99}
+    )
+    assert (await handler.handle(forged))[1] is CallbackOutcome.CONFLICT
+    assert job.metrics["pages"] == 2
+    assert [e for e, _ in security.events] == [SecurityEvent.AI_CALLBACK_EVENT_CONFLICT]
+    assert security.events[0][1]["event_id"] == "evt-1"
+
+
+@pytest.mark.asyncio
+async def test_an_event_id_recorded_for_another_job_is_a_conflict() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job_a = await _dispatched_job(uow, task="task-a")
+    job_b = await _dispatched_job(uow, task="task-b")
+    handler = HandleAICallbackHandler(uow, bus)
+    await handler.handle(_cb(job_a, "evt-shared", "job_failed"))
+    _, outcome = await handler.handle(_cb(job_b, "evt-shared", "job_failed"))
+    assert outcome is CallbackOutcome.CONFLICT
+    assert job_b.status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.asyncio
+async def test_a_legacy_event_id_is_never_treated_as_a_verified_duplicate() -> None:
+    from datetime import datetime, timezone
+
+    from app.domain.content.ingestion_event import IngestionEventRecord
+
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = await _dispatched_job(uow)
+    await uow.ingestion_events.add(
+        IngestionEventRecord(
+            event_id="evt-old",
+            job_id=job.id,
+            tenant_id="tenant-1",
+            run_number=None,
+            attempt_count=None,
+            external_task_id=None,
+            event_type=None,
+            stage=None,
+            payload_sha256=None,
+            outcome=CallbackOutcome.LEGACY,
+            received_at=datetime.now(timezone.utc),
+        )
+    )
+    _, outcome = await HandleAICallbackHandler(uow, bus).handle(_cb(job, "evt-old", "job_failed"))
+    assert outcome is CallbackOutcome.LEGACY
+    assert job.status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.asyncio
+async def test_outcomes_are_recorded_except_not_allowed() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = await _dispatched_job(uow)
+    handler = HandleAICallbackHandler(uow, bus)
+    await handler.handle(_cb(job, "evt-stale", "job_failed", task="task-old"))
+    await handler.handle(_cb(job, "evt-early", "job_completed"))
+    await handler.handle(_cb(job, "evt-x1", "stage_progress", "extracted", metrics=EXTRACTED_EVIDENCE))
+    await handler.handle(_cb(job, "evt-x2", "stage_progress", "extracted", metrics=EXTRACTED_EVIDENCE))
+    outcomes = {k: r.outcome for k, r in uow.ingestion_events.records.items()}
+    assert outcomes == {
+        "evt-stale": CallbackOutcome.STALE,
+        "evt-x1": CallbackOutcome.APPLIED,
+        "evt-x2": CallbackOutcome.SUPERSEDED,
+    }
+    assert all(len(r.payload_sha256 or "") == 64 for r in uow.ingestion_events.records.values())
+
+
+def test_the_digest_ignores_key_order_but_not_meaning() -> None:
+    from app.domain.content.ingestion_event import canonical_event_digest
+
+    base = dict(
+        job_id="j",
+        event_type="stage_progress",
+        run_number=1,
+        attempt_count=1,
+        external_task_id="t",
+        stage="extracted",
+        error_code=None,
+        error_message=None,
+        is_retryable=False,
+        details={},
+    )
+    a = canonical_event_digest(metrics={"pages": 1, "characters": 5, "method": "ocr"}, **base)
+    b = canonical_event_digest(metrics={"method": "ocr", "characters": 5, "pages": 1}, **base)
+    c = canonical_event_digest(metrics={"method": "ocr", "characters": 5, "pages": 2}, **base)
+    d = canonical_event_digest(metrics={"pages": 1, "characters": 5, "method": "ocr"}, **{**base, "attempt_count": 2})
+    assert a == b
+    assert len({a, c, d}) == 3

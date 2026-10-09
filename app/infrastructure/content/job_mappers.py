@@ -32,7 +32,6 @@ def content_job_to_model(
     model.external_task_id = job.external_task_id
     model.last_dispatched_at = job.last_dispatched_at
     model.last_callback_at = job.last_callback_at
-    model.processed_event_ids = list(job.processed_event_ids)
     model.created_by = job.created_by
     model.created_at = job.created_at
     model.updated_at = job.updated_at
@@ -63,7 +62,6 @@ def content_job_model_to_domain(model: ContentIngestionJobModel) -> ContentInges
         external_task_id=model.external_task_id,
         last_dispatched_at=model.last_dispatched_at,
         last_callback_at=model.last_callback_at,
-        processed_event_ids=list(model.processed_event_ids) if model.processed_event_ids else [],
         created_by=model.created_by,
         created_at=model.created_at,
         updated_at=model.updated_at,

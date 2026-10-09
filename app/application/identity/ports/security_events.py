@@ -25,6 +25,8 @@ class SecurityEvent(tuple[str, str], Enum):
     MEMBERSHIP_REACTIVATED = ("membership", "reactivated")
     MEMBERSHIP_JOINED_BY_EMAIL_DOMAIN = ("membership", "joined_by_email_domain")
     TENANT_JOIN_POLICY_UPDATED = ("tenant", "join_policy_updated")
+    # An AI-service callback reused an event id with different content.
+    AI_CALLBACK_EVENT_CONFLICT = ("ai_callback", "event_conflict")
 
 
 class LoginFailureReason(str, Enum):

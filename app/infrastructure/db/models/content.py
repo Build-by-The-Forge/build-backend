@@ -187,9 +187,6 @@ class ContentIngestionJobModel(Base):
     last_callback_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    processed_event_ids: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -215,3 +212,27 @@ class ContentIngestionJobModel(Base):
         Index("ix_content_ingestion_jobs_pending_retry", "status", "next_retry_at"),
         Index("ix_content_ingestion_jobs_asset_created", "asset_id", "created_at"),
     )
+
+
+class ContentIngestionEventModel(Base):
+    """One row per logical AI-service callback the backend handled (M3-08)."""
+
+    __tablename__ = "content_ingestion_events"
+
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("content_ingestion_jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tenant_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    run_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    attempt_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    event_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    stage: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    payload_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("ix_content_ingestion_events_job_id", "job_id"),)

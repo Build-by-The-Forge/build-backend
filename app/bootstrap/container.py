@@ -234,6 +234,7 @@ def build_container() -> Container:
         ContentIngestionJobService(
             event_bus=event_bus,
             uow_factory=sqlalchemy_content_uow,
+            security_events=security_events,
         ),
     )
     return container
