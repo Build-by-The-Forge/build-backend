@@ -20,6 +20,12 @@ from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import IngestionStatus
+from app.domain.content.job import (
+    CallbackOutcome,
+    InvalidJobTransition,
+    InvalidStageEvidence,
+    RetryNotDue,
+)
 from app.infrastructure.security.service_context import ACTOR_SYSTEM
 from app.infrastructure.security.service_signature import VerifiedServiceRequest
 from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
@@ -181,6 +187,11 @@ async def retry_job(
         job = await service.retry_job(
             job_id=job_id, tenant_id=context.tenant_id, delay_seconds=payload.delay_seconds
         )
+    except InvalidJobTransition as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+        )
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = (
@@ -251,6 +262,16 @@ async def dispatch_ingestion_job(
             membership_id=context.membership_id,
             role=context.role,
             permission=Permission.CONTENT_JOB_MANAGE.value,
+        )
+    except RetryNotDue as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "RETRY_NOT_DUE", "message": str(exc)}},
+        )
+    except InvalidJobTransition as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
         )
     except ValueError as exc:
         return JSONResponse(
@@ -326,26 +347,45 @@ async def handle_ai_callback(request: Request) -> JSONResponse:
             },
         )
 
-    job, already_processed = await service.handle_callback(
-        job_id=payload.job_id,
-        tenant_id=context.tenant_id,
-        event_id=payload.event_id,
-        event_type=payload.event_type,
-        stage=payload.stage,
-        external_task_id=payload.external_task_id,
-        run_number=payload.run_number,
-        attempt_count=payload.attempt_count,
-        metrics=payload.metrics,
-        error_code=payload.error_code,
-        error_message=payload.error_message,
-        is_retryable=payload.is_retryable,
-        details=payload.details,
-    )
+    try:
+        job, outcome = await service.handle_callback(
+            job_id=payload.job_id,
+            tenant_id=context.tenant_id,
+            event_id=payload.event_id,
+            event_type=payload.event_type,
+            stage=payload.stage,
+            external_task_id=payload.external_task_id,
+            run_number=payload.run_number,
+            attempt_count=payload.attempt_count,
+            metrics=payload.metrics,
+            error_code=payload.error_code,
+            error_message=payload.error_message,
+            is_retryable=payload.is_retryable,
+            details=payload.details,
+        )
+    except InvalidStageEvidence as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"error": {"code": "INVALID_STAGE_EVIDENCE", "message": str(exc)}},
+        )
 
-    if job is None:
+    if job is None or outcome is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}},
+        )
+
+    if outcome is CallbackOutcome.NOT_ALLOWED:
+        # Not consumed: the job is not in a state this event can move it from.
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": {
+                    "code": "TRANSITION_NOT_ALLOWED",
+                    "message": f"event not allowed while the job is {job.status.value}",
+                },
+                "data": {"job_id": job.id, "outcome": outcome.value},
+            },
         )
 
     return JSONResponse(
@@ -354,7 +394,8 @@ async def handle_ai_callback(request: Request) -> JSONResponse:
             "data": {
                 "status": "accepted",
                 "job_id": job.id,
-                "already_processed": already_processed,
+                "outcome": outcome.value,
+                "already_processed": outcome is not CallbackOutcome.APPLIED,
             }
         },
     )

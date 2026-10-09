@@ -43,4 +43,6 @@ class AICallbackRequest(BaseModel):
 class AICallbackResponse(BaseModel):
     status: str = "accepted"
     job_id: str
+    # applied | duplicate | stale | superseded (409 not_allowed / conflict)
+    outcome: str
     already_processed: bool = False

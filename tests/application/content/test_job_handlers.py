@@ -209,11 +209,12 @@ async def _job(uow, bus, asset, tenant_id="tenant-1", **kwargs) -> ContentIngest
 
 
 def _to_ready(job: ContentIngestionJob) -> None:
-    """Processing transitions now happen only through verified AI callbacks."""
+    """Processing transitions happen only through verified AI callbacks,
+    each with its stage evidence."""
     job.record_dispatch(external_task_id=f"aitask-{job.id}")
-    job.progress_to_extracted()
-    job.progress_to_chunked()
-    job.progress_to_indexed()
+    job.progress_to_extracted({"characters": 100, "pages": 1, "method": "native_text"})
+    job.progress_to_chunked({"chunks": 4})
+    job.progress_to_indexed({"indexed_chunks": 4, "index": "pgvector"})
     job.complete()
 
 
@@ -246,7 +247,7 @@ async def test_retry_of_a_failed_job_requeues_it() -> None:
     asset = await _asset(uow)
     job = await _job(uow, bus, asset, max_attempts=3)
     job.record_dispatch(external_task_id="aitask-1")
-    job.fail(error_code="TIMEOUT", error_message="Gateway timeout", is_retryable=True)
+    job.fail_processing(error_code="TIMEOUT", error_message="Gateway timeout", is_retryable=True)
 
     job = await RetryIngestionJobHandler(uow, bus).handle(
         RetryIngestionJobCommand(job_id=job.id, tenant_id="tenant-1", delay_seconds=15)
@@ -261,7 +262,7 @@ async def test_retry_of_another_tenants_job_is_refused() -> None:
     uow, bus = FakeContentUnitOfWork(), EventBus()
     job = await _job(uow, bus, await _asset(uow))
     job.record_dispatch(external_task_id="aitask-1")
-    job.fail(error_code="TIMEOUT", error_message="Gateway timeout", is_retryable=True)
+    job.fail_processing(error_code="TIMEOUT", error_message="Gateway timeout", is_retryable=True)
 
     with pytest.raises(ValueError, match="does not exist"):
         await RetryIngestionJobHandler(uow, bus).handle(RetryIngestionJobCommand(job_id=job.id, tenant_id="tenant-2"))

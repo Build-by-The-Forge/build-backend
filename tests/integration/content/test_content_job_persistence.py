@@ -60,10 +60,10 @@ async def test_content_job_persistence_and_latest_lookup(
         run_number=1,
     )
     job1.queue()
-    job1.start()
-    job1.progress_to_extracted()
-    job1.progress_to_chunked()
-    job1.progress_to_indexed()
+    job1.record_dispatch("task-run-1")
+    job1.progress_to_extracted({"characters": 100, "pages": 1, "method": "native_text"})
+    job1.progress_to_chunked({"chunks": 4})
+    job1.progress_to_indexed({"indexed_chunks": 4, "index": "pgvector"})
     job1.complete()
     await job_repo.save_job(job1)
 

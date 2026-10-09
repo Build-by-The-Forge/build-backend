@@ -51,10 +51,11 @@ class HandleAICallbackCommand:
     tenant_id: str
     event_id: str
     event_type: str  # "stage_progress" | "job_completed" | "job_failed"
+    # The attempt the event belongs to; must be the job's active attempt.
+    external_task_id: str
+    run_number: int
+    attempt_count: int
     stage: str | None = None  # "extracted" | "chunked" | "indexed"
-    external_task_id: str | None = None
-    run_number: int | None = None
-    attempt_count: int | None = None
     metrics: dict[str, Any] = field(default_factory=dict)
     error_code: str | None = None
     error_message: str | None = None

@@ -20,7 +20,7 @@ from app.domain.content.enums import (
     VisibilityScope,
 )
 from app.domain.content.gateway import AIServiceDispatchResult, IngestionDispatchActor
-from app.domain.content.job import ContentIngestionJob
+from app.domain.content.job import CallbackOutcome, ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
 from tests.application.content.test_job_handlers import FakeContentUnitOfWork
@@ -169,10 +169,10 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
             external_task_id=job.external_task_id,
             run_number=1,
             attempt_count=1,
-            metrics={"pages": 10},
+            metrics={"characters": 5000, "pages": 10, "method": "native_text"},
         )
     )
-    assert already_proc is False
+    assert already_proc is CallbackOutcome.APPLIED
     assert job_res.status == IngestionStatus.EXTRACTED
     assert asset.ingestion_status == IngestionStatus.EXTRACTED
 
@@ -189,7 +189,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
             attempt_count=1,
         )
     )
-    assert is_dup is True
+    assert is_dup is CallbackOutcome.DUPLICATE
     assert job_dup.status == IngestionStatus.EXTRACTED
 
     # 3. Next stage: CHUNKED
@@ -219,7 +219,7 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
             external_task_id=job.external_task_id,
             run_number=1,
             attempt_count=1,
-            metrics={"indexed": 40},
+            metrics={"indexed_chunks": 40, "index": "pgvector"},
         )
     )
     assert job_res.status == IngestionStatus.INDEXED
@@ -277,9 +277,9 @@ async def test_stale_attempt_protection() -> None:
         created_by="usr-1",
     )
     job.queue()
-    job.start()
-    job.fail(error_code="TIMEOUT", error_message="Timeout on attempt 1", is_retryable=True)
-    job.schedule_retry(delay_seconds=10)
+    job.record_dispatch(external_task_id="aitask-attempt-1")
+    job.fail_processing(error_code="TIMEOUT", error_message="Timeout on attempt 1", is_retryable=True)
+    job.schedule_retry(delay_seconds=0)
     job.record_dispatch(external_task_id="aitask-attempt-2")
     await uow.jobs.save_job(job)
 
@@ -303,7 +303,7 @@ async def test_stale_attempt_protection() -> None:
     )
 
     # Stale callback must be safely ignored
-    assert is_stale is True
+    assert is_stale is CallbackOutcome.STALE
     assert job_res.attempt_count == 2
     assert job_res.external_task_id == "aitask-attempt-2"
     assert job_res.status == IngestionStatus.PROCESSING
@@ -395,6 +395,122 @@ async def test_callback_for_another_tenants_or_platform_job_changes_nothing(job_
         )
     )
 
-    assert (result, processed) == (None, False)
+    assert (result, processed) == (None, None)
     assert job.status == IngestionStatus.PROCESSING
     assert not job.is_event_processed("evt-cross")
+
+
+# --- M3-08: outcomes through the handler -----------------------------------------------
+
+EXTRACTED_EVIDENCE = {"characters": 900, "pages": 2, "method": "native_text"}
+
+
+async def _dispatched_job(uow, task="task-1", max_attempts=3):
+    job = ContentIngestionJob.create(
+        asset_id="asset-m308",
+        source_id="src-m308",
+        tenant_id="tenant-1",
+        created_by="usr-1",
+        max_attempts=max_attempts,
+    )
+    job.queue()
+    job.record_dispatch(external_task_id=task)
+    await uow.jobs.save_job(job)
+    return job
+
+
+def _cb(job, event_id, event_type, stage=None, task=None, attempt=None, **kwargs):
+    return HandleAICallbackCommand(
+        job_id=job.id,
+        tenant_id="tenant-1",
+        event_id=event_id,
+        event_type=event_type,
+        stage=stage,
+        external_task_id=task or job.external_task_id,
+        run_number=job.run_number,
+        attempt_count=attempt or job.attempt_count,
+        **kwargs,
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_event_that_is_not_allowed_yet_is_not_consumed() -> None:
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = await _dispatched_job(uow)
+    handler = HandleAICallbackHandler(uow, bus)
+
+    early, outcome = await handler.handle(_cb(job, "evt-done", "job_completed"))
+    assert outcome is CallbackOutcome.NOT_ALLOWED
+    assert not job.is_event_processed("evt-done")
+    assert early.status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.asyncio
+async def test_missing_evidence_changes_and_consumes_nothing() -> None:
+    from app.domain.content.job import InvalidStageEvidence
+
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = await _dispatched_job(uow)
+    with pytest.raises(InvalidStageEvidence):
+        await HandleAICallbackHandler(uow, bus).handle(
+            _cb(job, "evt-x", "stage_progress", "extracted", metrics={"pages": 2})
+        )
+    assert job.status == IngestionStatus.PROCESSING
+    assert not job.is_event_processed("evt-x")
+
+
+@pytest.mark.asyncio
+async def test_an_old_task_cannot_fail_the_retried_attempt() -> None:
+    """Audit F-7: before M3-08 the old task's own retry (attempt 2) matched the
+    retried job and could fail it while queued."""
+    uow, bus = FakeContentUnitOfWork(), EventBus()
+    job = await _dispatched_job(uow, task="task-1")
+    handler = HandleAICallbackHandler(uow, bus)
+    await handler.handle(_cb(job, "evt-f1", "job_failed", is_retryable=True))
+    job.schedule_retry(delay_seconds=0)
+
+    _, outcome = await handler.handle(_cb(job, "evt-old", "job_failed", task="task-1", attempt=2))
+    assert outcome is CallbackOutcome.STALE
+    assert job.status == IngestionStatus.QUEUED
+
+
+@pytest.mark.asyncio
+async def test_a_retried_job_is_not_dispatched_before_its_delay() -> None:
+    from app.domain.content.job import RetryNotDue
+
+    uow, bus, gateway = FakeContentUnitOfWork(), EventBus(), FakeAIGateway()
+    source = ContentSource.create(
+        code="SRC_DELAY",
+        name="Delay",
+        source_type=ContentSourceType.CCMAS,
+        authority_level=AuthorityLevel.REGULATORY,
+        visibility=VisibilityScope.PLATFORM,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    await uow.sources.save_source(source)
+    asset = ContentAsset.create(
+        source_id=source.id,
+        file_name="d.pdf",
+        mime_type=AssetMimeType.PDF,
+        file_size_bytes=10,
+        content_sha256="d" * 64,
+        storage_uri="s3://build/d.pdf",
+        tenant_id="tenant-1",
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    await uow.assets.save_asset(asset)
+    job = ContentIngestionJob.create(
+        asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1"
+    )
+    job.queue()
+    job.record_dispatch("task-1")
+    job.fail_processing("TIMEOUT", "t", is_retryable=True)
+    job.schedule_retry(delay_seconds=300)
+    await uow.jobs.save_job(job)
+
+    with pytest.raises(RetryNotDue):
+        await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
+    assert gateway.dispatched_jobs == []
+    assert job.status == IngestionStatus.QUEUED

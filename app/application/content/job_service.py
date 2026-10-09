@@ -25,7 +25,7 @@ from app.application.content.job_handlers import (
 )
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import AIServiceIngestionGateway
-from app.domain.content.job import ContentIngestionJob
+from app.domain.content.job import CallbackOutcome, ContentIngestionJob
 from app.events.event_bus import EventBus
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
 
@@ -132,16 +132,16 @@ class ContentIngestionJobService:
         tenant_id: str,
         event_id: str,
         event_type: str,
+        external_task_id: str,
+        run_number: int,
+        attempt_count: int,
         stage: str | None = None,
-        external_task_id: str | None = None,
-        run_number: int | None = None,
-        attempt_count: int | None = None,
         metrics: dict[str, Any] | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
         is_retryable: bool = False,
         details: dict[str, Any] | None = None,
-    ) -> tuple[ContentIngestionJob | None, bool]:
+    ) -> tuple[ContentIngestionJob | None, CallbackOutcome | None]:
         cmd = HandleAICallbackCommand(
             job_id=job_id,
             tenant_id=tenant_id,

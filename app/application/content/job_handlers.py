@@ -14,7 +14,7 @@ from app.application.content.job_commands import (
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import AIServiceIngestionGateway, IngestionDispatchActor
-from app.domain.content.job import ContentIngestionJob
+from app.domain.content.job import CallbackOutcome, ContentIngestionJob
 from app.events.event_bus import EventBus
 
 
@@ -169,6 +169,10 @@ class DispatchIngestionJobHandler:
             permission=cmd.permission,
         )
 
+        # Only a queued job whose retry delay has elapsed is sent; anything
+        # else is refused before AI-service is contacted.
+        job.ensure_dispatchable()
+
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
                 job=job,
@@ -181,7 +185,7 @@ class DispatchIngestionJobHandler:
         except Exception as exc:
             error_code = getattr(exc, "error_code", "AI_DISPATCH_FAILED")
             is_retryable = getattr(exc, "is_retryable", True)
-            job.fail(
+            job.fail_dispatch(
                 error_code=error_code,
                 error_message=str(exc),
                 is_retryable=is_retryable,
@@ -225,77 +229,56 @@ class HandleAICallbackHandler:
 
     async def handle(
         self, cmd: HandleAICallbackCommand
-    ) -> tuple[ContentIngestionJob | None, bool]:
-        """Handles an incoming webhook callback from the AI service.
+    ) -> tuple[ContentIngestionJob | None, CallbackOutcome | None]:
+        """Apply one verified AI-service processing event.
 
-        Returns (job, already_processed_or_stale).
+        Returns (None, None) when the job is unknown or not the signed
+        tenant's, otherwise the job and the event's outcome. NOT_ALLOWED
+        leaves the event unconsumed, so a later valid delivery can apply.
+        Raises InvalidStageEvidence when a stage lacks its evidence.
         """
         job = await self._uow.jobs.get_job_by_id(cmd.job_id)
         # Unknown, platform-owned and other tenants' jobs all look the same:
         # absent. Nothing is created or changed.
         if job is None or job.tenant_id is None or job.tenant_id != cmd.tenant_id:
-            return None, False
+            return None, None
 
-        # 1. Event Idempotency Check
         if job.is_event_processed(cmd.event_id):
-            return job, True
+            return job, CallbackOutcome.DUPLICATE
 
-        # 2. Stale Attempt / Run Check
-        if job.is_stale_callback(
+        outcome = job.apply_callback(
+            event_type=cmd.event_type,
             run_number=cmd.run_number,
             attempt_count=cmd.attempt_count,
             external_task_id=cmd.external_task_id,
-        ):
-            return job, True
+            stage=cmd.stage,
+            metrics=cmd.metrics,
+            error_code=cmd.error_code,
+            error_message=cmd.error_message,
+            is_retryable=cmd.is_retryable,
+            details=cmd.details,
+        )
+        if outcome is CallbackOutcome.NOT_ALLOWED:
+            return job, outcome
 
-        # Record this event ID as processed
         job.record_event_processed(cmd.event_id)
 
-        # 3. Apply state transition according to event_type
-        ev_type = cmd.event_type.strip().lower()
-        if ev_type == "stage_progress":
-            stage = (cmd.stage or "").strip().lower()
-            if stage == "extracted":
-                if job.status == IngestionStatus.PROCESSING:
-                    job.progress_to_extracted(cmd.metrics)
-            elif stage == "chunked":
-                if job.status == IngestionStatus.EXTRACTED:
-                    job.progress_to_chunked(cmd.metrics)
-            elif stage == "indexed":
-                if job.status == IngestionStatus.CHUNKED:
-                    job.progress_to_indexed(cmd.metrics)
-        elif ev_type == "job_completed":
-            if job.status == IngestionStatus.INDEXED:
-                job.complete(cmd.metrics)
-        elif ev_type == "job_failed":
-            if job.status != IngestionStatus.READY:
-                job.fail(
-                    error_code=cmd.error_code or "AI_PROCESSING_FAILED",
-                    error_message=cmd.error_message or "AI service reported job failure",
-                    is_retryable=cmd.is_retryable,
-                    details=cmd.details,
+        events = job.pull_events()
+        if outcome is CallbackOutcome.APPLIED:
+            asset = await self._uow.assets.get_asset_by_id(job.asset_id)
+            if asset is not None:
+                asset.update_ingestion_status(
+                    job.status,
+                    error_code=job.error_code,
+                    error_message=job.error_message,
                 )
-
-        # 4. Synchronize asset status projection
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(
-                job.status,
-                error_code=job.error_code,
-                error_message=job.error_message,
-            )
-            await self._uow.assets.save_asset(asset)
-
-        job_events = job.pull_events()
-        if asset is not None:
-            job_events.extend(asset.pull_events())
+                await self._uow.assets.save_asset(asset)
+                events.extend(asset.pull_events())
 
         saved_job = await self._uow.jobs.save_job(job)
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job, False
+        if self._event_bus and events:
+            self._event_bus.publish_all(events)
+        return saved_job, outcome
 
 
 class GetIngestionJobHandler:
