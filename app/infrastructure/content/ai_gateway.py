@@ -234,18 +234,3 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
             error_code="AI_SERVICE_POLL_FAILED",
             is_retryable=response.status_code >= 500,
         )
-
-    async def cancel_ingestion_job(self, external_task_id: str) -> bool:
-        url = f"{self._base_url}/v1/ingest/tasks/{external_task_id}/cancel"
-        headers: dict[str, str] = {}
-
-        should_close = self._client is None
-        client = await self._get_client()
-        try:
-            response = await client.post(url, headers=headers)
-            return response.status_code in (200, 204)
-        except Exception:
-            return False
-        finally:
-            if should_close:
-                await client.aclose()

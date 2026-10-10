@@ -55,6 +55,3 @@ class AIServiceIngestionGateway(Protocol):
         self, external_task_id: str
     ) -> AIServiceStatusResult:
         raise NotImplementedError
-
-    async def cancel_ingestion_job(self, external_task_id: str) -> bool:
-        raise NotImplementedError
