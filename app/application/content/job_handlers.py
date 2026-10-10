@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.application.common.uow import ContentUnitOfWorkPort
@@ -14,6 +15,7 @@ from app.application.content.job_commands import (
     GetLatestJobForAssetQuery,
     HandleAICallbackCommand,
     ListIngestionJobsQuery,
+    ReconcileIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
 )
@@ -24,7 +26,13 @@ from app.domain.content.ingestion_event import (
     IngestionEventRecord,
     canonical_event_digest,
 )
-from app.domain.content.job import CallbackOutcome, ContentIngestionJob
+from app.domain.content.job import (
+    ACTIVE_STATUSES,
+    CallbackOutcome,
+    ContentIngestionJob,
+    InvalidJobTransition,
+    InvalidStageEvidence,
+)
 from app.events.event_bus import EventBus
 
 
@@ -389,3 +397,101 @@ class ListIngestionJobsHandler:
             limit=query.limit,
             offset=query.offset,
         )
+
+
+class ReconcileMismatchError(Exception):
+    """AI-service reported on a task that is not the job's active attempt."""
+
+    status_code = 502
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileResult:
+    job: ContentIngestionJob
+    outcomes: list[tuple[str, str]]  # (event_id, outcome) in AI-service's order
+
+
+class ReconcileIngestionJobHandler:
+    """POST /content/jobs/{id}/reconcile (design B.3).
+
+    Fetches AI-service's signed account of the job's active task and replays
+    each recorded event through HandleAICallbackHandler: the same row lock,
+    ledger, digest, attempt and transition rules as a delivered callback.
+    Events already applied come back as duplicates; events whose delivery
+    failed are applied now. AI-service's reported state alone never changes
+    the job. The status is fetched before any row lock is taken.
+    """
+
+    def __init__(
+        self,
+        uow: ContentUnitOfWorkPort,
+        gateway: AIServiceIngestionGateway,
+        event_bus: EventBus | None = None,
+        security_events: SecurityEventRecorder | None = None,
+    ) -> None:
+        self._uow = uow
+        self._gateway = gateway
+        self._event_bus = event_bus
+        self._security_events = security_events
+
+    async def handle(self, cmd: ReconcileIngestionJobCommand) -> ReconcileResult:
+        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
+        if job.status not in ACTIVE_STATUSES or not job.external_task_id:
+            raise InvalidJobTransition(
+                f"Only an active job can be reconciled, not one that is '{job.status.value}'."
+            )
+
+        status = await self._gateway.fetch_job_status(
+            job.external_task_id,
+            job.tenant_id or cmd.tenant_id,
+            job.correlation_id or job.id,
+        )
+        if (
+            status.external_task_id != job.external_task_id
+            or status.job_id != job.id
+            or status.run_number != job.run_number
+            or status.attempt_count != job.attempt_count
+        ):
+            raise ReconcileMismatchError(
+                "AI-service reported on a task that is not this job's active attempt"
+            )
+
+        callbacks = HandleAICallbackHandler(self._uow, self._event_bus, self._security_events)
+        outcomes: list[tuple[str, str]] = []
+        for body in status.events:
+            event_id = str(body.get("event_id", ""))
+            if body.get("job_id") != job.id:
+                outcomes.append((event_id, "rejected"))
+                continue
+            try:
+                callback = HandleAICallbackCommand(
+                    job_id=job.id,
+                    tenant_id=job.tenant_id or cmd.tenant_id,
+                    event_id=event_id,
+                    event_type=str(body["event_type"]),
+                    external_task_id=str(body["external_task_id"]),
+                    run_number=int(body["run_number"]),
+                    attempt_count=int(body["attempt_count"]),
+                    stage=body.get("stage"),
+                    metrics=dict(body.get("metrics") or {}),
+                    error_code=body.get("error_code"),
+                    error_message=body.get("error_message"),
+                    is_retryable=bool(body.get("is_retryable", False)),
+                    details=dict(body.get("details") or {}),
+                )
+            except (KeyError, TypeError, ValueError):
+                outcomes.append((event_id, "rejected"))
+                continue
+            if not event_id:
+                outcomes.append((event_id, "rejected"))
+                continue
+            try:
+                _, outcome = await callbacks.handle(callback)
+            except InvalidStageEvidence:
+                outcomes.append((event_id, "rejected"))
+                continue
+            outcomes.append((event_id, outcome.value if outcome else "rejected"))
+
+        refreshed = await self._uow.jobs.get_job_by_id(job.id)
+        return ReconcileResult(job=refreshed or job, outcomes=outcomes)
+

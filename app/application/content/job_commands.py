@@ -83,3 +83,12 @@ class ListIngestionJobsQuery:
     status: IngestionStatus | None = None
     limit: int = 50
     offset: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileIngestionJobCommand:
+    """Bring a job up to date with AI-service's account of its active task."""
+
+    job_id: str
+    tenant_id: str
+

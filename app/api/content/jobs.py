@@ -14,6 +14,7 @@ from app.api.content.job_schemas import (
     IngestionJobResponse,
     IngestionJobRetryRequest,
 )
+from app.application.content.job_handlers import ReconcileMismatchError
 from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
@@ -28,6 +29,7 @@ from app.domain.content.job import (
 )
 from app.infrastructure.security.service_context import ACTOR_SYSTEM
 from app.infrastructure.security.service_signature import VerifiedServiceRequest
+from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
@@ -303,6 +305,57 @@ async def dispatch_ingestion_job(
             },
         )
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
+
+
+@router.post(
+    "/jobs/{job_id}/reconcile",
+    response_model=IngestionJobResponse,
+)
+async def reconcile_ingestion_job(
+    job_id: str,
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+) -> JSONResponse:
+    """Apply AI-service's account of the job's active task (design B.3).
+
+    The recorded events go through the same rules as delivered callbacks;
+    ``meta.reconciled`` lists each event's outcome.
+    """
+    try:
+        result = await service.reconcile_job(job_id=job_id, tenant_id=context.tenant_id)
+    except InvalidJobTransition as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": {"code": "JOB_NOT_FOUND", "message": str(exc)}},
+        )
+    except ReconcileMismatchError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"error": {"code": "AI_STATUS_MISMATCH", "message": str(exc)}},
+        )
+    except AIServiceGatewayError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"error": {"code": exc.error_code, "message": str(exc)}},
+        )
+
+    resp_data = IngestionJobResponse.from_domain(result.job).model_dump(mode="json")
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "data": resp_data,
+            "meta": {
+                "reconciled": [
+                    {"event_id": event_id, "outcome": outcome}
+                    for event_id, outcome in result.outcomes
+                ]
+            },
+        },
+    )
 
 
 @router.post(

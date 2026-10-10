@@ -628,3 +628,155 @@ def test_the_digest_ignores_key_order_but_not_meaning() -> None:
     d = canonical_event_digest(metrics={"pages": 1, "characters": 5, "method": "ocr"}, **{**base, "attempt_count": 2})
     assert a == b
     assert len({a, c, d}) == 3
+
+
+# --- M3-09: reconcile ----------------------------------------------------------------------
+
+
+class StatusGateway:
+    def __init__(self, status=None, error=None) -> None:
+        self.status, self.error = status, error
+        self.calls: list[tuple] = []
+
+    async def fetch_job_status(self, external_task_id, tenant_id, correlation_id):
+        self.calls.append((external_task_id, tenant_id, correlation_id))
+        if self.error is not None:
+            raise self.error
+        return self.status
+
+
+def _status(job, events, **overrides):
+    from app.domain.content.gateway import AIServiceStatusResult
+
+    fields = dict(
+        external_task_id=job.external_task_id,
+        job_id=job.id,
+        run_number=job.run_number,
+        attempt_count=job.attempt_count,
+        state="failed",
+        events=events,
+    )
+    fields.update(overrides)
+    return AIServiceStatusResult(**fields)
+
+
+def _body(job, event_id, event_type, **fields):
+    return {
+        "event_id": event_id,
+        "job_id": job.id,
+        "external_task_id": job.external_task_id,
+        "run_number": job.run_number,
+        "attempt_count": job.attempt_count,
+        "event_type": event_type,
+        **fields,
+    }
+
+
+def _reconcile(uow, gateway, tenant_id="tenant-1", job_id=None):
+    from app.application.content.job_commands import ReconcileIngestionJobCommand
+    from app.application.content.job_handlers import ReconcileIngestionJobHandler
+
+    return ReconcileIngestionJobHandler(uow, gateway, EventBus()).handle(
+        ReconcileIngestionJobCommand(job_id=job_id, tenant_id=tenant_id)
+    )
+
+
+@pytest.mark.asyncio
+async def test_reconcile_applies_undelivered_events_and_skips_applied_ones() -> None:
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow, task="task-r")
+    extracted = _body(job, "evt-1", "stage_progress", stage="extracted", metrics=EXTRACTED_EVIDENCE)
+    # evt-1 was delivered as a callback; evt-2 never arrived.
+    await HandleAICallbackHandler(uow, EventBus()).handle(
+        _cb(job, "evt-1", "stage_progress", "extracted", metrics=EXTRACTED_EVIDENCE)
+    )
+    failed = _body(job, "evt-2", "job_failed", error_code="X", error_message="x", is_retryable=True)
+    gateway = StatusGateway(_status(job, [extracted, failed]))
+
+    result = await _reconcile(uow, gateway, job_id=job.id)
+
+    assert result.outcomes == [("evt-1", "duplicate"), ("evt-2", "applied")]
+    assert (result.job.status, result.job.error_code) == (IngestionStatus.FAILED, "X")
+    assert gateway.calls == [("task-r", "tenant-1", job.id)]
+    # The job is now terminal: there is nothing left to reconcile.
+    from app.domain.content.job import InvalidJobTransition
+
+    with pytest.raises(InvalidJobTransition):
+        await _reconcile(uow, gateway, job_id=job.id)
+
+
+@pytest.mark.asyncio
+async def test_reconciling_twice_while_active_is_idempotent() -> None:
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow)
+    extracted = _body(job, "evt-1", "stage_progress", stage="extracted", metrics=EXTRACTED_EVIDENCE)
+    gateway = StatusGateway(_status(job, [extracted], state="running"))
+    first = await _reconcile(uow, gateway, job_id=job.id)
+    second = await _reconcile(uow, gateway, job_id=job.id)
+    assert (first.outcomes, second.outcomes) == ([("evt-1", "applied")], [("evt-1", "duplicate")])
+    assert second.job.status == IngestionStatus.EXTRACTED
+
+
+@pytest.mark.asyncio
+async def test_reconcile_never_trusts_the_reported_state_alone() -> None:
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow)
+    result = await _reconcile(uow, StatusGateway(_status(job, [], state="succeeded")), job_id=job.id)
+    assert (result.outcomes, result.job.status) == ([], IngestionStatus.PROCESSING)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "override",
+    [{"external_task_id": "task-other"}, {"job_id": "job-other"}, {"attempt_count": 9}, {"run_number": 9}],
+)
+async def test_a_report_on_another_task_is_refused(override) -> None:
+    from app.application.content.job_handlers import ReconcileMismatchError
+
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow)
+    with pytest.raises(ReconcileMismatchError):
+        await _reconcile(uow, StatusGateway(_status(job, [], **override)), job_id=job.id)
+    assert job.status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.asyncio
+async def test_events_for_another_job_or_malformed_are_rejected_not_applied() -> None:
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow)
+    events = [
+        {**_body(job, "evt-a", "job_failed"), "job_id": "other-job"},
+        {"event_id": "evt-b", "job_id": job.id},
+        _body(job, "evt-c", "stage_progress", stage="extracted", metrics={"pages": 1}),
+    ]
+    result = await _reconcile(uow, StatusGateway(_status(job, events)), job_id=job.id)
+    assert result.outcomes == [("evt-a", "rejected"), ("evt-b", "rejected"), ("evt-c", "rejected")]
+    assert job.status == IngestionStatus.PROCESSING
+    assert uow.ingestion_events.records == {}
+
+
+@pytest.mark.asyncio
+async def test_reconcile_is_refused_for_other_tenants_and_inactive_jobs() -> None:
+    from app.domain.content.job import InvalidJobTransition
+
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow)
+    gateway = StatusGateway(_status(job, []))
+    with pytest.raises(ValueError, match="does not exist"):
+        await _reconcile(uow, gateway, tenant_id="tenant-2", job_id=job.id)
+    job.fail_processing("X", "x", is_retryable=False)
+    with pytest.raises(InvalidJobTransition):
+        await _reconcile(uow, gateway, job_id=job.id)
+    assert gateway.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_gateway_failure_changes_nothing() -> None:
+    from app.infrastructure.content.ai_gateway import AIServiceGatewayError
+
+    uow = FakeContentUnitOfWork()
+    job = await _dispatched_job(uow)
+    error = AIServiceGatewayError("down", error_code="AI_SERVICE_POLL_FAILED", is_retryable=True)
+    with pytest.raises(AIServiceGatewayError):
+        await _reconcile(uow, StatusGateway(error=error), job_id=job.id)
+    assert job.status == IngestionStatus.PROCESSING

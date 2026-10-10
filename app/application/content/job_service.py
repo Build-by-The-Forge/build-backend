@@ -11,6 +11,7 @@ from app.application.content.job_commands import (
     GetLatestJobForAssetQuery,
     HandleAICallbackCommand,
     ListIngestionJobsQuery,
+    ReconcileIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
 )
@@ -21,6 +22,8 @@ from app.application.content.job_handlers import (
     GetLatestJobForAssetHandler,
     HandleAICallbackHandler,
     ListIngestionJobsHandler,
+    ReconcileIngestionJobHandler,
+    ReconcileResult,
     ReprocessAssetHandler,
     RetryIngestionJobHandler,
 )
@@ -216,3 +219,17 @@ class ContentIngestionJobService:
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
         return await ListIngestionJobsHandler(self._uow).handle(query)
+
+    async def reconcile_job(self, job_id: str, tenant_id: str) -> ReconcileResult:
+        cmd = ReconcileIngestionJobCommand(job_id=job_id, tenant_id=tenant_id)
+        if self._uow_factory is not None:
+            async with self._uow_factory() as uow:
+                return await ReconcileIngestionJobHandler(
+                    uow, self._gateway, self._event_bus, self._security_events
+                ).handle(cmd)
+        if self._uow is None:
+            raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
+        return await ReconcileIngestionJobHandler(
+            self._uow, self._gateway, self._event_bus, self._security_events
+        ).handle(cmd)
+
