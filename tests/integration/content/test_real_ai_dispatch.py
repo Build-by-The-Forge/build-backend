@@ -219,3 +219,48 @@ def test_real_bearer_and_unsigned_requests_are_refused() -> None:
                 headers={**headers, "Content-Type": "application/json"},
             )
             assert response.status_code == 401
+
+
+# --- M3-09: signed task status against the real AI-service -----------------------------
+
+
+@pytest.mark.asyncio
+async def test_real_task_status_answers_only_the_tasks_tenant() -> None:
+    source, asset, job = material()
+    accepted = await gateway().dispatch_ingestion_job(
+        job=job, asset=asset, source=source, actor=actor()
+    )
+
+    status = await gateway().fetch_job_status(accepted.external_task_id, TENANT_A, "corr-real")
+    assert (status.external_task_id, status.job_id, status.run_number, status.attempt_count) == (
+        accepted.external_task_id,
+        job.id,
+        job.run_number,
+        job.attempt_count,
+    )
+    assert status.state in {"accepted", "running", "succeeded", "failed"}
+
+    with pytest.raises(AIServiceGatewayError) as other_tenant:
+        await gateway().fetch_job_status(accepted.external_task_id, TENANT_B, "corr-real")
+    assert other_tenant.value.error_code == "AI_TASK_NOT_FOUND"
+
+    with pytest.raises(AIServiceGatewayError) as unknown:
+        await gateway().fetch_job_status(f"task_{uuid4().hex}", TENANT_A, "corr-real")
+    assert unknown.value.error_code == "AI_TASK_NOT_FOUND"
+
+
+def test_real_task_status_refuses_a_user_context_and_unsigned_calls() -> None:
+    path = f"/v1/ingest/tasks/task_{uuid4().hex}"
+    user = _context()
+    headers = sign_request(
+        direction=Direction.BACKEND_TO_AI,
+        keys=ServiceKeys(current=B2A or ""),
+        method="GET",
+        target=path,
+        body=b"",
+        context=user,
+        timestamp=int(time.time()),
+    )
+    with httpx.Client(timeout=10) as http:
+        assert http.get(f"{AI_URL}{path}", headers=headers).status_code == 403
+        assert http.get(f"{AI_URL}{path}").status_code == 401
