@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import json
 import re
 import time
+from urllib.parse import quote
 from typing import Any
 
 import httpx
@@ -198,10 +199,25 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         )
 
     async def fetch_job_status(
-        self, external_task_id: str
+        self, external_task_id: str, tenant_id: str, correlation_id: str
     ) -> AIServiceStatusResult:
-        url = f"{self._base_url}/v1/ingest/tasks/{external_task_id}"
-        headers: dict[str, str] = {}
+        """Signed GET /v1/ingest/tasks/{id} with a system context naming the
+        job's tenant (design B.3); AI-service answers only for that tenant."""
+        keys = self._keys()
+        url = httpx.URL(
+            f"{self._base_url}/v1/ingest/tasks/{quote(external_task_id, safe='')}"
+        )
+        headers = sign_request(
+            direction=Direction.BACKEND_TO_AI,
+            keys=keys,
+            method="GET",
+            target=url.raw_path.decode("ascii"),
+            body=b"",
+            context=ServiceContext.for_system(
+                tenant_id=tenant_id, correlation_id=correlation_id
+            ),
+            timestamp=int(time.time()),
+        )
 
         should_close = self._client is None
         client = await self._get_client()
@@ -218,19 +234,40 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
                 await client.aclose()
 
         if response.status_code == 200:
-            data = response.json()
-            return AIServiceStatusResult(
-                external_task_id=external_task_id,
-                status=data.get("status", "unknown"),
-                stage=data.get("stage"),
-                metrics=data.get("metrics", {}),
-                error_code=data.get("error_code"),
-                error_message=data.get("error_message"),
-                is_retryable=data.get("is_retryable", False),
-            )
+            try:
+                data = response.json()
+                return AIServiceStatusResult(
+                    external_task_id=str(data["external_task_id"]),
+                    job_id=str(data["job_id"]),
+                    run_number=int(data["run_number"]),
+                    attempt_count=int(data["attempt_count"]),
+                    state=str(data["state"]),
+                    events=[dict(e) for e in data["events"]],
+                )
+            except (ValueError, KeyError, TypeError) as exc:
+                raise AIServiceGatewayError(
+                    message="AI Service returned an unreadable task status",
+                    error_code="AI_SERVICE_BAD_RESPONSE",
+                    is_retryable=True,
+                ) from exc
 
+        if response.status_code == 404:
+            raise AIServiceGatewayError(
+                message="AI Service has no such task for this tenant",
+                error_code="AI_TASK_NOT_FOUND",
+                is_retryable=False,
+                details={"status_code": 404},
+            )
+        if response.status_code in (401, 403):
+            raise AIServiceGatewayError(
+                message=f"AI Service authentication failed (HTTP {response.status_code})",
+                error_code="AI_SERVICE_AUTH_ERROR",
+                is_retryable=False,
+                details={"status_code": response.status_code},
+            )
         raise AIServiceGatewayError(
             message=f"Failed to fetch task status from AI Service (HTTP {response.status_code})",
             error_code="AI_SERVICE_POLL_FAILED",
             is_retryable=response.status_code >= 500,
+            details={"status_code": response.status_code},
         )

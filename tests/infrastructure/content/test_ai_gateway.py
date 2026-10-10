@@ -256,3 +256,97 @@ async def test_failure_classification(status_code, error_code, retryable) -> Non
             job=job, asset=asset, source=source, actor=ACTOR
         )
     assert (exc_info.value.error_code, exc_info.value.is_retryable) == (error_code, retryable)
+
+
+# --- M3-09: signed task status -----------------------------------------------------------
+
+
+STATUS = {
+    "external_task_id": "task_9876",
+    "job_id": "job-1",
+    "run_number": 1,
+    "attempt_count": 2,
+    "state": "failed",
+    "events": [{"event_id": "e1", "event_type": "job_failed"}],
+}
+
+
+@pytest.mark.asyncio
+async def test_task_status_is_a_signed_system_get_for_the_jobs_tenant() -> None:
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json=STATUS)
+
+    result = await _gateway(handler).fetch_job_status("task_9876", TENANT, "corr-9")
+    assert (result.job_id, result.attempt_count, result.state) == ("job-1", 2, "failed")
+    assert result.events == STATUS["events"]
+
+    [request] = seen
+    assert (request.method, request.url.path, request.content) == (
+        "GET",
+        "/v1/ingest/tasks/task_9876",
+        b"",
+    )
+    verified = verify_request(
+        direction=Direction.BACKEND_TO_AI,
+        keys=KEYS,
+        method="GET",
+        target=request.url.raw_path.decode(),
+        headers=dict(request.headers),
+        body_sha256=sha256_hex(b""),
+        now=int(request.headers["x-build-timestamp"]),
+    )
+    assert verified.context == ServiceContext.for_system(tenant_id=TENANT, correlation_id="corr-9")
+
+
+@pytest.mark.asyncio
+async def test_task_ids_are_escaped_into_the_signed_path() -> None:
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(404)
+
+    with pytest.raises(AIServiceGatewayError):
+        await _gateway(handler).fetch_job_status("../dispatch?x=1", TENANT, "c")
+    assert seen[0].url.raw_path == b"/v1/ingest/tasks/..%2Fdispatch%3Fx%3D1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("response", "error_code", "retryable"),
+    [
+        (httpx.Response(404), "AI_TASK_NOT_FOUND", False),
+        (httpx.Response(401), "AI_SERVICE_AUTH_ERROR", False),
+        (httpx.Response(503), "AI_SERVICE_POLL_FAILED", True),
+        (httpx.Response(200, json={"state": "failed"}), "AI_SERVICE_BAD_RESPONSE", True),
+        (httpx.Response(200, text="not json"), "AI_SERVICE_BAD_RESPONSE", True),
+    ],
+)
+async def test_task_status_failures_are_classified(response, error_code, retryable) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return response
+
+    with pytest.raises(AIServiceGatewayError) as exc_info:
+        await _gateway(handler).fetch_job_status("task_1", TENANT, "c")
+    assert (exc_info.value.error_code, exc_info.value.is_retryable) == (error_code, retryable)
+
+
+@pytest.mark.asyncio
+async def test_task_status_without_a_secret_is_refused_before_sending(monkeypatch) -> None:
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "backend_to_ai_secret", None)
+    sent: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json=STATUS)
+
+    gateway = HttpAIServiceIngestionGateway(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    with pytest.raises(AIServiceGatewayError) as exc_info:
+        await gateway.fetch_job_status("task_1", TENANT, "c")
+    assert exc_info.value.error_code == "AI_SERVICE_NOT_CONFIGURED"
+    assert sent == []

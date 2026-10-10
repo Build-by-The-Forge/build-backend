@@ -19,13 +19,17 @@ class AIServiceDispatchResult:
 
 @dataclass(frozen=True, slots=True)
 class AIServiceStatusResult:
+    """AI-service's account of one task (M3-09): its attempt identity, state,
+    and the exact callback bodies it produced, in order. The backend applies
+    those events through its callback rules; it never trusts ``state``
+    alone."""
+
     external_task_id: str
-    status: str
-    stage: str | None = None
-    metrics: dict[str, Any] = field(default_factory=dict)
-    error_code: str | None = None
-    error_message: str | None = None
-    is_retryable: bool = False
+    job_id: str
+    run_number: int
+    attempt_count: int
+    state: str
+    events: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,6 +56,6 @@ class AIServiceIngestionGateway(Protocol):
         raise NotImplementedError
 
     async def fetch_job_status(
-        self, external_task_id: str
+        self, external_task_id: str, tenant_id: str, correlation_id: str
     ) -> AIServiceStatusResult:
         raise NotImplementedError
