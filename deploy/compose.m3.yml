@@ -3,7 +3,8 @@
 #   docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml up -d --build
 #
 # Copy deploy/m3.env.example to deploy/m3.env (git-ignored) and fill it in,
-# Expects ../ai-service next to this repository.
+# or let scripts/m3_boundary_gate.sh generate one. Expects ../ai-service next
+# to this repository.
 #
 # One database (`build`) with least-privilege roles created by db-init. Each
 # Alembic chain runs as its owner role and each service runs as its app role;
@@ -162,6 +163,34 @@ services:
       <<: *ai-env
       DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
     entrypoint: ["python", "-m", "app.worker"]
+    networks: [internal]
+
+  # The real two-service boundary suite (design Part C); profile "gate".
+  # Inside the network, so it can reach the unpublished AI-service. Run it
+  # with scripts/m3_boundary_gate.sh.
+  boundary-tests:
+    profiles: ["gate"]
+    image: build-m3-backend
+    depends_on:
+      backend:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    environment:
+      APP_ENVIRONMENT: development
+      POSTGRES_URL: postgresql+asyncpg://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
+      REDIS_URL: redis://redis:6379/0
+      BOUNDARY_BACKEND_URL: http://backend:8000
+      BOUNDARY_AI_URL: http://ai-service:8000
+      BOUNDARY_AI_APP_DSN: postgresql://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+      BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}
+      AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
+      EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
+    volumes:
+      - outbox:/outbox:ro
+      - ../boundary:/app/boundary:ro
+    entrypoint: ["python", "-m", "pytest", "-p", "no:cacheprovider", "-p", "no:env", "boundary"]
+    command: ["-q", "-m", "not redis_down"]
     networks: [internal]
 
 volumes:
