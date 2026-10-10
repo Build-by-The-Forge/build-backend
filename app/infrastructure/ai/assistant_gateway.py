@@ -22,6 +22,7 @@ from app.domain.ai.assistant import (
     ChatAnswer,
     Explanation,
     GeneratedQuestions,
+    parse_generated_question,
 )
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import Direction, ServiceKeys, sign_request
@@ -69,12 +70,27 @@ class HttpAIAssistantGateway(AIAssistantGateway):
             raise _bad_response("explain")
         return Explanation(explanation=explanation)
 
-    async def generate_questions(self, actor: AIActor, topic: str, count: int) -> GeneratedQuestions:
-        data = await self._post("/v1/ai/generate-questions", {"topic": topic, "count": count}, actor)
-        questions = data.get("questions")
-        if not isinstance(questions, str):
+    async def generate_questions(
+        self, actor: AIActor, topic: str, count: int, difficulty: str, question_type: str
+    ) -> GeneratedQuestions:
+        data = await self._post(
+            "/v1/ai/generate-questions",
+            {"topic": topic, "count": count, "difficulty": difficulty, "question_type": question_type},
+            actor,
+        )
+        items, discarded = data.get("questions"), data.get("discarded")
+        if not isinstance(items, list) or not isinstance(discarded, int) or discarded < 0:
             raise _bad_response("generate-questions")
-        return GeneratedQuestions(questions=questions)
+        accepted = []
+        for item in items[:count]:
+            question = parse_generated_question(item)
+            # Only what was asked for, by the backend's own rules.
+            if question is None or (question.question_type, question.difficulty) != (question_type, difficulty):
+                discarded += 1
+            else:
+                accepted.append(question)
+        discarded += max(len(items) - count, 0)
+        return GeneratedQuestions(questions=accepted, discarded=discarded)
 
     async def _post(self, path: str, payload: dict[str, Any], actor: AIActor) -> dict[str, Any]:
         keys = self._keys()

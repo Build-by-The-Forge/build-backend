@@ -9,6 +9,7 @@ the verified session and membership.
 
 import re
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
@@ -46,6 +47,8 @@ class ExplainRequest(AIRequest):
 class GenerateQuestionsRequest(AIRequest):
     topic: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
     count: int = Field(default=5, ge=1, le=MAX_QUESTION_COUNT)
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    question_type: Literal["mcq", "true_false"] = "mcq"
 
 
 def get_ai_assistant_gateway() -> AIAssistantGateway:
@@ -123,8 +126,16 @@ async def generate_questions(
     await throttle.ai_question_generation(context.user_id)
     try:
         result = await gateway.generate_questions(
-            _actor(request, context, Permission.AI_QUESTIONS_GENERATE), body.topic, body.count
+            _actor(request, context, Permission.AI_QUESTIONS_GENERATE),
+            body.topic,
+            body.count,
+            body.difficulty,
+            body.question_type,
         )
     except AIAssistantError as exc:
         raise _failed(exc) from exc
-    return _envelope(request, {"questions": result.questions})
+    # Proposals for the lecturer to review; nothing is saved (M5 ruling R2).
+    return _envelope(
+        request,
+        {"questions": [q.to_dict() for q in result.questions], "discarded": result.discarded},
+    )

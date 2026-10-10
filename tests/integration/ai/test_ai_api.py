@@ -16,6 +16,8 @@ from app.domain.ai.assistant import (
     AIAssistantGateway,
     ChatAnswer,
     Explanation,
+    GeneratedOption,
+    GeneratedQuestion,
     GeneratedQuestions,
 )
 from app.main import app
@@ -44,9 +46,11 @@ class RecordingGateway(AIAssistantGateway):
         self._record("explain", actor, subject)
         return Explanation(explanation=f"about {subject}")
 
-    async def generate_questions(self, actor, topic, count):
-        self._record("generate_questions", actor, topic, count)
-        return GeneratedQuestions(questions=f"{count} on {topic}")
+    async def generate_questions(self, actor, topic, count, difficulty, question_type):
+        self._record("generate_questions", actor, topic, count, difficulty, question_type)
+        options = (GeneratedOption("True", True), GeneratedOption("False", False))
+        question = GeneratedQuestion(question_type, f"{topic}?", options, None, difficulty)
+        return GeneratedQuestions(questions=[question] * count, discarded=1)
 
 
 @pytest.fixture
@@ -81,10 +85,22 @@ async def test_explain_and_generate_questions(client, gateway):
     _, _, h = await member(client, "lecturer")
 
     explained = client.post("/ai/explain", json={"subject": "osmosis"}, headers=h)
-    generated = client.post("/ai/generate-questions", json={"topic": "cells", "count": 3}, headers=h)
+    generated = client.post(
+        "/ai/generate-questions",
+        json={"topic": "cells", "count": 2, "difficulty": "hard", "question_type": "true_false"},
+        headers=h,
+    )
 
     assert explained.json()["data"] == {"explanation": "about osmosis"}
-    assert generated.json()["data"] == {"questions": "3 on cells"}
+    question = {
+        "question_type": "true_false",
+        "prompt": "cells?",
+        "options": [{"text": "True", "is_correct": True}, {"text": "False", "is_correct": False}],
+        "explanation": None,
+        "difficulty": "hard",
+    }
+    assert generated.json()["data"] == {"questions": [question, question], "discarded": 1}
+    assert gateway.calls[-1][2] == ("cells", 2, "hard", "true_false")
     assert [(c[0], c[1].permission) for c in gateway.calls] == [
         ("explain", "ai.use"),
         ("generate_questions", "ai.questions.generate"),

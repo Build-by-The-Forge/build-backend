@@ -21,6 +21,16 @@ ACTOR = AIActor(
     permission="ai.use",
     correlation_id="corr-7",
 )
+MCQ = {
+    "question_type": "mcq",
+    "prompt": "Which organelle makes ATP?",
+    "options": [
+        {"text": "Nucleus", "is_correct": False},
+        {"text": "Mitochondrion", "is_correct": True},
+    ],
+    "explanation": "Respiration.",
+    "difficulty": "medium",
+}
 KEYS = ServiceKeys(current="test-backend-to-ai-secret-for-assistant-tests-01")
 
 
@@ -79,14 +89,20 @@ async def test_explain_and_question_bodies_name_no_identity():
         bodies[request.url.path] = json.loads(request.content)
         if request.url.path.endswith("explain"):
             return ok({"explanation": "E"})
-        return ok({"questions": "Q"})
+        return ok({"questions": [MCQ], "discarded": 0})
 
     g = gateway(handler)
     assert (await g.explain(ACTOR, "osmosis")).explanation == "E"
-    assert (await g.generate_questions(ACTOR, "cells", 3)).questions == "Q"
+    generated = await g.generate_questions(ACTOR, "cells", 3, "medium", "mcq")
+    assert [q.to_dict() for q in generated.questions] == [MCQ]
     assert bodies == {
         "/v1/ai/explain": {"subject": "osmosis"},
-        "/v1/ai/generate-questions": {"topic": "cells", "count": 3},
+        "/v1/ai/generate-questions": {
+            "topic": "cells",
+            "count": 3,
+            "difficulty": "medium",
+            "question_type": "mcq",
+        },
     }
 
 
@@ -135,4 +151,63 @@ async def test_unreadable_answers_are_bad_responses(response):
 
     with pytest.raises(AIAssistantError) as exc:
         await gateway(handler).chat(ACTOR, "hi")
+    assert exc.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+def with_(**changes) -> dict:
+    return {**MCQ, **changes}
+
+
+@pytest.mark.parametrize(
+    "item",
+    [
+        with_(options=[{"text": "A", "is_correct": True}, {"text": "B", "is_correct": True}]),
+        with_(options=[{"text": "A", "is_correct": True}]),
+        with_(options=[{"text": "A", "is_correct": True}, {"text": " a", "is_correct": False}]),
+        with_(options=[{"text": "A", "is_correct": "yes"}, {"text": "B", "is_correct": False}]),
+        with_(prompt=" "),
+        with_(question_type="essay"),
+        with_(difficulty="hard"),
+        with_(question_type="true_false"),
+        "not an object",
+    ],
+    ids=[
+        "two-correct",
+        "one-option",
+        "duplicate",
+        "non-bool",
+        "blank-prompt",
+        "unknown-type",
+        "unrequested-difficulty",
+        "tf-without-true-false",
+        "string",
+    ],
+)
+async def test_the_backend_rechecks_every_generated_question(item):
+    async def handler(request):
+        return ok({"questions": [MCQ, item], "discarded": 2})
+
+    generated = await gateway(handler).generate_questions(ACTOR, "cells", 5, "medium", "mcq")
+    assert [q.to_dict() for q in generated.questions] == [MCQ]
+    assert generated.discarded == 3  # AI-service's two plus the backend's one
+
+
+async def test_more_questions_than_asked_are_cut_and_counted():
+    async def handler(request):
+        return ok({"questions": [MCQ] * 4, "discarded": 0})
+
+    generated = await gateway(handler).generate_questions(ACTOR, "cells", 2, "medium", "mcq")
+    assert (len(generated.questions), generated.discarded) == (2, 2)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [{"questions": "Q", "discarded": 0}, {"questions": [], "discarded": -1}, {"questions": []}],
+)
+async def test_a_malformed_generation_answer_is_a_bad_response(data):
+    async def handler(request):
+        return ok(data)
+
+    with pytest.raises(AIAssistantError) as exc:
+        await gateway(handler).generate_questions(ACTOR, "cells", 2, "medium", "mcq")
     assert exc.value.error_code == "AI_SERVICE_BAD_RESPONSE"
