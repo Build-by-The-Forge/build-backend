@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     backend_to_ai_secret_previous: str | None = Field(default=None)
     ai_to_backend_secret: str | None = Field(default=None)
     ai_to_backend_secret_previous: str | None = Field(default=None)
+    # Connect/read timeout (seconds) of the Redis replay store that guards
+    # signed AI-service callbacks. A timeout fails closed (503); it never
+    # admits the request. Default 0.5; allowed 0.05-5.0. Raise it only on
+    # measured evidence from the deployment (see M3-08 follow-up report).
+    service_replay_timeout_seconds: float = Field(default=0.5, ge=0.05, le=5.0)
     ai_service_timeout_seconds: int = Field(default=60)
     ai_service_max_retries: int = Field(default=3)
 

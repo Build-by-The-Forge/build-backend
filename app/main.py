@@ -68,7 +68,9 @@ app = FastAPI(
 )
 
 # Replay protection is shared by every replica, so it lives in Redis only.
-app.state.service_replay_store = RedisReplayStore.from_url(settings.redis_url)
+app.state.service_replay_store = RedisReplayStore.from_url(
+    settings.redis_url, timeout_seconds=settings.service_replay_timeout_seconds
+)
 app.add_middleware(
     ServiceAuthMiddleware,
     receiver="build-backend",

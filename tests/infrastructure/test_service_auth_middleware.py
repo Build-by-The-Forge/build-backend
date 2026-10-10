@@ -443,3 +443,29 @@ async def test_the_replay_store_can_come_from_app_state(store):
         replay = await client.post(PATH, content=body, headers=headers)
     assert (first.status_code, replay.status_code) == (200, 401)
     assert len(calls) == 1
+
+
+async def test_a_redis_that_never_answers_times_out_closed():
+    """A slow replay store is refused (503) within the configured timeout;
+    a longer timeout can delay that answer but never admit the request."""
+    import asyncio
+
+    async def silent(reader, writer):
+        await asyncio.sleep(30)  # accept, read nothing back, never reply
+
+    server = await asyncio.start_server(silent, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    store = RedisReplayStore.from_url(f"redis://127.0.0.1:{port}/0", timeout_seconds=0.2)
+    try:
+        app, calls = build_app(store)
+        body = event_body()
+        started = time.monotonic()
+        async with client_for(app) as client:
+            resp = await client.post(PATH, content=body, headers=signed(body))
+        elapsed = time.monotonic() - started
+    finally:
+        await store.close()
+        server.close()
+    assert resp.status_code == 503
+    assert calls == []
+    assert elapsed < 3

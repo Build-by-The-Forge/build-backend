@@ -174,3 +174,13 @@ def test_static_bearer_settings_are_gone():
     settings = Settings(_env_file=None, app_environment="development")
     assert not hasattr(settings, "ai_service_api_key")
     assert not hasattr(settings, "ai_service_webhook_secret")
+
+
+def test_replay_store_timeout_defaults_to_half_a_second():
+    assert Settings(_env_file=None, app_environment="development").service_replay_timeout_seconds == 0.5
+
+
+@pytest.mark.parametrize("value", [0.0, 0.01, 5.5, -1])
+def test_replay_store_timeout_is_bounded(value):
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, app_environment="development", service_replay_timeout_seconds=value)
