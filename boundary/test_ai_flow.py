@@ -58,7 +58,8 @@ def test_c27_explain_and_question_generation_flow(backend, tenant_a):
     assert explained.status_code == 200, explained.text
     assert generated.status_code == 200, generated.text
     assert explained.json()["data"]["explanation"].startswith("[deterministic model]")
-    assert generated.json()["data"]["questions"].startswith("[deterministic model]")
+    questions = generated.json()["data"]["questions"]  # structured since M5
+    assert len(questions) == 3 and questions[0]["prompt"].startswith("[deterministic ")
 
 
 def test_c27_a_student_cannot_generate_questions(backend, tenant_a):

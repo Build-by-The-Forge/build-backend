@@ -185,6 +185,8 @@ services:
       BOUNDARY_BACKEND_URL: http://backend:8000
       BOUNDARY_AI_URL: http://ai-service:8000
       BOUNDARY_AI_APP_DSN: postgresql://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+      # Seeds faculties/departments only (no API yet); the rest goes over HTTP.
+      BOUNDARY_BACKEND_APP_DSN: postgresql://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
       BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}
       AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
       EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
