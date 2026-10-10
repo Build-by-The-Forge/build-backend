@@ -11,7 +11,7 @@ import re
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -114,6 +114,27 @@ async def explain(
     except AIAssistantError as exc:
         raise _failed(exc) from exc
     return _envelope(request, {"explanation": result.explanation})
+
+
+@router.get("/memory")
+async def my_memory(
+    request: Request,
+    topic: list[str] | None = Query(default=None, max_length=50),
+    context: TenantContext = Depends(require_permission(Permission.AI_USE)),
+    gateway: AIAssistantGateway = Depends(get_ai_assistant_gateway),
+) -> JSONResponse:
+    """The member's own learning memory in the current tenant (M5 ruling R3)."""
+    if topic and any(not t or len(t) > 255 for t in topic):
+        raise AppError("invalid topic", status_code=422)
+    await throttle.ai_request(context.user_id)
+    try:
+        items = await gateway.query_memory(_actor(request, context, Permission.AI_USE), topic)
+    except AIAssistantError as exc:
+        raise _failed(exc) from exc
+    return _envelope(
+        request,
+        {"items": [{"topic": i.topic, "mastery_score": i.mastery_score, "attempts": i.attempts} for i in items]},
+    )
 
 
 @router.post("/generate-questions")

@@ -19,6 +19,7 @@ from app.domain.ai.assistant import (
     GeneratedOption,
     GeneratedQuestion,
     GeneratedQuestions,
+    MemoryItem,
 )
 from app.main import app
 from tests.integration.assessment.test_attempt_api import headers
@@ -45,6 +46,14 @@ class RecordingGateway(AIAssistantGateway):
     async def explain(self, actor, subject):
         self._record("explain", actor, subject)
         return Explanation(explanation=f"about {subject}")
+
+    async def query_memory(self, actor, topics=None):
+        self._record("query_memory", actor, topics)
+        return [MemoryItem("algebra", 0.6, 2)]
+
+    async def record_memory(self, actor, observations):
+        self._record("record_memory", actor, observations)
+        return [MemoryItem(o.topic, 0.6, 1) for o in observations]
 
     async def generate_questions(self, actor, topic, count, difficulty, question_type):
         self._record("generate_questions", actor, topic, count, difficulty, question_type)
@@ -202,4 +211,26 @@ async def test_an_unverified_email_is_refused(client, gateway):
     _, slug, _, _ = await seed_tenant_context(user_id, "student")
     response = client.post("/ai/chat", json={"message": "hi"}, headers=headers(token, slug))
     assert response.status_code == 403
+    assert gateway.calls == []
+
+
+async def test_a_member_reads_their_own_memory(client, gateway):
+    user_id, tenant_id, h = await member(client, "student")
+    response = client.get("/ai/memory", params=[("topic", "algebra")], headers=h)
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == {"items": [{"topic": "algebra", "mastery_score": 0.6, "attempts": 2}]}
+    [(name, actor, args)] = gateway.calls
+    assert (name, args) == ("query_memory", (["algebra"],))
+    assert (actor.tenant_id, actor.user_id, actor.permission) == (tenant_id, user_id, "ai.use")
+
+
+def test_memory_requires_authentication(client, gateway):
+    assert client.get("/ai/memory").status_code == 401
+    assert gateway.calls == []
+
+
+async def test_memory_topics_are_bounded(client, gateway):
+    _, _, h = await member(client, "student")
+    assert client.get("/ai/memory", params=[("topic", "x" * 256)], headers=h).status_code == 422
+    assert client.get("/ai/memory", params=[("topic", "t")] * 51, headers=h).status_code == 422
     assert gateway.calls == []

@@ -22,6 +22,8 @@ from app.domain.ai.assistant import (
     ChatAnswer,
     Explanation,
     GeneratedQuestions,
+    MemoryItem,
+    MemoryObservation,
     parse_generated_question,
 )
 from app.infrastructure.security.service_context import ServiceContext
@@ -92,6 +94,14 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         discarded += max(len(items) - count, 0)
         return GeneratedQuestions(questions=accepted, discarded=discarded)
 
+    async def query_memory(self, actor: AIActor, topics: list[str] | None = None) -> list[MemoryItem]:
+        payload: dict[str, Any] = {} if topics is None else {"topics": topics}
+        return _memory_items(await self._post("/v1/ai/memory/query", payload, actor))
+
+    async def record_memory(self, actor: AIActor, observations: list[MemoryObservation]) -> list[MemoryItem]:
+        payload = {"observations": [{"topic": o.topic, "correct": o.correct} for o in observations]}
+        return _memory_items(await self._post("/v1/ai/memory/upsert", payload, actor))
+
     async def _post(self, path: str, payload: dict[str, Any], actor: AIActor) -> dict[str, Any]:
         keys = self._keys()
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -158,3 +168,26 @@ def _bad_response(operation: str) -> AIAssistantError:
         f"AI-service returned an unreadable {operation} response",
         error_code="AI_SERVICE_BAD_RESPONSE",
     )
+
+
+def _memory_items(data: dict[str, Any]) -> list[MemoryItem]:
+    items = data.get("items")
+    if not isinstance(items, list):
+        raise _bad_response("memory")
+    parsed = []
+    for item in items:
+        topic = item.get("topic") if isinstance(item, dict) else None
+        score = item.get("mastery_score") if isinstance(item, dict) else None
+        attempts = item.get("attempts") if isinstance(item, dict) else None
+        if (
+            not isinstance(topic, str)
+            or isinstance(score, bool)
+            or not isinstance(score, (int, float))
+            or not 0.0 <= float(score) <= 1.0
+            or isinstance(attempts, bool)
+            or not isinstance(attempts, int)
+            or attempts < 0
+        ):
+            raise _bad_response("memory")
+        parsed.append(MemoryItem(topic=topic, mastery_score=float(score), attempts=attempts))
+    return parsed

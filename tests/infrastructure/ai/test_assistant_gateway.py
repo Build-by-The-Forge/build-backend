@@ -1,8 +1,9 @@
 import json
+from dataclasses import replace
 
 import httpx
 import pytest
-from app.domain.ai.assistant import AIActor, AIAssistantError
+from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
@@ -210,4 +211,45 @@ async def test_a_malformed_generation_answer_is_a_bad_response(data):
 
     with pytest.raises(AIAssistantError) as exc:
         await gateway(handler).generate_questions(ACTOR, "cells", 2, "medium", "mcq")
+    assert exc.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+async def test_memory_query_and_upsert_are_signed_with_the_checked_permission():
+    seen: list[httpx.Request] = []
+
+    async def handler(request):
+        seen.append(request)
+        return ok({"items": [{"topic": "algebra", "mastery_score": 0.6, "attempts": 1}]})
+
+    g = gateway(handler)
+    assert await g.query_memory(ACTOR, ["algebra"]) == [MemoryItem("algebra", 0.6, 1)]
+    submitter = replace(ACTOR, permission="assessment.attempt.submit")
+    await g.record_memory(submitter, [MemoryObservation("algebra", True)])
+
+    query, upsert = seen
+    assert (query.url.path, json.loads(query.content)) == ("/v1/ai/memory/query", {"topics": ["algebra"]})
+    assert (upsert.url.path, json.loads(upsert.content)) == (
+        "/v1/ai/memory/upsert",
+        {"observations": [{"topic": "algebra", "correct": True}]},
+    )
+    assert verified_context(query).permissions == ("ai.use",)
+    assert verified_context(upsert).permissions == ("assessment.attempt.submit",)
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        "x",
+        [{"topic": "a", "mastery_score": 1.5, "attempts": 1}],
+        [{"topic": "a", "mastery_score": True, "attempts": 1}],
+        [{"topic": "a", "mastery_score": 0.5, "attempts": -1}],
+        [{"topic": 3, "mastery_score": 0.5, "attempts": 1}],
+    ],
+)
+async def test_malformed_memory_answers_are_bad_responses(items):
+    async def handler(request):
+        return ok({"items": items})
+
+    with pytest.raises(AIAssistantError) as exc:
+        await gateway(handler).query_memory(ACTOR)
     assert exc.value.error_code == "AI_SERVICE_BAD_RESPONSE"

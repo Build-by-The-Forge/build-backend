@@ -116,6 +116,24 @@ class GeneratedQuestions:
     discarded: int
 
 
+MAX_MEMORY_TOPIC = 255
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryItem:
+    topic: str
+    mastery_score: float
+    attempts: int
+
+
+@dataclass(frozen=True, slots=True)
+class MemoryObservation:
+    """One graded outcome for the learner's memory of a topic (M5 ruling R3)."""
+
+    topic: str
+    correct: bool
+
+
 class AIAssistantError(Exception):
     """AI-service did not produce a usable answer. ``unavailable`` marks a
     failure to reach it (503) as opposed to a bad or refused exchange (502)."""
@@ -132,6 +150,12 @@ class AIAssistantGateway(ABC):
 
     @abstractmethod
     async def explain(self, actor: AIActor, subject: str) -> Explanation: ...
+
+    @abstractmethod
+    async def query_memory(self, actor: AIActor, topics: list[str] | None = None) -> list[MemoryItem]: ...
+
+    @abstractmethod
+    async def record_memory(self, actor: AIActor, observations: list[MemoryObservation]) -> list[MemoryItem]: ...
 
     @abstractmethod
     async def generate_questions(
