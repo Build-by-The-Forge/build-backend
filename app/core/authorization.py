@@ -36,6 +36,10 @@ class Permission(StrEnum):
     TENANT_MEMBER_INVITE = "tenant.member.invite"
     TENANT_MEMBER_MANAGE = "tenant.member.manage"
     TENANT_SETTINGS_MANAGE = "tenant.settings.manage"
+    # AI operations proxied to AI-service (design B.5). The backend checks
+    # the permission and forwards exactly it in the signed context.
+    AI_USE = "ai.use"
+    AI_QUESTIONS_GENERATE = "ai.questions.generate"
 
 
 ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
@@ -52,6 +56,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_SOURCE_READ,
             Permission.CONTENT_ASSET_READ,
             Permission.CONTENT_JOB_READ,
+            Permission.AI_USE,
         }
     ),
     "lecturer": frozenset(
@@ -76,6 +81,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_ASSET_UPLOAD,
             Permission.CONTENT_JOB_READ,
             Permission.CONTENT_JOB_MANAGE,
+            Permission.AI_USE,
+            Permission.AI_QUESTIONS_GENERATE,
         }
     ),
     "hod": frozenset(
@@ -100,6 +107,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_ASSET_UPLOAD,
             Permission.CONTENT_JOB_READ,
             Permission.CONTENT_JOB_MANAGE,
+            Permission.AI_USE,
+            Permission.AI_QUESTIONS_GENERATE,
             Permission.TENANT_MEMBER_READ,
             Permission.TENANT_MEMBER_INVITE,
         }
@@ -128,6 +137,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[Permission]] = {
             Permission.CONTENT_ASSET_UPLOAD,
             Permission.CONTENT_JOB_READ,
             Permission.CONTENT_JOB_MANAGE,
+            Permission.AI_USE,
+            Permission.AI_QUESTIONS_GENERATE,
             Permission.TENANT_MEMBER_READ,
             Permission.TENANT_MEMBER_INVITE,
         }

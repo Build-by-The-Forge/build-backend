@@ -60,3 +60,19 @@ def test_unknown_role_has_no_permissions(context: TenantContext) -> None:
 
     assert authorization.permissions_for(unknown_context) == frozenset()
     assert not authorization.can(unknown_context, Permission.CATALOGUE_READ)
+
+
+ALL_ROLES = ("student", "lecturer", "hod", "faculty_admin", "admin", "owner")
+
+
+@pytest.mark.parametrize("role", ALL_ROLES)
+def test_every_role_may_use_ai(context: TenantContext, role: str) -> None:
+    member = TenantContext(context.user_id, context.tenant_id, context.membership_id, role)
+    assert AuthorizationService().can(member, Permission.AI_USE)
+
+
+@pytest.mark.parametrize("role", ALL_ROLES)
+def test_question_generation_is_for_lecturers_and_above(context: TenantContext, role: str) -> None:
+    member = TenantContext(context.user_id, context.tenant_id, context.membership_id, role)
+    expected = role != "student"
+    assert AuthorizationService().can(member, Permission.AI_QUESTIONS_GENERATE) is expected
