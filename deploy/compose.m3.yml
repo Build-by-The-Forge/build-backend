@@ -27,7 +27,6 @@ x-ai-env: &ai-env
   BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET:?set in deploy/m3.env}
   AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET:?set in deploy/m3.env}
   BACKEND_CALLBACK_URL: http://backend:8000/content/ingestion/callbacks
-  LEGACY_USER_ROUTES_ENABLED: "false"
   MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   LOG_LEVEL: INFO
