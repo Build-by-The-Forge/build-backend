@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from app.api.ai import correlation_id_for, get_ai_assistant_gateway
 from app.api.assessment.schemas import (
     AttemptQuestionOptionResponse,
     AttemptQuestionResponse,
@@ -9,17 +10,21 @@ from app.api.assessment.schemas import (
     AttemptResultResponse,
     QuestionResultResponse,
 )
+from app.application.ai.memory_reporting import LearningMemoryReporter
 from app.application.assessment.attempt_commands import AttemptQuestionSnapshot
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
+from app.domain.ai.assistant import AIAssistantGateway
 from app.domain.assessment.attempt import AssessmentAttempt
 from app.domain.assessment.errors import AttemptAlreadySubmittedError
+from app.infrastructure.assessment.attempt_topic_outcomes import SqlAlchemyAttemptTopicOutcomes
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 service = build_container().get(AttemptService)
+memory_reporter = LearningMemoryReporter(SqlAlchemyAttemptTopicOutcomes())
 
 
 @router.post(
@@ -29,14 +34,10 @@ service = build_container().get(AttemptService)
 async def start_attempt(
     assessment_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_START)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_START)),
 ) -> JSONResponse:
     try:
-        attempt = await service.start_attempt(
-            assessment_id, context.tenant_id, context.user_id
-        )
+        attempt = await service.start_attempt(assessment_id, context.tenant_id, context.user_id)
     except ValueError as exc:
         if str(exc) == "assessment not found":
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -48,9 +49,7 @@ async def start_attempt(
 async def get_attempt(
     attempt_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_READ)),
 ) -> JSONResponse:
     attempt = await service.get_attempt(attempt_id, context.tenant_id, context.user_id)
     if attempt is None:
@@ -62,16 +61,12 @@ async def get_attempt(
 async def get_attempt_questions(
     attempt_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_READ)),
 ) -> JSONResponse:
     attempt = await service.get_attempt(attempt_id, context.tenant_id, context.user_id)
     if attempt is None:
         raise HTTPException(status_code=404, detail="attempt questions not found")
-    questions = await service.get_attempt_questions(
-        attempt_id, context.tenant_id, context.user_id
-    )
+    questions = await service.get_attempt_questions(attempt_id, context.tenant_id, context.user_id)
     if questions is None:
         raise HTTPException(status_code=404, detail="attempt questions not found")
 
@@ -94,9 +89,7 @@ async def get_attempt_questions(
 @router.get("/attempts", status_code=status.HTTP_200_OK)
 async def list_attempts(
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_READ)),
 ) -> JSONResponse:
     attempts = await service.list_my_attempts(context.tenant_id, context.user_id)
     return JSONResponse(
@@ -114,18 +107,25 @@ async def list_attempts(
 async def submit_attempt(
     attempt_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_SUBMIT)
-    ),
+    background: BackgroundTasks,
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_SUBMIT)),
+    gateway: AIAssistantGateway = Depends(get_ai_assistant_gateway),
 ) -> JSONResponse:
     try:
-        attempt = await service.submit_attempt(
-            attempt_id, context.tenant_id, context.user_id
-        )
+        attempt = await service.submit_attempt(attempt_id, context.tenant_id, context.user_id)
     except AttemptAlreadySubmittedError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if attempt is None:
         raise HTTPException(status_code=404, detail="attempt not found")
+    # After the response, and only once the graded attempt is committed: the
+    # learner's memory in AI-service (M5 ruling R3). Best effort.
+    background.add_task(
+        memory_reporter.report_submitted_attempt,
+        gateway,
+        context,
+        attempt_id,
+        correlation_id_for(request),
+    )
     return _response(request, attempt)
 
 
@@ -133,9 +133,7 @@ async def submit_attempt(
 async def get_attempt_result(
     attempt_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_RESULT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_RESULT_READ)),
 ) -> JSONResponse:
     is_staff = context.role in {"lecturer", "hod", "faculty_admin", "admin", "owner"}
     try:
@@ -203,11 +201,7 @@ def _attempt_payload(attempt: AssessmentAttempt) -> dict[str, object]:
         user_id=attempt.user_id,
         status=attempt.status.value,
         started_at=attempt.started_at.isoformat(),
-        submitted_at=(
-            attempt.submitted_at.isoformat()
-            if attempt.submitted_at is not None
-            else None
-        ),
+        submitted_at=(attempt.submitted_at.isoformat() if attempt.submitted_at is not None else None),
         created_at=attempt.created_at.isoformat(),
         updated_at=attempt.updated_at.isoformat(),
     ).model_dump()
@@ -220,10 +214,7 @@ def _question_payload(question: AttemptQuestionSnapshot) -> AttemptQuestionRespo
         sequence=question.sequence,
         prompt=question.prompt,
         marks=question.marks,
-        options=[
-            AttemptQuestionOptionResponse(position=index, text=text)
-            for index, text in enumerate(question.options)
-        ],
+        options=[AttemptQuestionOptionResponse(position=index, text=text) for index, text in enumerate(question.options)],
     )
 
 

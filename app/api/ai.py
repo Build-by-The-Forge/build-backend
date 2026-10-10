@@ -55,9 +55,16 @@ def get_ai_assistant_gateway() -> AIAssistantGateway:
     return HttpAIAssistantGateway()
 
 
-def _actor(request: Request, context: TenantContext, permission: Permission) -> AIActor:
+def correlation_id_for(request: Request) -> str:
+    """The request id when it fits the signed-context format, else a new id."""
     request_id = getattr(request.state, "request_id", None)
-    correlation_id = request_id if isinstance(request_id, str) and _CORRELATION_ID_RE.fullmatch(request_id) else str(uuid.uuid4())
+    if isinstance(request_id, str) and _CORRELATION_ID_RE.fullmatch(request_id):
+        return request_id
+    return str(uuid.uuid4())
+
+
+def _actor(request: Request, context: TenantContext, permission: Permission) -> AIActor:
+    correlation_id = correlation_id_for(request)
     return AIActor(
         tenant_id=context.tenant_id,
         user_id=context.user_id,
