@@ -39,7 +39,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in deploy/m3.env}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d build"]
+      # Over TCP: the image's first-start init server listens only on the
+      # Unix socket and then restarts, so a socket check can pass before
+      # the real server accepts connections from db-init.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d build"]
       interval: 2s
       retries: 30
     networks: [internal]
