@@ -1,8 +1,9 @@
 import pytest
-
 from app.application.identity.ports.counter_store import CounterStoreUnavailable
 from app.application.identity.throttle import (
     ACCOUNT_LOCK_SECONDS,
+    AI_QUESTION_GENERATION_PER_USER,
+    AI_REQUESTS_PER_USER,
     LOGIN_FAILURES_PER_ACCOUNT,
     LOGIN_FAILURES_PER_PAIR,
     PAIR_LOCK_SECONDS,
@@ -138,3 +139,30 @@ async def test_an_expired_lock_does_not_immediately_re_lock(throttle, clock):
     await fail(throttle, LOGIN_FAILURES_PER_PAIR.limit - 1)
 
     await throttle.before_login(EMAIL, "10.0.0.1")
+
+
+async def test_ai_requests_are_limited_per_user(throttle, clock):
+    for _ in range(AI_REQUESTS_PER_USER.limit):
+        await throttle.ai_request("user-1")
+    with pytest.raises(RateLimitedError):
+        await throttle.ai_request("user-1")
+
+    await throttle.ai_request("user-2")  # another user is unaffected
+    clock.now += AI_REQUESTS_PER_USER.window_seconds
+    await throttle.ai_request("user-1")
+
+
+async def test_question_generation_has_its_own_lower_limit(throttle):
+    for _ in range(AI_QUESTION_GENERATION_PER_USER.limit):
+        await throttle.ai_question_generation("user-1")
+    with pytest.raises(RateLimitedError):
+        await throttle.ai_question_generation("user-1")
+    await throttle.ai_request("user-1")  # chat still has headroom
+
+
+async def test_question_generation_counts_towards_the_ai_limit(throttle):
+    for _ in range(AI_REQUESTS_PER_USER.limit - 1):
+        await throttle.ai_request("user-1")
+    await throttle.ai_question_generation("user-1")
+    with pytest.raises(RateLimitedError):
+        await throttle.ai_request("user-1")
