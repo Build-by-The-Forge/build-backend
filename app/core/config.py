@@ -1,3 +1,4 @@
+import ipaddress
 import os
 import secrets
 from typing import Literal
@@ -82,6 +83,9 @@ class Settings(BaseSettings):
     # Interactive docs and the OpenAPI document; off in staging/production
     # unless explicitly enabled.
     api_docs_enabled: bool | None = Field(default=None)
+    # Reverse proxies (IPs or CIDRs, comma separated) whose X-Forwarded-For
+    # is believed. Empty: the direct peer is the client (M6).
+    trusted_proxies: str = Field(default="")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -210,6 +214,21 @@ class Settings(BaseSettings):
             if parts.scheme not in schemes or not parts.hostname or parts.path not in ("", "/"):
                 raise ValueError(f"CORS origin {origin!r} must be a bare {' or '.join(sorted(schemes))} origin")
         return self
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def validate_trusted_proxies(cls, value: str) -> str:
+        for item in value.split(","):
+            if item.strip():
+                try:
+                    ipaddress.ip_network(item.strip(), strict=False)
+                except ValueError as exc:
+                    raise ValueError(f"TRUSTED_PROXIES entry {item.strip()!r} is not an IP or CIDR") from exc
+        return value
+
+    @property
+    def trusted_proxy_networks(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        return [ipaddress.ip_network(i.strip(), strict=False) for i in self.trusted_proxies.split(",") if i.strip()]
 
     @property
     def cors_origins(self) -> list[str]:
