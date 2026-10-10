@@ -1,0 +1,171 @@
+# Combined backend + AI-service topology (M3 design B.6).
+#
+#   docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml up -d --build
+#
+# Copy deploy/m3.env.example to deploy/m3.env (git-ignored) and fill it in,
+# Expects ../ai-service next to this repository.
+#
+# One database (`build`) with least-privilege roles created by db-init. Each
+# Alembic chain runs as its owner role and each service runs as its app role;
+# the superuser is used by db-init only. AI-service is not published: it is
+# reachable only on the internal network, from the backend.
+
+name: build-m3
+
+x-backend-image: &backend-build
+  context: ..
+  dockerfile: Dockerfile
+
+x-ai-image: &ai-build
+  context: ../../ai-service
+  dockerfile: Dockerfile
+
+x-ai-env: &ai-env
+  APP_ENVIRONMENT: development
+  REDIS_URL: redis://redis:6379/1
+  BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET:?set in deploy/m3.env}
+  AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET:?set in deploy/m3.env}
+  BACKEND_CALLBACK_URL: http://backend:8000/content/ingestion/callbacks
+  LEGACY_USER_ROUTES_ENABLED: "false"
+  MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  LOG_LEVEL: INFO
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: build
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in deploy/m3.env}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d build"]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+
+  redis:
+    image: redis:8
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+
+  db-init:
+    image: postgres:17
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGDATABASE: build
+      PGPASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+    volumes:
+      - ./db-init:/db-init:ro
+    command:
+      - psql
+      - -v
+      - db=build
+      - -v
+      - backend_owner_password=${BUILD_BACKEND_OWNER_PASSWORD:?set in deploy/m3.env}
+      - -v
+      - backend_app_password=${BUILD_BACKEND_APP_PASSWORD:?set in deploy/m3.env}
+      - -v
+      - ai_owner_password=${BUILD_AI_OWNER_PASSWORD:?set in deploy/m3.env}
+      - -v
+      - ai_app_password=${BUILD_AI_APP_PASSWORD:?set in deploy/m3.env}
+      - -f
+      - /db-init/init-roles.sql
+    networks: [internal]
+
+  backend-migrate:
+    build: *backend-build
+    image: build-m3-backend
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://build_backend_owner:${BUILD_BACKEND_OWNER_PASSWORD}@postgres:5432/build
+    command: ["alembic", "upgrade", "head"]
+    networks: [internal]
+
+  ai-migrate:
+    build: *ai-build
+    image: build-m3-ai-service
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      backend-migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *ai-env
+      DATABASE_URL: postgresql+asyncpg://build_ai_owner:${BUILD_AI_OWNER_PASSWORD}@postgres:5432/build
+    entrypoint: ["alembic", "upgrade", "head"]
+    networks: [internal]
+
+  backend:
+    image: build-m3-backend
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENVIRONMENT: development
+      POSTGRES_URL: postgresql+asyncpg://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
+      REDIS_URL: redis://redis:6379/0
+      AI_SERVICE_URL: http://ai-service:8000
+      BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}
+      AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
+      AUTH_RATE_LIMIT_FAILURE_MODE: closed
+      EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
+    volumes:
+      - outbox:/outbox
+    ports:
+      - "127.0.0.1:${M3_BACKEND_PORT:-18000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+      interval: 2s
+      retries: 60
+    networks: [internal]
+
+  ai-service:
+    image: build-m3-ai-service
+    depends_on:
+      ai-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *ai-env
+      DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+    # Runtime only: migrations already ran as build_ai_owner (ai-migrate).
+    entrypoint: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/system/health', timeout=2)"]
+      interval: 2s
+      retries: 60
+    # No ports: reachable only on the internal network.
+    networks: [internal]
+
+  ai-worker:
+    image: build-m3-ai-service
+    depends_on:
+      ai-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *ai-env
+      DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+    entrypoint: ["python", "-m", "app.worker"]
+    networks: [internal]
+
+volumes:
+  outbox:
+
+networks:
+  internal:
