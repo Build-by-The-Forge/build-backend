@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     # Development only: also append outgoing email (with its one-time codes)
     # to this JSONL file. Ignored in staging/production.
     email_outbox_path: str | None = Field(default=None)
+    # Largest request body any route accepts (413 above it). JSON only today:
+    # asset bytes never pass through the API.
+    max_request_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=100 * 1024 * 1024)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

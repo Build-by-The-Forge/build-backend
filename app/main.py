@@ -28,6 +28,7 @@ from app.db.base import Base
 from app.db.session import engine
 from app.infrastructure.security.replay_store import RedisReplayStore
 from app.infrastructure.security.service_signature import Direction, ServiceKeys
+from app.middleware.body_limit import RequestBodyLimitMiddleware
 from app.middleware.service_auth import ServiceAuthMiddleware
 
 # The one route AI-service may call. Only BUILD Service Signature v1 requests
@@ -80,6 +81,8 @@ app.add_middleware(
 )
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+# Outermost: an oversized body is refused before anything else reads it.
+app.add_middleware(RequestBodyLimitMiddleware, max_body_bytes=settings.max_request_body_bytes)
 app.include_router(health_router)
 app.include_router(api_router)
 app.include_router(identity_router)
