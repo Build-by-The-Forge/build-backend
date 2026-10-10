@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.health import router as health_router
@@ -66,6 +67,9 @@ app = FastAPI(
     title="BUILD Backend",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url="/redoc" if settings.docs_enabled else None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
 
 # Replay protection is shared by every replica, so it lives in Redis only.
@@ -81,6 +85,16 @@ app.add_middleware(
 )
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "X-Tenant-Slug", "X-Request-ID"],
+        expose_headers=["X-Request-ID", "Retry-After"],
+        max_age=600,
+    )
 # Outermost: an oversized body is refused before anything else reads it.
 app.add_middleware(RequestBodyLimitMiddleware, max_body_bytes=settings.max_request_body_bytes)
 app.include_router(health_router)

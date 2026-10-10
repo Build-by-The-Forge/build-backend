@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     # Largest request body any route accepts (413 above it). JSON only today:
     # asset bytes never pass through the API.
     max_request_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    # Browser origins allowed to call the API, comma separated. Empty means no
+    # CORS headers at all, so browsers refuse cross-origin calls (M6).
+    cors_allowed_origins: str = Field(default="")
+    # Interactive docs and the OpenAPI document; off in staging/production
+    # unless explicitly enabled.
+    api_docs_enabled: bool | None = Field(default=None)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -192,6 +198,28 @@ class Settings(BaseSettings):
         if to_ai & to_backend:
             raise ValueError("BACKEND_TO_AI and AI_TO_BACKEND secrets must differ")
         return self
+
+    @model_validator(mode="after")
+    def validate_cors_origins(self) -> "Settings":
+        strict = self.app_environment in STRICT_ENVIRONMENTS
+        for origin in self.cors_origins:
+            parts = urlsplit(origin)
+            if origin == "*" or "*" in origin:
+                raise ValueError("CORS_ALLOWED_ORIGINS must list exact origins, not wildcards")
+            schemes = {"https"} if strict else {"http", "https"}
+            if parts.scheme not in schemes or not parts.hostname or parts.path not in ("", "/"):
+                raise ValueError(f"CORS origin {origin!r} must be a bare {' or '.join(sorted(schemes))} origin")
+        return self
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip().rstrip("/") for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def docs_enabled(self) -> bool:
+        if self.api_docs_enabled is not None:
+            return self.api_docs_enabled
+        return self.app_environment not in STRICT_ENVIRONMENTS
 
     @property
     def ai_to_backend_verification_secrets(self) -> tuple[str, ...]:
