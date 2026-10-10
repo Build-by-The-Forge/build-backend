@@ -1,6 +1,7 @@
 import os
 import secrets
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -142,6 +143,18 @@ class Settings(BaseSettings):
                     f"AI_SERVICE_URL is required when app_environment is {self.app_environment!r}"
                 )
             self.ai_service_url = DEVELOPMENT_AI_SERVICE_URL
+        parts = urlsplit(self.ai_service_url)
+        # Requests are signed but responses are not (ruling E.4): outside
+        # development the boundary must run over TLS.
+        allowed = {"https"} if strict else {"http", "https"}
+        if parts.scheme not in allowed or not parts.hostname:
+            raise ValueError(
+                f"AI_SERVICE_URL must be an absolute {' or '.join(sorted(allowed))} URL"
+            )
+        if parts.username or parts.password or parts.query or parts.fragment:
+            raise ValueError(
+                "AI_SERVICE_URL must not carry credentials, a query or a fragment"
+            )
 
         if self.app_environment == "testing":
             # Single-process tests sign and verify with the same settings.

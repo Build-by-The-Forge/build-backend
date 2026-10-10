@@ -18,7 +18,7 @@ def no_ambient_jwt_env(monkeypatch):
 
 # Valid service-boundary settings, so strict environments fail only on JWT.
 SERVICE_BOUNDARY = {
-    "ai_service_url": "http://ai-service:8000",
+    "ai_service_url": "https://ai-service.internal",
     "backend_to_ai_secret": "b" * 40,
     "ai_to_backend_secret": "a" * 40,
 }

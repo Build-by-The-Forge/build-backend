@@ -4,7 +4,7 @@ import pytest
 from app.core.config import KNOWN_DEVELOPMENT_SERVICE_SECRETS, Settings
 
 JWT = "j" * 40
-URL = "http://ai-service:8000"
+URL = "https://ai-service.internal"
 B2A = "b2a-" + "x" * 40
 B2A_OLD = "b2a-old-" + "y" * 40
 A2B = "a2b-" + "z" * 40
@@ -93,9 +93,7 @@ def test_secret_length_is_counted_in_bytes():
 
 
 @pytest.mark.parametrize("environment", STRICT)
-@pytest.mark.parametrize(
-    "known", sorted(v for v in KNOWN_DEVELOPMENT_SERVICE_SECRETS if len(v) >= 32)
-)
+@pytest.mark.parametrize("known", sorted(v for v in KNOWN_DEVELOPMENT_SERVICE_SECRETS if len(v) >= 32))
 def test_known_development_value_refuses_to_start(environment, known):
     with pytest.raises(ValueError, match="known development value"):
         make(environment, backend_to_ai_secret=known)
@@ -184,3 +182,24 @@ def test_replay_store_timeout_defaults_to_half_a_second():
 def test_replay_store_timeout_is_bounded(value):
     with pytest.raises(ValueError):
         Settings(_env_file=None, app_environment="development", service_replay_timeout_seconds=value)
+
+
+@pytest.mark.parametrize("environment", STRICT)
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://ai-service:8000",
+        "ftp://ai-service",
+        "https://user:pass@ai-service.internal",
+        "https://ai-service.internal?x=1",
+        "ai-service:8000",
+    ],
+)
+def test_strict_environments_require_a_plain_https_ai_service_url(environment, url):
+    with pytest.raises(ValueError, match="AI_SERVICE_URL"):
+        make(environment, ai_service_url=url)
+
+
+@pytest.mark.parametrize("environment", ["development", "testing"])
+def test_development_may_use_http_for_the_ai_service(environment):
+    assert make(environment, ai_service_url="http://ai-service:8000").ai_service_url == "http://ai-service:8000"
