@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.ai import router as ai_router
 from app.api.assessment import assessment_router, attempt_router, question_router
 from app.api.assessment.answers import router as answer_router
 from app.api.catalogue import (
@@ -28,3 +29,4 @@ router.include_router(curriculum_sources_router)
 router.include_router(curriculum_benchmarks_router)
 router.include_router(curriculum_adoptions_router)
 router.include_router(content_router)
+router.include_router(ai_router)
