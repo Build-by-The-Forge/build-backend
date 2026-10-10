@@ -43,4 +43,7 @@ echo "C11: stopping redis"
 "${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m redis_down || status=$?
 "${COMPOSE[@]}" start redis
 
+# M6: the production startup path, with the same images.
+scripts/m6_production_startup.sh || status=$?
+
 exit "$status"
