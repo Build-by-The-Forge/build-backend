@@ -41,6 +41,10 @@ jobs:
           path: ai-service
       - name: Boundary gate
         working-directory: build-backend
+        env:
+          # The same read-only token fetches the OCR model mirror release
+          # assets during the ai-service build (BuildKit secret).
+          OCR_MODELS_TOKEN: ${{ secrets.AI_SERVICE_READ_TOKEN }}
         run: scripts/m3_boundary_gate.sh
       - name: Service logs on failure
         if: failure()

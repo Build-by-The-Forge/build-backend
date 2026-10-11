@@ -35,6 +35,16 @@ trap cleanup EXIT
 "${COMPOSE[@]}" --profile gate down -v --remove-orphans >/dev/null 2>&1 || true
 "${COMPOSE[@]}" up -d --build --wait backend ai-service ai-worker
 
+# The model-mirror token is a build secret only: it must not appear in the
+# image's history or configuration.
+if [[ -n "${OCR_MODELS_TOKEN:-}" ]]; then
+  if docker history --no-trunc build-m3-ai-service | grep -qF "$OCR_MODELS_TOKEN"      || docker image inspect build-m3-ai-service | grep -qF "$OCR_MODELS_TOKEN"; then
+    echo "OCR_MODELS_TOKEN leaked into the ai-service image" >&2
+    exit 1
+  fi
+  echo "model-mirror token: not present in image history or config"
+fi
+
 status=0
 "${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down" || status=$?
 
