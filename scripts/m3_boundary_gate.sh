@@ -46,4 +46,8 @@ echo "C11: stopping redis"
 # M6: the production startup path, with the same images.
 scripts/m6_production_startup.sh || status=$?
 
+# Phase 2 Step 2: real OCR in the AI-service image with networking disabled,
+# from the models baked into it (no runtime download).
+"${AI_SERVICE_DIR:-../ai-service}/scripts/test_offline_ocr_image.sh" build-m3-ai-service || status=$?
+
 exit "$status"
