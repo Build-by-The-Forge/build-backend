@@ -1,11 +1,11 @@
 # Backend production-image hardening: inspection findings and implementation plan
 
-Status: **proposal, approved with conditions on 2026-10-12 (§5).** The approval
-covers the sequence in §3 under the conditions in §5. It does not cover running
-every item automatically: each step is verified before it is committed, and
-anything that departs from this plan is brought back for a decision. The
-inspection that produced it was read-only: no file in `build-backend` or
-`ai-service` was changed, no branch was switched, nothing was pushed.
+Status: **approved with conditions (§5); C1a to C3a done; C3b to C10 to run as
+one coordinated implementation under the unified brief of 2026-10-12 (§3.3).**
+Section 3 is the canonical roadmap: completed work in §3.1, the re-inspection of
+both repositories in §3.2, the remaining phases in §3.4. The approval does not
+cover pushing, merging or deploying. Anything that departs from this plan, or
+hits a stop condition (§3.6), is brought back for a decision.
 
 ## 0. Baseline
 
@@ -95,6 +95,8 @@ Changing the backend case's input removes the only M6 coverage of the backend's 
 | R5 | Remove dead tool configuration: `[tool.black] target-version = ["py314"]` (black is not installed or used); `[tool.mypy] python_version = "3.13"` (mypy is not run in CI). Whether mypy should be enforced is a separate decision. |
 | R6 | Cross-repo: ai-service also runs as root (no `USER` in its Dockerfile). The same treatment should follow there, as its own step. |
 | R7 | A production start with a missing or malformed `POSTGRES_URL` is refused, but only by a raw `sqlalchemy.exc.ArgumentError` at import (verified with a valid production configuration and `POSTGRES_URL=not-a-url`), not by a configuration check with a clear message like the other strict-environment settings. Worth adding to `Settings` as a separate change, with its own M6 case. |
+| R8 | Cross-repo (found 2026-10-12): ai-service pins only direct dependencies (its `requirements.txt` has 15 direct entries), so transitive versions resolve at build time, the same class of problem as D1. This belongs to an ai-service workstream. |
+| R9 | Cross-repo (found 2026-10-12): ai-service's CI security job installs `bandit` and `pip-audit` unpinned, and its Dockerfile uses a floating `python:3.12-slim` and an unpinned pip (see D-B). |
 
 ### Unresolved questions (need a decision or evidence I could not get)
 
@@ -133,7 +135,7 @@ Drift is caught by a unit test (`tests/unit/test_dependency_declarations.py`, mo
 
 The closure is generated on Linux, where the image runs. Platform-specific dependencies get environment markers, so the same files install on Windows: `uvloop` (required by `uvicorn[standard]` only off Windows) gets `; sys_platform != "win32"`, and `colorama` (pytest, Windows only) gets `; sys_platform == "win32"`. The declaration test evaluates markers for both platforms, as ai-service's now does.
 
-**Which versions get pinned:** exactly the set the Phase 0 baseline resolves. Phase 0 rebuilds from HEAD, whose floating requirements pick up today's newest releases, so its `pip freeze` is recorded and becomes the pins. That way the pinned set is the one the baseline gate actually tested. Supporting evidence for the jump from the local venv: the 2026-10-11 image's set (SQLAlchemy 2.1.4 and the rest) already passes the unit suite on Linux. If Phase 0 resolves anything newer than that set, C4 re-runs the suite on it before committing.
+**Which versions get pinned:** a fresh resolution on the day C4a is implemented, in `python:3.13.16-slim`. It is not the Phase 0 set or any earlier image's set, because floating dependencies drifted within a day (§0a). Differences from the Phase 0 set are listed in the C4a commit, and nothing is upgraded deliberately. The pinned set then has to pass the unit suite, the postgres-gate replay and the full gate before it is committed.
 
 **2. How will production dependencies be separated from development and test tooling?**
 A multi-stage Dockerfile:
@@ -196,60 +198,246 @@ Production image: `app/`, `alembic/`, `alembic.ini` and `scripts/provision_tenan
 
 ## 3. Change sequence
 
-The work goes on a new branch, `chore/backend-image-hardening`, created from `feat/learning-content` at 51cb753. Creating it does not touch the working tree, since there are no uncommitted changes. One concern per commit; each commit is tested on its own and can be reverted alone.
+### 3.1 Done (on `chore/backend-image-hardening`, unpushed)
 
-**First commit.** This plan, as `docs/phase2-backend-image-hardening-plan.md`.
+| Step | Commits | Result |
+|---|---|---|
+| Plan | 93a1e4f | This document |
+| Phase 0 | 41ce621 (record) | Gate green on the unchanged code; two M6 cases refused for the wrong rule (§0a) |
+| C1a | a57d668 | M6 refusals count only a settings `ValidationError` with the case's own message; 12 lines (2 boots, 10 refusals); failures show the rule's message or the exception class, never configuration values |
+| C1b | 58b7eec, 2f66bc0 | `scripts/m6_refusal_selftest.sh` (bad database URL, missing module, unreadable config, redacted boot log), run by the gate on every run |
+| C1b fix | f3bb396 | Self-test cleanup survives interruption: asks Docker for the run's images, removes fixture containers first (never via the base tag), sweeps leftovers at start |
+| C2 | cb97f23 | `ruff format` (0.17.0), 198 files, identical AST and comments, reproducible exactly |
+| C3a | 939be32, c978c07, 2f0f7ab, f3aa82e | Final newline in `pyproject.toml`; `known-first-party` for app, scripts, tests, pg_smoke, boundary (classification was per file before); imports sorted (141 findings, 139 files); unused import removed |
 
-**Precondition.** At least 15 GB free on C: (U7), re-checked before each image build.
+**Baseline after C3a (f3aa82e).** These are re-run after every later phase, not assumed:
+- unit suite 1122 passed, 89 skipped;
+- `ci.yml` postgres-gate replay: migrations to head, single head, round-trip, schema-drift check, pg_smoke 20 passed + 1 xfailed, Redis counter 7, service auth 30, signed callbacks 46;
+- full boundary gate: boundary 176, Redis-down 3, M6 12, self-test 4, offline OCR both OK;
+- ruff 0.17.0 and 0.6.9: format clean, 4 lint findings (C3b).
 
-**Phase 0: baseline (no commit).** Run the full local boundary gate on HEAD, building both images fresh. The ai-service image comes from `../ai-service` on `feat/m3-boundary`, so this run is also the first boundary-gate evidence for the OCR-stack work (paddle 3.3.1 and the rest). Record pass counts per suite, every M6 line, and `pip freeze --all` from the freshly built backend image: that freeze is what C4 pins. If the baseline fails, stop and report: hardening must not start from a red gate.
+ruff 0.17.0 is used throughout; the pre-commit hook still pins 0.6.9 until C4c.
 
-| # | Commit | Change | Acceptance | Regression tests | Rollback |
-|---|---|---|---|---|---|
-| C1a | `test(backend): M6 refusals must fail for the configuration reason` | `refuses()` captures output and passes only if the import exits non-zero, the failure is a settings `ValidationError`, and the output contains that case's message (answer 7). `boots()` prints the server log on failure instead of discarding it. Per the Phase 0 measurement (§0a): the backend known-development-secret case uses a listed value of at least 32 bytes; the ai-service missing-secret case unsets the variable (`--entrypoint env` with `-u`, no shell script); and a backend short-secret case is added to keep the backend's length rule covered. | All 12 M6 lines pass on the Phase 0 images, each matching its category and message. **Negative control for the two corrected cases:** run with their old inputs, the new `refuses()` reports FAIL, because the message is the length rule's, not the label's. Run by hand against the new `refuses()`, three unrelated failures must each be reported FAIL: (a) a valid production configuration with `POSTGRES_URL=not-a-url` (URL error at import); (b) a throwaway image `FROM` the backend image with one runtime dependency uninstalled (missing module); (c) a throwaway image with `app/core/config.py` made unreadable, run as an unprivileged user (permission error). The commit message records that the old `refuses()` reported each of them as "refused". | Full gate. | Revert (script only). |
-| C1b | `test(backend): the M6 refusal check rejects unrelated failures` | `scripts/m6_refusal_selftest.sh`: builds the two throwaway images for (b) and (c), runs (a), (b) and (c) through the same `refuses()`, requires FAIL for each, then removes the images. Called from `m3_boundary_gate.sh`, so the check cannot quietly lose its teeth. | Self-test passes on current images. **Negative control:** with C1a reverted locally, the self-test fails. | Full gate. | Revert. |
-| C2 | `style(backend): ruff format with the pinned ruff (no behaviour change)` | Moves the pre-commit ruff hook from v0.6.9 to the ruff version in the Phase 0 freeze (0.17.0 as of 2026-10-11), which is also the version C4 pins, so pre-commit and CI format identically; then `ruff format app tests scripts pg_smoke`. Mechanical. | `ruff format --check` clean. **Formatter-only proof:** (1) the commit is reproduced by running the same ruff on the parent commit, and the trees must be identical; (2) every changed `.py` file parses to an identical AST before and after (excluding docstring-whitespace changes, which are listed for inspection); (3) only `.py` files and `.pre-commit-config.yaml` change. Unit suite 1122 passed / 89 skipped, unchanged; `pg_smoke` unchanged. | Unit suite; postgres-gate replay. | Revert. |
-| C3a | `style(backend): ruff's automatic lint fixes (no behaviour change)` | `ruff check --fix` with safe fixes only: 39 import-order fixes and 1 unused import. | Remaining findings are exactly the 7 hand-fix cases; suites unchanged; AST comparison as in C2 shows only import order and the removed import. | As C2. | Revert. |
-| C3b | `fix(backend): the remaining lint findings, reviewed by hand` | 3 E501, 2 E402 and 2 F841, each read for intent: an unused variable can hide a missing assertion, and moving an import can change initialisation order. Each fix is listed in the commit message; any that touches a security check or error handling is called out with its test. Adds `.git-blame-ignore-revs` listing C2 and C3a. | `ruff check` clean, so known baseline failure KB1 is closed; suites unchanged. | As C2. | Revert. |
-| C4 | `build(backend): exact pins; requirements files are the only install source` | Full-closure `requirements.txt` and `requirements-dev.txt` with platform markers (pins: the Phase 0 freeze; `requirements.txt` is what the runtime direct dependencies resolve to with that freeze as constraints, and `requirements-dev.txt` adds the rest); the dependency lists are removed from `pyproject.toml`; stale entries dropped (D10); the declaration test. The Dockerfile installs `requirements-dev.txt` (still everything, deliberately, so this commit changes pinning only) and no longer installs the empty project (D9). `ci.yml` installs `requirements-dev.txt` only, so lint uses the pinned ruff; the postgres-gate job already sets `PYTHONPATH: .`. These files must change together to stay consistent, so they are one commit. | Declaration test passes on both platforms; `pip check` clean; unit suite and postgres-gate pass **in a `python:3.13.16-slim` container** with exactly the pinned set; full gate matches the baseline. Local venv re-synced, best effort (U3), after a `pip freeze --all` backup. | Unit suite, `pg_smoke`, full gate. | Revert; installs go back to floating versions. Restore the local venv from the `pip freeze --all` backup. |
-| C4b | `docs(backend): install from the pinned requirements` | README development setup: `pip install -r requirements-dev.txt`, replacing `pip install -r requirements.txt` and `pip install -e ".[dev]"`. | The README commands work in a fresh `python:3.13.16-slim` container. | n/a | Revert. |
-| C5a | `build(backend): runtime-only production image, separate test image` | Multi-stage `runtime` / `test` / `production` (last, `FROM runtime`); explicit `COPY` allowlist (answer 4); compose: `boundary-tests` builds `target: test` as `build-m3-backend-test`, backend services build `target: production`. `boundary-tests` is in the `gate` profile, which the gate's `up --build backend ai-service ai-worker` does not build, and `compose run` reuses an existing image. So `m3_boundary_gate.sh` gains an explicit `--profile gate build boundary-tests`; without it the gate would silently test a stale image. These must change together for the gate to work. | `docker build .` produces the runtime image (no pytest, ruff or mypy; `/app` holds only the allowlist, checked by hand here and by C5b afterwards). The gate log shows the test image built in that run, and the full gate matches the baseline. | Full gate. | Revert; compose goes back to one image. |
-| C5b | `test(backend): production image checks` | `scripts/check_backend_image.sh <image>`: `/app` is exactly the allowlist; no dev tools; no `.env`, `m3.env` or test directories; `pip check`. Called from `m3_boundary_gate.sh` on the production image. | Passes on the C5a image. **Negative control:** fails on the Phase 0 image (dev tools, extra files). | Gate. | Revert. |
-| C5c | `build(backend): the gate tests images built from the checked-out sources` | Both images carry `org.opencontainers.image.revision` (backend: `git rev-parse HEAD`, suffixed `-dirty` for a dirty tree; ai-service: the HEAD of the checkout it was built from), passed in by the gate script. The gate prints both revisions and refuses to run the suite if the `boundary-tests` or `backend` image's revision differs from the checkout. CI publishes only the `production` target; the test image is never tagged for publication. | **Negative control:** with a stale `build-m3-backend-test` image whose label differs, the gate stops before running tests. | Gate. | Revert. |
-| C6 | `build(backend): run as an unprivileged user (final stage)` | `app` user (UID/GID 10001); `USER app` at the end of `runtime` and `test`; `/outbox` created and owned by `app`; a README line on running `docker compose -f deploy/compose.m3.yml down -v` once after upgrading. The image check gains: UID ≠ 0, `/app` not writable by the runtime user, `/outbox` owned by it. | Check passes; **negative control:** it fails on the C5c image (root). Full gate on fresh volumes matches the baseline. That exercises the outbox write (backend) and read (sign-up and invitation flows), both migration chains, provisioning, health checks and M6. | Full gate. | Revert; `docker compose -f deploy/compose.m3.yml down -v` locally if a volume was created by the non-root image. |
-| C7a | `build(backend): pin the base image` | `FROM python:3.13.16-slim@sha256:<digest>` (the digest recorded at implementation time). | Two builds of the same commit give the same package set; gate matches the baseline. | Gate. | Revert. |
-| C7b | `build(backend): pin pip` | `pip==<version>` in the Dockerfile and `ci.yml`, replacing `pip install --upgrade pip`. | Builds and CI replay use the pinned pip. | Unit suite in the container. | Revert. |
-| C8 | `ci(backend): dependency audit` | `security` job: pip-audit 2.10.1 on both requirements files; also runs weekly. | Replayed locally in a container: clean today. **Negative control:** adding `python-jose==3.5.0` makes it fail. | n/a | Revert. |
-| C9a | `ci(backend): build, check and audit the production image` | `image` job: build `production`; `check_backend_image.sh`; `scripts/audit_image_packages.py` (from ai-service, with review dates added) and an empty `security/accepted-image-advisories.txt`; also weekly. | Replayed locally. **Negative controls:** an unaccepted advisory, a stale acceptance and an expired review date each fail it. | n/a | Revert. |
-| C9b | `ci(backend): scan the image's OS packages with Trivy` | Trivy pinned by version and digest, `--pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`, full report logged; `security/trivyignore.yaml` (empty, or entries with `statement` and `expired_at`). | Run locally with the same pinned Trivy against the C7a image: results recorded in the commit message. If it reports fixable HIGH/CRITICAL findings, the base-image or `apt` remedy is brought back for decision before this commit, not silenced by exceptions. | n/a | Revert. |
-| C10a | `ci(backend): boundary gate checks out the intended ai-service` | `ai_service_ref` defaults to a repository variable (`AI_SERVICE_REF`, falling back to `main`), documented in the workflow header. | `actionlint` passes. | n/a | Revert. |
-| C10b | `ci(backend): boundary gate runs on pull requests` | Triggers: pull requests, push to `main`, and manual. No path filters, so a required check is never skipped. The workflow header notes that branch protection must require it (a check that never reports blocks the merge, rather than passing it). | `actionlint` passes. | n/a | Revert. |
-| C11 | `chore(backend): remove the stray "tatus --short" file` | Deletes the tracked stray file. `t -q` is untracked and is **not** deleted (yours to remove); the `*-q` ignore pattern stays until you do. | `git status` clean. | n/a | Revert. |
-| A1 | ai-service, separate branch: `ci(ai-service): remove the superseded ci.yml` | Branch `chore/remove-legacy-ci` from `feat/m3-boundary` (not from `main`; see answer 6). Deletes `.github/workflows/ci.yml`. Not on the backend branch. | The commit message maps each step of the old file to its `backend.yml` equivalent. Merges only after `feat/m3-boundary` reaches `main` and its `backend.yml` has passed in hosted CI. | n/a | Revert. |
+### 3.2 Re-inspection before the unified run (2026-10-12, read-only)
 
-Commit rules:
-- **As separate as possible:** each commit carries one concern. Files are combined only when splitting them would leave the repository inconsistent (C4, C5a), and the commit message says why.
-- **Gates:** every gate that passed at the baseline stays green after every commit. Known baseline failures are tracked by ID until the commit that fixes them, and each commit message names any it closes:
-  - **KB1:** backend lint (D2), closed by C3b;
-  - **KB2:** ai-service's legacy `ci.yml` (D14), closed by A1;
-  - anything else Phase 0 finds red is added here before work continues.
-- **Before each commit:** pre-commit runs (never skipped). The unit suite runs in the Linux container with the pinned versions (authoritative), and locally where App Control allows.
-- **Image-affecting commits** (C4, C5a, C5c, C6, C7a) also need the full gate, matching the baseline.
-- **Disk:** intermediate images are removed after each check.
-- **Nothing is pushed.** You push the branch.
+**Backend (f3aa82e).**
+- The tree is clean apart from the untracked `docs/backend-audit-2026-09-28.md`.
+- `Dockerfile`, `.dockerignore`, both compose files, both workflows, `requirements.txt` and `.pre-commit-config.yaml` are unchanged since the original inspection. D1, D3 to D6 and D8 to D13 therefore still stand. D2 is down to 4 findings (C3b), and D7 is fixed (C1a, C1b).
+- The backend has no image publication step, so "audit before publish" requires nothing for the backend today. If a publish step is added later, it must depend on the image job (C9b).
+
+**The four C3b findings, read in context:**
+- **`app/application/common/uow.py:77-78` (E402).** Two content repository imports were appended above `ContentUnitOfWorkPort` (125e77c, 3e7c1bf). Both modules import only `app.domain.*`, so moving them into the import block cannot create a cycle.
+- **`tests/integration/content/test_content_asset_api.py:18` (F841).** `admin_headers` is never used. The admin setup itself is needed, because `seed_tenant_context(admin_id, "admin")` creates tenant A, but no step acts as the admin.
+- **`tests/integration/content/test_content_source_api.py:85` (F841).** `reg_source_id` is never used. The platform source's visibility is asserted by code in steps 9 and 10. Step 11 checks the negative direct GET (a foreign lecturer gets 403 on tenant A's source); there is no positive direct GET of the platform source, which is what the ID would serve.
+
+**ai-service (`feat/m3-boundary`, 68da1cc).**
+- The local remote-tracking ref `origin/feat/m3-boundary` is also at 68da1cc. Not fetched; the remote is not re-checked here.
+- The Dockerfile's two stages use `python:3.12-slim` (floating); `pip install --upgrade pip` is unpinned; there is no `USER`, so it runs as root (R6).
+- The requirements files pin direct dependencies only (`requirements.txt`: 15 direct entries), so transitive versions resolve at build time (R8).
+- `backend.yml`'s image job runs build → offline OCR → package audit → publish (on `main` only), the right order. Its security job installs `bandit` and `pip-audit` unpinned (R9).
+- Pre-commit: ruff v0.1.8, black 26.3.1, mypy v1.7.1. The legacy `ci.yml` is still present (A1, out of scope).
+
+**Tools and environment.**
+- Local images: shellcheck 0.10.0, gitleaks 8.30.1, actionlint (tagged `latest`; its version is recorded when used), `python:3.13-slim` (3.13.16), postgres:17, redis:8.
+- 28.0 GB free on C:.
+
+### 3.3 How the remaining work runs (unified brief, 2026-10-12)
+
+C3b to C10 run as one coordinated implementation, in order, without an approval pause between commits. Every rule below still holds:
+- **Commits:** separate, reviewable commits, one concern each. Files are combined only where splitting would leave the repository inconsistent, and the commit message says so. Nothing is squashed; earlier commits are not amended.
+- **Branch and remote:** no reset, rebase, force checkout or discarded change. No push, merge, release, deploy or remote change. The untracked audit documents in both repositories are left alone.
+- **No weakening:** tests, security checks, the coverage floor, audits and boundary checks are not weakened. There are no blanket suppressions; any exception names the package, advisory, reason, scope and review date.
+- **Secrets:** never in code, command output, build arguments, image layers, logs or fixtures.
+- **Deletion:** nothing is removed except what a step itself creates (the self-test fixtures, the gate's own `down -v`, temporary images built for a check). No other images, volumes, caches or data are deleted.
+- **Tools:** ruff 0.17.0. pip-audit 2.10.1. Trivy and gitleaks pinned by version.
+- **Per phase:** its focused checks run before each commit. Its record (commits, files, checks, results, limitations) is kept for the final report.
+- **Baselines:** if one changes, the cause is identified, as an intended and documented change or a regression, before continuing.
+
+### 3.4 Remaining phases
+
+**C3b: the four remaining lint findings** (closes KB1)
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C3b-1 | `fix(backend): unit-of-work imports at the top of the module` | Move the two imports at `uow.py:77-78` into the import block; nothing else. | E402 cleared. With imports removed, the AST is unchanged. `app.application.common.uow` and every module importing it import cleanly in fresh interpreters. Unit suite. | Revert |
+| C3b-2 | `test(backend): drop an unused header in the asset API test` | Remove `admin_headers = ...` only; the admin registration and tenant seeding stay. | F841 cleared; the test passes; unit suite. | Revert |
+| C3b-3 | Per decision D-A | **Recommended:** use `reg_source_id`. A foreign-tenant lecturer's direct GET of the platform source returns 200: the positive counterpart of step 11 (`test(backend): foreign tenants can read a platform source directly`). If the API refuses it, stop and report; that is a behaviour question, not a lint fix. **Alternative:** remove the assignment. | F841 cleared. The test passes, and the test count is unchanged (the assertion goes inside the existing test). Unit suite. | Revert |
+| C3b-4 | `chore(backend): ignore the mechanical commits in git blame` | `.git-blame-ignore-revs` listing cb97f23 (format) and 2f0f7ab (import sorting), full SHAs. | The file lists both. | Revert |
+
+After C3b: `ruff check` is clean with 0.17.0 and 0.6.9, closing KB1. Full gate and postgres-gate replay.
+
+**C4: dependency declarations and tool versions**
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C4a | `build(backend): exact pins for the full dependency closure` | See below. These files must change together, so they are one commit. | Each file installs in a fresh container; `pip check` clean. Unit suite, postgres-gate replay and full gate on the pinned set. Local venv re-synced, best effort (U3), after a `pip freeze --all` backup. | Revert; restore the venv from the backup |
+| C4b | `test(backend): dependency declarations cannot drift` | The declaration test (answer 1): exact pins; closure; imports mapped to distributions through installed metadata, with standard-library and local imports excluded; no dev tool in the runtime file; `pyproject.toml` declares none. It runs in the existing `ci.yml` test job. The Dockerfile assertion is added in C5a, once the stage exists. | **Negative controls:** an unpinned line, a missing transitive pin and an undeclared import each make it fail. | Revert |
+| C4c | `build(backend): pre-commit uses the pinned ruff` | `.pre-commit-config.yaml`: ruff-pre-commit v0.6.9 → v0.17.0 (tag verified); hook arguments unchanged. | `pre-commit run --all-files` changes nothing, since the tree is already 0.17.0-clean. | Revert |
+| C4d | `docs(backend): install from the pinned requirements` | README development setup. | The commands work in a fresh container. | Revert |
+
+C4a in detail:
+- **Files:** `requirements.txt` (runtime closure) and `requirements-dev.txt` (`-r requirements.txt` plus the dev and test closure), exact pins with platform markers (uvloop off Windows, colorama on Windows only).
+- **`pyproject.toml`:** its dependency lists are removed; metadata and tool configuration stay.
+- **Stale entries:** python-jose, passlib, email-validator, python-dotenv and greenlet are dropped as direct entries, unless the import scan finds a use.
+- **Installs:** the Dockerfile installs `requirements-dev.txt`. The image keeps the same contents, because this commit is about pinning only. `ci.yml` installs `requirements-dev.txt`.
+- **Versions:** a **fresh resolution on the day**, in `python:3.13.16-slim`, not the Phase 0 set. Differences from Phase 0 are listed in the commit and re-tested. Nothing is upgraded deliberately.
+
+**C5: production image separate from the test image**
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C5a | `build(backend): runtime-only production image, separate test image` | See below. These files must change together for the gate to work. | `docker build .` gives the runtime image. Full gate green, with boundary tests from the test image. Migrations (`backend-migrate`) and provisioning (`scripts.provision_tenant`, called by the boundary tests) work. | Revert |
+| C5b | `test(backend): production image checks` | `scripts/check_backend_image.sh <image>`, called by the gate. See below. | Passes on the C5a image. **Negative controls:** it fails on the Phase 0 image, and on an image built `FROM` production with one extra file in `/app`. | Revert |
+| C5c | `build(backend): the gate tests images built from the checked-out sources` | Revision labels on both images. The gate refuses to run if the backend or test image's revision differs from the checkout. CI never tags the test target for publication. | **Negative control:** a stale test image stops the gate before any test runs. | Revert |
+
+C5a in detail:
+- **Stages:** `runtime` / `test` / `production` (last).
+- **Image contents:** an explicit `COPY` allowlist: `app/`, `alembic/`, `alembic.ini` and `scripts/provision_tenant.py`. `seed_futa.py` is excluded (U6).
+- **Compose:** `boundary-tests` builds `target: test` as `build-m3-backend-test`; the backend services build `target: production`.
+- **Gate:** it builds `boundary-tests` explicitly.
+- **Declaration test:** gains the Dockerfile assertion.
+
+C5b checks that:
+- `/app` holds exactly the allowlist;
+- no dev tools are present (pytest, ruff, mypy, pre-commit, respx, aiosqlite, coverage);
+- there is no `.env`, `m3.env` or test directory;
+- `pip check` passes;
+- installed versions equal `requirements.txt`.
+
+**C6: non-root production container**
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C6 | `build(backend): run as an unprivileged user (final stage)` | See below. | See below. | Revert; locally `docker compose -f deploy/compose.m3.yml down -v` if a volume was created by the non-root image |
+
+The change:
+- user `app`, UID and GID 10001, no login shell, no home;
+- code and site-packages stay root-owned and are not writable by `app`;
+- `/outbox` is created owned by `app`, mode 0750;
+- `USER app` at the end of `runtime` and `test`, with `USER root` only for the test stage's install;
+- the check script gains the non-root checks;
+- a README line on the one-time `down -v`.
+
+Acceptance:
+- **User:** effective UID ≠ 0 in both images.
+- **Writes:** writing under `/app` or site-packages as `app` fails.
+- **Outbox:** written by the backend and read by the boundary tests (same UID, files 0644).
+- **Operation:** migrations run. Health checks stay green. `docker stop` ends the backend cleanly within compose's grace period (uvicorn is PID 1 and handles SIGTERM). Temporary files go to `/tmp`; logs go to stdout.
+- **Gate:** the full gate on fresh volumes matches the baseline.
+- **Negative control:** the check fails on the C5c image (root).
+- **No compensation:** no broader permissions or capabilities were added to make a path work.
+
+**C7: build toolchain**
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C7a | `build(backend): pin the base image` | `FROM python:3.13.<patch>-slim@sha256:<digest>`, resolved and recorded at implementation time, not copied from earlier observations; every stage derives from it. A Dockerfile comment states how to upgrade (new patch tag and digest, then the full gate). | Two builds of the same commit give the same package set; gate green. | Revert |
+| C7b | `build(backend): pin pip` | `pip==<version>` in the Dockerfile and `ci.yml`, replacing `pip install --upgrade pip`. No setuptools or wheel step remains once the project is not installed (C4a); if one does, it is pinned too. | Builds and the CI replay use the pinned pip; unit suite in the container. | Revert |
+
+The ai-service toolchain is decision D-B.
+
+**C8: audit tooling and policy** (run locally; wired into CI in C9)
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C8a | `test(backend): audit the pinned dependencies` | `scripts/audit_dependencies.py`: pip-audit 2.10.1, `--no-deps`, on `requirements.txt` (runtime scope, gating) and `requirements-dev.txt` (dev scope, reported separately). It reads `security/accepted-advisories.txt` (dated entries) and fails on unaccepted, stale or expired entries. | Clean today. **Negative controls:** adding `python-jose==3.5.0` (CVE-2026-85394) fails it, as does a stale entry or an expired date. | Revert |
+| C8b | `test(backend): audit the packages in the production image` | `scripts/audit_image_packages.py`, taken from ai-service with review dates added, on the production image's own `pip freeze --all`. | Clean today. **Negative controls:** unaccepted, stale, expired. | Revert |
+| C8c | `test(backend): scan the image's OS packages` | Trivy pinned by version and digest: `--pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`, full report logged. `security/trivyignore.yaml` is empty, or holds entries with `statement` and `expired_at`. Trivy covers Debian packages, which pip-audit does not, so it is not redundant. | Run locally on the C7a image, results recorded. Fixable HIGH or CRITICAL findings stop the run and are reported: the remedy (base image or apt) is a decision, not an exception. | Revert |
+
+The policy goes in a short `docs/` section: no exceptions today; any future one needs evidence, affected version, exposure, mitigation and a review or removal condition.
+
+**C9: CI integration and ongoing checks**
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C9a | `ci(backend): dependency audit job` | A `security` job runs C8a. It needs the network, which is kept apart from the offline OCR check. | actionlint; job commands replayed locally. | Revert |
+| C9b | `ci(backend): build, check and audit the production image` | An `image` job: build `production` → C5b check → C8b audit → C8c scan. Failures name the package, version, advisory and policy. The workflow notes that any future publish step must `needs:` this job. | actionlint; job commands replayed locally; a failing audit fails the job. | Revert |
+| C9c | `ci(backend): weekly audits` | A `schedule` (weekly) and `workflow_dispatch` on the same workflow, running `security` and `image`. No second pipeline. | actionlint. | Revert |
+| C9d | Per decision D-D | gitleaks 8.30.1 (pinned) over the repository in CI. | Clean on the branch. **Negative control:** a planted fake token in a scratch copy is detected. | Revert |
+
+Secrets: the backend build uses no build secrets. The gate's check that `OCR_MODELS_TOKEN` is absent from the ai-service image stays.
+
+**C10: AI-service boundary-gate integration**
+
+| # | Commit | Change | Acceptance and checks | Rollback |
+|---|---|---|---|---|
+| C10a | `ci(backend): boundary gate checks out the intended ai-service revision` | See below. | actionlint. A local run of the gate script logs both SHAs. The token step is simulated with an empty token: it fails with the message and prints nothing secret. | Revert |
+| C10b | `ci(backend): boundary gate runs on pull requests` | Pull requests, push to `main`, and manual. No path filters, so a required check is never skipped. The header notes branch protection. | actionlint. | Revert |
+
+C10a in detail:
+- **Default:** `ai_service_ref` defaults explicitly to `feat/m3-boundary`, per D-C, until the ai-service branch is merged through the approved process. The header documents the one-line switch to `main`, made only after that merge is verified.
+- **Traceability:** the job prints the resolved ai-service and backend SHAs.
+- **Token:** the missing-token check stays. A failed checkout gets a diagnostic follow-up step (`if: failure()`) that names the likely causes and never prints the token.
+- **Fresh images:** CI builds fresh images on every run (`up --build`, the explicit test-image build from C5a, the revision check from C5c), so nothing extra is needed. This is confirmed and noted in the record.
+
+**After C10, if D-E is accepted:** `chore(backend): remove the stray "tatus --short" file` (the old C11). `t -q` is untracked and stays; it's yours to remove.
+
+### 3.5 Final regression (after the last commit)
+
+1. ruff lint and format with 0.17.0, and pre-commit (all hooks).
+2. Unit suite against 1122 passed / 89 skipped, with any difference explained.
+3. postgres-gate replay: migrations, schema drift, pg_smoke, Redis, service auth, signed callbacks.
+4. Production image: build, startup, content check, non-root check.
+5. Dependency audit, image package audit, OS scan.
+6. Full boundary gate: boundary 176, Redis-down 3, M6 12, self-test 4, offline OCR.
+7. gitleaks over every commit on the branch (`51cb753..HEAD`), plus a final diff review.
+8. `git status` in both repositories: all intended work committed; untracked files untouched; ai-service unchanged unless D-B says otherwise.
+
+A gate is reported as passed only if it completed and passed.
+
+### 3.6 Stop and report, instead of guessing, when
+
+- the branch or HEAD does not contain the approved baseline;
+- a file, workflow or build target differs materially from this plan;
+- a change needs a product or business decision;
+- a security control would have to be weakened to pass;
+- a migration or domain-behaviour change appears necessary (for example, C3b-3 if the API refuses the direct GET);
+- the ai-service revision the gate needs is unavailable or incompatible;
+- a required hosted check cannot be meaningfully reproduced locally;
+- disk space or Docker state makes further testing unsafe (below 15 GB free);
+- C8c finds fixable HIGH or CRITICAL OS advisories.
+
+Routine implementation details are resolved without stopping.
+
+### 3.7 Out of scope
+
+- Pushing or merging either repository.
+- Creating or publishing the OCR model release.
+- The legacy ai-service `ci.yml` (A1), which needs its own authorisation after the replacement is established on `main`.
+- Audit documents and other untracked files.
+- Phase 2 document ingestion.
+- Reopening finished work without evidence of a regression.
+- Treating local validation as proof of hosted CI or deployment readiness.
+- The ai-service follow-ups: non-root (R6), transitive pins (R8), pinned CI audit tools (R9), and its toolchain (D-B), unless D-B includes it.
+
+### 3.8 Final handover
+
+The final report covers:
+- starting and ending commits and branch;
+- every commit, grouped C3b to C10;
+- files and controls changed per phase;
+- unit, postgres-gate, boundary, image, lint, pre-commit, audit and secret-scan results;
+- exceptions, skips, environment limits and accepted advisories;
+- whether CI was verified locally only or also hosted;
+- remaining blockers (ai-service merge and ref switch, hosted secrets `AI_SERVICE_READ_TOKEN` and `AI_SERVICE_REF` if used, the OCR model release);
+- confirmation that nothing was pushed or merged and that unrelated work was preserved.
 
 **After you push: hosted validation.** Local results do not stand in for it. The hosted runs to inspect are:
-- `ci.yml`: `test` (now lint plus the unit suite), `postgres-gate`, `security` and `image`;
-- `boundary-gate`, via a manual run with `ai_service_ref` set to the ai-service branch under test. It needs `AI_SERVICE_READ_TOKEN`, plus `AI_SERVICE_REF` if C10 lands.
+- `ci.yml`: `test`, `postgres-gate`, `security` and `image`;
+- `boundary-gate`: a manual run, plus its pull-request run, against the ai-service revision under test.
 
-Each run is read for its actual results, not just its status. Hosted CI is also the first place the backend and the shipped ai-service image (paddle 3.3.1) run together outside this machine. Any hosted-only failure is reported as such, and not fixed blind.
+Each run is read for its actual results, not just its status.
 
-Not in this plan, and kept separate: ai-service non-root (R6); mypy enforcement (R5); Docker disk compaction (except as the U7 precondition).
+**Definition of done:** C3b to C10 are committed as reviewable changes; every reproducible gate passes; the remaining hosted-only prerequisites are listed; the branch is ready for human review and a separately authorised push or merge.
 
 ## 4. Risks
 
 | Risk | Mitigation |
 |---|---|
+| A fresh resolution in C4a picks up a release that behaves differently from the Phase 0 set. | Differences are listed in the commit and the full regression runs on the pinned set before the commit; a failure stops the run (§3.6) rather than being worked around. |
+| The positive direct-GET assertion in C3b-3 fails because the API forbids it. | That is a behaviour question, so the run stops and reports it (§3.6); the alternative is to remove the variable (D-A). |
+| C8c finds fixable HIGH or CRITICAL OS advisories in the base image. | The run stops; the remedy (a newer patch image or an apt upgrade) is a decision, not an exception entry. |
+| The hosted gate checks out a moving branch (`feat/m3-boundary`). | The job prints the resolved ai-service SHA; D-C offers a SHA pin instead. |
 | Pinning to the image's versions changes the *local* environment (SQLAlchemy 2.0 to 2.1 among others). | Already de-risked: the unit suite passes on exactly those versions in Linux (1122 passed, 89 skipped, project not installed), and Phase 0 runs the gate on them. Anything that fails locally only is investigated, not worked around. |
 | The C2 mechanical formatting diff is large (198 files) and can conflict with other branches built on `feat/learning-content`. | It is behaviour-neutral, isolated in one commit and listed in `.git-blame-ignore-revs`. Other branches can run the same `ruff format` before rebasing. If you'd rather not, C2 and C3 can be dropped and CI lint narrowed instead (not recommended: it leaves D2's lint gate meaningless). |
 | Non-root breaks a write path the inspection missed. | The only write in `app/`, `scripts/` and `alembic/` is the outbox (searched for `open(..., "w"/"a")`, `write_text`, `write_bytes`, `mkdir`, `tempfile`). The full gate on fresh volumes exercises the outbox, migrations, provisioning and health. |
@@ -271,9 +459,29 @@ Not in this plan, and kept separate: ai-service non-root (R6); mypy enforcement 
 | 8 | Disk precondition met (U7). Phase 0 does not start below the threshold. |
 | Also | Startup-check negative tests cover a bad database URL, a missing module and a permission failure, and check category and message, not exit status (C1a, C1b). The test image is built from the checked-out sources and checked by revision, never published, and the final image stage is runtime-only and non-root (C5a, C5c, C6). OCR raw per-line corpus results stay out of Git. |
 
+### Decisions of 2026-10-12 (unified brief for C3b to C10)
+
+| # | Decision |
+|---|---|
+| B1 | C3b to C10 run as one coordinated implementation in separate commits, without approval pauses between commits, under the rules in §3.3 and the stop conditions in §3.6. |
+| B2 | Dependency pins come from a fresh resolution at C4a time, not from an earlier image (answer 1). The pre-commit ruff is aligned to 0.17.0 (C4c). |
+| B3 | The boundary gate uses `feat/m3-boundary` until the ai-service branch is merged through the approved process, and `main` only after that is verified (C10a). |
+| B4 | The legacy ai-service `ci.yml` stays out of scope (A1). |
+| B5 | Final regression includes secret scanning (§3.5). |
+
+### Open decisions before the run starts
+
+| # | Question | Recommendation |
+|---|---|---|
+| D-A | C3b-3, the unused `reg_source_id`: add the positive direct-GET assertion it was presumably for, or remove the assignment? | **Add the assertion** (a foreign-tenant lecturer reads the platform source directly: 200). It is the missing counterpart of step 11. If the API refuses, the run stops and reports. |
+| D-B | C7 for ai-service: pin its base images and pip in this run on a separate ai-service branch, or leave them to an ai-service workstream? | **Leave them to an ai-service workstream**, together with R6, R8 and R9. Changing ai-service mid-run would put a second, unmerged ai-service branch next to `feat/m3-boundary`, which is the revision the gate is meant to test. |
+| D-C | C10a: default the gate to the branch `feat/m3-boundary`, or to its commit SHA (68da1cc)? | **The branch, with the resolved SHA printed in every run.** A SHA pin is more reproducible but needs a backend commit for every ai-service change until the merge. |
+| D-D | C9d: add gitleaks to CI, or keep secret scanning local (final regression only)? | **Add it to CI** (pinned 8.30.1). Nothing scans committed files for secrets today, and the brief asks for proof that none leak. |
+| D-E | Remove the stray committed `tatus --short` file (the old C11) after C10? | **Yes**, as its own `chore` commit. It is captured terminal output with no secrets. |
+
 ## 6. Review log
 
-Five review rounds were run on this plan; the fifth folded in the approval conditions. Each checked every claim against the repository, the image or a reproduction, and changed the plan where it was wrong or incomplete.
+Seven review rounds have shaped this plan: five before approval, one after Phase 0, and one for the unified brief. Each checked every claim against the repository, the image or a reproduction, and changed the plan where it was wrong or incomplete.
 
 | Round | Found | Changed |
 |---|---|---|
@@ -283,3 +491,4 @@ Five review rounds were run on this plan; the fifth folded in the approval condi
 | 4 | Phase 0 rebuilds with floating dependencies, so it would not test the 2026-10-11 versions the plan proposed to pin. Hosted validation after push was missing. D2 overstated what was observed. | Pins are now exactly the Phase 0 freeze (the set the baseline gate tested). Hosted validation steps added. D2 qualified by U1. Final consistency sweep (commit numbers, versions, references): clean. |
 | 5 | Approval conditions; `seed_futa.py` usage; ai-service `main`'s `backend.yml` runs only integration and contract tests, so the legacy `ci.yml` is the only unit-test run there. | Decisions recorded (§5). U6 and U7 resolved. Split C1, C3, C5, C9 and C10 further. Startup-check category plus three negative controls. Test-image revision check. Trivy scope and thresholds. Dated exceptions. Known-baseline-failure tracking. A1 based on `feat/m3-boundary`. |
 | 6 | Phase 0 measured (§0a). The gate is green, but two M6 refusals fire for the length rule instead of the rule they name. | C1a corrects both inputs and adds a backend short-secret case (12 M6 lines); acceptance criteria rewritten to match the measured messages. Submitted for approval before implementation. |
+| 7 | The unified brief (C3b to C10) and a read-only re-inspection of both repositories at f3aa82e / 68da1cc. | §3 rewritten as the canonical roadmap: completed work, re-inspection findings, run rules, remaining phases with commits and checks, final regression, stop conditions, out of scope, handover. Pins switch to a fresh resolution at C4a time. New R8 and R9 (ai-service). Open decisions D-A to D-E. |
