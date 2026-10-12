@@ -35,6 +35,9 @@ trap cleanup EXIT
 
 "${COMPOSE[@]}" --profile gate down -v --remove-orphans >/dev/null 2>&1 || true
 "${COMPOSE[@]}" up -d --build --wait backend ai-service ai-worker
+# The test image: `up --build` skips profile services and `compose run`
+# reuses an existing image, so build it from this checkout explicitly.
+"${COMPOSE[@]}" --profile gate build boundary-tests
 
 # The model-mirror token is a build secret only: it must not appear in the
 # image's history or configuration.

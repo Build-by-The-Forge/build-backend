@@ -16,6 +16,14 @@ name: build-m3
 x-backend-image: &backend-build
   context: ..
   dockerfile: Dockerfile
+  # Runtime only: no test tooling, tests or development files.
+  target: production
+
+# The same runtime plus test tooling and tests, for boundary-tests only.
+x-backend-test-image: &backend-test-build
+  context: ..
+  dockerfile: Dockerfile
+  target: test
 
 x-ai-image: &ai-build
   context: ../../ai-service
@@ -176,7 +184,11 @@ services:
   # with scripts/m3_boundary_gate.sh.
   boundary-tests:
     profiles: ["gate"]
-    image: build-m3-backend
+    # The test image (target: test). scripts/m3_boundary_gate.sh builds it
+    # explicitly on every run: `up --build` does not build profile services
+    # and `compose run` would reuse a stale image.
+    build: *backend-test-build
+    image: build-m3-backend-test
     depends_on:
       backend:
         condition: service_healthy
