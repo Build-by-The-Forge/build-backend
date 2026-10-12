@@ -10,6 +10,11 @@
 # Alembic chain runs as its owner role and each service runs as its app role;
 # the superuser is used by db-init only. AI-service is not published: it is
 # reachable only on the internal network, from the backend.
+#
+# The backend runs as an unprivileged user (UID 10001). An `outbox` volume
+# created before that change is owned by root and not writable by it; remove
+# it once with `docker compose --env-file deploy/m3.env -f
+# deploy/compose.m3.yml down -v` (the gate starts from empty volumes anyway).
 
 name: build-m3
 
