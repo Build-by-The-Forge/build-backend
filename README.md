@@ -308,7 +308,7 @@ responses never include correctness or grading metadata.
 
 ### Requirements
 
-- Python `3.12+`
+- Python `3.12+` (CI and the image use 3.13)
 - PostgreSQL for non-testing environments
 - Redis for Redis-backed integrations
 - Docker Desktop for Compose workflows
@@ -333,11 +333,18 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Install development tools with:
+`requirements.txt` holds the runtime dependencies. For tests, linting and
+pre-commit, install the development set instead (it includes the runtime
+set):
 
 ```bash
-pip install -e ".[dev]"
+pip install -r requirements-dev.txt
 ```
+
+Both files pin every package, including indirect ones, to an exact version;
+`tests/test_dependency_declarations.py` fails if your environment differs
+from them. The project itself is not installed: run commands from the
+repository root.
 
 ### Configuration
 
