@@ -5,8 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .[dev]
+# Pinned closure (requirements*.txt). The project itself is not installed:
+# the app runs from /app.
+COPY requirements.txt requirements-dev.txt ./
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements-dev.txt
 
 COPY . .
 
