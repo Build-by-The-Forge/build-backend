@@ -14,7 +14,7 @@ WORKDIR /app
 # for the install so no requirements file stays in the image. The project
 # itself is not installed: the app runs from /app.
 RUN --mount=type=bind,source=requirements.txt,target=/tmp/requirements.txt \
-    pip install --upgrade pip && pip install --no-cache-dir -r /tmp/requirements.txt
+    pip install --no-cache-dir pip==26.2.1 && pip install --no-cache-dir -r /tmp/requirements.txt
 
 # The unprivileged user the service runs as (UID/GID 10001, no login shell,
 # no home). Code and packages stay root-owned, so it cannot change them; its
