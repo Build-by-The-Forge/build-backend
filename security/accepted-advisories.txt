@@ -1,0 +1,11 @@
+# Python package advisories accepted for the backend, read by
+# scripts/audit_python_packages.py (dependency and image audits).
+# Policy: docs/security-advisories.md. One entry per line:
+#
+#   <advisory id> <package> <review-by YYYY-MM-DD>  # reason
+#
+# The reason is required. An audit fails on any advisory not listed here, on
+# a listed entry that no longer matches a finding, and on an entry past its
+# review date.
+#
+# No advisories are accepted.
