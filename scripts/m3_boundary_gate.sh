@@ -59,6 +59,13 @@ trap cleanup EXIT
 # reuses an existing image, so build it from this checkout explicitly.
 "${COMPOSE[@]}" --profile gate build boundary-tests
 
+# Every image must come from the revisions recorded above; a stale image or a
+# checkout that moved is never tested.
+if ! scripts/check_image_revisions.sh "$BACKEND_REVISION" "$AI_SERVICE_REVISION"; then
+  echo "refusing to run the gate on images that do not match the recorded revisions" >&2
+  exit 1
+fi
+
 # The model-mirror token is a build secret only: it must not appear in the
 # image's history or configuration.
 if [[ -n "${OCR_MODELS_TOKEN:-}" ]]; then
@@ -89,5 +96,23 @@ scripts/m6_refusal_selftest.sh || status=$?
 # Phase 2 Step 2: real OCR in the AI-service image with networking disabled,
 # from the models baked into it (no runtime download).
 "${AI_SERVICE_DIR:-../ai-service}/scripts/test_offline_ocr_image.sh" build-m3-ai-service || status=$?
+
+# The whole run tested one revision of each repository: neither checkout may
+# have moved since it was recorded.
+for repo in backend ai-service; do
+  if [[ $repo == backend ]]; then
+    now=$(revision_of . -- Dockerfile .dockerignore requirements.txt requirements-dev.txt pyproject.toml \
+      alembic.ini alembic app scripts tests pg_smoke boundary)
+    recorded=$BACKEND_REVISION
+  else
+    now=$(revision_of "$AI_DIR" --untracked-files=no)
+    recorded=$AI_SERVICE_REVISION
+  fi
+  if [[ $now != "$recorded" ]]; then
+    echo "$repo checkout changed during the run: $recorded -> $now" >&2
+    status=1
+  fi
+done
+echo "tested: backend $BACKEND_REVISION, ai-service $AI_SERVICE_REVISION"
 
 exit "$status"
