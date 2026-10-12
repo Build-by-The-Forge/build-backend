@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import func, select
+
 from app.application.tenant.provisioning import (
     MembershipAction,
     ProvisioningError,
@@ -16,7 +18,6 @@ from app.infrastructure.tenant.async_repositories import (
     AsyncSqlAlchemyMembershipRepository,
     AsyncSqlAlchemyTenantRepository,
 )
-from sqlalchemy import func, select
 
 PASSWORD = "Owner-Passphrase-2026"
 HASHER = Argon2PasswordHasher()

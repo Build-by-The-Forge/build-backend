@@ -1,9 +1,10 @@
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import CourseModel
-from sqlalchemy import select
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
     seed_tenant_context,

@@ -17,6 +17,7 @@ if not os.environ.get("POSTGRES_URL", "").startswith("postgresql"):
 
 import httpx  # noqa: E402
 import pytest_asyncio  # noqa: E402
+
 from app.main import app  # noqa: E402
 
 
@@ -36,6 +37,7 @@ def reset_auth_rate_limits():
     which would otherwise exhaust the per-IP limits it is not testing.
     """
     import redis
+
     from app.bootstrap.container import shared_auth_throttle
 
     client = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))

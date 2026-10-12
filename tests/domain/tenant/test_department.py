@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.tenant.department import Department
 from app.domain.tenant.errors import DepartmentAlreadyArchivedError
 from app.domain.tenant.value_objects import (

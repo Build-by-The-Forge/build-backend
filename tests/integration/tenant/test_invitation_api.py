@@ -3,11 +3,12 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select, update
+
 from app.api import tenant_invitations as invitations_api
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantInvitationModel
 from app.infrastructure.identity.models import SecurityEventModel
-from sqlalchemy import select, update
 from tests.integration.identity_helpers import verify_email
 from tests.integration.tenant.test_tenant_context import seed_tenant_membership
 

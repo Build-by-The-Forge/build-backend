@@ -2,13 +2,14 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+
 from app.db.session import SessionLocal
 from app.domain.tenant.join_policy import TenantJoinPolicy
 from app.domain.tenant.value_objects import MembershipRole, TenantId
 from app.infrastructure.tenant.join_policy_repository import (
     SQLAlchemyTenantJoinPolicyRepository,
 )
-from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

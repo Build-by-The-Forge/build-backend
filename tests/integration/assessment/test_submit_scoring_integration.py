@@ -2,6 +2,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.application.assessment.attempt_service import AttemptService
 from app.domain.assessment.assessment import Assessment
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
@@ -29,7 +31,6 @@ from app.infrastructure.assessment.unit_of_work import (
     AssessmentUnitOfWork,
     assessment_unit_of_work,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

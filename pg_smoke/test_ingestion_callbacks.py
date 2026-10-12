@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+
 from app.application.content.job_commands import HandleAICallbackCommand
 from app.application.content.job_handlers import HandleAICallbackHandler
 from app.bootstrap.container import sqlalchemy_content_uow
@@ -24,7 +26,6 @@ from app.domain.content.enums import (
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.infrastructure.db.models.tenant_core import TenantModel
-from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

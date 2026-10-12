@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import CourseModel
 from app.infrastructure.db.models.tenant_core import (
@@ -10,7 +12,6 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
-from sqlalchemy import select
 from tests.integration.identity_helpers import verify_email
 
 

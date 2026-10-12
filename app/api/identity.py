@@ -13,9 +13,6 @@ from app.application.identity.ports.security_events import (
 from app.application.identity.throttle import AuthThrottle
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
-from app.infrastructure.identity.security_event_recorder import (
-    SQLAlchemySecurityEventRecorder,
-)
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
 from app.core.dependencies import (
@@ -27,6 +24,9 @@ from app.core.exceptions import AppError, RateLimitedError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.request_context import client_ip as _client_ip
 from app.core.tenant_context import TenantContext
+from app.infrastructure.identity.security_event_recorder import (
+    SQLAlchemySecurityEventRecorder,
+)
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()

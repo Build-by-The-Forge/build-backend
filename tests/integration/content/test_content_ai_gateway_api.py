@@ -1,4 +1,5 @@
 from uuid import uuid4
+
 import pytest
 
 from tests.integration.assessment.test_attempt_api import headers
@@ -71,8 +72,9 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
     assert stu_disp.status_code == 403
 
     # B. Mock Gateway dispatch call for Lecturer
-    from app.domain.content.gateway import AIServiceDispatchResult
     from datetime import datetime, timezone
+
+    from app.domain.content.gateway import AIServiceDispatchResult
 
     actors = []
 

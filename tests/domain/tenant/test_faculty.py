@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.tenant.errors import FacultyAlreadyArchivedError
 from app.domain.tenant.faculty import Faculty
 from app.domain.tenant.value_objects import (

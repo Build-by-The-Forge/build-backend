@@ -1,4 +1,5 @@
 import pytest
+
 from app.application.content.asset_commands import (
     CreateAssetVersionCommand,
     FindAssetByHashQuery,

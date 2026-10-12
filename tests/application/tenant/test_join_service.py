@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 import pytest
+
 from app.application.tenant.join_service import TenantJoinService
 from app.core.exceptions import AppError
 from app.domain.identity.user import User

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.ingestion_event import IngestionEventRecord
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob
@@ -14,8 +17,6 @@ from app.infrastructure.db.models.content import (
     ContentIngestionEventModel,
     ContentIngestionJobModel,
 )
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):

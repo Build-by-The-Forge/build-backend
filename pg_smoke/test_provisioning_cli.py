@@ -5,9 +5,10 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from sqlalchemy import text
+
 from app.db.session import SessionLocal
 from app.main import app
-from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

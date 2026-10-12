@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.errors import CourseAlreadyArchivedError
 from app.domain.catalogue.value_objects import (

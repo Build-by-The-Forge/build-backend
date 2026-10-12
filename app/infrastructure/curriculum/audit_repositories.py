@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.curriculum.audit import (
     BenchmarkAuditAction,
     BenchmarkAuditLog,
 )
 from app.domain.repositories.benchmark_audit import BenchmarkAuditRepository
 from app.infrastructure.db.models.benchmark_audit import BenchmarkAuditLogModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _model_to_domain(model: BenchmarkAuditLogModel) -> BenchmarkAuditLog:

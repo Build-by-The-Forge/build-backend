@@ -4,10 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.application.common.uow import ContentUnitOfWorkPort
-from app.application.identity.ports.security_events import (
-    SecurityEvent,
-    SecurityEventRecorder,
-)
 from app.application.content.job_commands import (
     CreateIngestionJobCommand,
     DispatchIngestionJobCommand,
@@ -18,6 +14,10 @@ from app.application.content.job_commands import (
     ReconcileIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
+)
+from app.application.identity.ports.security_events import (
+    SecurityEvent,
+    SecurityEventRecorder,
 )
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus

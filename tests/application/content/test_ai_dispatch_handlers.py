@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+
 import pytest
 
 from app.application.content.job_commands import (

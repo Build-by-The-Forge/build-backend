@@ -36,12 +36,12 @@ from app.application.identity.handlers import (
     password_reset_email,
 )
 from app.application.identity.ports.email_sender import EmailSender
+from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.security_events import (
     LoginFailureReason,
     SecurityEvent,
     SecurityEventRecorder,
 )
-from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
 from app.core.config import settings
 from app.core.exceptions import AppError

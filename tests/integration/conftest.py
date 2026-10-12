@@ -6,9 +6,6 @@ from collections.abc import AsyncIterator
 os.environ["APP_ENVIRONMENT"] = "testing"
 
 import pytest
-from app.db.base import Base
-from app.db.session import engine as app_engine
-from app.main import app
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -16,6 +13,10 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+from app.db.base import Base
+from app.db.session import engine as app_engine
+from app.main import app
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from app.domain.curriculum.source import (
     CurriculumSource,
     SnapshotStatus,

@@ -1,4 +1,5 @@
 import pytest
+
 from app.core.authorization import ROLE_PERMISSIONS, Permission
 from app.domain.tenant.role_policy import RANK, can_grant, can_manage, grantable_roles
 from app.domain.tenant.value_objects import MembershipRole as R

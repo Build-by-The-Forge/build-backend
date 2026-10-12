@@ -35,7 +35,6 @@ from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 
-
 DEFAULT_SESSION_LIFETIME = timedelta(days=30)
 DEFAULT_REFRESH_IDLE_LIFETIME = timedelta(days=14)
 

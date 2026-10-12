@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,

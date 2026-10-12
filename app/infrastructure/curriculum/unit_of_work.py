@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.curriculum.adoption_repositories import (
     SqlAlchemyInstitutionalAdoptionRepository,
 )
@@ -16,7 +18,6 @@ from app.infrastructure.curriculum.repositories import (
     SqlAlchemyCurriculumSourceRepository,
 )
 from app.infrastructure.unit_of_work import UnitOfWork
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class CurriculumUnitOfWork(UnitOfWork):

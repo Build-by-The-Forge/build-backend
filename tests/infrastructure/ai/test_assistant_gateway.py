@@ -3,6 +3,7 @@ from dataclasses import replace
 
 import httpx
 import pytest
+
 from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
 from app.infrastructure.security.service_context import ServiceContext

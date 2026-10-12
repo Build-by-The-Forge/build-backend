@@ -4,6 +4,7 @@ verification steps of A.5 that do not need Redis or a request body stream."""
 import base64
 
 import pytest
+
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
     EMPTY_BODY_SHA256,

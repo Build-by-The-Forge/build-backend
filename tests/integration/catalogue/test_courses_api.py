@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import (
     DepartmentModel,

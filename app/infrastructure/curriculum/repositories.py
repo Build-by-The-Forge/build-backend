@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.curriculum.source import CurriculumSnapshot, CurriculumSource
 from app.domain.repositories.curriculum_source import CurriculumSourceRepository
 from app.infrastructure.curriculum.mappers import (
@@ -12,8 +15,6 @@ from app.infrastructure.db.models.curriculum import (
     CurriculumSnapshotModel,
     CurriculumSourceModel,
 )
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyCurriculumSourceRepository(CurriculumSourceRepository):

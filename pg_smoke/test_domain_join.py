@@ -3,9 +3,10 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+
 from app.api import identity as identity_api
 from app.db.session import SessionLocal
-from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

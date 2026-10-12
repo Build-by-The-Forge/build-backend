@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     BenchmarkOutcomeInput,
@@ -29,7 +31,6 @@ from app.infrastructure.curriculum.repositories import (
     SqlAlchemyCurriculumSourceRepository,
 )
 from app.infrastructure.db.models.tenant_core import TenantModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

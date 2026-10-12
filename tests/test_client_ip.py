@@ -3,6 +3,7 @@
 import ipaddress
 
 import pytest
+
 from app.core.config import Settings
 from app.core.request_context import resolve_client_ip
 

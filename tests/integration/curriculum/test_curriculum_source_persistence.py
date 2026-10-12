@@ -1,6 +1,9 @@
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.curriculum.source import (
     CurriculumSnapshot,
     CurriculumSource,
@@ -8,8 +11,6 @@ from app.domain.curriculum.source import (
 from app.infrastructure.curriculum.repositories import (
     SqlAlchemyCurriculumSourceRepository,
 )
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

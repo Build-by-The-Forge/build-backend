@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,

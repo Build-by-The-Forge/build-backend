@@ -4,6 +4,7 @@ contexts, and its enforcement inside signature verification (C10)."""
 from typing import Any
 
 import pytest
+
 from app.infrastructure.security.service_context import (
     InvalidServiceContext,
     ServiceContext,

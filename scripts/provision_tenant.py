@@ -17,6 +17,8 @@ import asyncio
 import getpass
 import sys
 
+from sqlalchemy.exc import IntegrityError
+
 from app.application.identity.ports.security_events import SecurityEvent
 from app.application.tenant.provisioning import (
     ProvisioningError,
@@ -36,7 +38,6 @@ from app.infrastructure.tenant.async_repositories import (
     AsyncSqlAlchemyMembershipRepository,
     AsyncSqlAlchemyTenantRepository,
 )
-from sqlalchemy.exc import IntegrityError
 
 
 def _parser() -> argparse.ArgumentParser:

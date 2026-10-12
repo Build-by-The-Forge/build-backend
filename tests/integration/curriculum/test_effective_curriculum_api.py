@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     BenchmarkOutcomeInput,

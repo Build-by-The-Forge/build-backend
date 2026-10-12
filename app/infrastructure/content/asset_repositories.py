@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.domain.repositories.content_asset import ContentAssetRepository
@@ -8,8 +11,6 @@ from app.infrastructure.content.asset_mappers import (
     content_asset_to_model,
 )
 from app.infrastructure.db.models.content import ContentAssetModel
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyContentAssetRepository(ContentAssetRepository):

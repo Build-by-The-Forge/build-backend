@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.tenant.errors import TenantAlreadyArchivedError
 from app.domain.tenant.tenant import Tenant
 from app.domain.tenant.value_objects import (

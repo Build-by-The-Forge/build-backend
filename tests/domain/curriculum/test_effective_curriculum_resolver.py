@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
     InstitutionalAdoption,

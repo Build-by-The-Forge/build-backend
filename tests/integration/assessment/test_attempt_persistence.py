@@ -1,7 +1,8 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.infrastructure.assessment.repositories import SqlAlchemyAttemptRepository
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

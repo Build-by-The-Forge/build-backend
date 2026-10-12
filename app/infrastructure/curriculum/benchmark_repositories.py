@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.domain.curriculum.benchmark import BenchmarkCourse, BenchmarkCurriculum
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
@@ -15,9 +19,6 @@ from app.infrastructure.db.models.benchmark import (
     BenchmarkCurriculumModel,
     BenchmarkTopicModel,
 )
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 
 class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):

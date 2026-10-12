@@ -10,6 +10,10 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from fastapi import FastAPI, Request
+from pydantic import BaseModel
+from redis.asyncio import Redis
+
 from app.infrastructure.security.replay_store import REPLAY_TTL_SECONDS, RedisReplayStore
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
@@ -22,9 +26,6 @@ from app.infrastructure.security.service_signature import (
     sign_request,
 )
 from app.middleware.service_auth import MAX_BODY_BYTES, STATE_KEY, ServiceAuthMiddleware
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
-from redis.asyncio import Redis
 
 REDIS_URL = os.getenv("TEST_REDIS_URL")
 DEAD_REDIS_URL = "redis://127.0.0.1:1/0"

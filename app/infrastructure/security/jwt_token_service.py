@@ -8,7 +8,8 @@ from app.application.identity.ports.token_service import (
     InvalidTokenError,
     TokenService,
 )
-from app.core.config import Settings, settings as default_settings
+from app.core.config import Settings
+from app.core.config import settings as default_settings
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_TYPE = "access"

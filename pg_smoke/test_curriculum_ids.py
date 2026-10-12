@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+
 from app.db.session import SessionLocal
 from app.domain.curriculum.adoption import CurriculumOverride, InstitutionalAdoption, OverrideType
 from app.domain.curriculum.benchmark import (

@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.assessment.result import AttemptResult, QuestionResult
 
 

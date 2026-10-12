@@ -1,11 +1,12 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.assessment.assessment import Assessment
 from app.domain.assessment.result import AttemptResult, QuestionResult
 from app.infrastructure.assessment.repositories import (
     SqlAlchemyAssessmentRepository,
     SqlAlchemyAttemptResultRepository,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

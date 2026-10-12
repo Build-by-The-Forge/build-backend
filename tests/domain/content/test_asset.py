@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, IngestionStatus
 

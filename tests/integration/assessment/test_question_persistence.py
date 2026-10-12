@@ -1,4 +1,6 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     Difficulty,
@@ -13,7 +15,6 @@ from app.domain.assessment.value_objects import (
     QuestionType,
 )
 from app.infrastructure.assessment.repositories import SqlAlchemyQuestionRepository
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def build_question(**overrides):

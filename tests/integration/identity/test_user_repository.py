@@ -1,4 +1,6 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.identity.user import User
 from app.domain.identity.value_objects import Email, PasswordHash, UserId
 from app.infrastructure.identity.mappers import user_model_to_domain
@@ -6,7 +8,6 @@ from app.infrastructure.identity.models import UserModel
 from app.infrastructure.identity.sqlalchemy_user_repository import (
     SQLAlchemyUserRepository,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

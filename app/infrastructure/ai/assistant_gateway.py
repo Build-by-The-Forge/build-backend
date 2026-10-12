@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 import httpx
+
 from app.core.config import settings
 from app.domain.ai.assistant import (
     AIActor,

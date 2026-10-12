@@ -1,6 +1,7 @@
 """Explicit CORS and docs exposure (plan §8.4, §12; M6)."""
 
 import pytest
+
 from app.core.config import Settings
 
 BOUNDARY = {

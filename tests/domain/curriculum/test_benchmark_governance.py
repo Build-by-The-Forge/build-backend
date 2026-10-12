@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.curriculum.audit import (
     BenchmarkAuditAction,
     BenchmarkAuditLog,

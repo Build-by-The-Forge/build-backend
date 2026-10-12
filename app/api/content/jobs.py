@@ -27,9 +27,9 @@ from app.domain.content.job import (
     InvalidStageEvidence,
     RetryNotDue,
 )
+from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 from app.infrastructure.security.service_context import ACTOR_SYSTEM
 from app.infrastructure.security.service_signature import VerifiedServiceRequest
-from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])

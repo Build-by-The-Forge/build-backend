@@ -1,4 +1,5 @@
 import pytest
+
 from app.application.identity.ports.counter_store import CounterStoreUnavailable
 from app.application.identity.throttle import (
     ACCOUNT_LOCK_SECONDS,

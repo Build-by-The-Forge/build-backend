@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.application.identity.ports.security_events import SecurityEventRecorder
 from app.application.common.uow import ContentUnitOfWorkFactory, ContentUnitOfWorkPort
 from app.application.content.job_commands import (
     CreateIngestionJobCommand,
@@ -27,6 +26,7 @@ from app.application.content.job_handlers import (
     ReprocessAssetHandler,
     RetryIngestionJobHandler,
 )
+from app.application.identity.ports.security_events import SecurityEventRecorder
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import AIServiceIngestionGateway
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob

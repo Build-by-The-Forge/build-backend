@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.catalogue.errors import LearningOutcomeAlreadyArchivedError
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.value_objects import (

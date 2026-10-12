@@ -3,11 +3,12 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
 from app.api import identity as identity_api
 from app.db.session import SessionLocal
 from scripts.check_schema_drift import find_unexpected_drift
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 
 # The app has one engine whose pooled asyncpg connections belong to the loop
 # that opened them, so every test here shares one session-wide loop.

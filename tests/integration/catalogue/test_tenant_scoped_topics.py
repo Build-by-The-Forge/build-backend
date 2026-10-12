@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,

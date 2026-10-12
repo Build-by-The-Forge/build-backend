@@ -8,6 +8,7 @@ would send is covered by the gateway tests, and the real two-service flow
 from uuid import uuid4
 
 import pytest
+
 from app.api.ai import get_ai_assistant_gateway
 from app.application.identity.throttle import AI_QUESTION_GENERATION_PER_USER
 from app.domain.ai.assistant import (

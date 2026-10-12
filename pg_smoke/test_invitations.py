@@ -3,14 +3,15 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
 from app.db.session import SessionLocal
 from app.domain.tenant.invitation import InvitationStatus, TenantInvitation
 from app.domain.tenant.value_objects import MembershipRole, TenantId
 from app.infrastructure.tenant.invitation_repository import (
     SQLAlchemyTenantInvitationRepository,
 )
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

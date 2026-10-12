@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.content.asset_repositories import (
     SqlAlchemyContentAssetRepository,
 )
@@ -12,7 +14,6 @@ from app.infrastructure.content.job_repositories import (
 )
 from app.infrastructure.content.repositories import SqlAlchemyContentSourceRepository
 from app.infrastructure.unit_of_work import UnitOfWork
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class ContentUnitOfWork(UnitOfWork):

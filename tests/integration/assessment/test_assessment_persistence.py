@@ -1,7 +1,8 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.infrastructure.assessment.repositories import SqlAlchemyAssessmentRepository
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def build_assessment(**overrides):

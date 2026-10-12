@@ -5,7 +5,6 @@ from sqlalchemy import update
 
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.content import ContentIngestionJobModel
-
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
