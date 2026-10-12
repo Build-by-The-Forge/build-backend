@@ -17,9 +17,7 @@ class UserRepository(Protocol):
     async def exists_by_email(self, email: str) -> bool:
         raise NotImplementedError
 
-    async def save_password_reset_token(
-        self, user_id: str, token_hash: str, expires_at: datetime | None = None
-    ) -> None:
+    async def save_password_reset_token(self, user_id: str, token_hash: str, expires_at: datetime | None = None) -> None:
         raise NotImplementedError
 
     async def consume_password_reset_token(self, token_hash: str) -> str | None:
@@ -29,9 +27,7 @@ class UserRepository(Protocol):
         """Mark every outstanding reset token of the user as used."""
         raise NotImplementedError
 
-    async def save_verification_token(
-        self, user_id: str, token_hash: str, expires_at: datetime
-    ) -> None:
+    async def save_verification_token(self, user_id: str, token_hash: str, expires_at: datetime) -> None:
         raise NotImplementedError
 
     async def consume_verification_token(self, token_hash: str) -> str | None:

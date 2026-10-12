@@ -5,9 +5,7 @@ from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.infrastructure.db.models.content import ContentAssetModel
 
 
-def content_asset_to_model(
-    asset: ContentAsset, model: ContentAssetModel | None = None
-) -> ContentAssetModel:
+def content_asset_to_model(asset: ContentAsset, model: ContentAssetModel | None = None) -> ContentAssetModel:
     if model is None:
         model = ContentAssetModel(id=asset.id)
 

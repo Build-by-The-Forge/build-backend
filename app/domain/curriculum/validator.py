@@ -34,12 +34,8 @@ class ValidationResult:
 
     @classmethod
     def from_issues(cls, issues: list[ValidationIssue]) -> ValidationResult:
-        error_count = sum(
-            1 for issue in issues if issue.severity == IssueSeverity.ERROR
-        )
-        warning_count = sum(
-            1 for issue in issues if issue.severity == IssueSeverity.WARNING
-        )
+        error_count = sum(1 for issue in issues if issue.severity == IssueSeverity.ERROR)
+        warning_count = sum(1 for issue in issues if issue.severity == IssueSeverity.WARNING)
         return cls(
             is_valid=(error_count == 0),
             error_count=error_count,
@@ -117,10 +113,7 @@ class BenchmarkCurriculumValidator:
 
         # Source-derived minimum credit unit check
         total_credit_units = sum(c.credit_units for c in courses)
-        if (
-            curriculum.minimum_credit_units > 0
-            and total_credit_units < curriculum.minimum_credit_units
-        ):
+        if curriculum.minimum_credit_units > 0 and total_credit_units < curriculum.minimum_credit_units:
             issues.append(
                 ValidationIssue(
                     entity_type="Curriculum",
@@ -293,8 +286,7 @@ class BenchmarkCurriculumValidator:
                             field="outcomes",
                             rule="NON_EMPTY_OUTCOMES",
                             message=(
-                                f"Topic '{topic.title}' in course '{course.code}' "
-                                "must contain at least one learning outcome."
+                                f"Topic '{topic.title}' in course '{course.code}' must contain at least one learning outcome."
                             ),
                             severity=IssueSeverity.ERROR,
                         )
@@ -324,10 +316,7 @@ class BenchmarkCurriculumValidator:
                         )
                     expected_outcome_seq += 1
 
-                    if (
-                        not outcome.description.strip()
-                        or len(outcome.description.strip()) < 5
-                    ):
+                    if not outcome.description.strip() or len(outcome.description.strip()) < 5:
                         issues.append(
                             ValidationIssue(
                                 entity_type="Outcome",

@@ -68,9 +68,7 @@ class CurriculumVersion:
 
     def archive(self) -> None:
         if self.status == CurriculumVersionStatus.ARCHIVED:
-            raise CurriculumVersionAlreadyArchivedError(
-                "curriculum version already archived"
-            )
+            raise CurriculumVersionAlreadyArchivedError("curriculum version already archived")
         self.status = CurriculumVersionStatus.ARCHIVED
         self.touch()
         self._events.append(

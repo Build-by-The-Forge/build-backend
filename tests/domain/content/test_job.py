@@ -233,9 +233,7 @@ def test_callbacks_for_an_undispatched_job_are_stale(status):
     job = new_job()
     if status == "queued":
         job.queue()
-    outcome = job.apply_callback(
-        event_type="job_failed", run_number=1, attempt_count=1, external_task_id="task-1"
-    )
+    outcome = job.apply_callback(event_type="job_failed", run_number=1, attempt_count=1, external_task_id="task-1")
     assert outcome is CallbackOutcome.STALE
     assert job.status.value == status
 
@@ -274,16 +272,12 @@ def test_an_old_attempts_events_cannot_touch_the_retried_job():
     job.schedule_retry(delay_seconds=0)
 
     for attempt in (1, 2):
-        old = job.apply_callback(
-            event_type="job_failed", run_number=1, attempt_count=attempt, external_task_id="task-1"
-        )
+        old = job.apply_callback(event_type="job_failed", run_number=1, attempt_count=attempt, external_task_id="task-1")
         assert old is CallbackOutcome.STALE
     assert job.status == IngestionStatus.QUEUED
 
     job.record_dispatch("task-2")
-    old = job.apply_callback(
-        event_type="job_failed", run_number=1, attempt_count=2, external_task_id="task-1"
-    )
+    old = job.apply_callback(event_type="job_failed", run_number=1, attempt_count=2, external_task_id="task-1")
     assert old is CallbackOutcome.STALE
     assert event(job, "stage_progress", "extracted", metrics=EXTRACTED) is CallbackOutcome.APPLIED
 

@@ -33,9 +33,7 @@ class CreateQuestionHandler:
         self.catalogue_repository = catalogue_repository
 
     async def handle(self, command: CreateQuestionCommand) -> Question | None:
-        topic = await self.catalogue_repository.get_by_topic_id(
-            command.topic_id, tenant_id=command.tenant_id
-        )
+        topic = await self.catalogue_repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
         if topic is None:
             return None
 
@@ -45,9 +43,7 @@ class CreateQuestionHandler:
             )
             if outcome_course is None:
                 return None
-            topic_found = any(
-                topic.id.value == command.topic_id for topic in outcome_course.topics
-            )
+            topic_found = any(topic.id.value == command.topic_id for topic in outcome_course.topics)
             if not topic_found:
                 return None
 
@@ -76,11 +72,7 @@ class CreateQuestionHandler:
             learning_outcome_id=command.learning_outcome_id,
             question_type=QuestionType(command.question_type),
             prompt=QuestionPrompt(command.prompt),
-            explanation=(
-                QuestionExplanation(command.explanation)
-                if command.explanation is not None
-                else None
-            ),
+            explanation=(QuestionExplanation(command.explanation) if command.explanation is not None else None),
             difficulty=Difficulty(command.difficulty),
             marks=QuestionMarks(command.marks),
             options=options,
@@ -100,19 +92,9 @@ class UpdateQuestionHandler:
         if question is None:
             return None
         question.update_details(
-            prompt=(
-                QuestionPrompt(command.prompt) if command.prompt is not None else None
-            ),
-            explanation=(
-                QuestionExplanation(command.explanation)
-                if command.explanation is not None
-                else None
-            ),
-            difficulty=(
-                Difficulty(command.difficulty)
-                if command.difficulty is not None
-                else None
-            ),
+            prompt=(QuestionPrompt(command.prompt) if command.prompt is not None else None),
+            explanation=(QuestionExplanation(command.explanation) if command.explanation is not None else None),
+            difficulty=(Difficulty(command.difficulty) if command.difficulty is not None else None),
             marks=QuestionMarks(command.marks) if command.marks is not None else None,
         )
         return await self.repository.update(question, tenant_id=command.tenant_id)
@@ -174,9 +156,7 @@ class ListQuestionsByLearningOutcomeHandler:
     def __init__(self, repository: QuestionRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: ListQuestionsByLearningOutcomeCommand
-    ) -> list[Question]:
+    async def handle(self, command: ListQuestionsByLearningOutcomeCommand) -> list[Question]:
         return await self.repository.list_by_learning_outcome(
             command.learning_outcome_id,
             tenant_id=command.tenant_id,

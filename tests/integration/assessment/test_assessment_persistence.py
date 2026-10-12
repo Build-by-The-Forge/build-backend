@@ -80,14 +80,9 @@ async def test_question_snapshots_are_tenant_scoped_and_sequence_ordered(
     repository = SqlAlchemyAssessmentRepository(session)
     await repository.save(assessment, tenant_id="tenant-123")
 
-    snapshots = await repository.list_question_snapshots(
-        assessment.id, tenant_id="tenant-123"
-    )
+    snapshots = await repository.list_question_snapshots(assessment.id, tenant_id="tenant-123")
 
     assert [item.question_id for item in snapshots] == ["question-1", "question-2"]
     assert snapshots[0].prompt == "Prompt A"
     assert snapshots[0].options == ["A", "B"]
-    assert (
-        await repository.list_question_snapshots(assessment.id, tenant_id="tenant-999")
-        == []
-    )
+    assert await repository.list_question_snapshots(assessment.id, tenant_id="tenant-999") == []

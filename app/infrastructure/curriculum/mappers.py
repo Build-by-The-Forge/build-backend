@@ -12,9 +12,7 @@ from app.infrastructure.db.models.curriculum import (
 )
 
 
-def curriculum_source_to_model(
-    source: CurriculumSource, model: CurriculumSourceModel | None = None
-) -> CurriculumSourceModel:
+def curriculum_source_to_model(source: CurriculumSource, model: CurriculumSourceModel | None = None) -> CurriculumSourceModel:
     if model is None:
         return CurriculumSourceModel(
             id=source.id,

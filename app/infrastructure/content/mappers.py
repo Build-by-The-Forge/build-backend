@@ -10,9 +10,7 @@ from app.domain.content.source import ContentSource
 from app.infrastructure.db.models.content import ContentSourceModel
 
 
-def content_source_to_model(
-    source: ContentSource, model: ContentSourceModel | None = None
-) -> ContentSourceModel:
+def content_source_to_model(source: ContentSource, model: ContentSourceModel | None = None) -> ContentSourceModel:
     if model is None:
         model = ContentSourceModel(id=source.id)
 

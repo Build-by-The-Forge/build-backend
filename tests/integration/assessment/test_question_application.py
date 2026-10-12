@@ -34,24 +34,17 @@ class InMemoryCourseRepository:
     def _matches_tenant(value: str, tenant_id: str | None) -> bool:
         return tenant_id is None or tenant_id in value
 
-    async def get_by_topic_id(
-        self, topic_id: str, tenant_id: str | None = None
-    ) -> Course | None:
+    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
         for course in self.items.values():
             if any(topic.id.value == topic_id for topic in course.topics):
                 if self._matches_tenant(course.id.value, tenant_id):
                     return course
         return None
 
-    async def get_by_learning_outcome_id(
-        self, learning_outcome_id: str, tenant_id: str | None = None
-    ) -> Course | None:
+    async def get_by_learning_outcome_id(self, learning_outcome_id: str, tenant_id: str | None = None) -> Course | None:
         for course in self.items.values():
             for topic in course.topics:
-                if any(
-                    item.id.value == learning_outcome_id
-                    for item in topic.learning_outcomes
-                ):
+                if any(item.id.value == learning_outcome_id for item in topic.learning_outcomes):
                     if self._matches_tenant(course.id.value, tenant_id):
                         return course
         return None
@@ -65,35 +58,19 @@ class InMemoryQuestionRepository:
         self.items[question.id.value] = question
         return question
 
-    async def get_by_id(
-        self, question_id: str, tenant_id: str | None = None
-    ) -> Question | None:
+    async def get_by_id(self, question_id: str, tenant_id: str | None = None) -> Question | None:
         return self.items.get(question_id)
 
-    async def list_by_topic(
-        self, topic_id: str, tenant_id: str | None = None
-    ) -> list[Question]:
-        return [
-            question
-            for question in self.items.values()
-            if question.topic_id == topic_id
-        ]
+    async def list_by_topic(self, topic_id: str, tenant_id: str | None = None) -> list[Question]:
+        return [question for question in self.items.values() if question.topic_id == topic_id]
 
-    async def list_by_learning_outcome(
-        self, learning_outcome_id: str, tenant_id: str | None = None
-    ) -> list[Question]:
-        return [
-            question
-            for question in self.items.values()
-            if question.learning_outcome_id == learning_outcome_id
-        ]
+    async def list_by_learning_outcome(self, learning_outcome_id: str, tenant_id: str | None = None) -> list[Question]:
+        return [question for question in self.items.values() if question.learning_outcome_id == learning_outcome_id]
 
     async def list_all(self, tenant_id: str | None = None) -> list[Question]:
         return list(self.items.values())
 
-    async def update(
-        self, question: Question, tenant_id: str | None = None
-    ) -> Question:
+    async def update(self, question: Question, tenant_id: str | None = None) -> Question:
         self.items[question.id.value] = question
         return question
 

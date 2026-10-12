@@ -26,9 +26,7 @@ service = build_container().get(CurriculumSourceService)
 async def create_source(
     payload: CreateCurriculumSourceRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         source = await service.register_source(
@@ -40,9 +38,7 @@ async def create_source(
             parser_version=payload.parser_version,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -59,9 +55,7 @@ async def create_source(
 async def list_sources(
     request: Request,
     status_filter: str | None = None,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     sources = await service.list_sources(status=status_filter)
     return JSONResponse(
@@ -79,15 +73,11 @@ async def list_sources(
 async def get_source(
     source_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -105,9 +95,7 @@ async def list_snapshots(
     request: Request,
     limit: int = 50,
     offset: int = 0,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     if limit < 1 or limit > 100:
         raise HTTPException(
@@ -122,9 +110,7 @@ async def list_snapshots(
 
     res = await service.list_snapshots(source_id=source_id, limit=limit, offset=offset)
     if res is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
 
     snapshots, total = res
     return JSONResponse(
@@ -142,15 +128,11 @@ async def list_snapshots(
 async def trigger_sync(
     source_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
 
     job_id = f"job-sync-{uuid4()}"
     return JSONResponse(

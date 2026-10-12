@@ -73,31 +73,23 @@ class CourseService:
         handler = CreateCourseHandler(repository=self._repository())
         return await handler.handle(command)
 
-    async def list_courses(
-        self, department_id: str | None = None, tenant_id: str | None = None
-    ) -> list[Course]:
+    async def list_courses(self, department_id: str | None = None, tenant_id: str | None = None) -> list[Course]:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = ListCoursesHandler(repository=uow.courses)
-                return await handler.handle(
-                    department_id=department_id, tenant_id=tenant_id
-                )
+                return await handler.handle(department_id=department_id, tenant_id=tenant_id)
 
         handler = ListCoursesHandler(repository=self._repository())
         return await handler.handle(department_id=department_id, tenant_id=tenant_id)
 
-    async def get_course(
-        self, course_id: str, tenant_id: str | None = None
-    ) -> Course | None:
+    async def get_course(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await uow.courses.get_by_id(course_id, tenant_id=tenant_id)
 
         return await self._repository().get_by_id(course_id, tenant_id=tenant_id)
 
-    async def get_course_by_topic(
-        self, topic_id: str, tenant_id: str | None = None
-    ) -> Course | None:
+    async def get_course_by_topic(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await uow.courses.get_by_topic_id(topic_id, tenant_id=tenant_id)
@@ -121,17 +113,11 @@ class CourseService:
                 return await UpdateCourseHandler(uow.courses).handle(command)
         return await UpdateCourseHandler(self._repository()).handle(command)
 
-    async def transition_course(
-        self, course_id: str, tenant_id: str | None, transition: str
-    ) -> Course | None:
+    async def transition_course(self, course_id: str, tenant_id: str | None, transition: str) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await TransitionCourseHandler(uow.courses).handle(
-                    course_id, tenant_id, transition
-                )
-        return await TransitionCourseHandler(self._repository()).handle(
-            course_id, tenant_id, transition
-        )
+                return await TransitionCourseHandler(uow.courses).handle(course_id, tenant_id, transition)
+        return await TransitionCourseHandler(self._repository()).handle(course_id, tenant_id, transition)
 
     async def create_topic(
         self,
@@ -173,17 +159,13 @@ class CourseService:
                 return await UpdateTopicHandler(uow.courses).handle(command)
         return await UpdateTopicHandler(self._repository()).handle(command)
 
-    async def transition_topic(
-        self, topic_id: str, tenant_id: str | None, transition: str
-    ) -> Topic | None:
+    async def transition_topic(self, topic_id: str, tenant_id: str | None, transition: str) -> Topic | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 course = await uow.courses.get_by_topic_id(topic_id, tenant_id)
                 if course is None:
                     return None
-                topic = next(
-                    (item for item in course.topics if item.id.value == topic_id), None
-                )
+                topic = next((item for item in course.topics if item.id.value == topic_id), None)
                 if topic is None:
                     return None
                 if transition == "archive":
@@ -233,18 +215,11 @@ class CourseService:
     ) -> LearningOutcome | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                course = await uow.courses.get_by_learning_outcome_id(
-                    learning_outcome_id, tenant_id
-                )
+                course = await uow.courses.get_by_learning_outcome_id(learning_outcome_id, tenant_id)
                 if course is None:
                     return None
                 outcome = next(
-                    (
-                        item
-                        for topic in course.topics
-                        for item in topic.learning_outcomes
-                        if item.id.value == learning_outcome_id
-                    ),
+                    (item for topic in course.topics for item in topic.learning_outcomes if item.id.value == learning_outcome_id),
                     None,
                 )
                 if outcome is None:
@@ -302,17 +277,11 @@ class CourseService:
     ) -> ReferenceMaterial | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                course = await uow.courses.get_by_reference_material_id(
-                    reference_material_id, tenant_id
-                )
+                course = await uow.courses.get_by_reference_material_id(reference_material_id, tenant_id)
                 if course is None:
                     return None
                 material = next(
-                    (
-                        item
-                        for item in course.references
-                        if item.id.value == reference_material_id
-                    ),
+                    (item for item in course.references if item.id.value == reference_material_id),
                     None,
                 )
                 if material is None:

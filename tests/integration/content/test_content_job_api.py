@@ -17,23 +17,17 @@ from tests.integration.content.test_content_source_api import add_membership
 @pytest.mark.asyncio
 async def test_content_job_api_and_rbac(client) -> None:
     # 1. Admin setup (Tenant A)
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"job-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"job-admin-{uuid4()}@example.com")
     tenant_a_id, tenant_a_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, tenant_a_slug)
 
     # 2. Lecturer setup (Tenant A)
-    lecturer_a_id, lecturer_a_token = await register_and_authenticate(
-        client, f"job-lecturer-a-{uuid4()}@example.com"
-    )
+    lecturer_a_id, lecturer_a_token = await register_and_authenticate(client, f"job-lecturer-a-{uuid4()}@example.com")
     await add_membership(lecturer_a_id, tenant_a_id, "lecturer")
     lecturer_headers = headers(lecturer_a_token, tenant_a_slug)
 
     # 3. Student setup (Tenant A)
-    student_a_id, student_a_token = await register_and_authenticate(
-        client, f"job-student-a-{uuid4()}@example.com"
-    )
+    student_a_id, student_a_token = await register_and_authenticate(client, f"job-student-a-{uuid4()}@example.com")
     await add_membership(student_a_id, tenant_a_id, "student")
     student_headers = headers(student_a_token, tenant_a_slug)
 
@@ -104,9 +98,7 @@ async def test_content_job_api_and_rbac(client) -> None:
     assert client.get(f"/content/jobs/{job_id}", headers=lecturer_headers).json()["data"]["status"] == "queued"
 
     # E. Another tenant's admin can neither see nor operate tenant A's job or asset (M3, N-1).
-    other_admin_id, other_admin_token = await register_and_authenticate(
-        client, f"job-admin-b-{uuid4()}@example.com"
-    )
+    other_admin_id, other_admin_token = await register_and_authenticate(client, f"job-admin-b-{uuid4()}@example.com")
     _, tenant_b_slug, _, _ = await seed_tenant_context(other_admin_id, "admin")
     other_headers = headers(other_admin_token, tenant_b_slug)
     cross = [

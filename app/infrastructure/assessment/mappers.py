@@ -62,9 +62,7 @@ def question_to_model(
     model.learning_outcome_id = question.learning_outcome_id
     model.question_type = question.question_type.value
     model.prompt = question.prompt.value
-    model.explanation = (
-        question.explanation.value if question.explanation is not None else None
-    )
+    model.explanation = question.explanation.value if question.explanation is not None else None
     model.difficulty = question.difficulty.value
     model.marks = int(question.marks.value)
     model.status = question.status.value
@@ -100,11 +98,7 @@ def question_model_to_domain(model: QuestionModel) -> Question:
         learning_outcome_id=model.learning_outcome_id,
         question_type=QuestionType(model.question_type),
         prompt=QuestionPrompt(model.prompt),
-        explanation=(
-            QuestionExplanation(model.explanation)
-            if model.explanation is not None
-            else None
-        ),
+        explanation=(QuestionExplanation(model.explanation) if model.explanation is not None else None),
         difficulty=Difficulty(model.difficulty),
         marks=QuestionMarks(model.marks),
         status=QuestionStatus(model.status),
@@ -122,9 +116,7 @@ def assessment_question_to_model(
     model: AssessmentQuestionModel | None = None,
 ) -> AssessmentQuestionModel:
     if model is None:
-        model = AssessmentQuestionModel(
-            id=f"{assessment_id}-{sequence}-{question.question_id}"
-        )
+        model = AssessmentQuestionModel(id=f"{assessment_id}-{sequence}-{question.question_id}")
 
     model.assessment_id = assessment_id
     model.sequence = sequence
@@ -191,10 +183,7 @@ def assessment_model_to_domain(model: AssessmentModel) -> Assessment:
         passing_score=model.passing_score,
         assessment_id=model.id,
         status=AssessmentStatus(model.status),
-        questions=[
-            assessment_question_model_to_domain(item)
-            for item in (model.questions or [])
-        ],
+        questions=[assessment_question_model_to_domain(item) for item in (model.questions or [])],
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

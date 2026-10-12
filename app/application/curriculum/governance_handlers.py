@@ -106,9 +106,7 @@ class ApproveBenchmarkHandler:
         self.benchmark_repo = benchmark_repo
         self.audit_repo = audit_repo
 
-    async def handle(
-        self, command: ApproveBenchmarkCommand
-    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
+    async def handle(self, command: ApproveBenchmarkCommand) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
             raise ValueError("benchmark curriculum not found")
@@ -145,9 +143,7 @@ class RejectBenchmarkHandler:
         self.benchmark_repo = benchmark_repo
         self.audit_repo = audit_repo
 
-    async def handle(
-        self, command: RejectBenchmarkCommand
-    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
+    async def handle(self, command: RejectBenchmarkCommand) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
             raise ValueError("benchmark curriculum not found")
@@ -183,9 +179,7 @@ class ReviseBenchmarkHandler:
         self.benchmark_repo = benchmark_repo
         self.audit_repo = audit_repo
 
-    async def handle(
-        self, command: ReviseBenchmarkCommand
-    ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
+    async def handle(self, command: ReviseBenchmarkCommand) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
             raise ValueError("benchmark curriculum not found")
@@ -213,7 +207,5 @@ class GetBenchmarkAuditTrailHandler:
     def __init__(self, audit_repo: BenchmarkAuditRepository) -> None:
         self.audit_repo = audit_repo
 
-    async def handle(
-        self, command: GetBenchmarkAuditTrailCommand
-    ) -> list[BenchmarkAuditLog]:
+    async def handle(self, command: GetBenchmarkAuditTrailCommand) -> list[BenchmarkAuditLog]:
         return await self.audit_repo.list_by_curriculum(command.curriculum_id)

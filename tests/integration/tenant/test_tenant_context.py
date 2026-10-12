@@ -8,9 +8,7 @@ from app.infrastructure.identity.models import UserModel, UserStatus
 from tests.integration.identity_helpers import verify_email
 
 
-async def seed_tenant_membership(
-    tenant_slug: str, user_id: str, role: str = "student"
-) -> tuple[str, str]:
+async def seed_tenant_membership(tenant_slug: str, user_id: str, role: str = "student") -> tuple[str, str]:
     """Create a tenant with one membership for ``user_id``.
 
     Valid on PostgreSQL, where foreign keys are enforced: the tenant row is
@@ -93,13 +91,9 @@ async def test_tenant_context_requires_explicit_tenant(client):
 
 @pytest.mark.asyncio
 async def test_tenant_context_resolves_active_membership(client):
-    user_id, access_token = await authenticate_user(
-        client, f"member-{uuid4()}@example.com"
-    )
+    user_id, access_token = await authenticate_user(client, f"member-{uuid4()}@example.com")
     tenant_slug = f"futa-{uuid4()}"
-    tenant_id, membership_id = await seed_tenant_membership(
-        tenant_slug, user_id, role="lecturer"
-    )
+    tenant_id, membership_id = await seed_tenant_membership(tenant_slug, user_id, role="lecturer")
 
     response = client.get(
         "/identity/tenant-context",
@@ -121,9 +115,7 @@ async def test_tenant_context_resolves_active_membership(client):
 
 @pytest.mark.asyncio
 async def test_tenant_context_denies_non_member(client):
-    user_id, access_token = await authenticate_user(
-        client, f"non-member-{uuid4()}@example.com"
-    )
+    user_id, access_token = await authenticate_user(client, f"non-member-{uuid4()}@example.com")
     tenant_slug = f"private-{uuid4()}"
     await seed_tenant_membership(f"member-{uuid4()}", user_id)
     await seed_tenant_membership(tenant_slug, str(uuid4()))

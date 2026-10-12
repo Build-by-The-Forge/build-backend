@@ -45,9 +45,7 @@ class AccountStatus(str, Enum):
 
 # Unverified accounts may sign in; their tenant capabilities are restricted
 # elsewhere. Every other non-active status is refused outright.
-AUTHENTICATABLE_STATUSES = frozenset(
-    {AccountStatus.ACTIVE, AccountStatus.PENDING_VERIFICATION}
-)
+AUTHENTICATABLE_STATUSES = frozenset({AccountStatus.ACTIVE, AccountStatus.PENDING_VERIFICATION})
 
 
 @dataclass(frozen=True, slots=True)

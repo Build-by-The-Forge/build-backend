@@ -12,12 +12,8 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     # 1. Lecturer creates course assessment with 1 question
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"gradebook-lecturer-{uuid4()}@example.com"
-    )
-    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(
-        lecturer_id, "lecturer"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"gradebook-lecturer-{uuid4()}@example.com")
+    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(lecturer_id, "lecturer")
     lecturer_headers = headers(lecturer_token, tenant_slug)
 
     course_id = await course_id_for_tenant(tenant_id)
@@ -64,9 +60,7 @@ async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     )
 
     # 2. Student 1 starts and submits attempt (correct answer -> 5 marks)
-    s1_id, s1_token = await register_and_authenticate(
-        client, f"student1-{uuid4()}@example.com"
-    )
+    s1_id, s1_token = await register_and_authenticate(client, f"student1-{uuid4()}@example.com")
     await add_membership(s1_id, tenant_id, "student")
     s1_headers = headers(s1_token, tenant_slug)
 
@@ -91,9 +85,7 @@ async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     client.post(f"/assessment/attempts/{att1_id}/submit", headers=s1_headers)
 
     # 3. Student 2 starts and submits attempt (incorrect answer -> 0 marks)
-    s2_id, s2_token = await register_and_authenticate(
-        client, f"student2-{uuid4()}@example.com"
-    )
+    s2_id, s2_token = await register_and_authenticate(client, f"student2-{uuid4()}@example.com")
     await add_membership(s2_id, tenant_id, "student")
     s2_headers = headers(s2_token, tenant_slug)
 
@@ -111,9 +103,7 @@ async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     client.post(f"/assessment/attempts/{att2_id}/submit", headers=s2_headers)
 
     # 4. Student 3 starts attempt but DOES NOT submit (in progress)
-    s3_id, s3_token = await register_and_authenticate(
-        client, f"student3-{uuid4()}@example.com"
-    )
+    s3_id, s3_token = await register_and_authenticate(client, f"student3-{uuid4()}@example.com")
     await add_membership(s3_id, tenant_id, "student")
     s3_headers = headers(s3_token, tenant_slug)
 
@@ -155,9 +145,7 @@ async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     ).json()
     assert p2["meta"]["total"] == 2
     assert len(p2["data"]["results"]) == 1
-    assert (
-        p1["data"]["results"][0]["attempt_id"] != p2["data"]["results"][0]["attempt_id"]
-    )
+    assert p1["data"]["results"][0]["attempt_id"] != p2["data"]["results"][0]["attempt_id"]
 
     # 7. Student caller is FORBIDDEN (403)
     student_res = client.get(
@@ -167,9 +155,7 @@ async def test_staff_assessment_gradebook_and_results_api(client) -> None:
     assert student_res.status_code == 403
 
     # 8. Cross-tenant lecturer cannot see foreign assessment (404)
-    other_lecturer_id, other_token = await register_and_authenticate(
-        client, f"other-lecturer-{uuid4()}@example.com"
-    )
+    other_lecturer_id, other_token = await register_and_authenticate(client, f"other-lecturer-{uuid4()}@example.com")
     _, other_slug, _, _ = await seed_tenant_context(other_lecturer_id, "lecturer")
     other_headers = headers(other_token, other_slug)
 

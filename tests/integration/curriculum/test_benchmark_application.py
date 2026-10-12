@@ -113,10 +113,7 @@ async def test_ingest_benchmark_candidate_and_retrieval(
     assert course_detail is not None
     assert len(course_detail.topics) == 1
     assert len(course_detail.topics[0].outcomes) == 1
-    assert (
-        course_detail.topics[0].outcomes[0].description
-        == "Identify CPU, ALU, Registers, and Memory."
-    )
+    assert course_detail.topics[0].outcomes[0].description == "Identify CPU, ALU, Registers, and Memory."
 
 
 @pytest.mark.asyncio
@@ -160,9 +157,7 @@ async def test_ingest_duplicate_course_code_rejected(
         ),
     ]
 
-    with pytest.raises(
-        ValueError, match="duplicate course code 'CSC101' in candidate payload"
-    ):
+    with pytest.raises(ValueError, match="duplicate course code 'CSC101' in candidate payload"):
         await service.ingest_candidate(
             source_snapshot_id=snap.id,
             extractor_version="v1.2",

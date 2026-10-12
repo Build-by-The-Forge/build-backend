@@ -161,9 +161,7 @@ _BAD_USER_VALUES = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("field", "value"), _BAD_USER_VALUES, ids=[f"{f}={v!r}"[:40] for f, v in _BAD_USER_VALUES]
-)
+@pytest.mark.parametrize(("field", "value"), _BAD_USER_VALUES, ids=[f"{f}={v!r}"[:40] for f, v in _BAD_USER_VALUES])
 def test_user_context_with_a_wrong_value_is_refused(field: str, value: Any) -> None:
     with pytest.raises(InvalidServiceContext):
         ServiceContext.from_dict(_with(USER_CONTEXT, **{field: value}))

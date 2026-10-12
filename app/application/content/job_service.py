@@ -73,9 +73,7 @@ class ContentIngestionJobService:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
         return await CreateIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
 
-    async def retry_job(
-        self, job_id: str, tenant_id: str, delay_seconds: int = 30
-    ) -> ContentIngestionJob:
+    async def retry_job(self, job_id: str, tenant_id: str, delay_seconds: int = 30) -> ContentIngestionJob:
         cmd = RetryIngestionJobCommand(job_id=job_id, tenant_id=tenant_id, delay_seconds=delay_seconds)
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
@@ -123,14 +121,10 @@ class ContentIngestionJobService:
         )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await DispatchIngestionJobHandler(
-                    uow, self._gateway, self._event_bus
-                ).handle(cmd)
+                return await DispatchIngestionJobHandler(uow, self._gateway, self._event_bus).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await DispatchIngestionJobHandler(
-            self._uow, self._gateway, self._event_bus
-        ).handle(cmd)
+        return await DispatchIngestionJobHandler(self._uow, self._gateway, self._event_bus).handle(cmd)
 
     async def handle_callback(
         self,
@@ -165,18 +159,12 @@ class ContentIngestionJobService:
         )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await HandleAICallbackHandler(
-                    uow, self._event_bus, self._security_events
-                ).handle(cmd)
+                return await HandleAICallbackHandler(uow, self._event_bus, self._security_events).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await HandleAICallbackHandler(
-            self._uow, self._event_bus, self._security_events
-        ).handle(cmd)
+        return await HandleAICallbackHandler(self._uow, self._event_bus, self._security_events).handle(cmd)
 
-    async def get_job(
-        self, job_id: str, tenant_id: str | None = None
-    ) -> ContentIngestionJob | None:
+    async def get_job(self, job_id: str, tenant_id: str | None = None) -> ContentIngestionJob | None:
         query = GetIngestionJobQuery(job_id=job_id, tenant_id=tenant_id)
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
@@ -185,9 +173,7 @@ class ContentIngestionJobService:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
         return await GetIngestionJobHandler(self._uow).handle(query)
 
-    async def get_latest_job_for_asset(
-        self, asset_id: str, tenant_id: str | None = None
-    ) -> ContentIngestionJob | None:
+    async def get_latest_job_for_asset(self, asset_id: str, tenant_id: str | None = None) -> ContentIngestionJob | None:
         query = GetLatestJobForAssetQuery(asset_id=asset_id, tenant_id=tenant_id)
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
@@ -224,12 +210,7 @@ class ContentIngestionJobService:
         cmd = ReconcileIngestionJobCommand(job_id=job_id, tenant_id=tenant_id)
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await ReconcileIngestionJobHandler(
-                    uow, self._gateway, self._event_bus, self._security_events
-                ).handle(cmd)
+                return await ReconcileIngestionJobHandler(uow, self._gateway, self._event_bus, self._security_events).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await ReconcileIngestionJobHandler(
-            self._uow, self._gateway, self._event_bus, self._security_events
-        ).handle(cmd)
-
+        return await ReconcileIngestionJobHandler(self._uow, self._gateway, self._event_bus, self._security_events).handle(cmd)

@@ -21,12 +21,8 @@ from app.domain.catalogue.reference_material import ReferenceMaterial
 
 router = APIRouter(prefix="/catalogue/courses", tags=["catalogue"])
 topic_router = APIRouter(prefix="/catalogue/topics", tags=["catalogue"])
-learning_outcome_router = APIRouter(
-    prefix="/catalogue/learning-outcomes", tags=["catalogue"]
-)
-reference_router = APIRouter(
-    prefix="/catalogue/reference-materials", tags=["catalogue"]
-)
+learning_outcome_router = APIRouter(prefix="/catalogue/learning-outcomes", tags=["catalogue"])
+reference_router = APIRouter(prefix="/catalogue/reference-materials", tags=["catalogue"])
 container = build_container()
 service = container.get(CourseService)
 
@@ -38,9 +34,7 @@ async def list_courses(
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     try:
-        courses = await service.list_courses(
-            department_id=department_id, tenant_id=context.tenant_id
-        )
+        courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
     except Exception as exc:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -85,9 +79,7 @@ async def get_course(
 ) -> JSONResponse:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
 
     response = CourseResponse(
         id=course.id.value,
@@ -179,9 +171,7 @@ async def update_course(
         description=payload.description,
     )
     if course is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -230,9 +220,7 @@ async def _transition_course(
 ) -> JSONResponse:
     course = await service.transition_course(course_id, context.tenant_id, transition)
     if course is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -263,9 +251,7 @@ async def create_topic(
         tenant_id=context.tenant_id,
     )
     if topic is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -276,9 +262,7 @@ async def create_topic(
                 "course_id": topic.course_id.value,
                 "title": topic.title.value,
                 "slug": topic.slug.value,
-                "description": (
-                    topic.description.value if topic.description is not None else None
-                ),
+                "description": (topic.description.value if topic.description is not None else None),
                 "sequence": topic.sequence.value,
                 "status": topic.status.value,
             },
@@ -296,9 +280,7 @@ async def list_topics(
 ) -> JSONResponse:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="course not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -309,11 +291,7 @@ async def list_topics(
                     "course_id": topic.course_id.value,
                     "title": topic.title.value,
                     "slug": topic.slug.value,
-                    "description": (
-                        topic.description.value
-                        if topic.description is not None
-                        else None
-                    ),
+                    "description": (topic.description.value if topic.description is not None else None),
                     "sequence": topic.sequence.value,
                     "status": topic.status.value,
                 }
@@ -474,17 +452,13 @@ async def update_learning_outcome(
     )
 
 
-@learning_outcome_router.post(
-    "/{learning_outcome_id}/archive", status_code=status.HTTP_200_OK
-)
+@learning_outcome_router.post("/{learning_outcome_id}/archive", status_code=status.HTTP_200_OK)
 async def archive_learning_outcome(
     learning_outcome_id: str,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
-    outcome = await service.transition_learning_outcome(
-        learning_outcome_id, context.tenant_id, "archive"
-    )
+    outcome = await service.transition_learning_outcome(learning_outcome_id, context.tenant_id, "archive")
     if outcome is None:
         raise HTTPException(status_code=404, detail="learning outcome not found")
     return JSONResponse(
@@ -498,9 +472,7 @@ async def archive_learning_outcome(
     )
 
 
-@topic_router.post(
-    "/{topic_id}/reference-materials", status_code=status.HTTP_201_CREATED
-)
+@topic_router.post("/{topic_id}/reference-materials", status_code=status.HTTP_201_CREATED)
 async def create_reference_material(
     topic_id: str,
     request: Request,
@@ -574,17 +546,13 @@ async def update_reference_material(
     )
 
 
-@reference_router.post(
-    "/{reference_material_id}/archive", status_code=status.HTTP_200_OK
-)
+@reference_router.post("/{reference_material_id}/archive", status_code=status.HTTP_200_OK)
 async def archive_reference_material(
     reference_material_id: str,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
-    material = await service.transition_reference_material(
-        reference_material_id, context.tenant_id, "archive"
-    )
+    material = await service.transition_reference_material(reference_material_id, context.tenant_id, "archive")
     if material is None:
         raise HTTPException(status_code=404, detail="reference material not found")
     return JSONResponse(

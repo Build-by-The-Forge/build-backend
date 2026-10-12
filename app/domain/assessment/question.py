@@ -71,9 +71,7 @@ class Question:
         seen_orders: set[int] = set()
         for option in normalized_options:
             if option.display_order.value in seen_orders:
-                raise ValueError(
-                    "question options must have unique display order values"
-                )
+                raise ValueError("question options must have unique display order values")
             seen_orders.add(option.display_order.value)
             if not option.text.value.strip():
                 raise ValueError("question option text must be a non-empty string")

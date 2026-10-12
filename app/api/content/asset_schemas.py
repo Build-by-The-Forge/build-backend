@@ -51,9 +51,7 @@ class ContentAssetResponse(BaseModel):
     is_deduplicated: bool = False
 
     @classmethod
-    def from_domain(
-        cls, asset: ContentAsset, is_deduplicated: bool = False
-    ) -> ContentAssetResponse:
+    def from_domain(cls, asset: ContentAsset, is_deduplicated: bool = False) -> ContentAssetResponse:
         return cls(
             id=asset.id,
             source_id=asset.source_id,

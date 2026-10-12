@@ -10,7 +10,5 @@ class BenchmarkAuditRepository(Protocol):
     async def list_by_curriculum(self, curriculum_id: str) -> list[BenchmarkAuditLog]:
         raise NotImplementedError
 
-    async def list_recent(
-        self, limit: int = 50, action: str | None = None
-    ) -> list[BenchmarkAuditLog]:
+    async def list_recent(self, limit: int = 50, action: str | None = None) -> list[BenchmarkAuditLog]:
         raise NotImplementedError

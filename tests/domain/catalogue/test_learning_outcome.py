@@ -59,9 +59,7 @@ def test_learning_outcome_update_description_emits_event() -> None:
     )
     lo.pull_events()
 
-    lo.update_description(
-        LearningOutcomeDescription("Explain how gradient descent converges.")
-    )
+    lo.update_description(LearningOutcomeDescription("Explain how gradient descent converges."))
 
     assert lo.description.value == "Explain how gradient descent converges."
     assert lo.pull_events()[0].event_type == "learning_outcome.updated"

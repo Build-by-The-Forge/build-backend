@@ -58,9 +58,7 @@ class SqlAlchemyQuestionRepository(QuestionRepository):
         await self._session.flush()
         return question
 
-    async def get_by_id(
-        self, question_id: str, tenant_id: str | None = None
-    ) -> Question | None:
+    async def get_by_id(self, question_id: str, tenant_id: str | None = None) -> Question | None:
         statement = select(QuestionModel).where(QuestionModel.id == question_id)
         if tenant_id is not None:
             statement = statement.where(QuestionModel.tenant_id == tenant_id)
@@ -69,9 +67,7 @@ class SqlAlchemyQuestionRepository(QuestionRepository):
         model = result.first()
         return question_model_to_domain(model) if model is not None else None
 
-    async def list_by_topic(
-        self, topic_id: str, tenant_id: str | None = None
-    ) -> list[Question]:
+    async def list_by_topic(self, topic_id: str, tenant_id: str | None = None) -> list[Question]:
         statement = select(QuestionModel).where(QuestionModel.topic_id == topic_id)
         if tenant_id is not None:
             statement = statement.where(QuestionModel.tenant_id == tenant_id)
@@ -79,12 +75,8 @@ class SqlAlchemyQuestionRepository(QuestionRepository):
         result = await self._session.scalars(statement)
         return [question_model_to_domain(q) for q in result.all()]
 
-    async def list_by_learning_outcome(
-        self, learning_outcome_id: str, tenant_id: str | None = None
-    ) -> list[Question]:
-        statement = select(QuestionModel).where(
-            QuestionModel.learning_outcome_id == learning_outcome_id
-        )
+    async def list_by_learning_outcome(self, learning_outcome_id: str, tenant_id: str | None = None) -> list[Question]:
+        statement = select(QuestionModel).where(QuestionModel.learning_outcome_id == learning_outcome_id)
         if tenant_id is not None:
             statement = statement.where(QuestionModel.tenant_id == tenant_id)
         statement = statement.options(selectinload(QuestionModel.options))
@@ -99,9 +91,7 @@ class SqlAlchemyQuestionRepository(QuestionRepository):
         result = await self._session.scalars(statement)
         return [question_model_to_domain(q) for q in result.all()]
 
-    async def update(
-        self, question: Question, tenant_id: str | None = None
-    ) -> Question:
+    async def update(self, question: Question, tenant_id: str | None = None) -> Question:
         statement = select(QuestionModel).where(QuestionModel.id == question.id.value)
         if tenant_id is not None:
             statement = statement.where(QuestionModel.tenant_id == tenant_id)
@@ -119,9 +109,7 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def save(
-        self, assessment: Assessment, tenant_id: str | None = None
-    ) -> Assessment:
+    async def save(self, assessment: Assessment, tenant_id: str | None = None) -> Assessment:
         statement = select(AssessmentModel).where(AssessmentModel.id == assessment.id)
         if tenant_id is not None:
             statement = statement.where(AssessmentModel.tenant_id == tenant_id)
@@ -140,9 +128,7 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         await self._session.flush()
         return assessment
 
-    async def get_by_id(
-        self, assessment_id: str, tenant_id: str | None = None
-    ) -> Assessment | None:
+    async def get_by_id(self, assessment_id: str, tenant_id: str | None = None) -> Assessment | None:
         statement = select(AssessmentModel).where(AssessmentModel.id == assessment_id)
         if tenant_id is not None:
             statement = statement.where(AssessmentModel.tenant_id == tenant_id)
@@ -151,12 +137,8 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         model = result.first()
         return assessment_model_to_domain(model) if model is not None else None
 
-    async def list_by_course(
-        self, course_id: str, tenant_id: str | None = None
-    ) -> list[Assessment]:
-        statement = select(AssessmentModel).where(
-            AssessmentModel.course_id == course_id
-        )
+    async def list_by_course(self, course_id: str, tenant_id: str | None = None) -> list[Assessment]:
+        statement = select(AssessmentModel).where(AssessmentModel.course_id == course_id)
         if tenant_id is not None:
             statement = statement.where(AssessmentModel.tenant_id == tenant_id)
         statement = statement.options(selectinload(AssessmentModel.questions))
@@ -171,9 +153,7 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         result = await self._session.scalars(statement)
         return [assessment_model_to_domain(item) for item in result.all()]
 
-    async def list_question_snapshots(
-        self, assessment_id: str, tenant_id: str
-    ) -> list[AssessmentQuestion]:
+    async def list_question_snapshots(self, assessment_id: str, tenant_id: str) -> list[AssessmentQuestion]:
         statement = (
             select(AssessmentQuestionModel)
             .join(AssessmentModel)
@@ -187,9 +167,7 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         result = await self._session.scalars(statement)
         return [assessment_question_model_to_domain(item) for item in result.all()]
 
-    async def update(
-        self, assessment: Assessment, tenant_id: str | None = None
-    ) -> Assessment:
+    async def update(self, assessment: Assessment, tenant_id: str | None = None) -> Assessment:
         statement = select(AssessmentModel).where(AssessmentModel.id == assessment.id)
         if tenant_id is not None:
             statement = statement.where(AssessmentModel.tenant_id == tenant_id)
@@ -207,9 +185,7 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def save(
-        self, attempt: AssessmentAttempt, tenant_id: str | None = None
-    ) -> AssessmentAttempt:
+    async def save(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         model = await self._find(attempt.id, tenant_id=tenant_id)
         if model is None:
             model = attempt_to_model(attempt)
@@ -227,9 +203,7 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         tenant_id: str | None = None,
         user_id: str | None = None,
     ) -> AssessmentAttempt | None:
-        statement = select(AssessmentAttemptModel).where(
-            AssessmentAttemptModel.id == attempt_id
-        )
+        statement = select(AssessmentAttemptModel).where(AssessmentAttemptModel.id == attempt_id)
         if tenant_id is not None:
             statement = statement.where(AssessmentAttemptModel.tenant_id == tenant_id)
         if user_id is not None:
@@ -254,9 +228,7 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         model = result.first()
         return attempt_model_to_domain(model) if model is not None else None
 
-    async def list_by_user(
-        self, user_id: str, tenant_id: str
-    ) -> list[AssessmentAttempt]:
+    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
         statement = select(AssessmentAttemptModel).where(
             AssessmentAttemptModel.user_id == user_id,
             AssessmentAttemptModel.tenant_id == tenant_id,
@@ -264,9 +236,7 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         result = await self._session.scalars(statement)
         return [attempt_model_to_domain(item) for item in result.all()]
 
-    async def update(
-        self, attempt: AssessmentAttempt, tenant_id: str | None = None
-    ) -> AssessmentAttempt:
+    async def update(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         model = await self._find(attempt.id, tenant_id=tenant_id)
         if model is None:
             raise ValueError(f"attempt {attempt.id} not found")
@@ -274,12 +244,8 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         await self._session.flush()
         return attempt
 
-    async def _find(
-        self, attempt_id: str, tenant_id: str | None = None
-    ) -> AssessmentAttemptModel | None:
-        statement = select(AssessmentAttemptModel).where(
-            AssessmentAttemptModel.id == attempt_id
-        )
+    async def _find(self, attempt_id: str, tenant_id: str | None = None) -> AssessmentAttemptModel | None:
+        statement = select(AssessmentAttemptModel).where(AssessmentAttemptModel.id == attempt_id)
         if tenant_id is not None:
             statement = statement.where(AssessmentAttemptModel.tenant_id == tenant_id)
         result = await self._session.scalars(statement)
@@ -304,9 +270,7 @@ class SqlAlchemyAttemptAnswerRepository(AttemptAnswerRepository):
         model = (await self._session.scalars(statement)).first()
         return attempt_answer_model_to_domain(model) if model is not None else None
 
-    async def list_by_attempt(
-        self, attempt_id: str, tenant_id: str
-    ) -> list[AttemptAnswer]:
+    async def list_by_attempt(self, attempt_id: str, tenant_id: str) -> list[AttemptAnswer]:
         statement = (
             select(AttemptAnswerModel)
             .where(
@@ -347,9 +311,7 @@ class SqlAlchemyAttemptResultRepository(AttemptResultRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_by_attempt_id(
-        self, attempt_id: str, tenant_id: str
-    ) -> AttemptResult | None:
+    async def get_by_attempt_id(self, attempt_id: str, tenant_id: str) -> AttemptResult | None:
         statement = select(AssessmentAttemptResultModel).where(
             AssessmentAttemptResultModel.attempt_id == attempt_id,
             AssessmentAttemptResultModel.tenant_id == tenant_id,

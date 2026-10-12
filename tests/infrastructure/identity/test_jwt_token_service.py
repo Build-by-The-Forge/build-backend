@@ -99,18 +99,14 @@ def test_small_clock_skew_is_tolerated():
 
 
 def test_rotation_accepts_tokens_signed_with_the_previous_key():
-    old_token = JWTTokenService(settings(auth_jwt_secret=OLD_KEY, auth_jwt_kid="old")).issue_access_token(
-        "user-1", "session-1"
-    )
+    old_token = JWTTokenService(settings(auth_jwt_secret=OLD_KEY, auth_jwt_kid="old")).issue_access_token("user-1", "session-1")
     rotated = service(auth_jwt_previous_secret=OLD_KEY, auth_jwt_previous_kid="old")
 
     assert rotated.decode_access_token(old_token).user_id == "user-1"
 
 
 def test_previous_key_is_rejected_once_retired():
-    old_token = JWTTokenService(settings(auth_jwt_secret=OLD_KEY, auth_jwt_kid="old")).issue_access_token(
-        "user-1", "session-1"
-    )
+    old_token = JWTTokenService(settings(auth_jwt_secret=OLD_KEY, auth_jwt_kid="old")).issue_access_token("user-1", "session-1")
 
     with pytest.raises(InvalidTokenError):
         service().decode_access_token(old_token)

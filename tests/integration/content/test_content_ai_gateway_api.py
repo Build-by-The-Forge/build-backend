@@ -12,22 +12,16 @@ from tests.integration.content.test_content_source_api import add_membership
 @pytest.mark.asyncio
 async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -> None:
     # 1. Admin setup (Tenant A)
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"aigate-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"aigate-admin-{uuid4()}@example.com")
     tenant_a_id, tenant_a_slug, _, _ = await seed_tenant_context(admin_id, "admin")
 
     # 2. Lecturer setup (Tenant A)
-    lecturer_a_id, lecturer_a_token = await register_and_authenticate(
-        client, f"aigate-lecturer-a-{uuid4()}@example.com"
-    )
+    lecturer_a_id, lecturer_a_token = await register_and_authenticate(client, f"aigate-lecturer-a-{uuid4()}@example.com")
     await add_membership(lecturer_a_id, tenant_a_id, "lecturer")
     lecturer_headers = headers(lecturer_a_token, tenant_a_slug)
 
     # 3. Student setup (Tenant A)
-    student_a_id, student_a_token = await register_and_authenticate(
-        client, f"aigate-student-a-{uuid4()}@example.com"
-    )
+    student_a_id, student_a_token = await register_and_authenticate(client, f"aigate-student-a-{uuid4()}@example.com")
     await add_membership(student_a_id, tenant_a_id, "student")
     student_headers = headers(student_a_token, tenant_a_slug)
 
@@ -120,9 +114,7 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
 async def test_failed_dispatch_is_persisted_and_reported(client, monkeypatch) -> None:
     from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"aigate-fail-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"aigate-fail-{uuid4()}@example.com")
     _, tenant_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, tenant_slug)
     source_id = client.post(
@@ -147,9 +139,7 @@ async def test_failed_dispatch_is_persisted_and_reported(client, monkeypatch) ->
         },
         headers=admin_headers,
     ).json()["data"]["id"]
-    job_id = client.post(
-        f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=admin_headers
-    ).json()["data"]["id"]
+    job_id = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=admin_headers).json()["data"]["id"]
 
     async def failing_dispatch(self, job, asset, source, actor):
         raise AIServiceGatewayError(
@@ -175,8 +165,6 @@ async def test_failed_dispatch_is_persisted_and_reported(client, monkeypatch) ->
         True,
     )
     # ... so the retry business operation is now possible.
-    retry = client.post(
-        f"/content/jobs/{job_id}/retry", json={"delay_seconds": 1}, headers=admin_headers
-    )
+    retry = client.post(f"/content/jobs/{job_id}/retry", json={"delay_seconds": 1}, headers=admin_headers)
     assert retry.status_code == 200, retry.text
     assert retry.json()["data"]["status"] == "queued"

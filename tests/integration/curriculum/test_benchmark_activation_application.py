@@ -103,9 +103,7 @@ async def test_benchmark_activation_and_supersession_pipeline(
         courses=[course_input],
     )
     await service.validate_candidate(v1_curr.id)
-    await service.submit_for_review(
-        v1_curr.id, actor_id="admin-1", actor_email="admin1@nuc.edu.ng"
-    )
+    await service.submit_for_review(v1_curr.id, actor_id="admin-1", actor_email="admin1@nuc.edu.ng")
     await service.approve_curriculum(
         v1_curr.id,
         reviewer_id="rev-1",
@@ -144,9 +142,7 @@ async def test_benchmark_activation_and_supersession_pipeline(
         courses=[course_input],
     )
     await service.validate_candidate(v2_curr.id)
-    await service.submit_for_review(
-        v2_curr.id, actor_id="admin-1", actor_email="admin1@nuc.edu.ng"
-    )
+    await service.submit_for_review(v2_curr.id, actor_id="admin-1", actor_email="admin1@nuc.edu.ng")
     await service.approve_curriculum(
         v2_curr.id,
         reviewer_id="rev-1",

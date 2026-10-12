@@ -29,9 +29,7 @@ async def register_asset(
     source_id: str,
     payload: ContentAssetRegisterRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_ASSET_UPLOAD)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
 ) -> JSONResponse:
     try:
         asset, is_deduplicated = await service.register_asset(
@@ -48,19 +46,13 @@ async def register_asset(
         )
     except ValueError as exc:
         msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
+        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
             content={"error": {"code": "INVALID_CONTENT_ASSET", "message": str(exc)}},
         )
 
-    resp_data = ContentAssetResponse.from_domain(
-        asset, is_deduplicated=is_deduplicated
-    ).model_dump(mode="json")
+    resp_data = ContentAssetResponse.from_domain(asset, is_deduplicated=is_deduplicated).model_dump(mode="json")
     status_code = status.HTTP_200_OK if is_deduplicated else status.HTTP_201_CREATED
     return JSONResponse(status_code=status_code, content={"data": resp_data})
 
@@ -103,9 +95,7 @@ async def list_source_assets(
         limit=limit,
         offset=offset,
     )
-    items = [
-        ContentAssetResponse.from_domain(a).model_dump(mode="json") for a in assets
-    ]
+    items = [ContentAssetResponse.from_domain(a).model_dump(mode="json") for a in assets]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -133,9 +123,7 @@ async def list_all_assets(
         limit=limit,
         offset=offset,
     )
-    items = [
-        ContentAssetResponse.from_domain(a).model_dump(mode="json") for a in assets
-    ]
+    items = [ContentAssetResponse.from_domain(a).model_dump(mode="json") for a in assets]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -154,9 +142,7 @@ async def create_asset_version(
     asset_id: str,
     payload: ContentAssetVersionRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_ASSET_UPLOAD)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
 ) -> JSONResponse:
     try:
         new_asset = await service.create_version(
@@ -172,20 +158,14 @@ async def create_asset_version(
         )
     except ValueError as exc:
         msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
+        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
             content={"error": {"code": "INVALID_ASSET_VERSION", "message": str(exc)}},
         )
 
     resp_data = ContentAssetResponse.from_domain(new_asset).model_dump(mode="json")
-    return JSONResponse(
-        status_code=status.HTTP_201_CREATED, content={"data": resp_data}
-    )
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"data": resp_data})
 
 
 @router.post(
@@ -196,9 +176,7 @@ async def revoke_asset(
     asset_id: str,
     payload: ContentAssetRevokeRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_ASSET_UPLOAD)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
 ) -> JSONResponse:
     try:
         revoked = await service.revoke_asset(
@@ -212,11 +190,7 @@ async def revoke_asset(
         status_code = (
             status.HTTP_404_NOT_FOUND
             if "does not exist" in msg
-            else (
-                status.HTTP_403_FORBIDDEN
-                if "permission denied" in msg
-                else status.HTTP_400_BAD_REQUEST
-            )
+            else (status.HTTP_403_FORBIDDEN if "permission denied" in msg else status.HTTP_400_BAD_REQUEST)
         )
         return JSONResponse(
             status_code=status_code,

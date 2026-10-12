@@ -12,33 +12,23 @@ from tests.integration.content.test_content_source_api import add_membership
 @pytest.mark.asyncio
 async def test_content_asset_api_lifecycle_and_deduplication(client) -> None:
     # 1. Admin setup (Tenant A)
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"asset-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"asset-admin-{uuid4()}@example.com")
     tenant_a_id, tenant_a_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, tenant_a_slug)
 
     # 2. Lecturer setup (Tenant A)
-    lecturer_a_id, lecturer_a_token = await register_and_authenticate(
-        client, f"asset-lecturer-a-{uuid4()}@example.com"
-    )
+    lecturer_a_id, lecturer_a_token = await register_and_authenticate(client, f"asset-lecturer-a-{uuid4()}@example.com")
     await add_membership(lecturer_a_id, tenant_a_id, "lecturer")
     lecturer_a_headers = headers(lecturer_a_token, tenant_a_slug)
 
     # 3. Student setup (Tenant A)
-    student_id, student_token = await register_and_authenticate(
-        client, f"asset-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"asset-student-{uuid4()}@example.com")
     await add_membership(student_id, tenant_a_id, "student")
     student_headers = headers(student_token, tenant_a_slug)
 
     # 4. Lecturer in Tenant B
-    lecturer_b_id, lecturer_b_token = await register_and_authenticate(
-        client, f"asset-lecturer-b-{uuid4()}@example.com"
-    )
-    tenant_b_id, tenant_b_slug, _, _ = await seed_tenant_context(
-        lecturer_b_id, "lecturer"
-    )
+    lecturer_b_id, lecturer_b_token = await register_and_authenticate(client, f"asset-lecturer-b-{uuid4()}@example.com")
+    tenant_b_id, tenant_b_slug, _, _ = await seed_tenant_context(lecturer_b_id, "lecturer")
     lecturer_b_headers = headers(lecturer_b_token, tenant_b_slug)
 
     # 5. Create ContentSource in Tenant A
@@ -151,9 +141,7 @@ async def test_content_asset_api_lifecycle_and_deduplication(client) -> None:
     assert get_res.json()["data"]["id"] == asset_1_id
 
     # 11. Foreign lecturer attempts GET on Tenant A asset -> 404 Not Found (tenant-isolated)
-    foreign_get = client.get(
-        f"/content/assets/{asset_1_id}", headers=lecturer_b_headers
-    )
+    foreign_get = client.get(f"/content/assets/{asset_1_id}", headers=lecturer_b_headers)
     assert foreign_get.status_code == 404
 
     # 12. Versioning: Lecturer A uploads v2 of the document
@@ -178,16 +166,12 @@ async def test_content_asset_api_lifecycle_and_deduplication(client) -> None:
     assert v2_data["status"] == "active"
 
     # Parent asset is now superseded
-    parent_check = client.get(
-        f"/content/assets/{asset_1_id}", headers=lecturer_a_headers
-    )
+    parent_check = client.get(f"/content/assets/{asset_1_id}", headers=lecturer_a_headers)
     assert parent_check.status_code == 200
     assert parent_check.json()["data"]["status"] == "superseded"
 
     # 13. List assets for source A -> returns both v1 and v2
-    list_res = client.get(
-        f"/content/sources/{source_a_id}/assets", headers=student_headers
-    )
+    list_res = client.get(f"/content/sources/{source_a_id}/assets", headers=student_headers)
     assert list_res.status_code == 200
     listed_assets = list_res.json()["data"]
     assert len(listed_assets) == 2

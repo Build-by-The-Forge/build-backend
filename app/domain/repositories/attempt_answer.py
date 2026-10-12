@@ -12,9 +12,7 @@ class AttemptAnswerRepository(Protocol):
     ) -> AttemptAnswer | None:
         raise NotImplementedError
 
-    async def list_by_attempt(
-        self, attempt_id: str, tenant_id: str
-    ) -> list[AttemptAnswer]:
+    async def list_by_attempt(self, attempt_id: str, tenant_id: str) -> list[AttemptAnswer]:
         raise NotImplementedError
 
     async def save(self, answer: AttemptAnswer) -> AttemptAnswer:

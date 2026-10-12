@@ -43,9 +43,7 @@ service = build_container().get(InstitutionalAdoptionService)
 async def adopt_benchmark(
     payload: AdoptBenchmarkRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         adoption = await service.adopt_benchmark(
@@ -58,9 +56,7 @@ async def adopt_benchmark(
             notes=payload.notes,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -77,9 +73,7 @@ async def adopt_benchmark(
 async def list_adoptions(
     request: Request,
     programme_id: str | None = None,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     adoptions = await service.list_adoptions(
         tenant_id=context.tenant_id,
@@ -100,9 +94,7 @@ async def list_adoptions(
 async def get_adoption(
     adoption_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     try:
         adoption, overrides = await service.get_adoption_detail(
@@ -110,9 +102,7 @@ async def get_adoption(
             tenant_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -132,9 +122,7 @@ async def get_adoption(
 async def activate_adoption(
     adoption_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         adoption, superseded = await service.activate_adoption(
@@ -143,9 +131,7 @@ async def activate_adoption(
             actor_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -153,15 +139,9 @@ async def activate_adoption(
             "success": True,
             "data": {
                 "activated": _adoption_payload(adoption),
-                "superseded": (
-                    _adoption_payload(superseded) if superseded is not None else None
-                ),
+                "superseded": (_adoption_payload(superseded) if superseded is not None else None),
             },
-            "meta": {
-                "superseded_adoption_id": (
-                    superseded.id if superseded is not None else None
-                )
-            },
+            "meta": {"superseded_adoption_id": (superseded.id if superseded is not None else None)},
             "request_id": getattr(request.state, "request_id", None),
         },
     )
@@ -172,9 +152,7 @@ async def add_override(
     adoption_id: str,
     payload: CreateOverrideRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         override = await service.add_override(
@@ -191,9 +169,7 @@ async def add_override(
             custom_payload=payload.custom_payload,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -211,9 +187,7 @@ async def remove_override(
     adoption_id: str,
     override_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         deleted = await service.remove_override(
@@ -222,9 +196,7 @@ async def remove_override(
             tenant_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     if not deleted:
         raise HTTPException(
@@ -247,9 +219,7 @@ async def remove_override(
 async def get_effective_curriculum_by_adoption(
     adoption_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     try:
         effective = await service.get_effective_curriculum(
@@ -257,9 +227,7 @@ async def get_effective_curriculum_by_adoption(
             tenant_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -289,9 +257,7 @@ async def get_active_effective_curriculum_student(
             academic_session_id=academic_session_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

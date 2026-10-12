@@ -30,22 +30,14 @@ class SaveAttemptAnswerHandler:
             raise LookupError("attempt not found")
         attempt.ensure_answer_mutation_allowed()
 
-        snapshots = await self.assessments.list_question_snapshots(
-            attempt.assessment_id, tenant_id=command.tenant_id
-        )
+        snapshots = await self.assessments.list_question_snapshots(attempt.assessment_id, tenant_id=command.tenant_id)
         snapshot = next(
-            (
-                item
-                for item in snapshots
-                if item.assessment_question_id == command.assessment_question_id
-            ),
+            (item for item in snapshots if item.assessment_question_id == command.assessment_question_id),
             None,
         )
         if snapshot is None:
             raise LookupError("assessment question not found")
-        if command.selected_option_index < 0 or command.selected_option_index >= len(
-            snapshot.options
-        ):
+        if command.selected_option_index < 0 or command.selected_option_index >= len(snapshot.options):
             raise ValueError("selected_option_index is outside the valid option range")
 
         answer = await self.answers.get_by_attempt_and_question(
@@ -61,22 +53,16 @@ class SaveAttemptAnswerHandler:
                 selected_option_index=command.selected_option_index,
             )
         else:
-            answer.update_selection(
-                command.selected_option_index, option_count=len(snapshot.options)
-            )
+            answer.update_selection(command.selected_option_index, option_count=len(snapshot.options))
         return await self.answers.save(answer)
 
 
 class GetAttemptAnswersHandler:
-    def __init__(
-        self, attempts: AttemptRepository, answers: AttemptAnswerRepository
-    ) -> None:
+    def __init__(self, attempts: AttemptRepository, answers: AttemptAnswerRepository) -> None:
         self.attempts = attempts
         self.answers = answers
 
-    async def handle(
-        self, command: GetAttemptAnswersCommand
-    ) -> list[AttemptAnswer] | None:
+    async def handle(self, command: GetAttemptAnswersCommand) -> list[AttemptAnswer] | None:
         attempt = await self.attempts.get_by_id(
             command.attempt_id,
             tenant_id=command.tenant_id,
@@ -88,9 +74,7 @@ class GetAttemptAnswersHandler:
 
 
 class DeleteAttemptAnswerHandler:
-    def __init__(
-        self, attempts: AttemptRepository, answers: AttemptAnswerRepository
-    ) -> None:
+    def __init__(self, attempts: AttemptRepository, answers: AttemptAnswerRepository) -> None:
         self.attempts = attempts
         self.answers = answers
 

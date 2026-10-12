@@ -140,9 +140,7 @@ def seed():
 
         faculty_map = {}
         for name, slug in FACULTIES:
-            f = Faculty.create(
-                tenant_id=tenant.id, name=FacultyName(name), slug=FacultySlug(slug)
-            )
+            f = Faculty.create(tenant_id=tenant.id, name=FacultyName(name), slug=FacultySlug(slug))
             uow.faculties.add(f)
             faculty_map[slug] = f
             log.info(" Faculty %s - %s", slug, name)

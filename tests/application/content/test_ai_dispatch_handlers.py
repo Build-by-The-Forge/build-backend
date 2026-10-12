@@ -43,9 +43,7 @@ class FakeAIGateway:
         self.actors: list[IngestionDispatchActor] = []
         self.error = error
 
-    async def dispatch_ingestion_job(
-        self, job, asset, source, actor
-    ) -> AIServiceDispatchResult:
+    async def dispatch_ingestion_job(self, job, asset, source, actor) -> AIServiceDispatchResult:
         self.dispatched_jobs.append(job.id)
         self.actors.append(actor)
         if self.error is not None:
@@ -89,16 +87,12 @@ async def test_dispatch_ingestion_handler() -> None:
 
     # 1. Create job
     create_handler = CreateIngestionJobHandler(uow, bus)
-    job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1")
-    )
+    job = await create_handler.handle(CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1"))
     assert job.status == IngestionStatus.QUEUED
 
     # 2. Dispatch job
     dispatch_handler = DispatchIngestionJobHandler(uow, gateway, bus)
-    dispatched_job = await dispatch_handler.handle(
-        dispatch_cmd(job.id)
-    )
+    dispatched_job = await dispatch_handler.handle(dispatch_cmd(job.id))
 
     assert dispatched_job.status == IngestionStatus.PROCESSING
     assert dispatched_job.current_stage == "dispatched_to_ai"
@@ -149,12 +143,8 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
     await uow.assets.save_asset(asset)
 
     create_handler = CreateIngestionJobHandler(uow, bus)
-    job = await create_handler.handle(
-        CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1")
-    )
-    await DispatchIngestionJobHandler(uow, gateway, bus).handle(
-        dispatch_cmd(job.id)
-    )
+    job = await create_handler.handle(CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1"))
+    await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
 
     callback_handler = HandleAICallbackHandler(uow, bus)
 
@@ -319,9 +309,7 @@ async def test_dispatch_of_another_tenants_or_platform_job_is_refused(job_tenant
     await uow.jobs.save_job(job)
 
     with pytest.raises(ValueError, match="does not exist"):
-        await DispatchIngestionJobHandler(uow, gateway, bus).handle(
-            dispatch_cmd(job.id)
-        )
+        await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
 
     assert gateway.dispatched_jobs == []
     assert job.status == IngestionStatus.QUEUED
@@ -358,9 +346,7 @@ async def test_failed_dispatch_is_recorded_not_raised(retryable) -> None:
         created_by_email="u@example.com",
     )
     await uow.sources.save_source(source)
-    job = ContentIngestionJob.create(
-        asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1"
-    )
+    job = ContentIngestionJob.create(asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1")
     job.queue()
     await uow.jobs.save_job(job)
 
@@ -377,9 +363,7 @@ async def test_failed_dispatch_is_recorded_not_raised(retryable) -> None:
 async def test_callback_for_another_tenants_or_platform_job_changes_nothing(job_tenant) -> None:
     """A signed callback for tenant-1 cannot touch a job it does not own (B.3 step 3)."""
     uow, bus = FakeContentUnitOfWork(), EventBus()
-    job = ContentIngestionJob.create(
-        asset_id="asset-x", source_id="src-x", tenant_id=job_tenant, created_by="usr-1"
-    )
+    job = ContentIngestionJob.create(asset_id="asset-x", source_id="src-x", tenant_id=job_tenant, created_by="usr-1")
     job.queue()
     job.record_dispatch(external_task_id="task-x")
     await uow.jobs.save_job(job)
@@ -453,9 +437,7 @@ async def test_missing_evidence_changes_and_consumes_nothing() -> None:
     uow, bus = FakeContentUnitOfWork(), EventBus()
     job = await _dispatched_job(uow)
     with pytest.raises(InvalidStageEvidence):
-        await HandleAICallbackHandler(uow, bus).handle(
-            _cb(job, "evt-x", "stage_progress", "extracted", metrics={"pages": 2})
-        )
+        await HandleAICallbackHandler(uow, bus).handle(_cb(job, "evt-x", "stage_progress", "extracted", metrics={"pages": 2}))
     assert job.status == IngestionStatus.PROCESSING
     assert uow.ingestion_events.records == {}
 
@@ -502,9 +484,7 @@ async def test_a_retried_job_is_not_dispatched_before_its_delay() -> None:
         created_by_email="u@example.com",
     )
     await uow.assets.save_asset(asset)
-    job = ContentIngestionJob.create(
-        asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1"
-    )
+    job = ContentIngestionJob.create(asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1")
     job.queue()
     job.record_dispatch("task-1")
     job.fail_processing("TIMEOUT", "t", is_retryable=True)
@@ -540,9 +520,7 @@ async def test_same_event_id_with_different_content_is_a_conflict() -> None:
     assert (await handler.handle(first))[1] is CallbackOutcome.APPLIED
     assert (await handler.handle(first))[1] is CallbackOutcome.DUPLICATE
 
-    forged = _cb(
-        job, "evt-1", "stage_progress", "extracted", metrics={**EXTRACTED_EVIDENCE, "pages": 99}
-    )
+    forged = _cb(job, "evt-1", "stage_progress", "extracted", metrics={**EXTRACTED_EVIDENCE, "pages": 99})
     assert (await handler.handle(forged))[1] is CallbackOutcome.CONFLICT
     assert job.metrics["pages"] == 2
     assert [e for e, _ in security.events] == [SecurityEvent.AI_CALLBACK_EVENT_CONFLICT]

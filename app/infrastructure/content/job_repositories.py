@@ -23,9 +23,7 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         self._session = session
 
     async def save_job(self, job: ContentIngestionJob) -> ContentIngestionJob:
-        stmt = select(ContentIngestionJobModel).where(
-            ContentIngestionJobModel.id == job.id
-        )
+        stmt = select(ContentIngestionJobModel).where(ContentIngestionJobModel.id == job.id)
         res = await self._session.execute(stmt)
         model = res.scalar_one_or_none()
 
@@ -39,27 +37,19 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         return content_job_model_to_domain(model)
 
     async def get_job_by_id(self, job_id: str) -> ContentIngestionJob | None:
-        stmt = select(ContentIngestionJobModel).where(
-            ContentIngestionJobModel.id == job_id
-        )
+        stmt = select(ContentIngestionJobModel).where(ContentIngestionJobModel.id == job_id)
         res = await self._session.execute(stmt)
         model = res.scalar_one_or_none()
         return content_job_model_to_domain(model) if model else None
 
     async def get_job_for_update(self, job_id: str) -> ContentIngestionJob | None:
         # SELECT ... FOR UPDATE on PostgreSQL; SQLite ignores the lock.
-        stmt = (
-            select(ContentIngestionJobModel)
-            .where(ContentIngestionJobModel.id == job_id)
-            .with_for_update()
-        )
+        stmt = select(ContentIngestionJobModel).where(ContentIngestionJobModel.id == job_id).with_for_update()
         res = await self._session.execute(stmt)
         model = res.scalar_one_or_none()
         return content_job_model_to_domain(model) if model else None
 
-    async def get_latest_job_for_asset(
-        self, asset_id: str
-    ) -> ContentIngestionJob | None:
+    async def get_latest_job_for_asset(self, asset_id: str) -> ContentIngestionJob | None:
         stmt = (
             select(ContentIngestionJobModel)
             .where(ContentIngestionJobModel.asset_id == asset_id)
@@ -73,12 +63,8 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         model = res.scalar_one_or_none()
         return content_job_model_to_domain(model) if model else None
 
-    async def list_jobs_for_asset(
-        self, asset_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentIngestionJob], int]:
-        base = select(ContentIngestionJobModel).where(
-            ContentIngestionJobModel.asset_id == asset_id
-        )
+    async def list_jobs_for_asset(self, asset_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentIngestionJob], int]:
+        base = select(ContentIngestionJobModel).where(ContentIngestionJobModel.asset_id == asset_id)
         count_stmt = select(func.count()).select_from(base.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
@@ -93,9 +79,7 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_job_model_to_domain(m) for m in models], total
 
-    async def list_pending_jobs(
-        self, tenant_id: str | None = None, limit: int = 50
-    ) -> list[ContentIngestionJob]:
+    async def list_pending_jobs(self, tenant_id: str | None = None, limit: int = 50) -> list[ContentIngestionJob]:
         now = datetime.now(timezone.utc)
         stmt = select(ContentIngestionJobModel).where(
             or_(
@@ -142,11 +126,7 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
-        stmt = (
-            stmt.order_by(ContentIngestionJobModel.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = stmt.order_by(ContentIngestionJobModel.created_at.desc()).limit(limit).offset(offset)
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_job_model_to_domain(m) for m in models], total
 

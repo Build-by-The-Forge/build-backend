@@ -22,9 +22,7 @@ service = container.get(QuestionService)
 async def create_question(
     request: Request,
     payload: CreateQuestionRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_QUESTION_CREATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_QUESTION_CREATE)),
 ) -> JSONResponse:
     try:
         question = await service.create_question(
@@ -50,9 +48,7 @@ async def create_question(
         )
 
     if question is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="question not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -64,9 +60,7 @@ async def create_question(
                 learning_outcome_id=question.learning_outcome_id,
                 question_type=question.question_type.value,
                 prompt=question.prompt.value,
-                explanation=(
-                    question.explanation.value if question.explanation else None
-                ),
+                explanation=(question.explanation.value if question.explanation else None),
                 difficulty=question.difficulty.value,
                 marks=question.marks.value,
                 status=question.status.value,
@@ -94,9 +88,7 @@ async def get_question(
 ) -> JSONResponse:
     question = await service.get_question(question_id, tenant_id=context.tenant_id)
     if question is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="question not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -108,9 +100,7 @@ async def get_question(
                 learning_outcome_id=question.learning_outcome_id,
                 question_type=question.question_type.value,
                 prompt=question.prompt.value,
-                explanation=(
-                    question.explanation.value if question.explanation else None
-                ),
+                explanation=(question.explanation.value if question.explanation else None),
                 difficulty=question.difficulty.value,
                 marks=question.marks.value,
                 status=question.status.value,
@@ -135,9 +125,7 @@ async def update_question(
     question_id: str,
     request: Request,
     payload: UpdateQuestionRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_QUESTION_UPDATE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_QUESTION_UPDATE)),
 ) -> JSONResponse:
     question = await service.update_question(
         question_id=question_id,
@@ -148,9 +136,7 @@ async def update_question(
         marks=payload.marks,
     )
     if question is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="question not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -162,9 +148,7 @@ async def update_question(
                 learning_outcome_id=question.learning_outcome_id,
                 question_type=question.question_type.value,
                 prompt=question.prompt.value,
-                explanation=(
-                    question.explanation.value if question.explanation else None
-                ),
+                explanation=(question.explanation.value if question.explanation else None),
                 difficulty=question.difficulty.value,
                 marks=question.marks.value,
                 status=question.status.value,
@@ -188,15 +172,11 @@ async def update_question(
 async def publish_question(
     question_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_QUESTION_PUBLISH)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_QUESTION_PUBLISH)),
 ) -> JSONResponse:
     question = await service.publish_question(question_id, tenant_id=context.tenant_id)
     if question is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="question not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -213,15 +193,11 @@ async def publish_question(
 async def archive_question(
     question_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_QUESTION_ARCHIVE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_QUESTION_ARCHIVE)),
 ) -> JSONResponse:
     question = await service.archive_question(question_id, tenant_id=context.tenant_id)
     if question is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="question not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

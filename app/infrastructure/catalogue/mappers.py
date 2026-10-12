@@ -63,17 +63,13 @@ def topic_to_model(topic: Topic, model: TopicModel | None = None) -> TopicModel:
     model.sequence = int(topic.sequence.value)
     model.title = topic.title.value
     model.slug = topic.slug.value
-    model.description = (
-        topic.description.value if topic.description is not None else None
-    )
+    model.description = topic.description.value if topic.description is not None else None
     model.level = topic.level.value
     model.status = topic.status.value
     model.created_at = topic.created_at
     model.updated_at = topic.updated_at
 
-    existing_outcomes = {
-        outcome.id: outcome for outcome in model.learning_outcomes or []
-    }
+    existing_outcomes = {outcome.id: outcome for outcome in model.learning_outcomes or []}
     model.learning_outcomes = [
         learning_outcome_to_model(
             outcome,
@@ -118,10 +114,7 @@ def course_to_model(course: Course, model: CourseModel | None = None) -> CourseM
     model.updated_at = course.updated_at
 
     existing_topics = {topic.id: topic for topic in model.topics or []}
-    model.topics = [
-        topic_to_model(topic, model=existing_topics.get(topic.id.value))
-        for topic in course.topics
-    ]
+    model.topics = [topic_to_model(topic, model=existing_topics.get(topic.id.value)) for topic in course.topics]
 
     existing_refs = {ref.id: ref for ref in model.reference_materials or []}
     model.reference_materials = [
@@ -153,16 +146,10 @@ def topic_model_to_domain(model: TopicModel) -> Topic:
         sequence=TopicSequence(model.sequence),
         title=TopicTitle(model.title),
         slug=TopicSlug(model.slug),
-        description=(
-            TopicDescription(model.description)
-            if model.description is not None
-            else None
-        ),
+        description=(TopicDescription(model.description) if model.description is not None else None),
         level=TopicLevel(model.level),
         status=TopicStatus(model.status),
-        learning_outcomes=[
-            learning_outcome_model_to_domain(lo) for lo in model.learning_outcomes
-        ],
+        learning_outcomes=[learning_outcome_model_to_domain(lo) for lo in model.learning_outcomes],
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
@@ -196,9 +183,7 @@ def course_to_domain(model: CourseModel) -> Course:
         status=CourseStatus(model.status),
         description=model.description,
         topics=[topic_model_to_domain(topic) for topic in model.topics],
-        references=[
-            reference_material_model_to_domain(ref) for ref in model.reference_materials
-        ],
+        references=[reference_material_model_to_domain(ref) for ref in model.reference_materials],
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

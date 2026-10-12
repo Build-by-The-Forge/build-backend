@@ -79,16 +79,12 @@ class ContentSourceService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                source = await RegisterContentSourceHandler(
-                    uow.sources, self.event_bus
-                ).handle(command)
+                source = await RegisterContentSourceHandler(uow.sources, self.event_bus).handle(command)
                 events = source.pull_events()
             self._publish_events(events)
             return source
 
-        source = await RegisterContentSourceHandler(
-            self._required_repository(), self.event_bus
-        ).handle(command)
+        source = await RegisterContentSourceHandler(self._required_repository(), self.event_bus).handle(command)
         self._publish_events(source.pull_events())
         return source
 
@@ -115,16 +111,12 @@ class ContentSourceService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                source = await UpdateContentSourceHandler(
-                    uow.sources, self.event_bus
-                ).handle(command)
+                source = await UpdateContentSourceHandler(uow.sources, self.event_bus).handle(command)
                 events = source.pull_events()
             self._publish_events(events)
             return source
 
-        source = await UpdateContentSourceHandler(
-            self._required_repository(), self.event_bus
-        ).handle(command)
+        source = await UpdateContentSourceHandler(self._required_repository(), self.event_bus).handle(command)
         self._publish_events(source.pull_events())
         return source
 
@@ -132,16 +124,12 @@ class ContentSourceService:
         command = DeprecateContentSourceCommand(source_id=source_id, reason=reason)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                source = await DeprecateContentSourceHandler(
-                    uow.sources, self.event_bus
-                ).handle(command)
+                source = await DeprecateContentSourceHandler(uow.sources, self.event_bus).handle(command)
                 events = source.pull_events()
             self._publish_events(events)
             return source
 
-        source = await DeprecateContentSourceHandler(
-            self._required_repository(), self.event_bus
-        ).handle(command)
+        source = await DeprecateContentSourceHandler(self._required_repository(), self.event_bus).handle(command)
         self._publish_events(source.pull_events())
         return source
 
@@ -149,16 +137,12 @@ class ContentSourceService:
         command = RevokeContentSourceCommand(source_id=source_id, reason=reason)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                source = await RevokeContentSourceHandler(
-                    uow.sources, self.event_bus
-                ).handle(command)
+                source = await RevokeContentSourceHandler(uow.sources, self.event_bus).handle(command)
                 events = source.pull_events()
             self._publish_events(events)
             return source
 
-        source = await RevokeContentSourceHandler(
-            self._required_repository(), self.event_bus
-        ).handle(command)
+        source = await RevokeContentSourceHandler(self._required_repository(), self.event_bus).handle(command)
         self._publish_events(source.pull_events())
         return source
 
@@ -166,16 +150,12 @@ class ContentSourceService:
         command = ActivateContentSourceCommand(source_id=source_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                source = await ActivateContentSourceHandler(
-                    uow.sources, self.event_bus
-                ).handle(command)
+                source = await ActivateContentSourceHandler(uow.sources, self.event_bus).handle(command)
                 events = source.pull_events()
             self._publish_events(events)
             return source
 
-        source = await ActivateContentSourceHandler(
-            self._required_repository(), self.event_bus
-        ).handle(command)
+        source = await ActivateContentSourceHandler(self._required_repository(), self.event_bus).handle(command)
         self._publish_events(source.pull_events())
         return source
 
@@ -208,9 +188,7 @@ class ContentSourceService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await ListContentSourcesHandler(uow.sources).handle(query)
-        return await ListContentSourcesHandler(self._required_repository()).handle(
-            query
-        )
+        return await ListContentSourcesHandler(self._required_repository()).handle(query)
 
     def _required_repository(self) -> ContentSourceRepository:
         if self.repository is None:

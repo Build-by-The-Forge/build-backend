@@ -15,23 +15,17 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_curriculum_source_api_lifecycle_and_rbac(client) -> None:
     # 1. Admin setup
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"curriculum-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"curriculum-admin-{uuid4()}@example.com")
     admin_tenant_id, admin_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, admin_slug)
 
     # 2. Lecturer setup
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"curriculum-lecturer-{uuid4()}@example.com"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"curriculum-lecturer-{uuid4()}@example.com")
     _, lecturer_slug, _, _ = await seed_tenant_context(lecturer_id, "lecturer")
     lecturer_headers = headers(lecturer_token, lecturer_slug)
 
     # 3. Student setup
-    student_id, student_token = await register_and_authenticate(
-        client, f"curriculum-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"curriculum-student-{uuid4()}@example.com")
     _, student_slug, _, _ = await seed_tenant_context(student_id, "student")
     student_headers = headers(student_token, student_slug)
 
@@ -95,9 +89,7 @@ async def test_curriculum_source_api_lifecycle_and_rbac(client) -> None:
     assert any(s["id"] == source_id for s in sources)
 
     # 10. Admin triggers sync -> 202 Accepted
-    sync_res = client.post(
-        f"/curriculum/sources/{source_id}/sync", headers=admin_headers
-    )
+    sync_res = client.post(f"/curriculum/sources/{source_id}/sync", headers=admin_headers)
     assert sync_res.status_code == 202
     sync_data = sync_res.json()["data"]
     assert "job_id" in sync_data
@@ -113,9 +105,7 @@ async def test_curriculum_source_api_lifecycle_and_rbac(client) -> None:
         raw_artifact_uri="s3://build-artifacts/ccmas/csc.pdf",
     )
 
-    snap_list_res = client.get(
-        f"/curriculum/sources/{source_id}/snapshots", headers=lecturer_headers
-    )
+    snap_list_res = client.get(f"/curriculum/sources/{source_id}/snapshots", headers=lecturer_headers)
     assert snap_list_res.status_code == 200
     snapshots_data = snap_list_res.json()
     assert snapshots_data["meta"]["total"] == 1

@@ -70,9 +70,7 @@ def redact(value: Any) -> Any:
     if isinstance(value, str):
         return redact_text(value)
     if isinstance(value, Mapping):
-        return {
-            k: REDACTED if _is_sensitive_key(k) else redact(v) for k, v in value.items()
-        }
+        return {k: REDACTED if _is_sensitive_key(k) else redact(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return type(value)(redact(v) for v in value)
     return value

@@ -56,9 +56,7 @@ class SqlAlchemyInstitutionalAdoptionRepository(InstitutionalAdoptionRepository)
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def save_adoption(
-        self, adoption: InstitutionalAdoption
-    ) -> InstitutionalAdoption:
+    async def save_adoption(self, adoption: InstitutionalAdoption) -> InstitutionalAdoption:
         model = await self._session.get(InstitutionalAdoptionModel, adoption.id)
         if model is None:
             model = InstitutionalAdoptionModel(
@@ -85,9 +83,7 @@ class SqlAlchemyInstitutionalAdoptionRepository(InstitutionalAdoptionRepository)
         await self._session.flush()
         return adoption
 
-    async def get_adoption_by_id(
-        self, adoption_id: str
-    ) -> InstitutionalAdoption | None:
+    async def get_adoption_by_id(self, adoption_id: str) -> InstitutionalAdoption | None:
         model = await self._session.get(InstitutionalAdoptionModel, adoption_id)
         return _adoption_to_domain(model) if model is not None else None
 
@@ -103,9 +99,7 @@ class SqlAlchemyInstitutionalAdoptionRepository(InstitutionalAdoptionRepository)
             InstitutionalAdoptionModel.status == AdoptionStatus.ACTIVE.value,
         )
         if academic_session_id is not None:
-            statement = statement.where(
-                InstitutionalAdoptionModel.academic_session_id == academic_session_id
-            )
+            statement = statement.where(InstitutionalAdoptionModel.academic_session_id == academic_session_id)
         model = (await self._session.scalars(statement)).first()
         return _adoption_to_domain(model) if model is not None else None
 
@@ -120,9 +114,7 @@ class SqlAlchemyInstitutionalAdoptionRepository(InstitutionalAdoptionRepository)
             .order_by(InstitutionalAdoptionModel.created_at.desc())
         )
         if programme_id is not None:
-            statement = statement.where(
-                InstitutionalAdoptionModel.programme_id == programme_id
-            )
+            statement = statement.where(InstitutionalAdoptionModel.programme_id == programme_id)
         models = (await self._session.scalars(statement)).all()
         return [_adoption_to_domain(m) for m in models]
 

@@ -20,9 +20,7 @@ def test_benchmark_governance_lifecycle_full_flow() -> None:
     assert curriculum.status == BenchmarkStatus.CANDIDATE
 
     # Direct submission before validation fails
-    with pytest.raises(
-        ValueError, match="only validated benchmarks can be submitted for review"
-    ):
+    with pytest.raises(ValueError, match="only validated benchmarks can be submitted for review"):
         curriculum.submit_for_review()
 
     # 1. Validate

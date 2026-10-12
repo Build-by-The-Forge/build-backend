@@ -44,12 +44,8 @@ async def add_membership(user_id: str, tenant_id: str, role: str) -> None:
 
 @pytest.mark.asyncio
 async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"attempt-lecturer-{uuid4()}@example.com"
-    )
-    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(
-        lecturer_id, "lecturer"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"attempt-lecturer-{uuid4()}@example.com")
+    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(lecturer_id, "lecturer")
     lecturer_headers = headers(lecturer_token, tenant_slug)
 
     from tests.integration.assessment.test_assessment_api import course_id_for_tenant
@@ -95,9 +91,7 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
     )
     assert published.status_code == 200, published.text
 
-    student_id, student_token = await register_and_authenticate(
-        client, f"attempt-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"attempt-student-{uuid4()}@example.com")
     await add_membership(student_id, tenant_id, "student")
     student_headers = headers(student_token, tenant_slug)
 
@@ -116,9 +110,7 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
     assert resumed.status_code == 201
     assert resumed.json()["data"]["id"] == attempt_id
 
-    retrieved = client.get(
-        f"/assessment/attempts/{attempt_id}", headers=student_headers
-    )
+    retrieved = client.get(f"/assessment/attempts/{attempt_id}", headers=student_headers)
     assert retrieved.status_code == 200
     assert retrieved.json()["data"]["user_id"] == student_id
 
@@ -126,9 +118,7 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["data"]] == [attempt_id]
 
-    delivered = client.get(
-        f"/assessment/attempts/{attempt_id}/questions", headers=student_headers
-    )
+    delivered = client.get(f"/assessment/attempts/{attempt_id}/questions", headers=student_headers)
     assert delivered.status_code == 200, delivered.text
     delivered_data = delivered.json()["data"]
     assert delivered_data["assessment_id"] == assessment_id
@@ -142,20 +132,14 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
     assert "answer_key" not in delivered.text
     assert "score" not in delivered.text
 
-    submitted = client.post(
-        f"/assessment/attempts/{attempt_id}/submit", headers=student_headers
-    )
+    submitted = client.post(f"/assessment/attempts/{attempt_id}/submit", headers=student_headers)
     assert submitted.status_code == 200
     assert submitted.json()["data"]["status"] == "submitted"
 
-    unavailable = client.get(
-        f"/assessment/attempts/{attempt_id}/questions", headers=student_headers
-    )
+    unavailable = client.get(f"/assessment/attempts/{attempt_id}/questions", headers=student_headers)
     assert unavailable.status_code == 404
 
-    duplicate = client.post(
-        f"/assessment/attempts/{attempt_id}/submit", headers=student_headers
-    )
+    duplicate = client.post(f"/assessment/attempts/{attempt_id}/submit", headers=student_headers)
     assert duplicate.status_code == 409
 
 
@@ -168,9 +152,7 @@ async def test_attempt_api_requires_authentication(client) -> None:
 
 @pytest.mark.asyncio
 async def test_student_cannot_start_unpublished_assessment(client) -> None:
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"attempt-draft-lecturer-{uuid4()}@example.com"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"attempt-draft-lecturer-{uuid4()}@example.com")
     tenant_id, tenant_slug, _, _ = await seed_tenant_context(lecturer_id, "lecturer")
     from tests.integration.assessment.test_assessment_api import course_id_for_tenant
 
@@ -186,9 +168,7 @@ async def test_student_cannot_start_unpublished_assessment(client) -> None:
         },
     )
     assert assessment.status_code == 201
-    student_id, student_token = await register_and_authenticate(
-        client, f"attempt-draft-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"attempt-draft-student-{uuid4()}@example.com")
     await add_membership(student_id, tenant_id, "student")
 
     response = client.post(

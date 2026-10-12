@@ -15,9 +15,7 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_benchmark_diff_api_endpoint(client) -> None:
     # 1. Auth setup
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"bm-diff-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"bm-diff-admin-{uuid4()}@example.com")
     _, admin_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, admin_slug)
 

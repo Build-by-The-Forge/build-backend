@@ -38,9 +38,7 @@ from app.infrastructure.security.service_signature import Direction, ServiceKeys
 AI_URL = os.getenv("REAL_AI_SERVICE_URL")
 B2A = os.getenv("REAL_BACKEND_TO_AI_SECRET")
 A2B = os.getenv("REAL_AI_TO_BACKEND_SECRET")
-pytestmark = pytest.mark.skipif(
-    not (AI_URL and B2A and A2B), reason="real AI-service not configured"
-)
+pytestmark = pytest.mark.skipif(not (AI_URL and B2A and A2B), reason="real AI-service not configured")
 
 TENANT_A = "6f1c2a7e-4b3d-4c8e-9a1f-2d3e4f5a6b7c"
 TENANT_B = "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a"
@@ -90,9 +88,7 @@ def material(tenant_id: str = TENANT_A, job_id: str | None = None):
 
 
 def gateway(secret: str | None = None) -> HttpAIServiceIngestionGateway:
-    return HttpAIServiceIngestionGateway(
-        base_url=AI_URL, keys=ServiceKeys(current=secret or B2A or "")
-    )
+    return HttpAIServiceIngestionGateway(base_url=AI_URL, keys=ServiceKeys(current=secret or B2A or ""))
 
 
 @pytest.mark.asyncio
@@ -109,9 +105,7 @@ async def test_real_idempotency_follows_the_signed_tenant() -> None:
 
     async def dispatch(tenant_id: str):
         source, asset, job = material(tenant_id, job_id)
-        return await gateway().dispatch_ingestion_job(
-            job=job, asset=asset, source=source, actor=actor(tenant_id)
-        )
+        return await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(tenant_id))
 
     first = await dispatch(TENANT_A)
     again = await dispatch(TENANT_A)
@@ -125,9 +119,7 @@ async def test_real_idempotency_follows_the_signed_tenant() -> None:
 async def test_real_dispatch_signed_with_the_other_directions_secret_is_refused() -> None:
     source, asset, job = material()
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await gateway(secret=A2B).dispatch_ingestion_job(
-            job=job, asset=asset, source=source, actor=actor()
-        )
+        await gateway(secret=A2B).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
     assert exc_info.value.details == {"status_code": 401}
 
 
@@ -135,9 +127,7 @@ async def test_real_dispatch_signed_with_the_other_directions_secret_is_refused(
 async def test_real_dispatch_without_the_permission_is_refused() -> None:
     source, asset, job = material()
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await gateway().dispatch_ingestion_job(
-            job=job, asset=asset, source=source, actor=actor(permission="ai.use")
-        )
+        await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(permission="ai.use"))
     assert exc_info.value.details == {"status_code": 403}
 
 
@@ -227,9 +217,7 @@ def test_real_bearer_and_unsigned_requests_are_refused() -> None:
 @pytest.mark.asyncio
 async def test_real_task_status_answers_only_the_tasks_tenant() -> None:
     source, asset, job = material()
-    accepted = await gateway().dispatch_ingestion_job(
-        job=job, asset=asset, source=source, actor=actor()
-    )
+    accepted = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
 
     status = await gateway().fetch_job_status(accepted.external_task_id, TENANT_A, "corr-real")
     assert (status.external_task_id, status.job_id, status.run_number, status.attempt_count) == (

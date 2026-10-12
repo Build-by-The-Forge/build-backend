@@ -140,12 +140,8 @@ async def test_question_creation_requires_authentication(client):
 
 @pytest.mark.asyncio
 async def test_lecturer_can_create_read_update_publish_and_archive_question(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"assessment-lecturer-{uuid4()}@example.com"
-    )
-    _, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(
-        user_id, "lecturer"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"assessment-lecturer-{uuid4()}@example.com")
+    _, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(user_id, "lecturer")
 
     payload = {
         "topic_id": topic_id,
@@ -225,9 +221,7 @@ async def test_lecturer_can_create_read_update_publish_and_archive_question(clie
 
 @pytest.mark.asyncio
 async def test_student_cannot_create_question(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"assessment-student-{uuid4()}@example.com"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"assessment-student-{uuid4()}@example.com")
     _, tenant_slug, topic_id, _ = await seed_tenant_context(user_id, "student")
 
     response = client.post(

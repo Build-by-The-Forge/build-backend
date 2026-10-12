@@ -16,9 +16,7 @@ async def test_attempt_round_trip(session: AsyncSession) -> None:
     repository = SqlAlchemyAttemptRepository(session)
     await repository.save(attempt, tenant_id="tenant-123")
 
-    retrieved = await repository.get_by_id(
-        attempt.id, tenant_id="tenant-123", user_id="user-123"
-    )
+    retrieved = await repository.get_by_id(attempt.id, tenant_id="tenant-123", user_id="user-123")
     assert retrieved is not None
     assert retrieved.id == attempt.id
     assert retrieved.status == AttemptStatus.IN_PROGRESS
@@ -37,18 +35,8 @@ async def test_attempt_lookup_enforces_tenant_and_user_scope(
     repository = SqlAlchemyAttemptRepository(session)
     await repository.save(attempt, tenant_id="tenant-123")
 
-    assert (
-        await repository.get_by_id(
-            attempt.id, tenant_id="tenant-999", user_id="user-123"
-        )
-        is None
-    )
-    assert (
-        await repository.get_by_id(
-            attempt.id, tenant_id="tenant-123", user_id="user-999"
-        )
-        is None
-    )
+    assert await repository.get_by_id(attempt.id, tenant_id="tenant-999", user_id="user-123") is None
+    assert await repository.get_by_id(attempt.id, tenant_id="tenant-123", user_id="user-999") is None
 
 
 @pytest.mark.asyncio
@@ -64,9 +52,7 @@ async def test_active_attempt_lookup_and_submitted_history(
     repository = SqlAlchemyAttemptRepository(session)
     await repository.save(active, tenant_id="tenant-123")
 
-    found = await repository.get_active_for_user(
-        "assessment-123", "user-123", "tenant-123"
-    )
+    found = await repository.get_active_for_user("assessment-123", "user-123", "tenant-123")
     assert found is not None
     assert found.id == active.id
 
@@ -74,10 +60,7 @@ async def test_active_attempt_lookup_and_submitted_history(
     active.pull_events()
     await repository.update(active, tenant_id="tenant-123")
 
-    assert (
-        await repository.get_active_for_user("assessment-123", "user-123", "tenant-123")
-        is None
-    )
+    assert await repository.get_active_for_user("assessment-123", "user-123", "tenant-123") is None
     attempts = await repository.list_by_user("user-123", "tenant-123")
     assert len(attempts) == 1
     assert attempts[0].status == AttemptStatus.SUBMITTED

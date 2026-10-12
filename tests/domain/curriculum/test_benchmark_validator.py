@@ -107,10 +107,7 @@ def test_validator_flags_course_without_topics() -> None:
 
     assert result.is_valid is False
     assert result.error_count == 1
-    assert any(
-        i.rule == "NON_EMPTY_TOPICS" and i.entity_identifier == "COS101"
-        for i in result.issues
-    )
+    assert any(i.rule == "NON_EMPTY_TOPICS" and i.entity_identifier == "COS101" for i in result.issues)
 
 
 def test_validator_flags_non_monotonic_topic_sequences() -> None:

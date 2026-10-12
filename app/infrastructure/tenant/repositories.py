@@ -73,12 +73,7 @@ class SqlAlchemyFacultyRepository:
         return faculty_to_domain(m) if m else None
 
     def list_by_tenant(self, tenant_id: str) -> List[Faculty]:
-        return [
-            faculty_to_domain(m)
-            for m in self.session.query(FacultyModel)
-            .filter_by(tenant_id=tenant_id)
-            .all()
-        ]
+        return [faculty_to_domain(m) for m in self.session.query(FacultyModel).filter_by(tenant_id=tenant_id).all()]
 
 
 class SqlAlchemyDepartmentRepository:
@@ -93,16 +88,10 @@ class SqlAlchemyDepartmentRepository:
         return department_to_domain(m) if m else None
 
     def list_by_faculty(self, fid: str) -> List[Department]:
-        return [
-            department_to_domain(m)
-            for m in self.session.query(DepartmentModel).filter_by(faculty_id=fid).all()
-        ]
+        return [department_to_domain(m) for m in self.session.query(DepartmentModel).filter_by(faculty_id=fid).all()]
 
     def list_by_tenant(self, tid: str) -> List[Department]:
-        return [
-            department_to_domain(m)
-            for m in self.session.query(DepartmentModel).filter_by(tenant_id=tid).all()
-        ]
+        return [department_to_domain(m) for m in self.session.query(DepartmentModel).filter_by(tenant_id=tid).all()]
 
 
 class SqlAlchemyProgrammeRepository:
@@ -113,12 +102,7 @@ class SqlAlchemyProgrammeRepository:
         self.session.add(programme_to_model(p))
 
     def list_by_department(self, dept_id: str) -> List[Programme]:
-        return [
-            programme_to_domain(m)
-            for m in self.session.query(ProgrammeModel)
-            .filter_by(department_id=dept_id)
-            .all()
-        ]
+        return [programme_to_domain(m) for m in self.session.query(ProgrammeModel).filter_by(department_id=dept_id).all()]
 
 
 class SqlAlchemyLevelRepository:
@@ -129,10 +113,7 @@ class SqlAlchemyLevelRepository:
         self.session.add(level_to_model(level))
 
     def list_by_tenant(self, tid: str) -> List[Level]:
-        return [
-            level_to_domain(m)
-            for m in self.session.query(LevelModel).filter_by(tenant_id=tid).all()
-        ]
+        return [level_to_domain(m) for m in self.session.query(LevelModel).filter_by(tenant_id=tid).all()]
 
 
 class SqlAlchemyAcademicSessionRepository:
@@ -143,19 +124,10 @@ class SqlAlchemyAcademicSessionRepository:
         self.session.add(session_to_model(s))
 
     def list_by_tenant(self, tid: str) -> List[AcademicSession]:
-        return [
-            session_to_domain(m)
-            for m in self.session.query(AcademicSessionModel)
-            .filter_by(tenant_id=tid)
-            .all()
-        ]
+        return [session_to_domain(m) for m in self.session.query(AcademicSessionModel).filter_by(tenant_id=tid).all()]
 
     def get_current(self, tid: str) -> Optional[AcademicSession]:
-        m = (
-            self.session.query(AcademicSessionModel)
-            .filter_by(tenant_id=tid, is_current=True)
-            .first()
-        )
+        m = self.session.query(AcademicSessionModel).filter_by(tenant_id=tid, is_current=True).first()
         return session_to_domain(m) if m else None
 
 
@@ -167,12 +139,7 @@ class SqlAlchemySemesterRepository:
         self.session.add(semester_to_model(s))
 
     def list_by_session(self, sid: str) -> List[Semester]:
-        return [
-            semester_to_domain(m)
-            for m in self.session.query(SemesterModel)
-            .filter_by(academic_session_id=sid)
-            .all()
-        ]
+        return [semester_to_domain(m) for m in self.session.query(SemesterModel).filter_by(academic_session_id=sid).all()]
 
 
 class SqlAlchemyMembershipRepository:
@@ -183,9 +150,5 @@ class SqlAlchemyMembershipRepository:
         self.session.add(membership_to_model(m))
 
     def get_by_tenant_user(self, tid: str, uid: str) -> Optional[Membership]:
-        mod = (
-            self.session.query(MembershipModel)
-            .filter_by(tenant_id=tid, user_id=uid)
-            .first()
-        )
+        mod = self.session.query(MembershipModel).filter_by(tenant_id=tid, user_id=uid).first()
         return membership_to_domain(mod) if mod else None

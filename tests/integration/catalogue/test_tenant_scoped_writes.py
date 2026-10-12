@@ -106,9 +106,7 @@ async def test_course_creation_requires_authentication(client):
 
 @pytest.mark.asyncio
 async def test_course_creation_requires_tenant_context(client):
-    _, access_token = await register_and_authenticate(
-        client, f"write-no-tenant-{uuid4()}@example.com"
-    )
+    _, access_token = await register_and_authenticate(client, f"write-no-tenant-{uuid4()}@example.com")
 
     response = client.post(
         "/catalogue/courses/",
@@ -122,9 +120,7 @@ async def test_course_creation_requires_tenant_context(client):
 
 @pytest.mark.asyncio
 async def test_student_cannot_create_course(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"write-student-{uuid4()}@example.com"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"write-student-{uuid4()}@example.com")
     _, tenant_slug, department_id = await seed_write_context(user_id, "student")
 
     response = client.post(
@@ -142,9 +138,7 @@ async def test_student_cannot_create_course(client):
 
 @pytest.mark.asyncio
 async def test_non_member_cannot_create_course(client):
-    _, access_token = await register_and_authenticate(
-        client, f"write-non-member-{uuid4()}@example.com"
-    )
+    _, access_token = await register_and_authenticate(client, f"write-non-member-{uuid4()}@example.com")
     _, tenant_slug, department_id = await seed_write_context(str(uuid4()), "lecturer")
 
     response = client.post(
@@ -162,12 +156,8 @@ async def test_non_member_cannot_create_course(client):
 
 @pytest.mark.asyncio
 async def test_lecturer_course_is_owned_by_context_tenant(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"write-lecturer-{uuid4()}@example.com"
-    )
-    tenant_id, tenant_slug, department_id = await seed_write_context(
-        user_id, "lecturer"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"write-lecturer-{uuid4()}@example.com")
+    tenant_id, tenant_slug, department_id = await seed_write_context(user_id, "lecturer")
 
     response = client.post(
         "/catalogue/courses/",
@@ -181,9 +171,7 @@ async def test_lecturer_course_is_owned_by_context_tenant(client):
     assert response.status_code == 201
     course_id = response.json()["data"]["id"]
     async with SessionLocal() as session:
-        course = await session.scalar(
-            select(CourseModel).where(CourseModel.id == course_id)
-        )
+        course = await session.scalar(select(CourseModel).where(CourseModel.id == course_id))
 
     assert course is not None
     assert course.tenant_id == tenant_id
@@ -191,12 +179,8 @@ async def test_lecturer_course_is_owned_by_context_tenant(client):
 
 @pytest.mark.asyncio
 async def test_client_tenant_id_is_rejected(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"write-injection-{uuid4()}@example.com"
-    )
-    tenant_id, tenant_slug, department_id = await seed_write_context(
-        user_id, "lecturer"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"write-injection-{uuid4()}@example.com")
+    tenant_id, tenant_slug, department_id = await seed_write_context(user_id, "lecturer")
 
     response = client.post(
         "/catalogue/courses/",

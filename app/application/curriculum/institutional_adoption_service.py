@@ -77,9 +77,7 @@ class InstitutionalAdoptionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                adoption, events = await AdoptBenchmarkCurriculumHandler(
-                    uow.adoptions, uow.benchmarks
-                ).handle(command)
+                adoption, events = await AdoptBenchmarkCurriculumHandler(uow.adoptions, uow.benchmarks).handle(command)
             self._publish_events(events)
             return adoption
 
@@ -119,9 +117,7 @@ class InstitutionalAdoptionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await AddCurriculumOverrideHandler(
-                    uow.adoptions, uow.benchmarks
-                ).handle(command)
+                return await AddCurriculumOverrideHandler(uow.adoptions, uow.benchmarks).handle(command)
 
         return await AddCurriculumOverrideHandler(
             self._required_adoption_repo(),
@@ -141,13 +137,9 @@ class InstitutionalAdoptionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await RemoveCurriculumOverrideHandler(uow.adoptions).handle(
-                    command
-                )
+                return await RemoveCurriculumOverrideHandler(uow.adoptions).handle(command)
 
-        return await RemoveCurriculumOverrideHandler(
-            self._required_adoption_repo()
-        ).handle(command)
+        return await RemoveCurriculumOverrideHandler(self._required_adoption_repo()).handle(command)
 
     async def activate_adoption(
         self,
@@ -162,15 +154,11 @@ class InstitutionalAdoptionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                adoption, superseded, events = await ActivateAdoptionHandler(
-                    uow.adoptions
-                ).handle(command)
+                adoption, superseded, events = await ActivateAdoptionHandler(uow.adoptions).handle(command)
             self._publish_events(events)
             return adoption, superseded
 
-        adoption, superseded, events = await ActivateAdoptionHandler(
-            self._required_adoption_repo()
-        ).handle(command)
+        adoption, superseded, events = await ActivateAdoptionHandler(self._required_adoption_repo()).handle(command)
         self._publish_events(events)
         return adoption, superseded
 
@@ -187,9 +175,7 @@ class InstitutionalAdoptionService:
             async with self.uow_factory() as uow:
                 return await GetAdoptionDetailHandler(uow.adoptions).handle(command)
 
-        return await GetAdoptionDetailHandler(self._required_adoption_repo()).handle(
-            command
-        )
+        return await GetAdoptionDetailHandler(self._required_adoption_repo()).handle(command)
 
     async def list_adoptions(
         self,
@@ -204,9 +190,7 @@ class InstitutionalAdoptionService:
             async with self.uow_factory() as uow:
                 return await ListAdoptionsHandler(uow.adoptions).handle(command)
 
-        return await ListAdoptionsHandler(self._required_adoption_repo()).handle(
-            command
-        )
+        return await ListAdoptionsHandler(self._required_adoption_repo()).handle(command)
 
     async def get_effective_curriculum(
         self,
@@ -219,9 +203,7 @@ class InstitutionalAdoptionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetEffectiveCurriculumByAdoptionHandler(
-                    uow.adoptions, uow.benchmarks
-                ).handle(query)
+                return await GetEffectiveCurriculumByAdoptionHandler(uow.adoptions, uow.benchmarks).handle(query)
 
         return await GetEffectiveCurriculumByAdoptionHandler(
             self._required_adoption_repo(),
@@ -241,9 +223,7 @@ class InstitutionalAdoptionService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetActiveEffectiveCurriculumHandler(
-                    uow.adoptions, uow.benchmarks
-                ).handle(query)
+                return await GetActiveEffectiveCurriculumHandler(uow.adoptions, uow.benchmarks).handle(query)
 
         return await GetActiveEffectiveCurriculumHandler(
             self._required_adoption_repo(),

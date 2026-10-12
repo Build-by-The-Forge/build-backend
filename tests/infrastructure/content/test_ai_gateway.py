@@ -103,9 +103,7 @@ async def test_dispatch_is_signed_and_carries_the_tenant_only_in_the_context() -
         seen.append(request)
         return _accepted()
 
-    result = await _gateway(handler).dispatch_ingestion_job(
-        job=job, asset=asset, source=source, actor=ACTOR
-    )
+    result = await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
     assert (result.external_task_id, result.status) == ("task_9876", "ACCEPTED")
 
     [request] = seen
@@ -211,9 +209,7 @@ async def test_dispatch_without_a_configured_secret_is_refused_before_sending(mo
         sent.append(request)
         return _accepted()
 
-    gateway = HttpAIServiceIngestionGateway(
-        client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    )
+    gateway = HttpAIServiceIngestionGateway(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     with pytest.raises(AIServiceGatewayError) as exc_info:
         await gateway.dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
     assert exc_info.value.error_code == "AI_SERVICE_NOT_CONFIGURED"
@@ -228,9 +224,7 @@ async def test_acceptance_without_a_task_id_is_an_error() -> None:
         return httpx.Response(202, json={"status": "ACCEPTED"})
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(
-            job=job, asset=asset, source=source, actor=ACTOR
-        )
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
     assert exc_info.value.error_code == "AI_SERVICE_BAD_RESPONSE"
 
 
@@ -252,9 +246,7 @@ async def test_failure_classification(status_code, error_code, retryable) -> Non
         return httpx.Response(status_code=status_code, text="no")
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(
-            job=job, asset=asset, source=source, actor=ACTOR
-        )
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
     assert (exc_info.value.error_code, exc_info.value.is_retryable) == (error_code, retryable)
 
 

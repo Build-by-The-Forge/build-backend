@@ -123,9 +123,7 @@ def test_create_snapshot_on_disabled_source_raises() -> None:
     )
     source.disable()
 
-    with pytest.raises(
-        ValueError, match="cannot create snapshot for a disabled curriculum source"
-    ):
+    with pytest.raises(ValueError, match="cannot create snapshot for a disabled curriculum source"):
         source.create_snapshot(
             source_url="https://example.com/csc.pdf",
             content_sha256="a" * 64,
@@ -140,9 +138,7 @@ def test_create_snapshot_invalid_hash() -> None:
         base_url="https://example.com",
     )
 
-    with pytest.raises(
-        ValueError, match="content_sha256 must be a valid 64-character hex string"
-    ):
+    with pytest.raises(ValueError, match="content_sha256 must be a valid 64-character hex string"):
         source.create_snapshot(
             source_url="https://example.com/csc.pdf",
             content_sha256="short-hash",

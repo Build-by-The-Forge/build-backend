@@ -109,8 +109,6 @@ async def test_unreachable_redis_falls_back_without_hanging():
     dead = RedisCounterStore.from_url("redis://127.0.0.1:1/0", timeout_seconds=0.25)
     store = FallbackCounterStore(dead, mode="local")
 
-    counts = await asyncio.wait_for(
-        asyncio.gather(*[store.hit("k", 60) for _ in range(3)]), timeout=5
-    )
+    counts = await asyncio.wait_for(asyncio.gather(*[store.hit("k", 60) for _ in range(3)]), timeout=5)
 
     assert sorted(c for c, _ in counts) == [1, 2, 3]

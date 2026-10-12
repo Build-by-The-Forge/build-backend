@@ -27,16 +27,12 @@ class GetEffectiveCurriculumByAdoptionHandler:
         self.benchmark_repo = benchmark_repo
         self.resolver = EffectiveCurriculumResolver()
 
-    async def handle(
-        self, query: GetEffectiveCurriculumByAdoptionQuery
-    ) -> EffectiveCurriculum:
+    async def handle(self, query: GetEffectiveCurriculumByAdoptionQuery) -> EffectiveCurriculum:
         adoption = await self.adoption_repo.get_adoption_by_id(query.adoption_id)
         if adoption is None or adoption.tenant_id != query.tenant_id:
             raise ValueError("adoption not found")
 
-        benchmark = await self.benchmark_repo.get_by_id(
-            adoption.benchmark_curriculum_id
-        )
+        benchmark = await self.benchmark_repo.get_by_id(adoption.benchmark_curriculum_id)
         if benchmark is None:
             raise ValueError("benchmark curriculum not found")
 
@@ -67,22 +63,16 @@ class GetActiveEffectiveCurriculumHandler:
         self.benchmark_repo = benchmark_repo
         self.resolver = EffectiveCurriculumResolver()
 
-    async def handle(
-        self, query: GetActiveEffectiveCurriculumQuery
-    ) -> EffectiveCurriculum:
+    async def handle(self, query: GetActiveEffectiveCurriculumQuery) -> EffectiveCurriculum:
         adoption = await self.adoption_repo.get_active_adoption(
             tenant_id=query.tenant_id,
             programme_id=query.programme_id,
             academic_session_id=query.academic_session_id,
         )
         if adoption is None:
-            raise ValueError(
-                f"no active curriculum adoption found for programme '{query.programme_id}'"
-            )
+            raise ValueError(f"no active curriculum adoption found for programme '{query.programme_id}'")
 
-        benchmark = await self.benchmark_repo.get_by_id(
-            adoption.benchmark_curriculum_id
-        )
+        benchmark = await self.benchmark_repo.get_by_id(adoption.benchmark_curriculum_id)
         if benchmark is None:
             raise ValueError("benchmark curriculum not found")
 

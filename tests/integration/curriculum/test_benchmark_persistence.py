@@ -56,9 +56,7 @@ async def test_benchmark_curriculum_persistence_round_trip(
     assert retrieved.discipline_group == "Computing"
     assert retrieved.status == BenchmarkStatus.CANDIDATE
 
-    retrieved_by_snap = await benchmark_repo.get_by_snapshot_and_programme(
-        snap.id, "CSC"
-    )
+    retrieved_by_snap = await benchmark_repo.get_by_snapshot_and_programme(snap.id, "CSC")
     assert retrieved_by_snap is not None
     assert retrieved_by_snap.id == curriculum.id
 
@@ -135,9 +133,7 @@ async def test_benchmark_course_tree_persistence_and_filtering(
     assert len(retrieved_c1.topics) == 1
     assert retrieved_c1.topics[0].title == "Software Lifecycle Models"
     assert len(retrieved_c1.topics[0].outcomes) == 1
-    assert (
-        retrieved_c1.topics[0].outcomes[0].bloom_level == BloomTaxonomyLevel.UNDERSTAND
-    )
+    assert retrieved_c1.topics[0].outcomes[0].bloom_level == BloomTaxonomyLevel.UNDERSTAND
 
     # List all courses
     all_courses = await benchmark_repo.list_courses(curriculum.id)
@@ -146,9 +142,7 @@ async def test_benchmark_course_tree_persistence_and_filtering(
     assert all_courses[1].code == "SEN201"
 
     # Filter courses by level
-    lvl100_courses = await benchmark_repo.list_courses(
-        curriculum.id, level=100, semester=1
-    )
+    lvl100_courses = await benchmark_repo.list_courses(curriculum.id, level=100, semester=1)
     assert len(lvl100_courses) == 1
     assert lvl100_courses[0].code == "SEN101"
 

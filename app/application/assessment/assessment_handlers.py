@@ -25,9 +25,7 @@ class CreateAssessmentHandler:
         self.catalogue_repository = catalogue_repository
 
     async def handle(self, command: CreateAssessmentCommand) -> Assessment:
-        course = await self.catalogue_repository.get_by_id(
-            command.course_id, tenant_id=command.tenant_id
-        )
+        course = await self.catalogue_repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
         if course is None:
             raise ValueError("course not found")
         assessment = Assessment.create(
@@ -46,9 +44,7 @@ class GetAssessmentHandler:
         self.repository = repository
 
     async def handle(self, command: GetAssessmentCommand) -> Assessment | None:
-        return await self.repository.get_by_id(
-            command.assessment_id, tenant_id=command.tenant_id
-        )
+        return await self.repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
 
 
 class ListAssessmentsHandler:
@@ -57,9 +53,7 @@ class ListAssessmentsHandler:
 
     async def handle(self, command: ListAssessmentsCommand) -> list[Assessment]:
         if command.course_id is not None:
-            return await self.repository.list_by_course(
-                command.course_id, tenant_id=command.tenant_id
-            )
+            return await self.repository.list_by_course(command.course_id, tenant_id=command.tenant_id)
         return await self.repository.list_all(tenant_id=command.tenant_id)
 
 
@@ -68,9 +62,7 @@ class UpdateAssessmentHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateAssessmentCommand) -> Assessment | None:
-        assessment = await self.repository.get_by_id(
-            command.assessment_id, tenant_id=command.tenant_id
-        )
+        assessment = await self.repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             return None
         assessment.update_details(
@@ -87,9 +79,7 @@ class PublishAssessmentHandler:
         self.repository = repository
 
     async def handle(self, command: PublishAssessmentCommand) -> Assessment | None:
-        assessment = await self.repository.get_by_id(
-            command.assessment_id, tenant_id=command.tenant_id
-        )
+        assessment = await self.repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             return None
         assessment.publish()
@@ -105,25 +95,15 @@ class AddQuestionToAssessmentHandler:
         self.repository = repository
         self.question_repository = question_repository
 
-    async def handle(
-        self, command: AddQuestionToAssessmentCommand
-    ) -> Assessment | None:
-        assessment = await self.repository.get_by_id(
-            command.assessment_id, tenant_id=command.tenant_id
-        )
+    async def handle(self, command: AddQuestionToAssessmentCommand) -> Assessment | None:
+        assessment = await self.repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             return None
-        question = await self.question_repository.get_by_id(
-            command.question_id, tenant_id=command.tenant_id
-        )
+        question = await self.question_repository.get_by_id(command.question_id, tenant_id=command.tenant_id)
         if question is None:
             raise ValueError("question not found")
         correct_idx = next(
-            (
-                index
-                for index, option in enumerate(question.options)
-                if option.is_correct
-            ),
+            (index for index, option in enumerate(question.options) if option.is_correct),
             0,
         )
         assessment.add_question(
@@ -145,12 +125,8 @@ class GetAssessmentResultsHandler:
         self.assessment_repository = assessment_repository
         self.attempt_result_repository = attempt_result_repository
 
-    async def handle(
-        self, command: GetAssessmentResultsCommand
-    ) -> tuple[list[AttemptResult], int] | None:
-        assessment = await self.assessment_repository.get_by_id(
-            command.assessment_id, tenant_id=command.tenant_id
-        )
+    async def handle(self, command: GetAssessmentResultsCommand) -> tuple[list[AttemptResult], int] | None:
+        assessment = await self.assessment_repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             return None
         return await self.attempt_result_repository.list_by_assessment(

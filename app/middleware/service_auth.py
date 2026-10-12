@@ -87,17 +87,13 @@ class ServiceAuthMiddleware:
             # No inbound secret configured (development only): nothing verifies.
             await self._reject(scope, receive, send, 401, "service secret not configured")
             return
-        replay_store = self.replay_store or getattr(
-            scope["app"].state, REPLAY_STORE_STATE_KEY, None
-        )
+        replay_store = self.replay_store or getattr(scope["app"].state, REPLAY_STORE_STATE_KEY, None)
         if replay_store is None:
             await self._reject(scope, receive, send, 503, "no replay store configured")
             return
 
         try:
-            checked = check_headers(
-                direction=self.direction, headers=Headers(scope=scope), now=int(self.clock())
-            )
+            checked = check_headers(direction=self.direction, headers=Headers(scope=scope), now=int(self.clock()))
             target = request_target(
                 scope.get("raw_path") or scope["path"].encode("ascii", "replace"),
                 scope.get("query_string", b""),
@@ -127,9 +123,7 @@ class ServiceAuthMiddleware:
             return
 
         try:
-            fresh = await replay_store.claim(
-                self.receiver, verified.service, verified.request_id
-            )
+            fresh = await replay_store.claim(self.receiver, verified.service, verified.request_id)
         except ReplayStoreUnavailable as exc:
             await self._reject(scope, receive, send, 503, f"replay store unavailable: {exc}")
             return
@@ -158,9 +152,7 @@ class ServiceAuthMiddleware:
             if not message.get("more_body", False):
                 return b"".join(chunks)
 
-    async def _reject(
-        self, scope: Scope, receive: Receive, send: Send, status: int, reason: str
-    ) -> None:
+    async def _reject(self, scope: Scope, receive: Receive, send: Send, status: int, reason: str) -> None:
         logger.warning(
             "service_auth_rejected",
             status_code=status,

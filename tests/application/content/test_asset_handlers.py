@@ -39,9 +39,7 @@ class InMemoryContentSourceRepo:
     async def get_source_by_id(self, source_id: str) -> ContentSource | None:
         return self.sources.get(source_id)
 
-    async def get_source_by_code(
-        self, code: str, tenant_id: str | None = None
-    ) -> ContentSource | None:
+    async def get_source_by_code(self, code: str, tenant_id: str | None = None) -> ContentSource | None:
         for s in self.sources.values():
             if s.code == code and s.tenant_id == tenant_id:
                 return s
@@ -72,18 +70,14 @@ class InMemoryContentAssetRepo:
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         return self.assets.get(asset_id)
 
-    async def get_asset_by_hash(
-        self, content_sha256: str, tenant_id: str | None = None
-    ) -> ContentAsset | None:
+    async def get_asset_by_hash(self, content_sha256: str, tenant_id: str | None = None) -> ContentAsset | None:
         clean = content_sha256.strip().lower()
         for a in self.assets.values():
             if a.content_sha256 == clean and a.tenant_id == tenant_id:
                 return a
         return None
 
-    async def list_assets_by_source(
-        self, source_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentAsset], int]:
+    async def list_assets_by_source(self, source_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentAsset], int]:
         res = [a for a in self.assets.values() if a.source_id == source_id]
         return res[offset : offset + limit], len(res)
 
@@ -100,9 +94,7 @@ class InMemoryContentAssetRepo:
         res = list(self.assets.values())
         if tenant_id is not None:
             if include_platform:
-                res = [
-                    a for a in res if a.tenant_id == tenant_id or a.tenant_id is None
-                ]
+                res = [a for a in res if a.tenant_id == tenant_id or a.tenant_id is None]
             else:
                 res = [a for a in res if a.tenant_id == tenant_id]
         if source_id is not None:
@@ -212,9 +204,7 @@ async def test_register_asset_validations() -> None:
     revoked_source.revoke("Decommissioned")
     await uow.sources.save_source(revoked_source)
 
-    with pytest.raises(
-        ValueError, match="Cannot register asset against revoked source"
-    ):
+    with pytest.raises(ValueError, match="Cannot register asset against revoked source"):
         await handler.handle(
             RegisterContentAssetCommand(
                 source_id=revoked_source.id,
@@ -327,23 +317,17 @@ async def test_revoke_and_query_handlers() -> None:
     assert found_by_id is not None
     assert found_by_id.id == asset.id
 
-    found_by_hash = await find_hash_handler.handle(
-        FindAssetByHashQuery(content_sha256=sha)
-    )
+    found_by_hash = await find_hash_handler.handle(FindAssetByHashQuery(content_sha256=sha))
     assert found_by_hash is not None
     assert found_by_hash.id == asset.id
 
     # List query
-    items, total = await list_handler.handle(
-        ListContentAssetsQuery(source_id=source.id)
-    )
+    items, total = await list_handler.handle(ListContentAssetsQuery(source_id=source.id))
     assert total == 1
     assert items[0].id == asset.id
 
     # Revoke
     revoked = await revoke_handler.handle(
-        RevokeContentAssetCommand(
-            asset_id=asset.id, reason="Superseded by new release", revoked_by="admin"
-        )
+        RevokeContentAssetCommand(asset_id=asset.id, reason="Superseded by new release", revoked_by="admin")
     )
     assert revoked.status == AssetStatus.REVOKED

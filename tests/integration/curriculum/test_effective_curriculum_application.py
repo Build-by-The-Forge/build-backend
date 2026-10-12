@@ -107,9 +107,7 @@ async def test_effective_curriculum_application_resolution(
         ],
     )
     await benchmark_service.validate_candidate(bm.id)
-    await benchmark_service.submit_for_review(
-        bm.id, actor_id="nuc-admin", actor_email="admin@nuc.edu.ng"
-    )
+    await benchmark_service.submit_for_review(bm.id, actor_id="nuc-admin", actor_email="admin@nuc.edu.ng")
     await benchmark_service.approve_curriculum(
         bm.id,
         reviewer_id="nuc-lead",
@@ -187,13 +185,8 @@ async def test_effective_curriculum_application_resolution(
         programme_id="prog-csc",
         academic_session_id="2026-2027",
     )
-    assert (
-        active_effective.effective_curriculum_fingerprint
-        == effective_by_id.effective_curriculum_fingerprint
-    )
-    assert (
-        active_effective.courses[0].code == "GNS101"
-    )  # sequence 0 comes before sequence 1
+    assert active_effective.effective_curriculum_fingerprint == effective_by_id.effective_curriculum_fingerprint
+    assert active_effective.courses[0].code == "GNS101"  # sequence 0 comes before sequence 1
     assert active_effective.courses[0].origin == EntityOrigin.INSTITUTIONAL_CUSTOM
     assert active_effective.courses[1].code == "CSC101"
     assert active_effective.courses[1].origin == EntityOrigin.INSTITUTIONAL_MODIFIED

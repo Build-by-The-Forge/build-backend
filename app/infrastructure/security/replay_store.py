@@ -34,9 +34,7 @@ class RedisReplayStore:
     async def claim(self, receiver: str, sender: str, request_id: str) -> bool:
         """True the first time a request id is seen, False on any reuse."""
         try:
-            created = await self._redis.set(
-                self.key(receiver, sender, request_id), "1", nx=True, ex=REPLAY_TTL_SECONDS
-            )
+            created = await self._redis.set(self.key(receiver, sender, request_id), "1", nx=True, ex=REPLAY_TTL_SECONDS)
         except (RedisError, OSError) as exc:
             raise ReplayStoreUnavailable(str(exc)) from exc
         return bool(created)

@@ -41,7 +41,9 @@ async def _programme(session) -> tuple[str, str]:
     tag = uuid4().hex[:8]
     session.add(TenantModel(id=tenant, name="Ids", slug=f"ids-{tag}", status="active", created_at=now, updated_at=now))
     await session.flush()
-    session.add(FacultyModel(id=faculty, tenant_id=tenant, name="F", slug=f"f-{tag}", status="active", created_at=now, updated_at=now))
+    session.add(
+        FacultyModel(id=faculty, tenant_id=tenant, name="F", slug=f"f-{tag}", status="active", created_at=now, updated_at=now)
+    )
     await session.flush()
     session.add(
         DepartmentModel(
@@ -82,9 +84,7 @@ async def test_every_curriculum_aggregate_persists_with_its_generated_id():
         benchmarks = SqlAlchemyBenchmarkCurriculumRepository(session)
         adoptions = SqlAlchemyInstitutionalAdoptionRepository(session)
 
-        source = CurriculumSource.create(
-            code=f"SRC{uuid4().hex[:6]}", name="Benchmark", base_url="https://example.org"
-        )
+        source = CurriculumSource.create(code=f"SRC{uuid4().hex[:6]}", name="Benchmark", base_url="https://example.org")
         await sources.save_source(source)
         snapshot = source.create_snapshot(
             source_url="https://example.org/ccmas.pdf",
@@ -110,9 +110,7 @@ async def test_every_curriculum_aggregate_persists_with_its_generated_id():
             semester=1,
         )
         topic = BenchmarkTopic.create(benchmark_course_id=course.id, sequence=1, title="Algorithms")
-        topic.add_outcome(
-            BenchmarkOutcome.create(benchmark_topic_id=topic.id, sequence=1, description="Define an algorithm")
-        )
+        topic.add_outcome(BenchmarkOutcome.create(benchmark_topic_id=topic.id, sequence=1, description="Define an algorithm"))
         course.add_topic(topic)
         await benchmarks.save_course(course)
 

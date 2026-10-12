@@ -53,16 +53,12 @@ class CurriculumSourceService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                source = await RegisterCurriculumSourceHandler(uow.sources).handle(
-                    command
-                )
+                source = await RegisterCurriculumSourceHandler(uow.sources).handle(command)
                 events = source.pull_events()
             self._publish_events(events)
             return source
 
-        source = await RegisterCurriculumSourceHandler(
-            self._required_repository()
-        ).handle(command)
+        source = await RegisterCurriculumSourceHandler(self._required_repository()).handle(command)
         self._publish_events(source.pull_events())
         return source
 
@@ -71,18 +67,14 @@ class CurriculumSourceService:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await GetCurriculumSourceHandler(uow.sources).handle(command)
-        return await GetCurriculumSourceHandler(self._required_repository()).handle(
-            command
-        )
+        return await GetCurriculumSourceHandler(self._required_repository()).handle(command)
 
     async def list_sources(self, status: str | None = None) -> list[CurriculumSource]:
         command = ListCurriculumSourcesCommand(status=status)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await ListCurriculumSourcesHandler(uow.sources).handle(command)
-        return await ListCurriculumSourcesHandler(self._required_repository()).handle(
-            command
-        )
+        return await ListCurriculumSourcesHandler(self._required_repository()).handle(command)
 
     async def record_snapshot(
         self,
@@ -103,30 +95,22 @@ class CurriculumSourceService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                snapshot, drift, events = await RecordCurriculumSnapshotHandler(
-                    uow.sources
-                ).handle(command)
+                snapshot, drift, events = await RecordCurriculumSnapshotHandler(uow.sources).handle(command)
             self._publish_events(events)
             return snapshot, drift
 
-        snapshot, drift, events = await RecordCurriculumSnapshotHandler(
-            self._required_repository()
-        ).handle(command)
+        snapshot, drift, events = await RecordCurriculumSnapshotHandler(self._required_repository()).handle(command)
         self._publish_events(events)
         return snapshot, drift
 
     async def list_snapshots(
         self, source_id: str, limit: int = 50, offset: int = 0
     ) -> tuple[list[CurriculumSnapshot], int] | None:
-        command = ListCurriculumSnapshotsCommand(
-            source_id=source_id, limit=limit, offset=offset
-        )
+        command = ListCurriculumSnapshotsCommand(source_id=source_id, limit=limit, offset=offset)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await ListCurriculumSnapshotsHandler(uow.sources).handle(command)
-        return await ListCurriculumSnapshotsHandler(self._required_repository()).handle(
-            command
-        )
+        return await ListCurriculumSnapshotsHandler(self._required_repository()).handle(command)
 
     def _required_repository(self) -> CurriculumSourceRepository:
         if self.repository is None:

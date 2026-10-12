@@ -27,17 +27,13 @@ class StartAttemptHandler:
         self.assessments = assessments
 
     async def handle(self, command: StartAttemptCommand) -> AssessmentAttempt:
-        assessment = await self.assessments.get_by_id(
-            command.assessment_id, tenant_id=command.tenant_id
-        )
+        assessment = await self.assessments.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             raise ValueError("assessment not found")
         if assessment.status != AssessmentStatus.PUBLISHED:
             raise ValueError("assessment is not available for attempts")
 
-        active = await self.attempts.get_active_for_user(
-            command.assessment_id, command.user_id, command.tenant_id
-        )
+        active = await self.attempts.get_active_for_user(command.assessment_id, command.user_id, command.tenant_id)
         if active is not None:
             return active
 
@@ -66,9 +62,7 @@ class ListMyAttemptsHandler:
         self.repository = repository
 
     async def handle(self, command: ListMyAttemptsCommand) -> list[AssessmentAttempt]:
-        return await self.repository.list_by_user(
-            command.user_id, tenant_id=command.tenant_id
-        )
+        return await self.repository.list_by_user(command.user_id, tenant_id=command.tenant_id)
 
 
 class SubmitAttemptHandler:
@@ -94,22 +88,12 @@ class SubmitAttemptHandler:
             return None
         attempt.submit()
 
-        if (
-            self.assessments is not None
-            and self.answers is not None
-            and self.results is not None
-        ):
-            assessment = await self.assessments.get_by_id(
-                attempt.assessment_id, tenant_id=command.tenant_id
-            )
+        if self.assessments is not None and self.answers is not None and self.results is not None:
+            assessment = await self.assessments.get_by_id(attempt.assessment_id, tenant_id=command.tenant_id)
             if assessment is None:
                 raise ValueError("assessment not found")
-            questions = await self.assessments.list_question_snapshots(
-                attempt.assessment_id, tenant_id=command.tenant_id
-            )
-            learner_answers = await self.answers.list_by_attempt(
-                command.attempt_id, tenant_id=command.tenant_id
-            )
+            questions = await self.assessments.list_question_snapshots(attempt.assessment_id, tenant_id=command.tenant_id)
+            learner_answers = await self.answers.list_by_attempt(command.attempt_id, tenant_id=command.tenant_id)
             result = AssessmentScorer.score(
                 attempt=attempt,
                 assessment=assessment,
@@ -131,9 +115,7 @@ class GetAttemptQuestionsHandler:
         self.attempts = attempts
         self.assessments = assessments
 
-    async def handle(
-        self, command: GetAttemptQuestionsCommand
-    ) -> list[AttemptQuestionSnapshot] | None:
+    async def handle(self, command: GetAttemptQuestionsCommand) -> list[AttemptQuestionSnapshot] | None:
         attempt = await self.attempts.get_by_id(
             command.attempt_id,
             tenant_id=command.tenant_id,
@@ -142,13 +124,10 @@ class GetAttemptQuestionsHandler:
         if attempt is None or attempt.status != AttemptStatus.IN_PROGRESS:
             return None
 
-        snapshots = await self.assessments.list_question_snapshots(
-            attempt.assessment_id, tenant_id=command.tenant_id
-        )
+        snapshots = await self.assessments.list_question_snapshots(attempt.assessment_id, tenant_id=command.tenant_id)
         return [
             AttemptQuestionSnapshot(
-                assessment_question_id=question.assessment_question_id
-                or question.question_id,
+                assessment_question_id=question.assessment_question_id or question.question_id,
                 question_id=question.question_id,
                 sequence=sequence,
                 prompt=question.prompt,
@@ -178,6 +157,4 @@ class GetAttemptResultHandler:
             return None
         if attempt.status != AttemptStatus.SUBMITTED:
             raise ValueError("attempt is not submitted")
-        return await self.results.get_by_attempt_id(
-            command.attempt_id, tenant_id=command.tenant_id
-        )
+        return await self.results.get_by_attempt_id(command.attempt_id, tenant_id=command.tenant_id)

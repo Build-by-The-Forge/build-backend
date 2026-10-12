@@ -25,9 +25,7 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
         self._session = session
 
     async def save(self, curriculum: BenchmarkCurriculum) -> BenchmarkCurriculum:
-        statement = select(BenchmarkCurriculumModel).where(
-            BenchmarkCurriculumModel.id == curriculum.id
-        )
+        statement = select(BenchmarkCurriculumModel).where(BenchmarkCurriculumModel.id == curriculum.id)
         model = (await self._session.scalars(statement)).first()
         if model is None:
             model = benchmark_curriculum_to_model(curriculum)
@@ -38,9 +36,7 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
         return curriculum
 
     async def save_course(self, course: BenchmarkCourse) -> BenchmarkCourse:
-        statement = select(BenchmarkCourseModel).where(
-            BenchmarkCourseModel.id == course.id
-        )
+        statement = select(BenchmarkCourseModel).where(BenchmarkCourseModel.id == course.id)
         model = (await self._session.scalars(statement)).first()
         if model is None:
             model = benchmark_course_to_model(course)
@@ -51,25 +47,17 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
         return course
 
     async def get_by_id(self, curriculum_id: str) -> BenchmarkCurriculum | None:
-        statement = select(BenchmarkCurriculumModel).where(
-            BenchmarkCurriculumModel.id == curriculum_id
-        )
+        statement = select(BenchmarkCurriculumModel).where(BenchmarkCurriculumModel.id == curriculum_id)
         model = (await self._session.scalars(statement)).first()
-        return (
-            benchmark_curriculum_model_to_domain(model) if model is not None else None
-        )
+        return benchmark_curriculum_model_to_domain(model) if model is not None else None
 
-    async def get_by_snapshot_and_programme(
-        self, source_snapshot_id: str, programme_code: str
-    ) -> BenchmarkCurriculum | None:
+    async def get_by_snapshot_and_programme(self, source_snapshot_id: str, programme_code: str) -> BenchmarkCurriculum | None:
         statement = select(BenchmarkCurriculumModel).where(
             BenchmarkCurriculumModel.source_snapshot_id == source_snapshot_id,
             BenchmarkCurriculumModel.programme_code == programme_code.upper(),
         )
         model = (await self._session.scalars(statement)).first()
-        return (
-            benchmark_curriculum_model_to_domain(model) if model is not None else None
-        )
+        return benchmark_curriculum_model_to_domain(model) if model is not None else None
 
     async def get_active_by_programme(
         self,
@@ -84,9 +72,7 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
             BenchmarkCurriculumModel.status == "active",
         )
         model = (await self._session.scalars(statement)).first()
-        return (
-            benchmark_curriculum_model_to_domain(model) if model is not None else None
-        )
+        return benchmark_curriculum_model_to_domain(model) if model is not None else None
 
     async def list_curricula(
         self,
@@ -98,9 +84,7 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
             BenchmarkCurriculumModel.created_at.desc(),
         )
         if programme_code is not None:
-            statement = statement.where(
-                BenchmarkCurriculumModel.programme_code == programme_code.upper()
-            )
+            statement = statement.where(BenchmarkCurriculumModel.programme_code == programme_code.upper())
         if status is not None:
             statement = statement.where(BenchmarkCurriculumModel.status == status)
         models = (await self._session.scalars(statement)).all()
@@ -110,40 +94,22 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
         statement = (
             select(BenchmarkCourseModel)
             .where(BenchmarkCourseModel.id == course_id)
-            .options(
-                selectinload(BenchmarkCourseModel.topics).selectinload(
-                    BenchmarkTopicModel.outcomes
-                )
-            )
+            .options(selectinload(BenchmarkCourseModel.topics).selectinload(BenchmarkTopicModel.outcomes))
         )
         model = (await self._session.scalars(statement)).first()
-        return (
-            benchmark_course_model_to_domain(model, include_topics=True)
-            if model is not None
-            else None
-        )
+        return benchmark_course_model_to_domain(model, include_topics=True) if model is not None else None
 
-    async def get_course_by_code(
-        self, curriculum_id: str, code: str
-    ) -> BenchmarkCourse | None:
+    async def get_course_by_code(self, curriculum_id: str, code: str) -> BenchmarkCourse | None:
         statement = (
             select(BenchmarkCourseModel)
             .where(
                 BenchmarkCourseModel.benchmark_curriculum_id == curriculum_id,
                 BenchmarkCourseModel.code == code.upper(),
             )
-            .options(
-                selectinload(BenchmarkCourseModel.topics).selectinload(
-                    BenchmarkTopicModel.outcomes
-                )
-            )
+            .options(selectinload(BenchmarkCourseModel.topics).selectinload(BenchmarkTopicModel.outcomes))
         )
         model = (await self._session.scalars(statement)).first()
-        return (
-            benchmark_course_model_to_domain(model, include_topics=True)
-            if model is not None
-            else None
-        )
+        return benchmark_course_model_to_domain(model, include_topics=True) if model is not None else None
 
     async def list_courses(
         self,
@@ -161,6 +127,4 @@ class SqlAlchemyBenchmarkCurriculumRepository(BenchmarkCurriculumRepository):
         if semester is not None:
             statement = statement.where(BenchmarkCourseModel.semester == semester)
         models = (await self._session.scalars(statement)).all()
-        return [
-            benchmark_course_model_to_domain(m, include_topics=False) for m in models
-        ]
+        return [benchmark_course_model_to_domain(m, include_topics=False) for m in models]

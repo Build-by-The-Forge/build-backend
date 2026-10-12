@@ -195,7 +195,5 @@ async def test_compare_different_programmes_raises_error(
         version="2026.01",
     )
 
-    with pytest.raises(
-        ValueError, match="cannot compare curricula of different programmes"
-    ):
+    with pytest.raises(ValueError, match="cannot compare curricula of different programmes"):
         await service.compare_curricula(c1.id, c2.id)

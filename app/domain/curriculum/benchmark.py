@@ -96,9 +96,7 @@ class BenchmarkTopic:
 
     def add_outcome(self, outcome: BenchmarkOutcome) -> None:
         if any(o.sequence == outcome.sequence for o in self.outcomes):
-            raise ValueError(
-                f"outcome with sequence {outcome.sequence} already exists in topic"
-            )
+            raise ValueError(f"outcome with sequence {outcome.sequence} already exists in topic")
         self.outcomes.append(outcome)
 
 
@@ -165,9 +163,7 @@ class BenchmarkCourse:
 
     def add_topic(self, topic: BenchmarkTopic) -> None:
         if any(t.sequence == topic.sequence for t in self.topics):
-            raise ValueError(
-                f"topic with sequence {topic.sequence} already exists in course {self.code}"
-            )
+            raise ValueError(f"topic with sequence {topic.sequence} already exists in course {self.code}")
         self.topics.append(topic)
 
 
@@ -247,9 +243,7 @@ class BenchmarkCurriculum:
 
     def mark_validated(self) -> None:
         if self.status != BenchmarkStatus.CANDIDATE:
-            raise ValueError(
-                f"only candidate benchmarks can be validated, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only candidate benchmarks can be validated, current status is '{self.status.value}'")
         self.status = BenchmarkStatus.VALIDATED
         self.touch()
         self._events.append(
@@ -272,9 +266,7 @@ class BenchmarkCurriculum:
         notes: str | None = None,
     ) -> None:
         if self.status != BenchmarkStatus.VALIDATED:
-            raise ValueError(
-                f"only validated benchmarks can be submitted for review, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only validated benchmarks can be submitted for review, current status is '{self.status.value}'")
         self.status = BenchmarkStatus.UNDER_REVIEW
         self.review_fingerprint = diff_fingerprint
         self.touch()
@@ -296,9 +288,7 @@ class BenchmarkCurriculum:
 
     def approve(self, reviewer_id: str, reason: str) -> None:
         if self.status != BenchmarkStatus.UNDER_REVIEW:
-            raise ValueError(
-                f"only benchmarks under review can be approved, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only benchmarks under review can be approved, current status is '{self.status.value}'")
         if not reason.strip():
             raise ValueError("approval reason cannot be empty")
         self.status = BenchmarkStatus.APPROVED
@@ -322,9 +312,7 @@ class BenchmarkCurriculum:
 
     def reject(self, reviewer_id: str, reason: str) -> None:
         if self.status != BenchmarkStatus.UNDER_REVIEW:
-            raise ValueError(
-                f"only benchmarks under review can be rejected, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only benchmarks under review can be rejected, current status is '{self.status.value}'")
         if not reason.strip():
             raise ValueError("rejection reason cannot be empty")
         self.status = BenchmarkStatus.REJECTED
@@ -347,9 +335,7 @@ class BenchmarkCurriculum:
 
     def revise_to_candidate(self) -> None:
         if self.status != BenchmarkStatus.REJECTED:
-            raise ValueError(
-                f"only rejected benchmarks can be revised to candidate, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only rejected benchmarks can be revised to candidate, current status is '{self.status.value}'")
         self.status = BenchmarkStatus.CANDIDATE
         self.touch()
         self._events.append(
@@ -372,9 +358,7 @@ class BenchmarkCurriculum:
         activated_by: str | None = None,
     ) -> None:
         if self.status != BenchmarkStatus.APPROVED:
-            raise ValueError(
-                f"only approved benchmarks can be activated, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only approved benchmarks can be activated, current status is '{self.status.value}'")
         self.status = BenchmarkStatus.ACTIVE
         self.touch()
         self._events.append(
@@ -396,9 +380,7 @@ class BenchmarkCurriculum:
 
     def supersede(self) -> None:
         if self.status != BenchmarkStatus.ACTIVE:
-            raise ValueError(
-                f"only active benchmarks can be superseded, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only active benchmarks can be superseded, current status is '{self.status.value}'")
         self.status = BenchmarkStatus.SUPERSEDED
         self.touch()
         self._events.append(

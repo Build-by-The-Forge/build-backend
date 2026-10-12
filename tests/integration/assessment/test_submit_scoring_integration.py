@@ -94,15 +94,12 @@ async def test_submit_attempt_calculates_and_persists_result_with_events(
     await attempt_repo.save(attempt, tenant_id="tenant-123")
 
     # 4. Save learner answer (correct option index 1)
-    snapshots = await assessment_repo.list_question_snapshots(
-        assessment.id, tenant_id="tenant-123"
-    )
+    snapshots = await assessment_repo.list_question_snapshots(assessment.id, tenant_id="tenant-123")
     answer_repo = SqlAlchemyAttemptAnswerRepository(session)
     answer = AttemptAnswer.create(
         tenant_id="tenant-123",
         attempt_id=attempt.id,
-        assessment_question_id=snapshots[0].assessment_question_id
-        or snapshots[0].question_id,
+        assessment_question_id=snapshots[0].assessment_question_id or snapshots[0].question_id,
         selected_option_index=1,
     )
     await answer_repo.save(answer)
@@ -121,9 +118,7 @@ async def test_submit_attempt_calculates_and_persists_result_with_events(
     service = AttemptService(event_bus=event_bus, uow_factory=uow_factory)
 
     # 6. Submit attempt
-    submitted_attempt = await service.submit_attempt(
-        attempt.id, "tenant-123", "user-123"
-    )
+    submitted_attempt = await service.submit_attempt(attempt.id, "tenant-123", "user-123")
     assert submitted_attempt is not None
     assert submitted_attempt.status == AttemptStatus.SUBMITTED
     assert submitted_attempt.submitted_at is not None

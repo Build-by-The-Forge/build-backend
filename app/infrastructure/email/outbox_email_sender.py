@@ -44,6 +44,4 @@ class UnconfiguredEmailSender:
     """
 
     async def send(self, message: EmailMessage) -> None:
-        logger.error(
-            "email delivery is not configured; dropped message %r", message.subject
-        )
+        logger.error("email delivery is not configured; dropped message %r", message.subject)

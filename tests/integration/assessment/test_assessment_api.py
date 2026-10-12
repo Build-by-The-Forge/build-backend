@@ -19,9 +19,7 @@ def headers(token: str, tenant_slug: str) -> dict[str, str]:
 
 async def course_id_for_tenant(tenant_id: str) -> str:
     async with SessionLocal() as session:
-        result = await session.scalars(
-            select(CourseModel.id).where(CourseModel.tenant_id == tenant_id)
-        )
+        result = await session.scalars(select(CourseModel.id).where(CourseModel.tenant_id == tenant_id))
         course_id = result.first()
     assert course_id is not None
     return course_id
@@ -29,12 +27,8 @@ async def course_id_for_tenant(tenant_id: str) -> str:
 
 @pytest.mark.asyncio
 async def test_assessment_definition_lifecycle_over_http(client):
-    user_id, token = await register_and_authenticate(
-        client, f"assessment-api-{uuid4()}@example.com"
-    )
-    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(
-        user_id, "lecturer"
-    )
+    user_id, token = await register_and_authenticate(client, f"assessment-api-{uuid4()}@example.com")
+    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(user_id, "lecturer")
     course_id = await course_id_for_tenant(tenant_id)
     request_headers = headers(token, tenant_slug)
 
@@ -80,15 +74,11 @@ async def test_assessment_definition_lifecycle_over_http(client):
     assert added.status_code == 200, added.text
     assert added.json()["data"]["question_count"] == 1
 
-    listed = client.get(
-        f"/assessment/assessments?course_id={course_id}", headers=request_headers
-    )
+    listed = client.get(f"/assessment/assessments?course_id={course_id}", headers=request_headers)
     assert listed.status_code == 200
     assert [item["id"] for item in listed.json()["data"]] == [assessment_id]
 
-    retrieved = client.get(
-        f"/assessment/assessments/{assessment_id}", headers=request_headers
-    )
+    retrieved = client.get(f"/assessment/assessments/{assessment_id}", headers=request_headers)
     assert retrieved.status_code == 200
     assert retrieved.json()["data"]["title"] == "Midterm Assessment"
 
@@ -117,9 +107,7 @@ async def test_assessment_api_requires_authentication(client):
 
 @pytest.mark.asyncio
 async def test_student_cannot_create_assessment(client):
-    user_id, token = await register_and_authenticate(
-        client, f"assessment-student-api-{uuid4()}@example.com"
-    )
+    user_id, token = await register_and_authenticate(client, f"assessment-student-api-{uuid4()}@example.com")
     tenant_id, tenant_slug, _, _ = await seed_tenant_context(user_id, "student")
     course_id = await course_id_for_tenant(tenant_id)
 
@@ -139,9 +127,7 @@ async def test_student_cannot_create_assessment(client):
 
 @pytest.mark.asyncio
 async def test_assessment_api_does_not_cross_tenants(client):
-    owner_id, owner_token = await register_and_authenticate(
-        client, f"assessment-owner-{uuid4()}@example.com"
-    )
+    owner_id, owner_token = await register_and_authenticate(client, f"assessment-owner-{uuid4()}@example.com")
     owner_tenant_id, owner_slug, _, _ = await seed_tenant_context(owner_id, "lecturer")
     course_id = await course_id_for_tenant(owner_tenant_id)
     owner_headers = headers(owner_token, owner_slug)
@@ -158,9 +144,7 @@ async def test_assessment_api_does_not_cross_tenants(client):
     assert created.status_code == 201
     assessment_id = created.json()["data"]["id"]
 
-    other_id, other_token = await register_and_authenticate(
-        client, f"assessment-other-{uuid4()}@example.com"
-    )
+    other_id, other_token = await register_and_authenticate(client, f"assessment-other-{uuid4()}@example.com")
     _, other_slug, _, _ = await seed_tenant_context(other_id, "lecturer")
     response = client.get(
         f"/assessment/assessments/{assessment_id}",

@@ -22,17 +22,13 @@ class QuestionModel(Base):
     __tablename__ = "questions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     topic_id: Mapped[str] = mapped_column(String(36), nullable=False)
     learning_outcome_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     question_type: Mapped[str] = mapped_column(String(20), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
-    difficulty: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="medium"
-    )
+    difficulty: Mapped[str] = mapped_column(String(20), nullable=False, default="medium")
     marks: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     created_at: Mapped[datetime] = mapped_column(
@@ -66,9 +62,7 @@ class QuestionOptionModel(Base):
     __tablename__ = "question_options"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    question_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False
-    )
+    question_id: Mapped[str] = mapped_column(String(36), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
     is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -80,9 +74,7 @@ class QuestionOptionModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "question_id", "display_order", name="uq_option_question_display_order"
-        ),
+        UniqueConstraint("question_id", "display_order", name="uq_option_question_display_order"),
         Index("ix_option_question_id", "question_id"),
     )
 
@@ -91,12 +83,8 @@ class AssessmentModel(Base):
     __tablename__ = "assessments"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
-    course_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[str] = mapped_column(String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    course_id: Mapped[str] = mapped_column(String(255), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -176,24 +164,12 @@ class AssessmentAttemptModel(Base):
     __tablename__ = "assessment_attempts"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
-    assessment_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="in_progress"
-    )
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    submitted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    tenant_id: Mapped[str] = mapped_column(String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    assessment_id: Mapped[str] = mapped_column(String(255), ForeignKey("assessments.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="in_progress")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -226,9 +202,7 @@ class AttemptAnswerModel(Base):
     __tablename__ = "assessment_attempt_answers"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[str] = mapped_column(String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     attempt_id: Mapped[str] = mapped_column(
         String(255),
         ForeignKey("assessment_attempts.id", ondelete="CASCADE"),
@@ -268,9 +242,7 @@ class AssessmentAttemptResultModel(Base):
     __tablename__ = "assessment_attempt_results"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[str] = mapped_column(String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     attempt_id: Mapped[str] = mapped_column(
         String(255),
         ForeignKey("assessment_attempts.id", ondelete="CASCADE"),
@@ -281,9 +253,7 @@ class AssessmentAttemptResultModel(Base):
         ForeignKey("assessments.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     total_score: Mapped[int] = mapped_column(Integer, nullable=False)
     max_score: Mapped[int] = mapped_column(Integer, nullable=False)
     percentage: Mapped[float] = mapped_column(Float, nullable=False)

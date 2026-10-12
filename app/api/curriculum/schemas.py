@@ -3,9 +3,7 @@ from pydantic import BaseModel, Field
 
 class CreateCurriculumSourceRequest(BaseModel):
     code: str = Field(..., min_length=2, max_length=50, examples=["NUC_CCMAS"])
-    name: str = Field(
-        ..., min_length=2, max_length=200, examples=["NUC Core Curriculum Standards"]
-    )
+    name: str = Field(..., min_length=2, max_length=200, examples=["NUC Core Curriculum Standards"])
     base_url: str = Field(..., min_length=5, max_length=1024)
     source_type: str = Field(default="official_benchmark", max_length=50)
     sync_frequency_days: int = Field(default=30, ge=1, le=365)

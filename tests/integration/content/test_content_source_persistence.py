@@ -97,9 +97,7 @@ async def test_content_source_tenant_isolation_persistence(
     await repository.save_source(unilag_source)
 
     # List from FUTA tenant context (should include Platform + FUTA, but NOT UNILAG)
-    futa_list, futa_total = await repository.list_sources(
-        tenant_id="tenant-futa", include_platform=True
-    )
+    futa_list, futa_total = await repository.list_sources(tenant_id="tenant-futa", include_platform=True)
     futa_codes = {s.code for s in futa_list}
     assert "PLAT_SRC_1" in futa_codes
     assert "FUTA_SRC_1" in futa_codes

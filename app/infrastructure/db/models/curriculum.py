@@ -15,16 +15,10 @@ class CurriculumSourceModel(Base):
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     base_url: Mapped[str] = mapped_column(String(1024), nullable=False)
-    source_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="official_benchmark"
-    )
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False, default="official_benchmark")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    sync_frequency_days: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=30
-    )
-    parser_version: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="v1.0"
-    )
+    sync_frequency_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    parser_version: Mapped[str] = mapped_column(String(50), nullable=False, default="v1.0")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -82,9 +76,7 @@ class CurriculumSnapshotModel(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint(
-            "source_id", "content_sha256", name="uq_curriculum_snapshot_source_hash"
-        ),
+        UniqueConstraint("source_id", "content_sha256", name="uq_curriculum_snapshot_source_hash"),
         Index("ix_curriculum_snapshots_source_id", "source_id"),
         Index("ix_curriculum_snapshots_retrieved_at", "retrieved_at"),
         Index("ix_curriculum_snapshots_content_sha256", "content_sha256"),

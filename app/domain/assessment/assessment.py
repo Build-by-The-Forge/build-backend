@@ -36,12 +36,8 @@ class AssessmentQuestion:
         if self.marks <= 0:
             raise ValueError("question marks must be positive")
         if self.correct_option_index is not None:
-            if self.correct_option_index < 0 or self.correct_option_index >= len(
-                self.options
-            ):
-                raise ValueError(
-                    "correct_option_index is outside the valid option range"
-                )
+            if self.correct_option_index < 0 or self.correct_option_index >= len(self.options):
+                raise ValueError("correct_option_index is outside the valid option range")
 
 
 @dataclass
@@ -52,9 +48,7 @@ class Assessment:
     instructions: str
     duration_minutes: int
     passing_score: int = 0
-    assessment_id: str = field(
-        default_factory=lambda: f"assessment-{uuid4()}", repr=False
-    )
+    assessment_id: str = field(default_factory=lambda: f"assessment-{uuid4()}", repr=False)
     status: AssessmentStatus = AssessmentStatus.DRAFT
     questions: list[AssessmentQuestion] = field(default_factory=list, repr=False)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -131,9 +125,7 @@ class Assessment:
         if self.status != AssessmentStatus.DRAFT:
             raise ValueError("questions cannot be changed after publication")
         if any(existing.question_id == question_id for existing in self.questions):
-            raise ValueError(
-                f"question {question_id} already exists in this assessment"
-            )
+            raise ValueError(f"question {question_id} already exists in this assessment")
 
         item = AssessmentQuestion(
             question_id=question_id,

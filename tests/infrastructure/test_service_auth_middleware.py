@@ -162,9 +162,7 @@ async def test_stale_or_future_requests_are_refused(store, offset):
     app, calls = build_app(store)
     body = event_body()
     async with client_for(app) as client:
-        resp = await client.post(
-            PATH, content=body, headers=signed(body, timestamp=int(time.time()) + offset)
-        )
+        resp = await client.post(PATH, content=body, headers=signed(body, timestamp=int(time.time()) + offset))
     assert (resp.status_code, resp.json()) == (401, UNIFORM_401)
     assert calls == []
 
@@ -200,9 +198,7 @@ async def test_a_reused_request_id_with_a_new_signature_is_refused(store):
     async with client_for(app) as client:
         first_body, second_body = event_body("evt-1"), event_body("evt-2")
         await client.post(PATH, content=first_body, headers=signed(first_body, request_id=request_id))
-        resp = await client.post(
-            PATH, content=second_body, headers=signed(second_body, request_id=request_id)
-        )
+        resp = await client.post(PATH, content=second_body, headers=signed(second_body, request_id=request_id))
     assert resp.status_code == 401
     assert [c["event"] for c in calls] == ["evt-1"]
 
@@ -260,9 +256,7 @@ async def test_malformed_requests_get_the_uniform_401(store, mutate):
 async def test_unsigned_request_with_a_bearer_token_is_refused(store):
     app, calls = build_app(store)
     async with client_for(app) as client:
-        resp = await client.post(
-            PATH, content=event_body(), headers={"Authorization": f"Bearer {SECRET}"}
-        )
+        resp = await client.post(PATH, content=event_body(), headers={"Authorization": f"Bearer {SECRET}"})
     assert (resp.status_code, resp.json()) == (401, UNIFORM_401)
     assert calls == []
 
@@ -282,9 +276,7 @@ async def test_signed_query_is_accepted(store):
     app, calls = build_app(store)
     body = event_body()
     async with client_for(app) as client:
-        resp = await client.post(
-            PATH + "?a=1&b=x%20y", content=body, headers=signed(body, target=PATH + "?a=1&b=x%20y")
-        )
+        resp = await client.post(PATH + "?a=1&b=x%20y", content=body, headers=signed(body, target=PATH + "?a=1&b=x%20y"))
     assert resp.status_code == 200
     assert len(calls) == 1
 

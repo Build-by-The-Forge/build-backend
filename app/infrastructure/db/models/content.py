@@ -31,27 +31,19 @@ class ContentSourceModel(Base):
     visibility: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
 
-    tenant_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True
-    )
-    faculty_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("faculties.id", ondelete="SET NULL"), nullable=True
-    )
+    tenant_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)
+    faculty_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("faculties.id", ondelete="SET NULL"), nullable=True)
     department_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True
     )
-    programme_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("programmes.id", ondelete="SET NULL"), nullable=True
-    )
+    programme_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("programmes.id", ondelete="SET NULL"), nullable=True)
 
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     author_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     publisher: Mapped[str | None] = mapped_column(String(255), nullable=True)
     isbn_or_doi: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    trust_policy: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    trust_policy: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
     created_by_email: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -85,12 +77,8 @@ class ContentAssetModel(Base):
     __tablename__ = "content_assets"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    source_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False
-    )
-    tenant_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True
-    )
+    source_id: Mapped[str] = mapped_column(String(36), ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -101,12 +89,8 @@ class ContentAssetModel(Base):
         String(36), ForeignKey("content_assets.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    ingestion_status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="uploaded"
-    )
-    metadata_json: Mapped[dict[str, Any]] = mapped_column(
-        "metadata", JSON, nullable=False, default=dict
-    )
+    ingestion_status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
+    metadata_json: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, nullable=False, default=dict)
 
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
     created_by_email: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -122,9 +106,7 @@ class ContentAssetModel(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
-    source: Mapped[ContentSourceModel] = relationship(
-        "ContentSourceModel", back_populates="assets"
-    )
+    source: Mapped[ContentSourceModel] = relationship("ContentSourceModel", back_populates="assets")
     jobs: Mapped[list[ContentIngestionJobModel]] = relationship(
         "ContentIngestionJobModel", back_populates="asset", cascade="all, delete-orphan"
     )
@@ -136,9 +118,7 @@ class ContentAssetModel(Base):
         Index("ix_content_assets_status", "status"),
         Index("ix_content_assets_ingestion_status", "ingestion_status"),
         Index("ix_content_assets_source_version", "source_id", "asset_version"),
-        UniqueConstraint(
-            "tenant_id", "content_sha256", name="uq_content_assets_tenant_hash"
-        ),
+        UniqueConstraint("tenant_id", "content_sha256", name="uq_content_assets_tenant_hash"),
     )
 
 
@@ -146,15 +126,9 @@ class ContentIngestionJobModel(Base):
     __tablename__ = "content_ingestion_jobs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    asset_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("content_assets.id", ondelete="CASCADE"), nullable=False
-    )
-    source_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False
-    )
-    tenant_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True
-    )
+    asset_id: Mapped[str] = mapped_column(String(36), ForeignKey("content_assets.id", ondelete="CASCADE"), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(36), ForeignKey("content_sources.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True)
     run_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
     current_stage: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -162,31 +136,17 @@ class ContentIngestionJobModel(Base):
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    error_details: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    error_details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     is_retryable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    next_retry_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    attempt_history: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
+    attempt_history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     external_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    last_dispatched_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_callback_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_callback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -200,9 +160,7 @@ class ContentIngestionJobModel(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
-    asset: Mapped[ContentAssetModel] = relationship(
-        "ContentAssetModel", back_populates="jobs"
-    )
+    asset: Mapped[ContentAssetModel] = relationship("ContentAssetModel", back_populates="jobs")
 
     __table_args__ = (
         Index("ix_content_ingestion_jobs_asset_id", "asset_id"),

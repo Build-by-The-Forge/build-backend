@@ -109,9 +109,7 @@ async def test_catalogue_reads_require_authentication_and_tenant_context(client)
 
 @pytest.mark.asyncio
 async def test_catalogue_list_is_scoped_to_member_tenant(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"catalogue-{uuid4()}@example.com"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"catalogue-{uuid4()}@example.com")
     tenant_a_slug = f"tenant-a-{uuid4()}"
     tenant_b_slug = f"tenant-b-{uuid4()}"
     _, course_a_id = await seed_catalogue(tenant_a_slug, user_id, "CAT101")
@@ -131,9 +129,7 @@ async def test_catalogue_list_is_scoped_to_member_tenant(client):
 
 @pytest.mark.asyncio
 async def test_catalogue_direct_lookup_cannot_cross_tenants(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"lookup-{uuid4()}@example.com"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"lookup-{uuid4()}@example.com")
     tenant_a_slug = f"lookup-a-{uuid4()}"
     tenant_b_slug = f"lookup-b-{uuid4()}"
     await seed_catalogue(tenant_a_slug, user_id, "LKP101")
@@ -153,9 +149,7 @@ async def test_catalogue_direct_lookup_cannot_cross_tenants(client):
 
 @pytest.mark.asyncio
 async def test_catalogue_read_denies_non_member_tenant(client):
-    user_id, access_token = await register_and_authenticate(
-        client, f"denied-{uuid4()}@example.com"
-    )
+    user_id, access_token = await register_and_authenticate(client, f"denied-{uuid4()}@example.com")
     tenant_slug = f"denied-{uuid4()}"
     await seed_catalogue(tenant_slug, str(uuid4()), "DEN101")
 

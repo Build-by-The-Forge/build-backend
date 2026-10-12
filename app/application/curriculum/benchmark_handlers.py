@@ -24,9 +24,7 @@ class IngestBenchmarkCandidateHandler:
     def __init__(self, repository: BenchmarkCurriculumRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: IngestBenchmarkCandidateCommand
-    ) -> tuple[BenchmarkCurriculum, bool, list[DomainEvent]]:
+    async def handle(self, command: IngestBenchmarkCandidateCommand) -> tuple[BenchmarkCurriculum, bool, list[DomainEvent]]:
         # 1. Check for duplicate candidate for this snapshot and programme
         existing = await self.repository.get_by_snapshot_and_programme(
             source_snapshot_id=command.source_snapshot_id,
@@ -41,23 +39,17 @@ class IngestBenchmarkCandidateHandler:
         for course_input in command.courses:
             clean_code = course_input.code.strip().upper()
             if clean_code in seen_codes:
-                raise ValueError(
-                    f"duplicate course code '{clean_code}' in candidate payload"
-                )
+                raise ValueError(f"duplicate course code '{clean_code}' in candidate payload")
             seen_codes.add(clean_code)
 
             if course_input.sequence in seen_sequences:
-                raise ValueError(
-                    f"duplicate course sequence '{course_input.sequence}' in candidate payload"
-                )
+                raise ValueError(f"duplicate course sequence '{course_input.sequence}' in candidate payload")
             seen_sequences.add(course_input.sequence)
 
             seen_topic_sequences: set[int] = set()
             for topic_input in course_input.topics:
                 if topic_input.sequence in seen_topic_sequences:
-                    raise ValueError(
-                        f"duplicate topic sequence '{topic_input.sequence}' in course '{clean_code}'"
-                    )
+                    raise ValueError(f"duplicate topic sequence '{topic_input.sequence}' in course '{clean_code}'")
                 seen_topic_sequences.add(topic_input.sequence)
 
                 seen_outcome_sequences: set[int] = set()
@@ -105,9 +97,7 @@ class IngestBenchmarkCandidateHandler:
                     bloom = None
                     if outcome_input.bloom_level:
                         try:
-                            bloom = BloomTaxonomyLevel(
-                                outcome_input.bloom_level.lower()
-                            )
+                            bloom = BloomTaxonomyLevel(outcome_input.bloom_level.lower())
                         except ValueError:
                             bloom = None
                     outcome = BenchmarkOutcome.create(
@@ -128,9 +118,7 @@ class GetBenchmarkCurriculumHandler:
     def __init__(self, repository: BenchmarkCurriculumRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: GetBenchmarkCurriculumCommand
-    ) -> BenchmarkCurriculum | None:
+    async def handle(self, command: GetBenchmarkCurriculumCommand) -> BenchmarkCurriculum | None:
         return await self.repository.get_by_id(command.curriculum_id)
 
 
@@ -138,9 +126,7 @@ class ListBenchmarkCurriculaHandler:
     def __init__(self, repository: BenchmarkCurriculumRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: ListBenchmarkCurriculaCommand
-    ) -> list[BenchmarkCurriculum]:
+    async def handle(self, command: ListBenchmarkCurriculaCommand) -> list[BenchmarkCurriculum]:
         return await self.repository.list_curricula(
             programme_code=command.programme_code,
             status=command.status,
@@ -151,9 +137,7 @@ class ListBenchmarkCoursesHandler:
     def __init__(self, repository: BenchmarkCurriculumRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: ListBenchmarkCoursesCommand
-    ) -> list[BenchmarkCourse]:
+    async def handle(self, command: ListBenchmarkCoursesCommand) -> list[BenchmarkCourse]:
         return await self.repository.list_courses(
             curriculum_id=command.curriculum_id,
             level=command.level,
@@ -165,7 +149,5 @@ class GetBenchmarkCourseHandler:
     def __init__(self, repository: BenchmarkCurriculumRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: GetBenchmarkCourseCommand
-    ) -> BenchmarkCourse | None:
+    async def handle(self, command: GetBenchmarkCourseCommand) -> BenchmarkCourse | None:
         return await self.repository.get_course(command.course_id)

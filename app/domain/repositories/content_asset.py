@@ -13,14 +13,10 @@ class ContentAssetRepository(Protocol):
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         raise NotImplementedError
 
-    async def get_asset_by_hash(
-        self, content_sha256: str, tenant_id: str | None = None
-    ) -> ContentAsset | None:
+    async def get_asset_by_hash(self, content_sha256: str, tenant_id: str | None = None) -> ContentAsset | None:
         raise NotImplementedError
 
-    async def list_assets_by_source(
-        self, source_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentAsset], int]:
+    async def list_assets_by_source(self, source_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentAsset], int]:
         raise NotImplementedError
 
     async def list_assets(

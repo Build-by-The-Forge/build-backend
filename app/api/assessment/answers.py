@@ -27,9 +27,7 @@ async def save_answer(
     assessment_question_id: str,
     request: Request,
     payload: SaveAttemptAnswerRequest,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_ANSWER_WRITE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_ANSWER_WRITE)),
 ) -> JSONResponse:
     try:
         answer = await service.save_answer(
@@ -52,9 +50,7 @@ async def save_answer(
 async def get_answers(
     attempt_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_READ)),
 ) -> JSONResponse:
     answers = await service.get_answers(attempt_id, context.tenant_id, context.user_id)
     if answers is None:
@@ -90,9 +86,7 @@ async def delete_answer(
     attempt_id: str,
     assessment_question_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_ATTEMPT_ANSWER_DELETE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_ANSWER_DELETE)),
 ) -> JSONResponse:
     try:
         deleted = await service.delete_answer(

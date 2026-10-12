@@ -33,9 +33,7 @@ class ActivateBenchmarkCurriculumHandler:
             raise ValueError("benchmark curriculum not found")
 
         if curriculum.status != BenchmarkStatus.APPROVED:
-            raise ValueError(
-                f"only approved benchmarks can be activated, current status is '{curriculum.status.value}'"
-            )
+            raise ValueError(f"only approved benchmarks can be activated, current status is '{curriculum.status.value}'")
 
         all_events: list[DomainEvent] = []
 

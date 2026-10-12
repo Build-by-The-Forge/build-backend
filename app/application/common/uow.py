@@ -92,18 +92,8 @@ class ContentUnitOfWorkPort(Protocol):
     def ingestion_events(self) -> IngestionEventRepository: ...
 
 
-AssessmentUnitOfWorkFactory = Callable[
-    [], AbstractAsyncContextManager[AssessmentUnitOfWorkPort]
-]
-CourseUnitOfWorkFactory = Callable[
-    [], AbstractAsyncContextManager[CourseUnitOfWorkPort]
-]
-IdentityUnitOfWorkFactory = Callable[
-    [], AbstractAsyncContextManager[IdentityUnitOfWorkPort]
-]
-CurriculumUnitOfWorkFactory = Callable[
-    [], AbstractAsyncContextManager[CurriculumUnitOfWorkPort]
-]
-ContentUnitOfWorkFactory = Callable[
-    [], AbstractAsyncContextManager[ContentUnitOfWorkPort]
-]
+AssessmentUnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[AssessmentUnitOfWorkPort]]
+CourseUnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[CourseUnitOfWorkPort]]
+IdentityUnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[IdentityUnitOfWorkPort]]
+CurriculumUnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[CurriculumUnitOfWorkPort]]
+ContentUnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[ContentUnitOfWorkPort]]

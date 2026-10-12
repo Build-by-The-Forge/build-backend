@@ -26,11 +26,7 @@ class AssessmentScorer:
         for question in questions:
             question_id = question.assessment_question_id or question.question_id
             max_score += question.marks
-            correct_idx = (
-                question.correct_option_index
-                if question.correct_option_index is not None
-                else 0
-            )
+            correct_idx = question.correct_option_index if question.correct_option_index is not None else 0
 
             answer = answers_by_question_id.get(question_id)
             selected_idx = answer.selected_option_index if answer is not None else None
@@ -50,9 +46,7 @@ class AssessmentScorer:
                 )
             )
 
-        percentage = (
-            round((total_score / max_score * 100.0), 2) if max_score > 0 else 0.0
-        )
+        percentage = round((total_score / max_score * 100.0), 2) if max_score > 0 else 0.0
         passed = total_score >= assessment.passing_score
 
         return AttemptResult.create(
