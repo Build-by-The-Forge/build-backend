@@ -12,6 +12,8 @@ from app.domain.repositories.benchmark_audit import (
 from app.domain.repositories.benchmark_curriculum import (
     BenchmarkCurriculumRepository,
 )
+from app.domain.repositories.content_asset import ContentAssetRepository
+from app.domain.repositories.content_job import ContentIngestionJobRepository, IngestionEventRepository
 from app.domain.repositories.content_source import ContentSourceRepository
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.curriculum_source import CurriculumSourceRepository
@@ -72,10 +74,6 @@ class CurriculumUnitOfWorkPort(Protocol):
 
     @property
     def adoptions(self) -> InstitutionalAdoptionRepository: ...
-
-
-from app.domain.repositories.content_asset import ContentAssetRepository
-from app.domain.repositories.content_job import ContentIngestionJobRepository, IngestionEventRepository
 
 
 class ContentUnitOfWorkPort(Protocol):
