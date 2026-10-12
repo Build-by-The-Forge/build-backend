@@ -1,0 +1,8 @@
+# Mechanical commits that `git blame` should look through:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub's blame view reads this file automatically.)
+
+# style(backend): ruff format, no behaviour change
+cb97f23c7b20913289820613c8cdb8f8e96d9b8f
+# style(backend): sort imports under the corrected first-party rule
+2f0f7ab67447068304610b375ac2a3b7910b6e56
