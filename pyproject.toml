@@ -44,6 +44,12 @@ src = ["app"]
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 
+[tool.ruff.lint.isort]
+# This repository's own top-level packages. `src` alone left ruff deciding
+# per file: first-party only where __init__.py files chain up to app/,
+# third-party everywhere else (including every test).
+known-first-party = ["app", "scripts", "tests", "pg_smoke", "boundary"]
+
 [tool.black]
 target-version = ["py314"]
 
