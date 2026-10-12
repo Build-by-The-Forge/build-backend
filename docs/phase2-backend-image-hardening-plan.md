@@ -469,7 +469,7 @@ Each run is read for its actual results, not just its status.
 | B4 | The legacy ai-service `ci.yml` stays out of scope (A1). |
 | B5 | Final regression includes secret scanning (§3.5). |
 
-### Open decisions before the run starts
+### Open decisions before the run (decided below)
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -478,6 +478,24 @@ Each run is read for its actual results, not just its status.
 | D-C | C10a: default the gate to the branch `feat/m3-boundary`, or to its commit SHA (68da1cc)? | **The branch, with the resolved SHA printed in every run.** A SHA pin is more reproducible but needs a backend commit for every ai-service change until the merge. |
 | D-D | C9d: add gitleaks to CI, or keep secret scanning local (final regression only)? | **Add it to CI** (pinned 8.30.1). Nothing scans committed files for secrets today, and the brief asks for proof that none leak. |
 | D-E | Remove the stray committed `tatus --short` file (the old C11) after C10? | **Yes**, as its own `chore` commit. It is captured terminal output with no secrets. |
+
+**Decided 2026-10-12** (the run is authorised on these terms):
+
+| # | Decision | Conditions |
+|---|---|---|
+| D-A | Add the check | First verify the API's authorisation and response contract for a platform source. Assert the success status and the resource's identity. If the API does not support it, stop and report; application behaviour is not changed to clear lint. |
+| D-B | Defer | ai-service toolchain, transitive pins, unpinned CI tools and non-root stay follow-up work (R6, R8, R9). No ai-service source, branch or document is changed in this run. |
+| D-C | The branch, resolved once | `feat/m3-boundary` is resolved to a concrete commit at the start of each gate run. That SHA is printed and recorded, and every gate step in the run uses that same revision. The gate refuses to continue if the ai-service revision changes mid-run (the image's revision label from C5c must equal the recorded SHA). |
+| D-D | Add gitleaks to CI | Pinned to 8.30.1, with the download verified by checksum. Scan tracked content with a supported configuration and redaction (no secret values in logs). Test the failure path. |
+| D-E | Remove the file | First confirm that nothing references it (tooling, scripts, docs, CI) and that it is captured output; then delete it in its own commit. |
+
+Run safeguards added with the decisions:
+- the asset test keeps its tenant-A setup;
+- no dependency is removed on "appears unused" alone: indirect imports and runtime paths are checked first;
+- the gate tests a fresh test image and also verifies the production image;
+- audits and secret scanning fail closed;
+- backend changes only on `chore/backend-image-hardening`;
+- stop on any behaviour change, unclear security implication, unexpected ai-service revision, unforeseen migration or application change, or gate that cannot run reliably.
 
 ## 6. Review log
 
