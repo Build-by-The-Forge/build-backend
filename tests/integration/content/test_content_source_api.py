@@ -143,6 +143,12 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
     foreign_get = client.get(f"/content/sources/{inst_source_id}", headers=foreign_headers)
     assert foreign_get.status_code == 403
 
+    # 11b. Foreign Lecturer reads the Platform source directly -> 200 OK
+    foreign_platform_get = client.get(f"/content/sources/{reg_source_id}", headers=foreign_headers)
+    assert foreign_platform_get.status_code == 200, foreign_platform_get.text
+    assert foreign_platform_get.json()["data"]["id"] == reg_source_id
+    assert foreign_platform_get.json()["data"]["code"] == reg_code
+
     # 12. Lecturer updates metadata -> 200 OK
     update_res = client.patch(
         f"/content/sources/{inst_source_id}",
