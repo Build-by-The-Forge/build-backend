@@ -22,6 +22,45 @@ inspection that produced it was read-only: no file in `build-backend` or
 
 Evidence was gathered by reading files, inspecting the existing image (`docker run --network none`), running pip-audit 2.10.1 in a throwaway container, linting a clean `git archive HEAD` export in a Linux container, and replaying ai-service's `ci.yml` locally. Hosted CI history could not be read: `gh` is not installed and both repositories are private.
 
+## 0a. Phase 0 baseline (measured 2026-10-12)
+
+Run on backend `93a1e4f` (51cb753's code plus this document) and ai-service `68da1cc` (`feat/m3-boundary`), both images built fresh. Implementation files unchanged.
+
+| Gate or check | Result |
+|---|---|
+| `scripts/m3_boundary_gate.sh` | **exit 0** (12:14 to 12:46 UTC) |
+| Boundary suite | 176 passed, 3 deselected |
+| Redis-down case (boundary C11) | 3 passed |
+| M6 production boot | backend and ai-service both boot |
+| M6 unsafe configuration | 9 of 9 reported "refused" (exit status only; see below) |
+| ai-service offline OCR (paddle 3.3.1 image) | both checks OK. This is the first boundary-gate run of the OCR-stack work |
+| Lint, ruff 0.17.0 (the Phase 0 set's), clean export | 47 findings (40 automatically fixable); 198 files would be reformatted. **KB1, unchanged** |
+| Unit suite, Linux Python 3.13.16, exactly the Phase 0 versions, project not installed | 1122 passed, 89 skipped; `pip check` clean |
+| Backend image `pip freeze` | 69 distributions. Six resolved newer than on 2026-10-11: filelock 4.1.1, platformdirs 4.13.0, pydantic 2.14.1, pydantic-core 2.50.1, pytest-env 1.8.0, virtualenv 21.14.7. Floating dependencies drifted within a day (D1); C4 pins this set. |
+
+**What each M6 refusal actually prints.** The gate checks only the exit status, so this was measured separately: each case was run with the same compose services and production configuration, and the final error recorded.
+
+| Case | Category | Actual message | Matches its label? |
+|---|---|---|---|
+| backend: missing JWT secret | settings `ValidationError` | `AUTH_JWT_SECRET is required when app_environment is 'production'` | yes |
+| backend: plain-http AI_SERVICE_URL | settings `ValidationError` | `AI_SERVICE_URL must be an absolute https URL` | yes |
+| backend: equal directional secrets | settings `ValidationError` | `BACKEND_TO_AI and AI_TO_BACKEND secrets must differ` | yes |
+| backend: known development secret | settings `ValidationError` | `BACKEND_TO_AI_SECRET must be at least 32 bytes` | **no.** The case's value, `build-internal-service-secret`, is 29 bytes, so the length rule fires before the known-value rule. The known-value rule is never exercised by the gate. |
+| backend: wildcard CORS | settings `ValidationError` | `CORS_ALLOWED_ORIGINS must list exact origins, not wildcards` | yes |
+| ai-service: missing secret | settings `ValidationError` | `BACKEND_TO_AI_SECRET must be at least 32 bytes` | **no.** The case sets an *empty* value, and ai-service treats only an absent variable as missing; compose always sets it. |
+| ai-service: short secret | settings `ValidationError` | `AI_TO_BACKEND_SECRET must be at least 32 bytes` | yes |
+| ai-service: plain-http callback URL | settings `ValidationError` | `BACKEND_CALLBACK_URL must use https` | yes |
+| ai-service: deterministic model | settings `ValidationError` | `MODEL_PROVIDER=deterministic is refused when APP_ENVIRONMENT=production` | yes |
+| *control:* backend, valid production config, `POSTGRES_URL=not-a-url` | `sqlalchemy.exc.ArgumentError` | `Could not parse SQLAlchemy URL` | not a security refusal, yet today's `refuses()` would count it as one (D7 confirmed) |
+
+**Fixes verified (measurement only):**
+- the backend case with `BACKEND_TO_AI_SECRET=test-only-backend-to-ai-secret-0123456789abcdef` (a listed development value of 47 bytes) refuses with `BACKEND_TO_AI_SECRET is a known development value`;
+- the ai-service case with the variable truly absent (`--entrypoint env ... -u BACKEND_TO_AI_SECRET`) refuses with `BACKEND_TO_AI_SECRET is required when APP_ENVIRONMENT=production`.
+
+Changing the backend case's input removes the only M6 coverage of the backend's 32-byte minimum for service secrets, so C1a adds an explicit backend short-secret case. ai-service already has one.
+
+**Known baseline failures after Phase 0:** KB1 (backend lint) and KB2 (ai-service legacy `ci.yml`), as expected. The two M6 cases above are gate defects, not failures, and C1a fixes them.
+
 ## 1. Findings
 
 **Confirmed defects** are reproduced with evidence. **Recommendations** are improvements without a demonstrated failure.
@@ -142,9 +181,10 @@ Production image: `app/`, `alembic/`, `alembic.ini` and `scripts/provision_tenan
   | backend: missing JWT secret | `AUTH_JWT_SECRET is required` |
   | backend: plain-http AI_SERVICE_URL | `AI_SERVICE_URL must be an absolute https URL` |
   | backend: equal directional secrets | `secrets must differ` |
-  | backend: known development secret | `is a known development value` |
+  | backend: short service secret (new case: `BACKEND_TO_AI_SECRET` of 31 bytes) | `BACKEND_TO_AI_SECRET must be at least 32 bytes` |
+  | backend: known development secret (input changed to `test-only-backend-to-ai-secret-0123456789abcdef`, 47 bytes) | `BACKEND_TO_AI_SECRET is a known development value` |
   | backend: wildcard CORS | `CORS_ALLOWED_ORIGINS must list exact origins` |
-  | ai-service: missing secret | `BACKEND_TO_AI_SECRET is required` |
+  | ai-service: missing secret (input changed: variable unset in the container, not empty) | `BACKEND_TO_AI_SECRET is required` |
   | ai-service: short secret | `AI_TO_BACKEND_SECRET must be at least` |
   | ai-service: plain-http callback URL | `BACKEND_CALLBACK_URL must use https` |
   | ai-service: deterministic model | `MODEL_PROVIDER=deterministic is refused` |
@@ -152,7 +192,7 @@ Production image: `app/`, `alembic/`, `alembic.ini` and `scripts/provision_tenan
   Each `boots` case must answer health.
 - **Image checks travel with the change they guard:** `scripts/check_backend_image.sh` is created in C5b (allowlist, no dev tools, no secrets, `pip check`) and extended in C6 (non-root, code not writable, `/outbox` ownership). Each commit's negative control runs the new checks against the previous image, where they must fail.
 - **Baseline:** a full local gate run on the current HEAD (Phase 0) records the expected results.
-- **After every image-affecting commit:** the full `scripts/m3_boundary_gate.sh` must give the same results as the baseline, covering the boundary suite, the Redis-down case (boundary C11), all 11 M6 cases and the ai-service offline OCR check. The new image checks also run.
+- **After every image-affecting commit:** the full `scripts/m3_boundary_gate.sh` must give the same results as the baseline, covering the boundary suite, the Redis-down case (boundary C11), all M6 cases (11 at baseline, 12 from C1a) and the ai-service offline OCR check. The new image checks also run.
 
 ## 3. Change sequence
 
@@ -166,7 +206,7 @@ The work goes on a new branch, `chore/backend-image-hardening`, created from `fe
 
 | # | Commit | Change | Acceptance | Regression tests | Rollback |
 |---|---|---|---|---|---|
-| C1a | `test(backend): M6 refusals must fail for the configuration reason` | `refuses()` captures output and passes only if the import exits non-zero, the failure is a settings `ValidationError`, and the output contains that case's message (answer 7). `boots()` prints the server log on failure instead of discarding it. | All 11 M6 lines pass on the Phase 0 images, each matching its category and message. Run by hand against the new `refuses()`, three unrelated failures must each be reported FAIL: (a) a valid production configuration with `POSTGRES_URL=not-a-url` (URL error at import); (b) a throwaway image `FROM` the backend image with one runtime dependency uninstalled (missing module); (c) a throwaway image with `app/core/config.py` made unreadable, run as an unprivileged user (permission error). The commit message records that the old `refuses()` reported each of them as "refused". | Full gate. | Revert (script only). |
+| C1a | `test(backend): M6 refusals must fail for the configuration reason` | `refuses()` captures output and passes only if the import exits non-zero, the failure is a settings `ValidationError`, and the output contains that case's message (answer 7). `boots()` prints the server log on failure instead of discarding it. Per the Phase 0 measurement (§0a): the backend known-development-secret case uses a listed value of at least 32 bytes; the ai-service missing-secret case unsets the variable (`--entrypoint env` with `-u`, no shell script); and a backend short-secret case is added to keep the backend's length rule covered. | All 12 M6 lines pass on the Phase 0 images, each matching its category and message. **Negative control for the two corrected cases:** run with their old inputs, the new `refuses()` reports FAIL, because the message is the length rule's, not the label's. Run by hand against the new `refuses()`, three unrelated failures must each be reported FAIL: (a) a valid production configuration with `POSTGRES_URL=not-a-url` (URL error at import); (b) a throwaway image `FROM` the backend image with one runtime dependency uninstalled (missing module); (c) a throwaway image with `app/core/config.py` made unreadable, run as an unprivileged user (permission error). The commit message records that the old `refuses()` reported each of them as "refused". | Full gate. | Revert (script only). |
 | C1b | `test(backend): the M6 refusal check rejects unrelated failures` | `scripts/m6_refusal_selftest.sh`: builds the two throwaway images for (b) and (c), runs (a), (b) and (c) through the same `refuses()`, requires FAIL for each, then removes the images. Called from `m3_boundary_gate.sh`, so the check cannot quietly lose its teeth. | Self-test passes on current images. **Negative control:** with C1a reverted locally, the self-test fails. | Full gate. | Revert. |
 | C2 | `style(backend): ruff format with the pinned ruff (no behaviour change)` | Moves the pre-commit ruff hook from v0.6.9 to the ruff version in the Phase 0 freeze (0.17.0 as of 2026-10-11), which is also the version C4 pins, so pre-commit and CI format identically; then `ruff format app tests scripts pg_smoke`. Mechanical. | `ruff format --check` clean. **Formatter-only proof:** (1) the commit is reproduced by running the same ruff on the parent commit, and the trees must be identical; (2) every changed `.py` file parses to an identical AST before and after (excluding docstring-whitespace changes, which are listed for inspection); (3) only `.py` files and `.pre-commit-config.yaml` change. Unit suite 1122 passed / 89 skipped, unchanged; `pg_smoke` unchanged. | Unit suite; postgres-gate replay. | Revert. |
 | C3a | `style(backend): ruff's automatic lint fixes (no behaviour change)` | `ruff check --fix` with safe fixes only: 39 import-order fixes and 1 unused import. | Remaining findings are exactly the 7 hand-fix cases; suites unchanged; AST comparison as in C2 shows only import order and the removed import. | As C2. | Revert. |
@@ -242,3 +282,4 @@ Five review rounds were run on this plan; the fifth folded in the approval condi
 | 3 | C4 and C7 bundled separable changes. App Control could block the new ruff binary at the commit hook. Two audits would have had two exception lists. Where the authoritative test run happens was undefined. | Split C4b and C7a/C7b. Commit rules added (one concern per commit; hooks never skipped; Linux container authoritative; nothing pushed). One shared exception list. A risk row for the hook. |
 | 4 | Phase 0 rebuilds with floating dependencies, so it would not test the 2026-10-11 versions the plan proposed to pin. Hosted validation after push was missing. D2 overstated what was observed. | Pins are now exactly the Phase 0 freeze (the set the baseline gate tested). Hosted validation steps added. D2 qualified by U1. Final consistency sweep (commit numbers, versions, references): clean. |
 | 5 | Approval conditions; `seed_futa.py` usage; ai-service `main`'s `backend.yml` runs only integration and contract tests, so the legacy `ci.yml` is the only unit-test run there. | Decisions recorded (§5). U6 and U7 resolved. Split C1, C3, C5, C9 and C10 further. Startup-check category plus three negative controls. Test-image revision check. Trivy scope and thresholds. Dated exceptions. Known-baseline-failure tracking. A1 based on `feat/m3-boundary`. |
+| 6 | Phase 0 measured (§0a). The gate is green, but two M6 refusals fire for the length rule instead of the rule they name. | C1a corrects both inputs and adds a backend short-secret case (12 M6 lines); acceptance criteria rewritten to match the measured messages. Submitted for approval before implementation. |
