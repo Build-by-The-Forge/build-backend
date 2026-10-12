@@ -15,7 +15,6 @@ async def test_content_asset_api_lifecycle_and_deduplication(client) -> None:
     # 1. Admin setup (Tenant A)
     admin_id, admin_token = await register_and_authenticate(client, f"asset-admin-{uuid4()}@example.com")
     tenant_a_id, tenant_a_slug, _, _ = await seed_tenant_context(admin_id, "admin")
-    admin_headers = headers(admin_token, tenant_a_slug)
 
     # 2. Lecturer setup (Tenant A)
     lecturer_a_id, lecturer_a_token = await register_and_authenticate(client, f"asset-lecturer-a-{uuid4()}@example.com")
