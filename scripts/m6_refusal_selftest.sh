@@ -16,9 +16,13 @@
 # failure.
 #
 # Fixtures are built on each run FROM the current build-m3-backend image (its
-# ID, tagged for the run) and removed afterwards, with that tag; a temporary compose override, outside the
+# ID, tagged for the run); a temporary compose override, outside the
 # repository, points only this script's runs at them. The gate's images and
-# the working tree are not changed.
+# the working tree are not changed. Everything tagged for the run is removed
+# on exit. A run killed before its exit trap can run (seen under Git Bash
+# while a docker.exe child was running) leaves its images behind, so each run
+# first removes images left by an earlier one; the gate never runs twice at
+# once (fixed compose project, `down -v` at start), so nothing current is lost.
 #
 # Sourcing this file defines the checks without running them.
 set -uo pipefail
@@ -31,15 +35,31 @@ BASE_ID=""
 BASE_TAG=""
 RUN_ID=""
 FIXTURE=""
-FIXTURES=()
 OVERRIDE_DIR=""
 
+# Removes the self-test images matching a reference filter, found by asking
+# Docker rather than from a list kept here, so an image built just before an
+# interruption is not missed. A fixture still in use by a check container
+# (an interrupted run) cannot be removed, so its containers go first. Never
+# for the base tag: that image is the gate's backend, and so are its
+# containers.
+remove_selftest_images() { # reference-filter
+  local tag ids
+  while read -r tag; do
+    if [[ $tag != build-m3-selftest:base-* ]]; then
+      mapfile -t ids < <(docker ps -aq --filter "ancestor=$tag")
+      if ((${#ids[@]})); then
+        docker rm -f "${ids[@]}" >/dev/null 2>&1 || echo "  note: could not remove containers of $tag"
+      fi
+    fi
+    docker rmi "$tag" >/dev/null 2>&1 || echo "  note: could not remove $tag"
+  done < <(docker images --format '{{.Repository}}:{{.Tag}}' --filter "reference=$1")
+}
+
 cleanup() {
-  local tag
-  for tag in "${FIXTURES[@]}"; do
-    docker rmi "$tag" >/dev/null 2>&1 || echo "  note: could not remove fixture image $tag"
-  done
-  FIXTURES=()
+  if [[ -n $RUN_ID ]]; then
+    remove_selftest_images "build-m3-selftest:*-$RUN_ID"
+  fi
   if [[ -n $OVERRIDE_DIR ]]; then
     rm -f -- "$OVERRIDE_DIR/override.yml"
     rmdir -- "$OVERRIDE_DIR"
@@ -55,7 +75,6 @@ build_fixture() { # name dockerfile-instruction...
     bad "could not build fixture $tag"
     return 1
   fi
-  FIXTURES+=("$tag")
   FIXTURE=$tag
 }
 
@@ -99,6 +118,12 @@ main() {
     bad "no build-m3-backend image: build it first (scripts/m3_boundary_gate.sh)"
     return
   fi
+  local stale
+  stale=$(docker images -q --filter "reference=build-m3-selftest:*" | wc -l)
+  if ((stale)); then
+    echo "  removing $stale image(s) left by an interrupted earlier self-test run"
+    remove_selftest_images "build-m3-selftest:*"
+  fi
   RUN_ID=$(rnd | cut -c1-12)
   OVERRIDE_DIR=$(mktemp -d)
   trap cleanup EXIT
@@ -109,7 +134,6 @@ main() {
     bad "could not tag the base image $BASE_ID"
     return
   fi
-  FIXTURES+=("$BASE_TAG")
 
   echo "M6 refusal self-test (fixtures from build-m3-backend ${BASE_ID:7:12})"
   expect_unrelated "broken database URL" sqlalchemy.exc.ArgumentError \
