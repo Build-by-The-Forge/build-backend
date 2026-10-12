@@ -16,6 +16,25 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 COMPOSE=(docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml)
 
+# The revisions under test, recorded once per run: compose labels every image
+# with them (org.opencontainers.image.revision). "-dirty" marks uncommitted
+# changes to what an image is built from. AI_SERVICE_DIR must be the checkout
+# compose builds from (../ai-service).
+AI_DIR=${AI_SERVICE_DIR:-../ai-service}
+revision_of() { # repository [git status arguments...]
+  local repo=$1 rev
+  shift
+  rev=$(git -C "$repo" rev-parse HEAD)
+  if [[ -n "$(git -C "$repo" status --porcelain "$@")" ]]; then rev="$rev-dirty"; fi
+  echo "$rev"
+}
+BACKEND_REVISION=$(revision_of . -- Dockerfile .dockerignore requirements.txt requirements-dev.txt pyproject.toml \
+  alembic.ini alembic app scripts tests pg_smoke boundary)
+AI_SERVICE_REVISION=$(revision_of "$AI_DIR" --untracked-files=no)
+export BACKEND_REVISION AI_SERVICE_REVISION
+echo "backend revision:    $BACKEND_REVISION ($(git branch --show-current || true))"
+echo "ai-service revision: $AI_SERVICE_REVISION ($(git -C "$AI_DIR" branch --show-current || true) at $AI_DIR)"
+
 if [[ ! -f deploy/m3.env ]]; then
   echo "generating deploy/m3.env with fresh random secrets"
   python - <<'PY'

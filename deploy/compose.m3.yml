@@ -18,12 +18,18 @@ x-backend-image: &backend-build
   dockerfile: Dockerfile
   # Runtime only: no test tooling, tests or development files.
   target: production
+  # The source revision, recorded by scripts/m3_boundary_gate.sh; the gate
+  # refuses to test an image whose label differs from its checkout.
+  labels:
+    org.opencontainers.image.revision: ${BACKEND_REVISION:-unknown}
 
 # The same runtime plus test tooling and tests, for boundary-tests only.
 x-backend-test-image: &backend-test-build
   context: ..
   dockerfile: Dockerfile
   target: test
+  labels:
+    org.opencontainers.image.revision: ${BACKEND_REVISION:-unknown}
 
 x-ai-image: &ai-build
   context: ../../ai-service
@@ -32,6 +38,10 @@ x-ai-image: &ai-build
   # models/ocr/manifest.json), as a BuildKit secret: never an ARG, ENV or
   # layer. Unset locally, where verified archives come from the cache.
   secrets: [github_token]
+  # Set here, not in ai-service's Dockerfile: the ai-service repository is
+  # not changed by the backend gate.
+  labels:
+    org.opencontainers.image.revision: ${AI_SERVICE_REVISION:-unknown}
 
 x-ai-env: &ai-env
   APP_ENVIRONMENT: development
