@@ -11,7 +11,9 @@
 #     directories anywhere under /app;
 #   - no compiled bytecode or tool caches under /app (host artefacts);
 #   - `pip check` is clean and the installed packages are exactly
-#     requirements.txt's pins (markers evaluated for Linux).
+#     requirements.txt's pins (markers evaluated for Linux);
+#   - it runs as an unprivileged user that cannot change the code or the
+#     installed packages, and owns /outbox (mode 0750).
 # Runs the image with networking disabled; prints one line per check.
 set -euo pipefail
 
@@ -88,11 +90,34 @@ wrong = {k: (pins[k], installed[k]) for k in pins if k in installed and pins[k] 
 check(not (extra or missing or wrong), f"installed packages are exactly requirements.txt ({len(pins)})",
       f"not pinned {extra}, missing {missing}, version differs {wrong}")
 
+uid, gid = os.getuid(), os.getgid()
+check(uid != 0 and gid != 0, "runs as an unprivileged user", f"uid {uid}, gid {gid}")
+
+import sysconfig  # noqa: E402
+
+purelib = sysconfig.get_paths()["purelib"]
+writable = []
+for target in (app, app / "app", Path(purelib)):
+    probe = target / ".write-probe"
+    try:
+        probe.touch()
+    except PermissionError:
+        continue
+    probe.unlink()
+    writable.append(str(target))
+check(not writable, "code and installed packages are not writable by it", f"writable: {writable}")
+
+outbox = Path("/outbox")
+info = outbox.stat() if outbox.is_dir() else None
+check(info is not None and info.st_uid == uid and (info.st_mode & 0o777) == 0o750,
+      "/outbox is owned by it, mode 0750",
+      "missing" if info is None else f"owner {info.st_uid}, mode {oct(info.st_mode & 0o777)}")
+
 print(f"checks run: {ran}")
 sys.exit(1 if failed else 0)
 PY
 )
-EXPECTED_CHECKS=7
+EXPECTED_CHECKS=10
 
 echo "Production image checks: $image"
 status=0
