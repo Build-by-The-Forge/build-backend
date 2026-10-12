@@ -7,9 +7,10 @@
 # Builds backend and ../ai-service, starts PostgreSQL 17 and Redis 8 from
 # empty volumes, creates the least-privilege roles, runs both Alembic chains
 # as their owner roles, starts both services (AI-service unpublished) and the
-# AI worker, then runs boundary/ inside the network. C11 runs with Redis
-# stopped; then the M6 production startup checks and their self-test, and the
-# AI-service offline OCR check. Exit status is non-zero if any of them fails.
+# AI worker, checks the production image's contents, then runs boundary/
+# inside the network from the test image. C11 runs with Redis stopped; then
+# the M6 production startup checks and their self-test, and the AI-service
+# offline OCR check. Exit status is non-zero if any of them fails.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -50,6 +51,9 @@ if [[ -n "${OCR_MODELS_TOKEN:-}" ]]; then
 fi
 
 status=0
+# The production image holds what production runs and nothing else.
+scripts/check_backend_image.sh build-m3-backend || status=$?
+
 "${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down" || status=$?
 
 echo "C11: stopping redis"
