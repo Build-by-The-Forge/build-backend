@@ -7,8 +7,9 @@
 # Builds backend and ../ai-service, starts PostgreSQL 17 and Redis 8 from
 # empty volumes, creates the least-privilege roles, runs both Alembic chains
 # as their owner roles, starts both services (AI-service unpublished) and the
-# AI worker, then runs boundary/ inside the network. C11 runs last, with
-# Redis stopped. Exit status is the suite's.
+# AI worker, then runs boundary/ inside the network. C11 runs with Redis
+# stopped; then the M6 production startup checks and their self-test, and the
+# AI-service offline OCR check. Exit status is non-zero if any of them fails.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -55,6 +56,9 @@ echo "C11: stopping redis"
 
 # M6: the production startup path, with the same images.
 scripts/m6_production_startup.sh || status=$?
+# The M6 refusal check itself: unrelated startup failures must not count as
+# refusals (fixtures built from this run's backend image).
+scripts/m6_refusal_selftest.sh || status=$?
 
 # Phase 2 Step 2: real OCR in the AI-service image with networking disabled,
 # from the models baked into it (no runtime download).
