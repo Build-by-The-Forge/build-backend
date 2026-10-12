@@ -20,7 +20,6 @@ from app.domain.content.enums import (
     ContentSourceType,
     IngestionStatus,
     SourceStatus,
-    VisibilityScope,
 )
 from app.domain.content.ingestion_event import IngestionEventRecord
 from app.domain.content.job import ContentIngestionJob
