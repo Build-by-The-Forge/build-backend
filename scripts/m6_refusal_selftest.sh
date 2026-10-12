@@ -140,12 +140,14 @@ main() {
     "CORS_ALLOWED_ORIGINS must list exact origins" "${BACKEND_PROD[@]}" -e POSTGRES_URL=not-a-url
 
   # An unsafe configuration too: the unrelated failure must still not count.
-  if build_fixture missing-module "RUN pip uninstall -y -q structlog"; then
+  # Fixtures change the image as root and then run as the backend's
+  # unprivileged UID (10001), whatever user the base image ends with.
+  if build_fixture missing-module "USER root" "RUN pip uninstall -y -q structlog" "USER 10001:10001"; then
     use_backend_image "$FIXTURE"
     expect_unrelated "missing module (structlog uninstalled)" ModuleNotFoundError \
       "AUTH_JWT_SECRET is required" "${BACKEND_PROD[@]}" -e AUTH_JWT_SECRET=
   fi
-  if build_fixture unreadable-config "RUN chmod 000 /app/app/core/config.py" "USER 65534:65534"; then
+  if build_fixture unreadable-config "USER root" "RUN chmod 000 /app/app/core/config.py" "USER 10001:10001"; then
     use_backend_image "$FIXTURE"
     expect_unrelated "unreadable app/core/config.py (unprivileged user)" PermissionError \
       "AUTH_JWT_SECRET is required" "${BACKEND_PROD[@]}" -e AUTH_JWT_SECRET=
