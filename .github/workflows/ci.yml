@@ -80,3 +80,20 @@ jobs:
         run: pytest tests/infrastructure/test_service_auth_middleware.py -q
       - name: Signed AI-service callbacks against real Redis
         run: pytest tests/integration/content/test_signed_callbacks.py -q
+  security:
+    # Known advisories in the pinned dependencies, under the exception policy
+    # (docs/security-advisories.md). Needs the network for the advisory
+    # database.
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install pip-audit
+        run: |
+          python -m pip install pip==26.2.1
+          pip install pip-audit==2.10.1
+      - name: Audit requirements.txt and requirements-dev.txt
+        run: python -m scripts.audit_python_packages requirements
