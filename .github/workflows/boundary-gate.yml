@@ -15,12 +15,18 @@ name: boundary-gate
 # one-line change). A manual run can name any branch, tag or commit. Each run
 # resolves the ref to one commit when it checks it out, records it, and
 # scripts/m3_boundary_gate.sh fails if the checkout changes during the run.
+#
+# Runs on pull requests too, so a boundary regression is caught before merge;
+# there are no path filters, so the check always reports. Branch protection
+# on main should require it. Pull requests from forks get no secrets and fail
+# at the token step instead of passing.
 on:
   workflow_dispatch:
     inputs:
       ai_service_ref:
         description: ai-service branch, tag or commit
         default: feat/m3-boundary
+  pull_request:
   push:
     branches: [main]
 
