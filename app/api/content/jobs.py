@@ -1,30 +1,36 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Header, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.api.content.callback_schemas import (
     AICallbackRequest,
     AICallbackResponse,
-    AIDispatchRequest,
 )
 from app.api.content.job_schemas import (
-    IngestionJobCompleteRequest,
     IngestionJobCreateRequest,
-    IngestionJobFailRequest,
-    IngestionJobProgressRequest,
     IngestionJobReprocessRequest,
     IngestionJobResponse,
     IngestionJobRetryRequest,
 )
+from app.application.content.job_handlers import ReconcileMismatchError
 from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
-from app.core.config import settings
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import IngestionStatus
-from app.infrastructure.content.ai_gateway import verify_webhook_signature
+from app.domain.content.job import (
+    CallbackOutcome,
+    InvalidJobTransition,
+    InvalidStageEvidence,
+    RetryNotDue,
+)
+from app.infrastructure.security.service_context import ACTOR_SYSTEM
+from app.infrastructure.security.service_signature import VerifiedServiceRequest
+from app.infrastructure.content.ai_gateway import AIServiceGatewayError
+from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
 service = build_container().get(ContentIngestionJobService)
@@ -44,6 +50,7 @@ async def trigger_ingestion_job(
     try:
         job = await service.create_job(
             asset_id=asset_id,
+            tenant_id=context.tenant_id,
             created_by=context.user_id,
             max_attempts=payload.max_attempts,
             correlation_id=payload.correlation_id,
@@ -170,124 +177,6 @@ async def list_ingestion_jobs(
 
 
 @router.post(
-    "/jobs/{job_id}/start",
-    response_model=IngestionJobResponse,
-)
-async def start_job(
-    job_id: str,
-    stage: str = Query(default="parsing"),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.start_job(job_id=job_id, stage=stage)
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "START_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
-    "/jobs/{job_id}/progress",
-    response_model=IngestionJobResponse,
-)
-async def progress_job(
-    job_id: str,
-    payload: IngestionJobProgressRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.progress_job(
-            job_id=job_id,
-            target_stage=payload.target_stage,
-            metrics=payload.metrics,
-        )
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "PROGRESS_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
-    "/jobs/{job_id}/complete",
-    response_model=IngestionJobResponse,
-)
-async def complete_job(
-    job_id: str,
-    payload: IngestionJobCompleteRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.complete_job(job_id=job_id, metrics=payload.metrics)
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "COMPLETE_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
-    "/jobs/{job_id}/fail",
-    response_model=IngestionJobResponse,
-)
-async def fail_job(
-    job_id: str,
-    payload: IngestionJobFailRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
-) -> JSONResponse:
-    try:
-        job = await service.fail_job(
-            job_id=job_id,
-            error_code=payload.error_code,
-            error_message=payload.error_message,
-            is_retryable=payload.is_retryable,
-            details=payload.details,
-        )
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "FAIL_JOB_FAILED", "message": str(exc)}},
-        )
-
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
-
-
-@router.post(
     "/jobs/{job_id}/retry",
     response_model=IngestionJobResponse,
 )
@@ -298,7 +187,12 @@ async def retry_job(
 ) -> JSONResponse:
     try:
         job = await service.retry_job(
-            job_id=job_id, delay_seconds=payload.delay_seconds
+            job_id=job_id, tenant_id=context.tenant_id, delay_seconds=payload.delay_seconds
+        )
+    except InvalidJobTransition as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
         )
     except ValueError as exc:
         msg = str(exc).lower()
@@ -329,6 +223,7 @@ async def reprocess_asset(
     try:
         job = await service.reprocess_asset(
             asset_id=asset_id,
+            tenant_id=context.tenant_id,
             created_by=context.user_id,
             correlation_id=payload.correlation_id,
         )
@@ -356,12 +251,30 @@ async def reprocess_asset(
 )
 async def dispatch_ingestion_job(
     job_id: str,
-    payload: AIDispatchRequest | None = None,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
-    callback_url = payload.callback_url if payload else None
+    # No request body: where AI-service reports back is never chosen by the
+    # caller. The signed context carries this caller and the one permission
+    # checked here (design B.2, decision E.6).
     try:
-        job = await service.dispatch_job(job_id=job_id, callback_url=callback_url)
+        job = await service.dispatch_job(
+            job_id=job_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            membership_id=context.membership_id,
+            role=context.role,
+            permission=Permission.CONTENT_JOB_MANAGE.value,
+        )
+    except RetryNotDue as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "RETRY_NOT_DUE", "message": str(exc)}},
+        )
+    except InvalidJobTransition as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+        )
     except ValueError as exc:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -379,73 +292,165 @@ async def dispatch_ingestion_job(
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
+    if job.status == IngestionStatus.FAILED:
+        # The dispatch failed and the job's failed state was saved; report it.
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={
+                "error": {
+                    "code": job.error_code or "AI_DISPATCH_FAILED",
+                    "message": job.error_message or "AI-service dispatch failed",
+                },
+                "data": resp_data,
+            },
+        )
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
+
+
+@router.post(
+    "/jobs/{job_id}/reconcile",
+    response_model=IngestionJobResponse,
+)
+async def reconcile_ingestion_job(
+    job_id: str,
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+) -> JSONResponse:
+    """Apply AI-service's account of the job's active task (design B.3).
+
+    The recorded events go through the same rules as delivered callbacks;
+    ``meta.reconciled`` lists each event's outcome.
+    """
+    try:
+        result = await service.reconcile_job(job_id=job_id, tenant_id=context.tenant_id)
+    except InvalidJobTransition as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": {"code": "JOB_NOT_FOUND", "message": str(exc)}},
+        )
+    except ReconcileMismatchError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"error": {"code": "AI_STATUS_MISMATCH", "message": str(exc)}},
+        )
+    except AIServiceGatewayError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            content={"error": {"code": exc.error_code, "message": str(exc)}},
+        )
+
+    resp_data = IngestionJobResponse.from_domain(result.job).model_dump(mode="json")
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "data": resp_data,
+            "meta": {
+                "reconciled": [
+                    {"event_id": event_id, "outcome": outcome}
+                    for event_id, outcome in result.outcomes
+                ]
+            },
+        },
+    )
 
 
 @router.post(
     "/ingestion/callbacks",
     response_model=AICallbackResponse,
 )
-async def handle_ai_callback(
-    request: Request,
-    x_build_signature: str | None = Header(default=None, alias="X-Build-Signature"),
-    authorization: str | None = Header(default=None),
-) -> JSONResponse:
-    body_bytes = await request.body()
+async def handle_ai_callback(request: Request) -> JSONResponse:
+    """Processing events from AI-service (design B.3).
 
-    # Authenticate webhook signature or bearer token
-    is_valid_hmac = verify_webhook_signature(
-        payload_bytes=body_bytes,
-        signature_header=x_build_signature,
-        secret=settings.ai_service_webhook_secret,
-    )
-    is_valid_bearer = (
-        authorization is not None
-        and authorization.strip() == f"Bearer {settings.ai_service_api_key}"
-    )
-
-    if not is_valid_hmac and not is_valid_bearer:
+    ServiceAuthMiddleware has already verified the BUILD Service Signature v1
+    request (AI_TO_BACKEND_SECRET, sender ai-service, replay, 1 MiB body)
+    before this runs; there is no other way in.
+    """
+    verified = getattr(request.state, SERVICE_AUTH_STATE_KEY, None)
+    if not isinstance(verified, VerifiedServiceRequest):
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"error": "invalid service authentication"},
+        )
+    # A callback is a system operation: it carries no user and grants
+    # nothing. A user context here is a misuse of the AI-to-backend secret.
+    context = verified.context
+    if context.actor != ACTOR_SYSTEM:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={"error": "callbacks require a system context"},
+        )
+
+    try:
+        payload = AICallbackRequest.model_validate_json(await request.body())
+    except ValidationError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "error": {
-                    "code": "INVALID_CALLBACK_AUTH",
-                    "message": "Missing or invalid HMAC signature / API Key",
+                    "code": "INVALID_PAYLOAD",
+                    "message": "callback body failed validation",
+                    "details": exc.errors(
+                        include_url=False, include_input=False, include_context=False
+                    ),
                 }
             },
         )
 
     try:
-        payload = AICallbackRequest.model_validate_json(body_bytes)
-    except Exception as exc:
+        job, outcome = await service.handle_callback(
+            job_id=payload.job_id,
+            tenant_id=context.tenant_id,
+            event_id=payload.event_id,
+            event_type=payload.event_type,
+            stage=payload.stage,
+            external_task_id=payload.external_task_id,
+            run_number=payload.run_number,
+            attempt_count=payload.attempt_count,
+            metrics=payload.metrics,
+            error_code=payload.error_code,
+            error_message=payload.error_message,
+            is_retryable=payload.is_retryable,
+            details=payload.details,
+        )
+    except InvalidStageEvidence as exc:
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"error": {"code": "INVALID_PAYLOAD", "message": str(exc)}},
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            content={"error": {"code": "INVALID_STAGE_EVIDENCE", "message": str(exc)}},
         )
 
-    job, already_processed = await service.handle_callback(
-        job_id=payload.job_id,
-        event_id=payload.event_id,
-        event_type=payload.event_type,
-        stage=payload.stage,
-        external_task_id=payload.external_task_id,
-        run_number=payload.run_number,
-        attempt_count=payload.attempt_count,
-        metrics=payload.metrics,
-        error_code=payload.error_code,
-        error_message=payload.error_message,
-        is_retryable=payload.is_retryable,
-        details=payload.details,
-    )
-
-    if job is None:
+    if job is None or outcome is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}},
+        )
+
+    if outcome is CallbackOutcome.CONFLICT:
+        # The event id was already used for different content.
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
             content={
                 "error": {
-                    "code": "JOB_NOT_FOUND",
-                    "message": f"Job '{payload.job_id}' not found",
-                }
+                    "code": "EVENT_CONFLICT",
+                    "message": "event_id was already recorded with different content",
+                },
+                "data": {"job_id": job.id, "outcome": outcome.value},
+            },
+        )
+
+    if outcome is CallbackOutcome.NOT_ALLOWED:
+        # Not consumed: the job is not in a state this event can move it from.
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "error": {
+                    "code": "TRANSITION_NOT_ALLOWED",
+                    "message": f"event not allowed while the job is {job.status.value}",
+                },
+                "data": {"job_id": job.id, "outcome": outcome.value},
             },
         )
 
@@ -455,7 +460,8 @@ async def handle_ai_callback(
             "data": {
                 "status": "accepted",
                 "job_id": job.id,
-                "already_processed": already_processed,
+                "outcome": outcome.value,
+                "already_processed": outcome is not CallbackOutcome.APPLIED,
             }
         },
     )

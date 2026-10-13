@@ -8,6 +8,7 @@ from app.infrastructure.content.asset_repositories import (
 )
 from app.infrastructure.content.job_repositories import (
     SqlAlchemyContentIngestionJobRepository,
+    SqlAlchemyIngestionEventRepository,
 )
 from app.infrastructure.content.repositories import SqlAlchemyContentSourceRepository
 from app.infrastructure.unit_of_work import UnitOfWork
@@ -20,6 +21,7 @@ class ContentUnitOfWork(UnitOfWork):
         self.sources = SqlAlchemyContentSourceRepository(session)
         self.assets = SqlAlchemyContentAssetRepository(session)
         self.jobs = SqlAlchemyContentIngestionJobRepository(session)
+        self.ingestion_events = SqlAlchemyIngestionEventRepository(session)
 
 
 @asynccontextmanager

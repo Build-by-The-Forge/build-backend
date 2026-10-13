@@ -116,7 +116,7 @@ class ContentSource:
 
         now = datetime.now(timezone.utc)
         source = cls(
-            id=source_id or f"csrc-{uuid4()}",
+            id=source_id or str(uuid4()),
             code=clean_code,
             name=name.strip(),
             source_type=st,

@@ -53,3 +53,5 @@ Thumbs.db
 
 # Misc
 .python-version
+# Combined topology secrets (deploy/m3.env.example)
+deploy/m3.env

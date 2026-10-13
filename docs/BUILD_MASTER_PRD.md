@@ -3674,7 +3674,783 @@ The technology should remain modular enough that the product can evolve without 
 
 ---
 
-# 146. Document Status
+# 146. Offline AI & Hybrid Intelligence Architecture
+
+## 146.1 Overview
+
+BUILD shall support a **hybrid AI architecture** in which online cloud intelligence and local/offline intelligence coexist as complementary capabilities.
+
+The objective is not to replace cloud AI with a smaller local model. Instead, BUILD shall provide students with useful AI-assisted learning capabilities even when internet connectivity is unavailable, unreliable, expensive, or temporarily interrupted, while retaining access to substantially stronger cloud models whenever connectivity is available.
+
+The architecture shall therefore distinguish between:
+
+1. **Online Intelligence** — cloud and self-hosted models accessed through the BUILD Model Gateway.
+2. **Offline Intelligence** — locally available models and educational resources running on the student's device.
+3. **Hybrid Intelligence** — coordinated operation between local and online intelligence when connectivity is intermittent or restored.
+
+The local model selection shall remain configurable and shall not be hard-coded into the core application architecture.
+
+## 146.2 Design Principle
+
+BUILD shall optimize for **learning reliability rather than model size**.
+
+A model with more parameters is not automatically a better offline model for BUILD. The usefulness of an offline AI system depends on the combination of:
+
+* model capability;
+* educational reasoning ability;
+* mathematical correctness;
+* course-material grounding;
+* retrieval quality;
+* hallucination resistance;
+* response latency;
+* memory consumption;
+* storage requirements;
+* battery and thermal impact;
+* device compatibility;
+* runtime stability;
+* licensing and redistribution rights;
+* and the quality of the surrounding offline intelligence infrastructure.
+
+Therefore, BUILD shall select its offline model configuration through evidence-based benchmarking rather than committing prematurely to a single model.
+
+## 146.3 Local Model Pool
+
+BUILD shall investigate supporting a **pool of compact local language models** rather than assuming that a single model must perform every offline task.
+
+The initial evaluation pool shall include candidates such as:
+
+* Glimmer 2B;
+* Qwen3-1.7B;
+* Gemma 3 1B;
+* SmolLM2-1.7B-Instruct;
+* one additional mobile/on-device-oriented candidate selected during technical evaluation.
+
+The exact models used in production shall be determined after benchmarking.
+
+The architecture shall permit:
+
+```text
+Local Model Pool
+│
+├── Model A
+├── Model B
+├── Model C
+├── Model D
+└── Model E
+```
+
+without requiring the application or AI service architecture to depend on any particular model.
+
+The system may ultimately use:
+
+### Option A — Single best model
+
+One model clearly outperforms the alternatives across BUILD's requirements.
+
+```text
+Offline Request
+      ↓
+Selected Local Model
+      ↓
+Response
+```
+
+### Option B — Task-specialized model routing
+
+Different models demonstrate meaningful strengths in different workloads.
+
+```text
+                         Offline Request
+                               │
+                               ▼
+                       Local Model Router
+                     ┌─────────┼─────────┐
+                     ▼         ▼         ▼
+                 Model A    Model B    Model C
+                 Math       Summary     General QA
+```
+
+### Option C — Multi-model verification
+
+For selected high-value tasks, more than one local model may independently produce or evaluate an answer.
+
+```text
+                 Student Question
+                       │
+              ┌────────┴────────┐
+              ▼                 ▼
+           Model A           Model B
+              │                 │
+              └────────┬────────┘
+                       ▼
+                Verification /
+                Consensus Layer
+                       │
+                       ▼
+                 Final Response
+```
+
+This mode shall only be used where its additional CPU, RAM, battery, latency, and storage costs are justified.
+
+The system shall **not run all local models simultaneously by default**.
+
+## 146.4 Offline Intelligence Runtime
+
+The offline experience shall not be treated as merely "put a small LLM on the phone."
+
+BUILD shall implement an **Offline Intelligence Runtime** consisting of multiple cooperating components.
+
+```text
+Offline Intelligence Runtime
+│
+├── Local Model Runtime
+│     └── Selected compact model(s)
+│
+├── Local Retrieval
+│     ├── Course materials
+│     ├── Lecture notes
+│     ├── Textbooks/resources
+│     └── Academic documents
+│
+├── Local CBT Knowledge
+│     ├── Questions
+│     ├── Verified answers
+│     └── Explanations
+│
+├── Deterministic Tools
+│     ├── Calculator
+│     ├── Mathematical solver
+│     └── Other verified utilities
+│
+├── Local Context Manager
+│
+├── Confidence/Evidence Evaluation
+│
+├── Offline Conversation State
+│
+├── Pending Task Queue
+│
+└── Synchronization/Reconciliation
+```
+
+The purpose of this architecture is to compensate for the reduced general reasoning capability of compact local models by providing them with **high-quality contextual information and deterministic tools**.
+
+## 146.5 Local Course-Material Retrieval
+
+Offline AI shall be capable of answering questions using educational materials that have previously been downloaded, imported, or made available to the student.
+
+Examples include:
+
+* lecture notes;
+* course PDFs;
+* lecturer-provided materials;
+* approved textbooks;
+* summaries;
+* previously ingested academic documents;
+* official course materials;
+* and other authorized learning resources.
+
+The system shall locally index appropriate content and retrieve relevant passages before generating an answer.
+
+Example:
+
+```text
+Student:
+"Explain the concept of hypothesis testing from my MTS 101 notes."
+
+             ↓
+
+Local Retrieval
+             ↓
+Relevant MTS 101 passages
+             ↓
+Compact Local Model
+             ↓
+Grounded explanation
+```
+
+The local model should therefore rely on retrieved course evidence whenever appropriate instead of depending entirely on its pretrained knowledge.
+
+This is particularly important for university-specific content where the expected answer may depend on:
+
+* lecturer terminology;
+* course-specific definitions;
+* institutional curriculum;
+* locally provided examples;
+* specific formulas;
+* or the exact content taught in a course.
+
+## 146.6 Offline CBT Intelligence
+
+BUILD shall provide access to locally available CBT resources when the student is offline.
+
+Where authorized and available, the device may retain:
+
+* CBT questions;
+* answer options;
+* verified answers;
+* explanations;
+* topic classifications;
+* difficulty levels;
+* course associations;
+* and other metadata.
+
+Offline CBT functionality may include:
+
+* taking previously downloaded CBTs;
+* practicing questions;
+* reviewing answers;
+* explaining why an answer is correct;
+* identifying weak topics;
+* generating limited practice variations where reliable;
+* and recording progress locally.
+
+Verified question-bank data shall be preferred over model-generated information whenever authoritative content is available.
+
+The local LLM shall not be treated as the source of truth for verified assessment data.
+
+## 146.7 Deterministic Tools
+
+BUILD shall use deterministic computational tools wherever practical instead of requiring a language model to perform calculations that can be verified algorithmically.
+
+Examples include:
+
+* arithmetic;
+* algebraic calculations;
+* unit conversion;
+* statistical calculations;
+* numerical evaluation;
+* and other supported mathematical operations.
+
+The local model may interpret the student's request and explain the result, while a deterministic engine performs or verifies the calculation.
+
+Example:
+
+```text
+Student Question
+      ↓
+Local Model
+      ↓
+Identifies mathematical operation
+      ↓
+Deterministic Solver
+      ↓
+Verified Result
+      ↓
+Local Model
+      ↓
+Step-by-step explanation
+```
+
+This architecture is intended to reduce mathematical hallucinations and improve reliability.
+
+## 146.8 Offline Confidence and Evidence Handling
+
+BUILD shall explicitly account for uncertainty in offline responses.
+
+The local system shall distinguish between:
+
+### High-confidence response
+
+The system has sufficient relevant source material and/or deterministic verification.
+
+→ Answer normally.
+
+### Limited-confidence response
+
+The system has some relevant information but insufficient evidence for a highly reliable answer.
+
+→ Answer cautiously and communicate the limitation.
+
+### Low-confidence response
+
+The system lacks sufficient information, encounters conflicting evidence, or cannot reliably solve the problem.
+
+→ Avoid presenting an unsupported answer as fact.
+
+Where appropriate, the student may be offered the ability to save the question for later processing by a stronger online model.
+
+The goal is to ensure that:
+
+> **Offline mode prioritizes trustworthy assistance over confidently generated misinformation.**
+
+## 146.9 Online AI Remains the Primary High-Capability Layer
+
+Offline AI shall **not replace BUILD's online AI infrastructure**.
+
+When connectivity is available, BUILD may access substantially stronger models through the Model Gateway.
+
+The online layer may include:
+
+* commercial model APIs;
+* open-weight/self-hosted models;
+* cloud inference providers;
+* specialized models;
+* future model providers;
+* and BUILD-hosted inference infrastructure.
+
+Conceptually:
+
+```text
+                         BUILD Model Gateway
+                                │
+                ┌───────────────┴───────────────┐
+                │                               │
+          Online Intelligence            Offline Intelligence
+                │                               │
+       ┌────────┼────────┐              ┌───────┴────────┐
+       │        │        │              │                │
+    Provider A Provider B Provider C   Local Model A   Local Model B
+       │        │        │              │                │
+       └────────┴────────┘              └───────┬────────┘
+                                                │
+                                      Local Retrieval/Tools
+```
+
+The gateway shall determine the appropriate execution path based on factors such as:
+
+* connectivity;
+* task requirements;
+* model capability;
+* latency;
+* cost;
+* privacy requirements;
+* device capability;
+* availability;
+* and user/application policy.
+
+## 146.10 Intelligent Model Routing
+
+BUILD shall implement provider- and model-agnostic routing.
+
+The routing system shall not assume that the most powerful available model is always the appropriate model.
+
+Example routing policy:
+
+| Situation                       | Preferred execution             |
+| ------------------------------- | ------------------------------- |
+| No internet                     | Local intelligence              |
+| Very poor connectivity          | Local intelligence              |
+| Simple offline explanation      | Local model                     |
+| Course-material question        | Local model + local retrieval   |
+| Deterministic calculation       | Calculator/solver + local model |
+| Normal online academic question | Appropriate cloud model         |
+| Complex reasoning               | Stronger cloud model            |
+| High-quality generation         | Stronger cloud model            |
+| Sensitive local-only task       | Local execution where supported |
+| Local model uncertain           | Queue/escalate when permitted   |
+| Primary provider unavailable    | Alternate provider              |
+| Connectivity restored           | Process eligible queued tasks   |
+
+Routing decisions shall be configurable and should evolve as benchmark and production data become available.
+
+## 146.11 Offline-to-Online Continuity
+
+BUILD shall support continuity between offline and online operation.
+
+The system shall **not synchronize the local model itself with a cloud model**.
+
+Instead, BUILD shall synchronize relevant **work, state, context, and results**.
+
+Example:
+
+```text
+                 OFFLINE
+                    │
+                    ▼
+             Student Question
+                    │
+                    ▼
+          Local Intelligence
+                    │
+              ┌─────┴─────┐
+              │           │
+          Answer       Needs review
+              │           │
+              │       Pending Queue
+              │           │
+              └─────┬─────┘
+                    │
+              Internet returns
+                    │
+                    ▼
+              Model Gateway
+                    │
+                    ▼
+            Stronger AI model
+                    │
+                    ▼
+            Refined/verified result
+                    │
+                    ▼
+                Student
+```
+
+BUILD shall not automatically upload every offline conversation when connectivity returns.
+
+Each queued task shall be subject to defined:
+
+* synchronization rules;
+* privacy requirements;
+* user consent/policy;
+* data-retention rules;
+* task priority;
+* context requirements;
+* and retry behavior.
+
+## 146.12 Offline Task Queue
+
+Tasks that cannot be reliably completed offline may be stored in a local pending queue.
+
+Examples:
+
+* difficult unanswered questions;
+* requests requiring a cloud model;
+* requests requiring unavailable external knowledge;
+* requests flagged for additional verification;
+* and other explicitly deferred operations.
+
+Each queued task should retain only the information necessary to resume processing, subject to BUILD's privacy and data-retention policies.
+
+When connectivity returns, the Model Gateway may determine whether the task should:
+
+1. remain local;
+2. be processed by a cloud model;
+3. be processed by a self-hosted model;
+4. be sent to an alternative provider;
+5. or be discarded/expired.
+
+## 146.13 Local Model Benchmarking
+
+Before selecting the production offline configuration, BUILD shall conduct a controlled comparative benchmark.
+
+The benchmark shall evaluate candidate models against BUILD-specific workloads rather than relying solely on general-purpose public benchmarks.
+
+Initial evaluation categories shall include:
+
+### Academic reasoning
+
+* university-level conceptual questions;
+* multi-step reasoning;
+* explanation quality;
+* instruction following.
+
+### Mathematics
+
+* arithmetic;
+* algebra;
+* statistics;
+* probability;
+* step-by-step solutions;
+* correctness and consistency.
+
+### Course-material grounding
+
+* question answering from supplied material;
+* retrieval-grounded explanations;
+* multi-section synthesis;
+* resistance to information not present in the supplied material.
+
+### Hallucination and uncertainty
+
+* unsupported questions;
+* insufficient context;
+* ambiguous questions;
+* conflicting source material;
+* willingness to acknowledge uncertainty.
+
+### CBT
+
+* question answering;
+* answer explanations;
+* distractor analysis;
+* practice-question generation where appropriate.
+
+### General academic assistance
+
+* summarization;
+* study assistance;
+* rewriting;
+* classification;
+* straightforward conversation.
+
+## 146.14 Real-Device Benchmarking
+
+Model evaluation shall not be limited to developer laptops.
+
+Candidate models shall be tested on representative Android devices, including lower-end devices within BUILD's intended support range.
+
+Metrics shall include:
+
+* first-token latency;
+* total response latency;
+* tokens/second;
+* peak RAM usage;
+* persistent storage requirements;
+* model download size;
+* startup time;
+* battery consumption;
+* thermal behaviour;
+* crash/stability rate;
+* concurrent application impact;
+* offline runtime compatibility;
+* and user-perceived responsiveness.
+
+A model that produces better answers but makes BUILD unusably slow on supported devices may not be selected as the default.
+
+## 146.15 Complete Offline-System Benchmark
+
+BUILD shall evaluate not only raw model performance but complete configurations.
+
+For example:
+
+```text
+Configuration A
+Model A + Retrieval
+
+Configuration B
+Model B + Retrieval
+
+Configuration C
+Model C + Retrieval + Calculator
+
+Configuration D
+Model D + Retrieval + CBT Bank
+
+Configuration E
+Multiple local models + Router + Verification
+```
+
+This is important because the best individual model may not produce the best complete offline learning experience.
+
+The final benchmark shall therefore measure:
+
+> **Model capability + context quality + tools + retrieval + device performance + reliability.**
+
+## 146.16 Model Selection Criteria
+
+The production local model configuration shall be selected using a weighted BUILD-specific evaluation.
+
+Indicative criteria may include:
+
+| Criterion                  | Indicative importance |
+| -------------------------- | --------------------: |
+| Educational correctness    |                   25% |
+| Course-material grounding  |                   20% |
+| Mathematical correctness   |                   15% |
+| Hallucination resistance   |                   10% |
+| Explanation quality        |                   10% |
+| Latency                    |                    5% |
+| RAM requirements           |                    5% |
+| Storage requirements       |                    3% |
+| Battery/thermal efficiency |                    3% |
+| Runtime stability          |                    2% |
+
+These weights are provisional and shall be finalized during the benchmark design.
+
+**Licensing and commercial deployment compatibility shall be treated as a mandatory gate rather than merely a numerical score.**
+
+A model that cannot legally be distributed or deployed under BUILD's intended commercial model shall not be selected regardless of benchmark performance.
+
+## 146.17 Model Gateway Abstraction
+
+The BUILD Model Gateway shall remain independent of the selected local model.
+
+The application shall communicate with an abstract model capability rather than directly targeting a specific model vendor or model name.
+
+Conceptually:
+
+```text
+Application
+     │
+     ▼
+Model Gateway
+     │
+     ├── Local Provider
+     │      ├── Model A
+     │      ├── Model B
+     │      └── Model C
+     │
+     ├── Cloud Provider A
+     ├── Cloud Provider B
+     ├── Cloud Provider C
+     │
+     └── Self-hosted Provider
+```
+
+This allows BUILD to:
+
+* replace local models;
+* add new models;
+* change cloud providers;
+* introduce self-hosted inference;
+* combine multiple providers;
+* perform A/B testing;
+* and modify routing policies
+
+without requiring fundamental changes to the student application.
+
+## 146.18 Privacy and Data Handling
+
+Offline processing shall provide an important privacy advantage because some student interactions can be processed entirely on-device without transmitting the underlying content to external providers.
+
+BUILD shall distinguish between:
+
+### Local-only data
+
+Information that remains on-device unless explicitly synchronized according to policy.
+
+### Cloud-eligible data
+
+Information that may be transmitted to an online provider when required and permitted.
+
+### Cloud-required data
+
+Operations that cannot reasonably be completed offline.
+
+The system shall not automatically transmit offline conversations, uploaded academic materials, or other potentially sensitive student data merely because connectivity has returned.
+
+Synchronization shall follow BUILD's privacy, authorization, retention, and consent requirements.
+
+## 146.19 Resource Management
+
+Because mobile devices have limited resources, BUILD shall dynamically manage local AI workloads.
+
+The runtime should consider:
+
+* available RAM;
+* battery level;
+* thermal state;
+* device performance class;
+* available storage;
+* current application workload;
+* model loading cost;
+* and connectivity state.
+
+Possible behaviour includes:
+
+```text
+High device resources
+→ use stronger local model
+
+Limited resources
+→ use smaller model
+
+Low battery
+→ reduce local inference workload
+
+High thermal pressure
+→ reduce inference intensity
+
+No storage
+→ prevent additional model/material downloads
+
+Internet available
+→ consider cloud execution
+```
+
+The local runtime shall not unnecessarily keep multiple large models resident in memory simultaneously.
+
+## 146.20 Progressive Model Availability
+
+BUILD may support downloading additional local models according to device capability and user needs.
+
+For example:
+
+```text
+Base Offline Package
+├── smallest supported model
+├── core retrieval engine
+├── essential CBT content
+└── core academic tools
+
+Optional Intelligence Pack
+├── stronger local model
+├── additional subject resources
+└── additional capabilities
+```
+
+This allows BUILD to support a wider range of Android hardware without forcing every student to download the largest available model.
+
+## 146.21 Architecture Invariant
+
+The following architectural invariant shall be maintained:
+
+> **BUILD must never depend on a single AI model, provider, or inference location for core learning functionality.**
+
+The platform must be capable of operating across:
+
+```text
+Cloud AI
+      ↕
+Self-hosted AI
+      ↕
+Local AI
+      ↕
+Deterministic educational tools
+      ↕
+Verified academic knowledge
+```
+
+The system should degrade gracefully as capabilities become unavailable.
+
+## 146.22 Expected Outcome
+
+The desired end state is not simply "BUILD works offline."
+
+The desired end state is:
+
+> **BUILD remains useful, grounded, and trustworthy across a spectrum of connectivity and device conditions.**
+
+A student with a strong internet connection may receive assistance from BUILD's strongest available cloud models.
+
+A student with intermittent connectivity may continue learning through local models, retrieved course materials, CBT resources, and deterministic tools.
+
+A student with no connectivity may still receive meaningful academic assistance from the Offline Intelligence Runtime.
+
+When connectivity returns, BUILD can selectively escalate unresolved or high-value tasks to stronger online intelligence.
+
+This creates a **hybrid educational intelligence system** in which local and cloud AI complement each other rather than compete.
+
+## 146.23 Initial Implementation Direction
+
+The implementation shall proceed in the following order:
+
+1. Define the Offline Intelligence Runtime interfaces.
+2. Define the Model Gateway local-provider abstraction.
+3. Establish the candidate-model benchmark suite.
+4. Benchmark the initial local model candidates.
+5. Benchmark candidates on representative Android hardware.
+6. Prototype local retrieval over downloaded academic materials.
+7. Integrate deterministic mathematical tooling.
+8. Prototype local CBT access and verification.
+9. Implement confidence/evidence handling.
+10. Implement offline task queuing.
+11. Implement controlled offline-to-online synchronization.
+12. Evaluate single-model versus multi-model local routing.
+13. Select the production local configuration based on evidence.
+14. Integrate the selected configuration into BUILD without coupling the core architecture to that model.
+15. Continue monitoring model and runtime performance as new models become available.
+
+### Decision Status
+
+**Architecture: Approved direction**
+
+**Production local model: Not yet selected**
+
+**Initial candidates: Under evaluation**
+
+**Cloud AI: Remains part of the core architecture**
+
+**Model Gateway: Provider/model agnostic**
+
+**Offline strategy: Local Model Pool + Local RAG + Verified CBT Knowledge + Deterministic Tools + Confidence Handling**
+
+**Final local configuration: Determined by benchmark and real-device validation**
+
+---
+
+# 147. Document Status
 
 This document represents the consolidated target-state product and architecture direction for BUILD.
 

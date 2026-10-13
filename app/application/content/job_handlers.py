@@ -1,24 +1,56 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
 from app.application.common.uow import ContentUnitOfWorkPort
+from app.application.identity.ports.security_events import (
+    SecurityEvent,
+    SecurityEventRecorder,
+)
 from app.application.content.job_commands import (
-    CompleteIngestionJobCommand,
     CreateIngestionJobCommand,
     DispatchIngestionJobCommand,
-    FailIngestionJobCommand,
     GetIngestionJobQuery,
     GetLatestJobForAssetQuery,
     HandleAICallbackCommand,
     ListIngestionJobsQuery,
-    ProgressIngestionJobCommand,
+    ReconcileIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
-    StartIngestionJobCommand,
 )
+from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
-from app.domain.content.gateway import AIServiceIngestionGateway
-from app.domain.content.job import ContentIngestionJob
+from app.domain.content.gateway import AIServiceIngestionGateway, IngestionDispatchActor
+from app.domain.content.ingestion_event import (
+    IngestionEventRecord,
+    canonical_event_digest,
+)
+from app.domain.content.job import (
+    ACTIVE_STATUSES,
+    CallbackOutcome,
+    ContentIngestionJob,
+    InvalidJobTransition,
+    InvalidStageEvidence,
+)
 from app.events.event_bus import EventBus
+
+
+def owned_job(job: ContentIngestionJob | None, tenant_id: str, job_id: str) -> ContentIngestionJob:
+    """The job if it belongs to ``tenant_id``.
+
+    A job of another tenant, or a tenant-less (platform) job, is reported
+    exactly like a missing one, so a caller learns nothing about it.
+    """
+    if job is None or job.tenant_id is None or job.tenant_id != tenant_id:
+        raise ValueError(f"ContentIngestionJob with id '{job_id}' does not exist")
+    return job
+
+
+def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> ContentAsset:
+    if asset is None or asset.tenant_id is None or asset.tenant_id != tenant_id:
+        raise ValueError(f"ContentAsset with id '{asset_id}' does not exist")
+    return asset
 
 
 class CreateIngestionJobHandler:
@@ -27,9 +59,9 @@ class CreateIngestionJobHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
-        asset = await self._uow.assets.get_asset_by_id(cmd.asset_id)
-        if asset is None:
-            raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
+        asset = owned_asset(
+            await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id
+        )
 
         job = ContentIngestionJob.create(
             asset_id=asset.id,
@@ -57,140 +89,13 @@ class CreateIngestionJobHandler:
         return saved_job
 
 
-class StartIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: StartIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        job.start(stage=cmd.stage)
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(IngestionStatus.PROCESSING)
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
-class ProgressIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: ProgressIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        target = cmd.target_stage.strip().lower()
-        if target == "extracted":
-            job.progress_to_extracted(cmd.metrics)
-            asset_status = IngestionStatus.EXTRACTED
-        elif target == "chunked":
-            job.progress_to_chunked(cmd.metrics)
-            asset_status = IngestionStatus.CHUNKED
-        elif target == "indexed":
-            job.progress_to_indexed(cmd.metrics)
-            asset_status = IngestionStatus.INDEXED
-        else:
-            raise ValueError(f"Unknown target stage '{cmd.target_stage}'")
-
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(asset_status)
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
-class CompleteIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: CompleteIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        job.complete(cmd.metrics)
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(IngestionStatus.READY)
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
-class FailIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
-        self._uow = uow
-        self._event_bus = event_bus
-
-    async def handle(self, cmd: FailIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
-
-        job.fail(
-            error_code=cmd.error_code,
-            error_message=cmd.error_message,
-            is_retryable=cmd.is_retryable,
-            details=cmd.details,
-        )
-        job_events = job.pull_events()
-        saved_job = await self._uow.jobs.save_job(job)
-
-        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
-        if asset is not None:
-            asset.update_ingestion_status(
-                IngestionStatus.FAILED,
-                error_code=cmd.error_code,
-                error_message=cmd.error_message,
-            )
-            await self._uow.assets.save_asset(asset)
-            job_events.extend(asset.pull_events())
-
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job
-
-
 class RetryIngestionJobHandler:
     def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
     async def handle(self, cmd: RetryIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
+        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
 
         job.schedule_retry(delay_seconds=cmd.delay_seconds)
         job_events = job.pull_events()
@@ -214,9 +119,9 @@ class ReprocessAssetHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
-        asset = await self._uow.assets.get_asset_by_id(cmd.asset_id)
-        if asset is None:
-            raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
+        asset = owned_asset(
+            await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id
+        )
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
         if latest_job is not None:
@@ -261,9 +166,7 @@ class DispatchIngestionJobHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: DispatchIngestionJobCommand) -> ContentIngestionJob:
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            raise ValueError(f"ContentIngestionJob with id '{cmd.job_id}' does not exist")
+        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
 
         asset = await self._uow.assets.get_asset_by_id(job.asset_id)
         if asset is None:
@@ -273,21 +176,34 @@ class DispatchIngestionJobHandler:
         if source is None:
             raise ValueError(f"ContentSource with id '{job.source_id}' does not exist")
 
-        callback_url = cmd.callback_url or "/content/ingestion/callbacks"
+        # The signed context names the job's own tenant (owned_job checked it
+        # is the caller's). No callback URL is sent: AI-service reports only
+        # to its configured BACKEND_CALLBACK_URL.
+        actor = IngestionDispatchActor(
+            tenant_id=job.tenant_id or cmd.tenant_id,
+            user_id=cmd.user_id,
+            membership_id=cmd.membership_id,
+            role=cmd.role,
+            permission=cmd.permission,
+        )
+
+        # Only a queued job whose retry delay has elapsed is sent; anything
+        # else is refused before AI-service is contacted.
+        job.ensure_dispatchable()
 
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
                 job=job,
                 asset=asset,
                 source=source,
-                callback_url=callback_url,
+                actor=actor,
             )
             job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
         except Exception as exc:
             error_code = getattr(exc, "error_code", "AI_DISPATCH_FAILED")
             is_retryable = getattr(exc, "is_retryable", True)
-            job.fail(
+            job.fail_dispatch(
                 error_code=error_code,
                 error_message=str(exc),
                 is_retryable=is_retryable,
@@ -297,9 +213,15 @@ class DispatchIngestionJobHandler:
                 error_code=error_code,
                 error_message=str(exc),
             )
-            await self._uow.jobs.save_job(job)
+            # queued -> failed is a recorded business outcome, not an error to
+            # roll back: return normally so the unit of work commits it, and
+            # let the caller report the failure from the job's state.
+            saved_failed = await self._uow.jobs.save_job(job)
             await self._uow.assets.save_asset(asset)
-            raise
+            failure_events = job.pull_events() + asset.pull_events()
+            if self._event_bus and failure_events:
+                self._event_bus.publish_all(failure_events)
+            return saved_failed
 
         job_events = job.pull_events()
         asset_events = asset.pull_events()
@@ -319,62 +241,89 @@ class HandleAICallbackHandler:
         self,
         uow: ContentUnitOfWorkPort,
         event_bus: EventBus | None = None,
+        security_events: SecurityEventRecorder | None = None,
     ) -> None:
         self._uow = uow
         self._event_bus = event_bus
+        self._security_events = security_events
 
     async def handle(
         self, cmd: HandleAICallbackCommand
-    ) -> tuple[ContentIngestionJob | None, bool]:
-        """Handles an incoming webhook callback from the AI service.
+    ) -> tuple[ContentIngestionJob | None, CallbackOutcome | None]:
+        """Apply one verified AI-service processing event.
 
-        Returns (job, already_processed_or_stale).
+        In one transaction: lock the job row, check the event ledger, apply
+        the event through the state machine, and record its outcome. Returns
+        (None, None) when the job is unknown or not the signed tenant's,
+        otherwise the job and the outcome. NOT_ALLOWED and CONFLICT record
+        nothing, so the event id is not consumed. Raises InvalidStageEvidence
+        when a stage lacks its evidence.
         """
-        job = await self._uow.jobs.get_job_by_id(cmd.job_id)
-        if job is None:
-            return None, False
+        job = await self._uow.jobs.get_job_for_update(cmd.job_id)
+        # Unknown, platform-owned and other tenants' jobs all look the same:
+        # absent. Nothing is created or changed.
+        if job is None or job.tenant_id is None or job.tenant_id != cmd.tenant_id:
+            return None, None
 
-        # 1. Event Idempotency Check
-        if job.is_event_processed(cmd.event_id):
-            return job, True
-
-        # 2. Stale Attempt / Run Check
-        if job.is_stale_callback(
+        digest = canonical_event_digest(
+            job_id=cmd.job_id,
+            event_type=cmd.event_type,
             run_number=cmd.run_number,
             attempt_count=cmd.attempt_count,
             external_task_id=cmd.external_task_id,
-        ):
-            return job, True
+            stage=cmd.stage,
+            metrics=cmd.metrics,
+            error_code=cmd.error_code,
+            error_message=cmd.error_message,
+            is_retryable=cmd.is_retryable,
+            details=cmd.details,
+        )
+        recorded = await self._uow.ingestion_events.get(cmd.event_id)
+        if recorded is not None:
+            if recorded.job_id != job.id or (
+                recorded.payload_sha256 is not None and recorded.payload_sha256 != digest
+            ):
+                await self._record_conflict(cmd, recorded.job_id)
+                return job, CallbackOutcome.CONFLICT
+            if recorded.payload_sha256 is None:
+                # Seen before M3-08: handled then, content cannot be compared.
+                return job, CallbackOutcome.LEGACY
+            return job, CallbackOutcome.DUPLICATE
 
-        # Record this event ID as processed
-        job.record_event_processed(cmd.event_id)
+        outcome = job.apply_callback(
+            event_type=cmd.event_type,
+            run_number=cmd.run_number,
+            attempt_count=cmd.attempt_count,
+            external_task_id=cmd.external_task_id,
+            stage=cmd.stage,
+            metrics=cmd.metrics,
+            error_code=cmd.error_code,
+            error_message=cmd.error_message,
+            is_retryable=cmd.is_retryable,
+            details=cmd.details,
+        )
+        if outcome is CallbackOutcome.NOT_ALLOWED:
+            return job, outcome
 
-        # 3. Apply state transition according to event_type
-        ev_type = cmd.event_type.strip().lower()
-        if ev_type == "stage_progress":
-            stage = (cmd.stage or "").strip().lower()
-            if stage == "extracted":
-                if job.status == IngestionStatus.PROCESSING:
-                    job.progress_to_extracted(cmd.metrics)
-            elif stage == "chunked":
-                if job.status == IngestionStatus.EXTRACTED:
-                    job.progress_to_chunked(cmd.metrics)
-            elif stage == "indexed":
-                if job.status == IngestionStatus.CHUNKED:
-                    job.progress_to_indexed(cmd.metrics)
-        elif ev_type == "job_completed":
-            if job.status == IngestionStatus.INDEXED:
-                job.complete(cmd.metrics)
-        elif ev_type == "job_failed":
-            if job.status != IngestionStatus.READY:
-                job.fail(
-                    error_code=cmd.error_code or "AI_PROCESSING_FAILED",
-                    error_message=cmd.error_message or "AI service reported job failure",
-                    is_retryable=cmd.is_retryable,
-                    details=cmd.details,
-                )
+        await self._uow.ingestion_events.add(
+            IngestionEventRecord(
+                event_id=cmd.event_id,
+                job_id=job.id,
+                tenant_id=job.tenant_id,
+                run_number=cmd.run_number,
+                attempt_count=cmd.attempt_count,
+                external_task_id=cmd.external_task_id,
+                event_type=cmd.event_type,
+                stage=cmd.stage,
+                payload_sha256=digest,
+                outcome=outcome,
+                received_at=datetime.now(timezone.utc),
+            )
+        )
+        if outcome is not CallbackOutcome.APPLIED:
+            return job, outcome
 
-        # 4. Synchronize asset status projection
+        events = job.pull_events()
         asset = await self._uow.assets.get_asset_by_id(job.asset_id)
         if asset is not None:
             asset.update_ingestion_status(
@@ -383,17 +332,26 @@ class HandleAICallbackHandler:
                 error_message=job.error_message,
             )
             await self._uow.assets.save_asset(asset)
-
-        job_events = job.pull_events()
-        if asset is not None:
-            job_events.extend(asset.pull_events())
+            events.extend(asset.pull_events())
 
         saved_job = await self._uow.jobs.save_job(job)
+        if self._event_bus and events:
+            self._event_bus.publish_all(events)
+        return saved_job, outcome
 
-        if self._event_bus and job_events:
-            self._event_bus.publish_all(job_events)
-
-        return saved_job, False
+    async def _record_conflict(self, cmd: HandleAICallbackCommand, recorded_job_id: str) -> None:
+        if self._security_events is None:
+            return
+        await self._security_events.record(
+            SecurityEvent.AI_CALLBACK_EVENT_CONFLICT,
+            metadata={
+                "event_id": cmd.event_id,
+                "job_id": cmd.job_id,
+                "recorded_job_id": recorded_job_id,
+                "tenant_id": cmd.tenant_id,
+                "external_task_id": cmd.external_task_id,
+            },
+        )
 
 
 class GetIngestionJobHandler:
@@ -439,3 +397,101 @@ class ListIngestionJobsHandler:
             limit=query.limit,
             offset=query.offset,
         )
+
+
+class ReconcileMismatchError(Exception):
+    """AI-service reported on a task that is not the job's active attempt."""
+
+    status_code = 502
+
+
+@dataclass(frozen=True, slots=True)
+class ReconcileResult:
+    job: ContentIngestionJob
+    outcomes: list[tuple[str, str]]  # (event_id, outcome) in AI-service's order
+
+
+class ReconcileIngestionJobHandler:
+    """POST /content/jobs/{id}/reconcile (design B.3).
+
+    Fetches AI-service's signed account of the job's active task and replays
+    each recorded event through HandleAICallbackHandler: the same row lock,
+    ledger, digest, attempt and transition rules as a delivered callback.
+    Events already applied come back as duplicates; events whose delivery
+    failed are applied now. AI-service's reported state alone never changes
+    the job. The status is fetched before any row lock is taken.
+    """
+
+    def __init__(
+        self,
+        uow: ContentUnitOfWorkPort,
+        gateway: AIServiceIngestionGateway,
+        event_bus: EventBus | None = None,
+        security_events: SecurityEventRecorder | None = None,
+    ) -> None:
+        self._uow = uow
+        self._gateway = gateway
+        self._event_bus = event_bus
+        self._security_events = security_events
+
+    async def handle(self, cmd: ReconcileIngestionJobCommand) -> ReconcileResult:
+        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
+        if job.status not in ACTIVE_STATUSES or not job.external_task_id:
+            raise InvalidJobTransition(
+                f"Only an active job can be reconciled, not one that is '{job.status.value}'."
+            )
+
+        status = await self._gateway.fetch_job_status(
+            job.external_task_id,
+            job.tenant_id or cmd.tenant_id,
+            job.correlation_id or job.id,
+        )
+        if (
+            status.external_task_id != job.external_task_id
+            or status.job_id != job.id
+            or status.run_number != job.run_number
+            or status.attempt_count != job.attempt_count
+        ):
+            raise ReconcileMismatchError(
+                "AI-service reported on a task that is not this job's active attempt"
+            )
+
+        callbacks = HandleAICallbackHandler(self._uow, self._event_bus, self._security_events)
+        outcomes: list[tuple[str, str]] = []
+        for body in status.events:
+            event_id = str(body.get("event_id", ""))
+            if body.get("job_id") != job.id:
+                outcomes.append((event_id, "rejected"))
+                continue
+            try:
+                callback = HandleAICallbackCommand(
+                    job_id=job.id,
+                    tenant_id=job.tenant_id or cmd.tenant_id,
+                    event_id=event_id,
+                    event_type=str(body["event_type"]),
+                    external_task_id=str(body["external_task_id"]),
+                    run_number=int(body["run_number"]),
+                    attempt_count=int(body["attempt_count"]),
+                    stage=body.get("stage"),
+                    metrics=dict(body.get("metrics") or {}),
+                    error_code=body.get("error_code"),
+                    error_message=body.get("error_message"),
+                    is_retryable=bool(body.get("is_retryable", False)),
+                    details=dict(body.get("details") or {}),
+                )
+            except (KeyError, TypeError, ValueError):
+                outcomes.append((event_id, "rejected"))
+                continue
+            if not event_id:
+                outcomes.append((event_id, "rejected"))
+                continue
+            try:
+                _, outcome = await callbacks.handle(callback)
+            except InvalidStageEvidence:
+                outcomes.append((event_id, "rejected"))
+                continue
+            outcomes.append((event_id, outcome.value if outcome else "rejected"))
+
+        refreshed = await self._uow.jobs.get_job_by_id(job.id)
+        return ReconcileResult(job=refreshed or job, outcomes=outcomes)
+

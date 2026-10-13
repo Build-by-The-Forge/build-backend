@@ -56,6 +56,10 @@ REFRESH_PER_IP = Rule("refresh:ip", 120, 60)
 INVITATION_ACCEPT_PER_IP = Rule("invite-accept:ip", 20, 15 * 60)
 INVITATION_CREATE_PER_USER = Rule("invite-create:user", 100, 60 * 60)
 DOMAIN_JOIN_PER_IP = Rule("domain-join:ip", 20, 15 * 60)
+# AI requests proxied to AI-service (design B.5), per user across tenants:
+# each call costs model time, and question generation the most.
+AI_REQUESTS_PER_USER = Rule("ai:user", 30, 60)
+AI_QUESTION_GENERATION_PER_USER = Rule("ai-questions:user", 10, 60)
 
 # Failure counters that lead to a temporary lock. Each counter's window is
 # no longer than its lock, so the counter has expired by the time the lock
@@ -98,14 +102,10 @@ class AuthThrottle:
         try:
             return await operation
         except CounterStoreUnavailable:
-            raise AppError(
-                "service temporarily unavailable", status_code=503
-            ) from None
+            raise AppError("service temporarily unavailable", status_code=503) from None
 
     async def _limit(self, rule: Rule, subject: str) -> None:
-        count, ttl = await self._guard(
-            self.store.hit(self._key(rule.name, subject), rule.window_seconds)
-        )
+        count, ttl = await self._guard(self.store.hit(self._key(rule.name, subject), rule.window_seconds))
         if count > rule.limit:
             raise RateLimitedError(ttl)
 
@@ -139,16 +139,8 @@ class AuthThrottle:
         keys = self._login_keys(email, ip)
         await self._refuse_if_locked(keys["pair_lock"], keys["account_lock"])
 
-        pair_count, _ = await self._guard(
-            self.store.hit(
-                keys["pair_failures"], LOGIN_FAILURES_PER_PAIR.window_seconds
-            )
-        )
-        account_count, _ = await self._guard(
-            self.store.hit(
-                keys["account_failures"], LOGIN_FAILURES_PER_ACCOUNT.window_seconds
-            )
-        )
+        pair_count, _ = await self._guard(self.store.hit(keys["pair_failures"], LOGIN_FAILURES_PER_PAIR.window_seconds))
+        account_count, _ = await self._guard(self.store.hit(keys["account_failures"], LOGIN_FAILURES_PER_ACCOUNT.window_seconds))
         attempt = LoginAttempt(email, ip, pair_count, account_count)
         if pair_count > LOGIN_FAILURES_PER_PAIR.limit:
             await self._lock_pair(keys)
@@ -183,9 +175,7 @@ class AuthThrottle:
     async def login_succeeded(self, email: str, ip: str) -> None:
         """The password was correct (even if the account is blocked)."""
         keys = self._login_keys(email, ip)
-        await self._guard(
-            self.store.clear(keys["pair_failures"], keys["account_failures"])
-        )
+        await self._guard(self.store.clear(keys["pair_failures"], keys["account_failures"]))
 
     async def password_reset_completed(self, email: str, ip: str) -> None:
         """The owner proved control of the mailbox: lift sign-in locks."""
@@ -204,9 +194,7 @@ class AuthThrottle:
 
     async def password_change_failed(self, user_id: str) -> None:
         failures, lock = self._change_keys(user_id)
-        count, _ = await self._guard(
-            self.store.hit(failures, PASSWORD_CHANGE_FAILURES.window_seconds)
-        )
+        count, _ = await self._guard(self.store.hit(failures, PASSWORD_CHANGE_FAILURES.window_seconds))
         if count >= PASSWORD_CHANGE_FAILURES.limit:
             await self._guard(self.store.lock(lock, PASSWORD_CHANGE_LOCK_SECONDS))
 
@@ -243,3 +231,10 @@ class AuthThrottle:
 
     async def domain_join(self, ip: str) -> None:
         await self._limit(DOMAIN_JOIN_PER_IP, ip)
+
+    async def ai_request(self, user_id: str) -> None:
+        await self._limit(AI_REQUESTS_PER_USER, user_id)
+
+    async def ai_question_generation(self, user_id: str) -> None:
+        await self._limit(AI_REQUESTS_PER_USER, user_id)
+        await self._limit(AI_QUESTION_GENERATION_PER_USER, user_id)

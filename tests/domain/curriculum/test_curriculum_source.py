@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from app.domain.curriculum.source import (
     CurriculumSource,
@@ -16,7 +18,7 @@ def test_create_curriculum_source_success() -> None:
         parser_version="v1.0",
     )
 
-    assert source.id.startswith("source-")
+    assert str(UUID(source.id)) == source.id  # fits VARCHAR(36)
     assert source.code == "NUC_CCMAS"
     assert source.name == "National Universities Commission CCMAS"
     assert source.base_url == "https://ccmas.nuc.edu.ng"
@@ -98,7 +100,7 @@ def test_create_snapshot_success() -> None:
         raw_artifact_uri="s3://build-artifacts/ccmas/csc.pdf",
     )
 
-    assert snapshot.id.startswith("snapshot-")
+    assert str(UUID(snapshot.id)) == snapshot.id  # fits VARCHAR(36)
     assert snapshot.source_id == source.id
     assert snapshot.source_url == "https://example.com/computer-science.pdf"
     assert snapshot.content_sha256 == sample_sha

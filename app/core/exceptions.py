@@ -1,7 +1,8 @@
 import structlog
-from fastapi import HTTPException, Request, status
+from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.metrics import errors_total
 
@@ -34,7 +35,9 @@ class NotFoundError(AppError):
 
 
 async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    if not isinstance(exc, HTTPException):
+    # Starlette raises its own HTTPException (the base of FastAPI's) for
+    # unmatched routes and methods; both must answer with their status.
+    if not isinstance(exc, StarletteHTTPException):
         raise TypeError("expected HTTPException")
     request_id = getattr(request.state, "request_id", None)
     errors_total.labels(error_type="HTTPException").inc()
@@ -52,6 +55,8 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
             "meta": {"error": exc.detail},
             **({"request_id": request_id} if request_id is not None else {}),
         },
+        # Keep WWW-Authenticate (401), Allow (405) and similar headers.
+        headers=getattr(exc, "headers", None),
     )
 
 

@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.config import Settings
 
 STRONG = "s" * 32
@@ -17,8 +16,16 @@ def no_ambient_jwt_env(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+# Valid service-boundary settings, so strict environments fail only on JWT.
+SERVICE_BOUNDARY = {
+    "ai_service_url": "https://ai-service.internal",
+    "backend_to_ai_secret": "b" * 40,
+    "ai_to_backend_secret": "a" * 40,
+}
+
+
 def make(**overrides) -> Settings:
-    return Settings(_env_file=None, **overrides)
+    return Settings(_env_file=None, **{**SERVICE_BOUNDARY, **overrides})
 
 
 @pytest.mark.parametrize("environment", ["production", "staging"])

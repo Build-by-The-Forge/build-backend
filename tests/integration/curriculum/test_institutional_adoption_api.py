@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from app.application.curriculum.benchmark_commands import (
@@ -148,7 +148,7 @@ async def test_institutional_adoption_api_and_tenant_isolation(client) -> None:
     )
     assert override_res.status_code == 201
     override_id = override_res.json()["data"]["id"]
-    assert override_id.startswith("ovr-")
+    assert str(UUID(override_id)) == override_id  # fits VARCHAR(36)
     assert override_res.json()["data"]["field_overrides"]["credit_units"] == 4
 
     # 6. Tenant B (UNILAG) attempts to view Tenant A's adoption -> 404 Not Found (Tenant Isolation)

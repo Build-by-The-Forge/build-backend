@@ -52,7 +52,7 @@ class BenchmarkOutcome:
             raise ValueError("outcome sequence must be at least 1")
 
         return cls(
-            id=outcome_id or f"outcome-{uuid4()}",
+            id=outcome_id or str(uuid4()),
             benchmark_topic_id=benchmark_topic_id,
             sequence=sequence,
             description=description.strip(),
@@ -86,7 +86,7 @@ class BenchmarkTopic:
             raise ValueError("topic sequence must be at least 1")
 
         return cls(
-            id=topic_id or f"topic-{uuid4()}",
+            id=topic_id or str(uuid4()),
             benchmark_course_id=benchmark_course_id,
             sequence=sequence,
             title=title.strip(),
@@ -149,7 +149,7 @@ class BenchmarkCourse:
             raise ValueError("course sequence must be at least 1")
 
         return cls(
-            id=course_id or f"bmcourse-{uuid4()}",
+            id=course_id or str(uuid4()),
             benchmark_curriculum_id=benchmark_curriculum_id,
             code=clean_code,
             title=title.strip(),
@@ -216,7 +216,7 @@ class BenchmarkCurriculum:
 
         now = datetime.now(timezone.utc)
         curriculum = cls(
-            id=curriculum_id or f"bmcurr-{uuid4()}",
+            id=curriculum_id or str(uuid4()),
             source_snapshot_id=source_snapshot_id.strip(),
             discipline_group=discipline_group.strip(),
             programme_name=programme_name.strip(),

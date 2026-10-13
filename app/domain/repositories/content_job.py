@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from app.domain.content.enums import IngestionStatus
+from app.domain.content.ingestion_event import IngestionEventRecord
 from app.domain.content.job import ContentIngestionJob
 
 
@@ -11,6 +12,11 @@ class ContentIngestionJobRepository(Protocol):
         raise NotImplementedError
 
     async def get_job_by_id(self, job_id: str) -> ContentIngestionJob | None:
+        raise NotImplementedError
+
+    async def get_job_for_update(self, job_id: str) -> ContentIngestionJob | None:
+        """Load the job and lock its row until the unit of work ends, so
+        competing callbacks for one job are applied one at a time."""
         raise NotImplementedError
 
     async def get_latest_job_for_asset(
@@ -37,4 +43,12 @@ class ContentIngestionJobRepository(Protocol):
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[ContentIngestionJob], int]:
+        raise NotImplementedError
+
+
+class IngestionEventRepository(Protocol):
+    async def get(self, event_id: str) -> IngestionEventRecord | None:
+        raise NotImplementedError
+
+    async def add(self, record: IngestionEventRecord) -> None:
         raise NotImplementedError

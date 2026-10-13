@@ -13,22 +13,6 @@ class IngestionJobCreateRequest(BaseModel):
     correlation_id: str | None = None
 
 
-class IngestionJobProgressRequest(BaseModel):
-    target_stage: str = Field(..., pattern="^(extracted|chunked|indexed)$")
-    metrics: dict[str, Any] = Field(default_factory=dict)
-
-
-class IngestionJobCompleteRequest(BaseModel):
-    metrics: dict[str, Any] = Field(default_factory=dict)
-
-
-class IngestionJobFailRequest(BaseModel):
-    error_code: str = Field(..., min_length=1, max_length=100)
-    error_message: str = Field(..., min_length=1)
-    is_retryable: bool = False
-    details: dict[str, Any] = Field(default_factory=dict)
-
-
 class IngestionJobRetryRequest(BaseModel):
     delay_seconds: int = Field(default=30, ge=1, le=3600)
 

@@ -54,7 +54,7 @@ class CurriculumSnapshot:
 
         now = datetime.now(timezone.utc)
         return cls(
-            id=snapshot_id or f"snapshot-{uuid4()}",
+            id=snapshot_id or str(uuid4()),
             source_id=source_id,
             source_url=source_url,
             retrieved_at=retrieved_at or now,
@@ -103,7 +103,7 @@ class CurriculumSource:
 
         now = datetime.now(timezone.utc)
         source = cls(
-            id=source_id or f"source-{uuid4()}",
+            id=source_id or str(uuid4()),
             code=clean_code,
             name=name.strip(),
             base_url=base_url.strip(),

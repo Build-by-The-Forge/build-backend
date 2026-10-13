@@ -1,178 +1,392 @@
+"""The ingestion job state machine (M3-08)."""
+
+from datetime import datetime, timedelta, timezone
+from uuid import UUID
+
 import pytest
+
 from app.domain.content.enums import IngestionStatus
-from app.domain.content.job import ContentIngestionJob
+from app.domain.content.job import (
+    CallbackOutcome,
+    ContentIngestionJob,
+    InvalidJobTransition,
+    InvalidStageEvidence,
+    RetryNotDue,
+)
+
+EXTRACTED = {"characters": 1200, "pages": 3, "method": "native_text"}
+CHUNKED = {"chunks": 12}
+INDEXED = {"indexed_chunks": 12, "index": "pgvector"}
 
 
-def test_job_creation_and_full_linear_lifecycle() -> None:
-    job = ContentIngestionJob.create(
-        asset_id="cass-1234",
-        source_id="csrc-5678",
-        tenant_id="tenant-futa",
-        created_by="usr-lecturer",
-        max_attempts=3,
-        correlation_id="corr-1",
+def new_job(**kwargs) -> ContentIngestionJob:
+    return ContentIngestionJob.create(
+        asset_id="asset-1",
+        source_id="source-1",
+        tenant_id="tenant-1",
+        created_by="usr-1",
+        **kwargs,
     )
 
-    assert job.id.startswith("cjob-")
-    assert job.asset_id == "cass-1234"
-    assert job.source_id == "csrc-5678"
-    assert job.tenant_id == "tenant-futa"
-    assert job.status == IngestionStatus.UPLOADED
-    assert job.run_number == 1
-    assert job.attempt_count == 1
-    assert job.max_attempts == 3
 
-    events = job.pull_events()
-    assert len(events) == 1
-    assert events[0].event_type == "content.ingestion_job_created"
-
-    # 1. Queue job
+def dispatched(task: str = "task-1", **kwargs) -> ContentIngestionJob:
+    job = new_job(**kwargs)
     job.queue()
+    job.record_dispatch(task)
+    return job
+
+
+def event(job: ContentIngestionJob, event_type: str, stage: str | None = None, **kwargs):
+    identity = {
+        "run_number": job.run_number,
+        "attempt_count": job.attempt_count,
+        "external_task_id": job.external_task_id or "none",
+    }
+    identity.update(kwargs.pop("identity", {}))
+    return job.apply_callback(event_type=event_type, stage=stage, **identity, **kwargs)
+
+
+def to_status(job: ContentIngestionJob, status: IngestionStatus) -> None:
+    steps = [
+        ("extracted", EXTRACTED, IngestionStatus.EXTRACTED),
+        ("chunked", CHUNKED, IngestionStatus.CHUNKED),
+        ("indexed", INDEXED, IngestionStatus.INDEXED),
+    ]
+    for stage, metrics, reached in steps:
+        if job.status == status:
+            return
+        assert event(job, "stage_progress", stage, metrics=metrics) is CallbackOutcome.APPLIED
+        assert job.status == reached
+    if status == IngestionStatus.READY:
+        assert event(job, "job_completed") is CallbackOutcome.APPLIED
+
+
+# --- creation and business operations ----------------------------------------------
+
+
+def test_creation():
+    job = new_job(max_attempts=3, correlation_id="corr-1")
+    assert str(UUID(job.id)) == job.id and UUID(job.id).version == 4  # fits VARCHAR(36)
+    assert (job.status, job.run_number, job.attempt_count) == (IngestionStatus.UPLOADED, 1, 1)
+    assert [e.event_type for e in job.pull_events()] == ["content.ingestion_job_created"]
+
+
+def test_queue_is_only_from_uploaded():
+    job = new_job()
+    job.queue()
+    job.queue()  # idempotent
     assert job.status == IngestionStatus.QUEUED
-    events = job.pull_events()
-    assert len(events) == 1
-    assert events[0].event_type == "content.ingestion_job_queued"
+    failed = dispatched()
+    failed.fail_processing("X", "x", is_retryable=True)
+    with pytest.raises(InvalidJobTransition):
+        failed.queue()  # a failed job is requeued only through schedule_retry
 
-    # 2. Start processing
-    job.start(stage="parsing")
-    assert job.status == IngestionStatus.PROCESSING
-    assert job.current_stage == "parsing"
-    assert job.started_at is not None
-    events = job.pull_events()
-    assert len(events) == 1
-    assert events[0].event_type == "content.ingestion_job_started"
 
-    # 3. Extracted
-    job.progress_to_extracted(metrics={"pages": 12, "ocr_used": False})
-    assert job.status == IngestionStatus.EXTRACTED
-    assert job.metrics["pages"] == 12
+def test_dispatch_moves_queued_to_processing_with_the_task_identity():
+    job = dispatched("task-abc")
+    assert (job.status, job.external_task_id) == (IngestionStatus.PROCESSING, "task-abc")
 
-    # 4. Chunked
-    job.progress_to_chunked(metrics={"chunks_count": 48})
-    assert job.status == IngestionStatus.CHUNKED
-    assert job.metrics["chunks_count"] == 48
 
-    # 5. Indexed
-    job.progress_to_indexed(metrics={"vectors_indexed": 48})
-    assert job.status == IngestionStatus.INDEXED
+@pytest.mark.parametrize("status", ["uploaded", "processing", "ready", "failed"])
+def test_dispatch_is_refused_unless_queued(status):
+    job = new_job()
+    if status != "uploaded":
+        job.queue()
+        job.record_dispatch("t")
+    if status == "ready":
+        to_status(job, IngestionStatus.READY)
+    if status == "failed":
+        job.fail_processing("X", "x", is_retryable=False)
+    with pytest.raises(InvalidJobTransition):
+        job.record_dispatch("t2")
 
-    # 6. Complete
-    job.complete(metrics={"total_duration_ms": 1250})
+
+def test_dispatch_requires_a_task_id():
+    job = new_job()
+    job.queue()
+    with pytest.raises(InvalidJobTransition):
+        job.record_dispatch("  ")
+
+
+def test_dispatch_failure_is_only_from_queued():
+    job = new_job()
+    job.queue()
+    job.fail_dispatch("AI_SERVICE_UNAVAILABLE", "down", is_retryable=True)
+    assert (job.status, job.error_code) == (IngestionStatus.FAILED, "AI_SERVICE_UNAVAILABLE")
+    with pytest.raises(InvalidJobTransition):
+        dispatched().fail_dispatch("X", "x", is_retryable=True)
+
+
+def test_start_no_longer_exists():
+    assert not hasattr(ContentIngestionJob, "start")
+
+
+# --- the full successful path --------------------------------------------------------
+
+
+def test_ready_only_after_every_stage_and_completion():
+    job = dispatched()
+    to_status(job, IngestionStatus.READY)
     assert job.status == IngestionStatus.READY
     assert job.completed_at is not None
-    events = job.pull_events()
-    assert len(events) == 4  # extracted, chunked, indexed, completed
-    assert events[-1].event_type == "content.ingestion_job_completed"
+    assert job.metrics["chunks"] == 12 and job.metrics["indexed_chunks"] == 12
 
 
-def test_job_illegal_transitions() -> None:
-    job = ContentIngestionJob.create(
-        asset_id="cass-1",
-        source_id="csrc-1",
-        created_by="user",
-    )
-
-    # Cannot start from UPLOADED
-    with pytest.raises(ValueError, match="Must be QUEUED"):
-        job.start()
-
-    # Queue then start
-    job.queue()
-    job.start()
-
-    # Cannot skip from PROCESSING straight to INDEXED
-    with pytest.raises(ValueError, match="Must be CHUNKED"):
-        job.progress_to_indexed()
-
-    # Progress to completion
-    job.progress_to_extracted()
-    job.progress_to_chunked()
-    job.progress_to_indexed()
-    job.complete()
-
-    # Cannot fail once READY
-    with pytest.raises(ValueError, match="already READY"):
-        job.fail("ERR", "Should not fail ready job")
+@pytest.mark.parametrize(
+    "status",
+    [IngestionStatus.PROCESSING, IngestionStatus.EXTRACTED, IngestionStatus.CHUNKED],
+)
+def test_completion_before_indexing_is_not_allowed(status):
+    job = dispatched()
+    to_status(job, status)
+    assert event(job, "job_completed") is CallbackOutcome.NOT_ALLOWED
+    assert job.status == status
 
 
-def test_job_failure_and_retry_lifecycle() -> None:
-    job = ContentIngestionJob.create(
-        asset_id="cass-1",
-        source_id="csrc-1",
-        created_by="user",
-        max_attempts=3,
-    )
-    job.queue()
-    job.start()
+# --- ordering ------------------------------------------------------------------------
 
-    # Transient AI Gateway timeout failure
-    job.fail(
-        error_code="AI_GATEWAY_TIMEOUT",
-        error_message="Gateway timed out after 30s",
-        is_retryable=True,
-        details={"http_status": 504},
-    )
-    assert job.status == IngestionStatus.FAILED
-    assert job.is_retryable is True
+
+@pytest.mark.parametrize(
+    ("status", "stage"),
+    [
+        (IngestionStatus.PROCESSING, "chunked"),
+        (IngestionStatus.PROCESSING, "indexed"),
+        (IngestionStatus.EXTRACTED, "indexed"),
+    ],
+)
+def test_skipped_stages_are_not_allowed(status, stage):
+    job = dispatched()
+    to_status(job, status)
+    metrics = {"chunked": CHUNKED, "indexed": INDEXED}[stage]
+    assert event(job, "stage_progress", stage, metrics=metrics) is CallbackOutcome.NOT_ALLOWED
+    assert job.status == status
+
+
+@pytest.mark.parametrize(
+    ("status", "stage"),
+    [
+        (IngestionStatus.EXTRACTED, "extracted"),
+        (IngestionStatus.CHUNKED, "extracted"),
+        (IngestionStatus.INDEXED, "chunked"),
+        (IngestionStatus.READY, "indexed"),
+    ],
+)
+def test_stages_already_reached_are_superseded_never_backwards(status, stage):
+    job = dispatched()
+    to_status(job, status)
+    metrics = {"extracted": EXTRACTED, "chunked": CHUNKED, "indexed": INDEXED}[stage]
+    assert event(job, "stage_progress", stage, metrics=metrics) is CallbackOutcome.SUPERSEDED
+    assert job.status == status
+
+
+def test_completion_after_ready_is_superseded():
+    job = dispatched()
+    to_status(job, IngestionStatus.READY)
+    assert event(job, "job_completed") is CallbackOutcome.SUPERSEDED
+
+
+# --- failure -------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        IngestionStatus.PROCESSING,
+        IngestionStatus.EXTRACTED,
+        IngestionStatus.CHUNKED,
+        IngestionStatus.INDEXED,
+    ],
+)
+def test_failure_applies_to_any_active_status(status):
+    job = dispatched()
+    to_status(job, status)
+    outcome = event(job, "job_failed", error_code="OCR", error_message="bad", is_retryable=True)
+    assert outcome is CallbackOutcome.APPLIED
+    assert (job.status, job.error_code, job.is_retryable) == (IngestionStatus.FAILED, "OCR", True)
+    assert job.attempt_history[-1]["external_task_id"] == "task-1"
+
+
+def test_late_failure_after_ready_is_not_allowed():
+    job = dispatched()
+    to_status(job, IngestionStatus.READY)
+    assert event(job, "job_failed", error_code="X") is CallbackOutcome.NOT_ALLOWED
+    assert job.status == IngestionStatus.READY
+
+
+def test_a_second_failure_for_the_same_attempt_is_superseded():
+    job = dispatched()
+    event(job, "job_failed", error_code="FIRST")
+    assert event(job, "job_failed", error_code="SECOND") is CallbackOutcome.SUPERSEDED
+    assert job.error_code == "FIRST"
     assert len(job.attempt_history) == 1
-    assert job.attempt_history[0]["error_code"] == "AI_GATEWAY_TIMEOUT"
 
-    # Schedule retry #1
-    job.schedule_retry(delay_seconds=10)
-    assert job.status == IngestionStatus.QUEUED
-    assert job.attempt_count == 2
-    assert job.next_retry_at is not None
 
-    # Start attempt #2 and fail again
-    job.start()
-    job.fail(
-        error_code="AI_GATEWAY_TIMEOUT",
-        error_message="Gateway timed out again",
-        is_retryable=True,
+def test_stage_events_after_failure_are_not_allowed():
+    job = dispatched()
+    event(job, "job_failed")
+    assert event(job, "stage_progress", "extracted", metrics=EXTRACTED) is CallbackOutcome.NOT_ALLOWED
+    assert event(job, "job_completed") is CallbackOutcome.NOT_ALLOWED
+
+
+@pytest.mark.parametrize("status", ["uploaded", "queued"])
+def test_callbacks_for_an_undispatched_job_are_stale(status):
+    job = new_job()
+    if status == "queued":
+        job.queue()
+    outcome = job.apply_callback(
+        event_type="job_failed", run_number=1, attempt_count=1, external_task_id="task-1"
     )
-    assert job.attempt_count == 2
-    assert len(job.attempt_history) == 2
+    assert outcome is CallbackOutcome.STALE
+    assert job.status.value == status
 
-    # Schedule retry #2
-    job.schedule_retry(delay_seconds=10)
-    assert job.attempt_count == 3
+
+# --- attempt identity ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        {"run_number": 2},
+        {"run_number": 0},
+        {"attempt_count": 2},
+        {"attempt_count": 0},
+        {"external_task_id": "task-other"},
+    ],
+)
+def test_any_identity_mismatch_is_stale(identity):
+    job = dispatched()
+    assert event(job, "job_failed", identity=identity) is CallbackOutcome.STALE
+    assert job.status == IngestionStatus.PROCESSING
+
+
+def test_retry_clears_the_task_and_increments_the_attempt_once():
+    job = dispatched("task-1", max_attempts=3)
+    event(job, "job_failed", is_retryable=True)
+    job.schedule_retry(delay_seconds=0)
+    assert (job.status, job.attempt_count, job.external_task_id) == (IngestionStatus.QUEUED, 2, None)
+
+
+def test_an_old_attempts_events_cannot_touch_the_retried_job():
+    """The F-7 race: after a retry, events from the previous task are stale,
+    whatever attempt number they carry."""
+    job = dispatched("task-1", max_attempts=3)
+    event(job, "job_failed", is_retryable=True)
+    job.schedule_retry(delay_seconds=0)
+
+    for attempt in (1, 2):
+        old = job.apply_callback(
+            event_type="job_failed", run_number=1, attempt_count=attempt, external_task_id="task-1"
+        )
+        assert old is CallbackOutcome.STALE
     assert job.status == IngestionStatus.QUEUED
 
-    # Start attempt #3 and fail (exhausted max attempts = 3)
-    job.start()
-    job.fail(
-        error_code="AI_GATEWAY_UNAVAILABLE",
-        error_message="Persistent outage",
-        is_retryable=True,
+    job.record_dispatch("task-2")
+    old = job.apply_callback(
+        event_type="job_failed", run_number=1, attempt_count=2, external_task_id="task-1"
     )
-    assert job.attempt_count == 3
-    assert len(job.attempt_history) == 3
+    assert old is CallbackOutcome.STALE
+    assert event(job, "stage_progress", "extracted", metrics=EXTRACTED) is CallbackOutcome.APPLIED
 
-    # Attempting to schedule another retry exceeds max attempts
-    with pytest.raises(ValueError, match="Maximum attempts .* exceeded"):
+
+def test_retry_rules():
+    job = dispatched(max_attempts=2)
+    with pytest.raises(InvalidJobTransition):
+        job.schedule_retry()  # not failed
+    event(job, "job_failed", is_retryable=False)
+    with pytest.raises(InvalidJobTransition, match="non-retryable"):
         job.schedule_retry()
 
+    exhausted = dispatched(max_attempts=1)
+    event(exhausted, "job_failed", is_retryable=True)
+    with pytest.raises(InvalidJobTransition, match="Maximum attempts"):
+        exhausted.schedule_retry()
 
-def test_job_reprocess_run_creation() -> None:
-    job = ContentIngestionJob.create(
-        asset_id="cass-1",
-        source_id="csrc-1",
-        tenant_id="t1",
-        created_by="user",
-    )
-    job.queue()
-    job.start()
-    job.progress_to_extracted()
-    job.progress_to_chunked()
-    job.progress_to_indexed()
-    job.complete()
 
-    # Spawning reprocess run creates run #2 in QUEUED status
-    reprocess_job = job.create_reprocess_run(created_by="user-admin")
-    assert reprocess_job.asset_id == "cass-1"
-    assert reprocess_job.source_id == "csrc-1"
-    assert reprocess_job.tenant_id == "t1"
-    assert reprocess_job.run_number == 2
-    assert reprocess_job.status == IngestionStatus.QUEUED
-    assert reprocess_job.attempt_count == 1
-    assert reprocess_job.id != job.id
+def test_a_retried_attempt_is_not_dispatched_before_its_delay():
+    job = dispatched(max_attempts=3)
+    event(job, "job_failed", is_retryable=True)
+    job.schedule_retry(delay_seconds=60)
+    with pytest.raises(RetryNotDue):
+        job.record_dispatch("task-2")
+    assert job.status == IngestionStatus.QUEUED
+    later = datetime.now(timezone.utc) + timedelta(seconds=61)
+    job.ensure_dispatchable(now=later)  # allowed once the delay has elapsed
+    job.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    job.record_dispatch("task-2")
+    assert (job.status, job.next_retry_at) == (IngestionStatus.PROCESSING, None)
+
+
+# --- evidence ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        {},
+        {"characters": 0, "pages": 1, "method": "ocr"},
+        {"characters": 10, "pages": -1, "method": "ocr"},
+        {"characters": 10, "pages": 1, "method": "guess"},
+        {"characters": True, "pages": 1, "method": "ocr"},
+        {"characters": "10", "pages": 1, "method": "ocr"},
+    ],
+)
+def test_extraction_needs_evidence(metrics):
+    job = dispatched()
+    with pytest.raises(InvalidStageEvidence):
+        event(job, "stage_progress", "extracted", metrics=metrics)
+    assert job.status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.parametrize("metrics", [{}, {"chunks": 0}, {"chunks": 1.5}])
+def test_chunking_needs_evidence(metrics):
+    job = dispatched()
+    to_status(job, IngestionStatus.EXTRACTED)
+    with pytest.raises(InvalidStageEvidence):
+        event(job, "stage_progress", "chunked", metrics=metrics)
+
+
+@pytest.mark.parametrize(
+    "metrics",
+    [
+        {},
+        {"indexed_chunks": 11, "index": "pgvector"},  # not every chunk indexed
+        {"indexed_chunks": 12},  # no durable index named
+        {"indexed_chunks": 12, "index": "  "},
+    ],
+)
+def test_indexing_needs_evidence_matching_the_chunk_count(metrics):
+    job = dispatched()
+    to_status(job, IngestionStatus.CHUNKED)
+    with pytest.raises(InvalidStageEvidence):
+        event(job, "stage_progress", "indexed", metrics=metrics)
+    assert job.status == IngestionStatus.CHUNKED
+
+
+def test_unknown_stage_or_event_type_is_invalid():
+    job = dispatched()
+    with pytest.raises(InvalidStageEvidence):
+        event(job, "stage_progress", "embedded", metrics={})
+    with pytest.raises(InvalidStageEvidence):
+        event(job, "job_started")
+
+
+# --- reprocess -----------------------------------------------------------------------
+
+
+def test_reprocess_creates_a_new_run_from_terminal_states_only():
+    job = dispatched()
+    with pytest.raises(InvalidJobTransition):
+        job.create_reprocess_run(created_by="usr-2")
+    to_status(job, IngestionStatus.READY)
+    run2 = job.create_reprocess_run(created_by="usr-2")
+    assert (run2.run_number, run2.status, run2.attempt_count) == (2, IngestionStatus.QUEUED, 1)
+    assert run2.id != job.id and job.status == IngestionStatus.READY
+
+
+def test_a_retry_time_stored_without_timezone_is_read_as_utc():
+    job = dispatched(max_attempts=3)
+    event(job, "job_failed", is_retryable=True)
+    job.schedule_retry(delay_seconds=60)
+    job.next_retry_at = job.next_retry_at.replace(tzinfo=None)  # as SQLite returns it
+    with pytest.raises(RetryNotDue):
+        job.ensure_dispatchable()

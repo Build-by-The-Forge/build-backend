@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from app.domain.content.enums import (
     AuthorityLevel,
@@ -21,7 +23,7 @@ def test_create_regulatory_content_source_success() -> None:
         description="Official national regulatory benchmark curriculum for computer science.",
     )
 
-    assert source.id.startswith("csrc-")
+    assert str(UUID(source.id)) == source.id and UUID(source.id).version == 4  # fits VARCHAR(36)
     assert source.code == "NUC_CCMAS_CS"
     assert source.name == "National Universities Commission CCMAS Computer Science"
     assert source.source_type == ContentSourceType.CCMAS
@@ -53,7 +55,7 @@ def test_create_institutional_content_source_success() -> None:
         author_name="Dr. Adewale",
     )
 
-    assert source.id.startswith("csrc-")
+    assert str(UUID(source.id)) == source.id and UUID(source.id).version == 4  # fits VARCHAR(36)
     assert source.code == "FUTA_CSC_NOTES"
     assert source.authority_level == AuthorityLevel.INSTITUTIONAL
     assert source.authority_level.rank == 2
