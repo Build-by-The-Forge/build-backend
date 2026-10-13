@@ -61,6 +61,11 @@ jobs:
           echo "::error::Could not check out Build-by-The-Forge/ai-service at '$AI_SERVICE_REF'." \
             "Either AI_SERVICE_READ_TOKEN lacks contents:read on that repository (or has expired)," \
             "or the ref does not exist there."
+      # The gate scripts run `python` on the runner: generating deploy/m3.env
+      # (git-ignored, so always generated here) and M6's random secrets.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
       - name: Record the revisions under test
         run: |
           backend=$(git -C build-backend rev-parse HEAD)
