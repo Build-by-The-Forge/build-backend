@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.catalogue.errors import TopicAlreadyArchivedError
 from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import (

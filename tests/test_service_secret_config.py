@@ -1,6 +1,7 @@
 """Service-boundary configuration (design A.1, B.7; acceptance row C26)."""
 
 import pytest
+
 from app.core.config import KNOWN_DEVELOPMENT_SERVICE_SECRETS, Settings
 
 JWT = "j" * 40

@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.assessment.errors import QuestionAlreadyArchivedError
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
@@ -37,9 +38,7 @@ def build_question(**overrides):
         "learning_outcome_id": "lo-123",
         "question_type": QuestionType.MCQ,
         "prompt": QuestionPrompt("Which data structure uses FIFO ordering?"),
-        "explanation": QuestionExplanation(
-            "A queue follows first-in, first-out order."
-        ),
+        "explanation": QuestionExplanation("A queue follows first-in, first-out order."),
         "difficulty": Difficulty.EASY,
         "marks": QuestionMarks(2),
         "options": options,

@@ -27,9 +27,9 @@ from app.domain.content.job import (
     InvalidStageEvidence,
     RetryNotDue,
 )
+from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 from app.infrastructure.security.service_context import ACTOR_SYSTEM
 from app.infrastructure.security.service_signature import VerifiedServiceRequest
-from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
@@ -57,22 +57,14 @@ async def trigger_ingestion_job(
         )
     except ValueError as exc:
         msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
+        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
-            content={
-                "error": {"code": "INGESTION_TRIGGER_FAILED", "message": str(exc)}
-            },
+            content={"error": {"code": "INGESTION_TRIGGER_FAILED", "message": str(exc)}},
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(
-        status_code=status.HTTP_201_CREATED, content={"data": resp_data}
-    )
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"data": resp_data})
 
 
 @router.get(
@@ -109,9 +101,7 @@ async def get_latest_job_for_asset(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_READ)),
 ) -> JSONResponse:
-    job = await service.get_latest_job_for_asset(
-        asset_id=asset_id, tenant_id=context.tenant_id
-    )
+    job = await service.get_latest_job_for_asset(asset_id=asset_id, tenant_id=context.tenant_id)
     if job is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -186,9 +176,7 @@ async def retry_job(
     context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
     try:
-        job = await service.retry_job(
-            job_id=job_id, tenant_id=context.tenant_id, delay_seconds=payload.delay_seconds
-        )
+        job = await service.retry_job(job_id=job_id, tenant_id=context.tenant_id, delay_seconds=payload.delay_seconds)
     except InvalidJobTransition as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -196,11 +184,7 @@ async def retry_job(
         )
     except ValueError as exc:
         msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
+        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
             content={"error": {"code": "RETRY_JOB_FAILED", "message": str(exc)}},
@@ -229,20 +213,14 @@ async def reprocess_asset(
         )
     except ValueError as exc:
         msg = str(exc).lower()
-        status_code = (
-            status.HTTP_404_NOT_FOUND
-            if "does not exist" in msg
-            else status.HTTP_400_BAD_REQUEST
-        )
+        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
             content={"error": {"code": "REPROCESS_FAILED", "message": str(exc)}},
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
-    return JSONResponse(
-        status_code=status.HTTP_201_CREATED, content={"data": resp_data}
-    )
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"data": resp_data})
 
 
 @router.post(
@@ -348,12 +326,7 @@ async def reconcile_ingestion_job(
         status_code=status.HTTP_200_OK,
         content={
             "data": resp_data,
-            "meta": {
-                "reconciled": [
-                    {"event_id": event_id, "outcome": outcome}
-                    for event_id, outcome in result.outcomes
-                ]
-            },
+            "meta": {"reconciled": [{"event_id": event_id, "outcome": outcome} for event_id, outcome in result.outcomes]},
         },
     )
 
@@ -393,9 +366,7 @@ async def handle_ai_callback(request: Request) -> JSONResponse:
                 "error": {
                     "code": "INVALID_PAYLOAD",
                     "message": "callback body failed validation",
-                    "details": exc.errors(
-                        include_url=False, include_input=False, include_context=False
-                    ),
+                    "details": exc.errors(include_url=False, include_input=False, include_context=False),
                 }
             },
         )

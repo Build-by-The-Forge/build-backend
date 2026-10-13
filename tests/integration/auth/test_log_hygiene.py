@@ -24,9 +24,7 @@ def test_auth_requests_put_no_secrets_into_raw_log_records(client, caplog):
     client.post("/identity/reset-password", json={"token": REFRESH, "password": PASSWORD})
     client.post("/identity/verify-email", json={"token": REFRESH})
 
-    raw = "\n".join(
-        f"{r.getMessage()} {r.exc_text or ''}" for r in caplog.records
-    )
+    raw = "\n".join(f"{r.getMessage()} {r.exc_text or ''}" for r in caplog.records)
     for secret in (PASSWORD, REFRESH, JWT, login["refresh_token"], login["access_token"]):
         assert secret not in raw
     assert email not in raw

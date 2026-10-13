@@ -154,9 +154,7 @@ class CourseSlug:
         if len(v) < 3 or len(v) > 80:
             raise ValueError("course slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError(
-                "course slug must be lowercase alphanumeric and hyphens only"
-            )
+            raise ValueError("course slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -241,9 +239,7 @@ class TopicSlug:
         if len(v) < 3 or len(v) > 80:
             raise ValueError("topic slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError(
-                "topic slug must be lowercase alphanumeric and hyphens only"
-            )
+            raise ValueError("topic slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:

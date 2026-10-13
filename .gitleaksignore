@@ -1,0 +1,10 @@
+# gitleaks findings accepted for this repository, read by
+# scripts/scan_secrets.sh. Policy and reasons: docs/security-advisories.md.
+# One fingerprint per line (<path as scanned, under /repo>:<rule>:<line>);
+# if the line moves, the finding is reported again and must be re-reviewed.
+
+# Test-fixture passwords for throwaway users in ephemeral test databases
+# (in-memory SQLite or a disposable PostgreSQL); valid nowhere else.
+/repo/pg_smoke/test_provisioning_cli.py:generic-api-key:15
+/repo/tests/application/identity/test_identity_credential_handlers.py:generic-api-key:106
+/repo/tests/integration/tenant/test_provisioning.py:generic-api-key:22

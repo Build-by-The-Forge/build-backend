@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.tenant.join_policy import (
     MAX_ALLOWED_DOMAINS,
     JoinPolicyError,

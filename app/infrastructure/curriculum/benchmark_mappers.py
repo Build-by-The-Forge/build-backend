@@ -66,9 +66,7 @@ def benchmark_curriculum_model_to_domain(
     )
 
 
-def benchmark_course_to_model(
-    course: BenchmarkCourse, model: BenchmarkCourseModel | None = None
-) -> BenchmarkCourseModel:
+def benchmark_course_to_model(course: BenchmarkCourse, model: BenchmarkCourseModel | None = None) -> BenchmarkCourseModel:
     if model is None:
         m = BenchmarkCourseModel(
             id=course.id,
@@ -100,9 +98,7 @@ def benchmark_course_to_model(
     return model
 
 
-def benchmark_course_model_to_domain(
-    model: BenchmarkCourseModel, include_topics: bool = True
-) -> BenchmarkCourse:
+def benchmark_course_model_to_domain(model: BenchmarkCourseModel, include_topics: bool = True) -> BenchmarkCourse:
     topics = []
     if include_topics and model.topics:
         topics = [benchmark_topic_model_to_domain(t) for t in model.topics]
@@ -124,9 +120,7 @@ def benchmark_course_model_to_domain(
     )
 
 
-def benchmark_topic_to_model(
-    topic: BenchmarkTopic, model: BenchmarkTopicModel | None = None
-) -> BenchmarkTopicModel:
+def benchmark_topic_to_model(topic: BenchmarkTopic, model: BenchmarkTopicModel | None = None) -> BenchmarkTopicModel:
     if model is None:
         m = BenchmarkTopicModel(
             id=topic.id,
@@ -174,17 +168,13 @@ def benchmark_outcome_to_model(
             benchmark_topic_id=outcome.benchmark_topic_id,
             sequence=outcome.sequence,
             description=outcome.description,
-            bloom_taxonomy_level=(
-                outcome.bloom_level.value if outcome.bloom_level else None
-            ),
+            bloom_taxonomy_level=(outcome.bloom_level.value if outcome.bloom_level else None),
             created_at=outcome.created_at,
         )
 
     model.sequence = outcome.sequence
     model.description = outcome.description
-    model.bloom_taxonomy_level = (
-        outcome.bloom_level.value if outcome.bloom_level else None
-    )
+    model.bloom_taxonomy_level = outcome.bloom_level.value if outcome.bloom_level else None
     return model
 
 

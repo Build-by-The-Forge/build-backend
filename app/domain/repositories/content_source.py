@@ -13,9 +13,7 @@ class ContentSourceRepository(Protocol):
     async def get_source_by_id(self, source_id: str) -> ContentSource | None:
         raise NotImplementedError
 
-    async def get_source_by_code(
-        self, code: str, tenant_id: str | None = None
-    ) -> ContentSource | None:
+    async def get_source_by_code(self, code: str, tenant_id: str | None = None) -> ContentSource | None:
         raise NotImplementedError
 
     async def list_sources(

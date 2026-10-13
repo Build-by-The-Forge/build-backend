@@ -59,9 +59,7 @@ class LearningOutcome:
 
     def archive(self) -> None:
         if self.status == LearningOutcomeStatus.ARCHIVED:
-            raise LearningOutcomeAlreadyArchivedError(
-                "learning outcome already archived"
-            )
+            raise LearningOutcomeAlreadyArchivedError("learning outcome already archived")
         self.status = LearningOutcomeStatus.ARCHIVED
         self.touch()
         self._events.append(

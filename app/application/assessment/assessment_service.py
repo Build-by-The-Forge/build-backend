@@ -63,30 +63,24 @@ class AssessmentService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                assessment = await CreateAssessmentHandler(
-                    uow.assessments, uow.catalogue
-                ).handle(command)
+                assessment = await CreateAssessmentHandler(uow.assessments, uow.catalogue).handle(command)
                 events = assessment.pull_events()
             self._publish_events(events)
             return assessment
-        assessment = await CreateAssessmentHandler(
-            self._required_repository(), self._required_catalogue_repository()
-        ).handle(command)
+        assessment = await CreateAssessmentHandler(self._required_repository(), self._required_catalogue_repository()).handle(
+            command
+        )
         self._publish_events(assessment.pull_events())
         return assessment
 
-    async def get_assessment(
-        self, assessment_id: str, tenant_id: str
-    ) -> Assessment | None:
+    async def get_assessment(self, assessment_id: str, tenant_id: str) -> Assessment | None:
         command = GetAssessmentCommand(assessment_id, tenant_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await GetAssessmentHandler(uow.assessments).handle(command)
         return await GetAssessmentHandler(self._required_repository()).handle(command)
 
-    async def list_assessments(
-        self, tenant_id: str, course_id: str | None = None
-    ) -> list[Assessment]:
+    async def list_assessments(self, tenant_id: str, course_id: str | None = None) -> list[Assessment]:
         command = ListAssessmentsCommand(tenant_id, course_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
@@ -112,47 +106,33 @@ class AssessmentService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                assessment = await UpdateAssessmentHandler(uow.assessments).handle(
-                    command
-                )
+                assessment = await UpdateAssessmentHandler(uow.assessments).handle(command)
                 events = assessment.pull_events() if assessment is not None else []
             self._publish_events(events)
             return assessment
-        assessment = await UpdateAssessmentHandler(self._required_repository()).handle(
-            command
-        )
+        assessment = await UpdateAssessmentHandler(self._required_repository()).handle(command)
         if assessment is not None:
             self._publish_events(assessment.pull_events())
         return assessment
 
-    async def publish_assessment(
-        self, assessment_id: str, tenant_id: str
-    ) -> Assessment | None:
+    async def publish_assessment(self, assessment_id: str, tenant_id: str) -> Assessment | None:
         command = PublishAssessmentCommand(assessment_id, tenant_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                assessment = await PublishAssessmentHandler(uow.assessments).handle(
-                    command
-                )
+                assessment = await PublishAssessmentHandler(uow.assessments).handle(command)
                 events = assessment.pull_events() if assessment is not None else []
             self._publish_events(events)
             return assessment
-        assessment = await PublishAssessmentHandler(self._required_repository()).handle(
-            command
-        )
+        assessment = await PublishAssessmentHandler(self._required_repository()).handle(command)
         if assessment is not None:
             self._publish_events(assessment.pull_events())
         return assessment
 
-    async def add_question(
-        self, assessment_id: str, question_id: str, tenant_id: str
-    ) -> Assessment | None:
+    async def add_question(self, assessment_id: str, question_id: str, tenant_id: str) -> Assessment | None:
         command = AddQuestionToAssessmentCommand(assessment_id, question_id, tenant_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                assessment = await AddQuestionToAssessmentHandler(
-                    uow.assessments, uow.questions
-                ).handle(command)
+                assessment = await AddQuestionToAssessmentHandler(uow.assessments, uow.questions).handle(command)
                 events = assessment.pull_events() if assessment is not None else []
             self._publish_events(events)
             return assessment
@@ -178,12 +158,10 @@ class AssessmentService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetAssessmentResultsHandler(
-                    uow.assessments, uow.attempt_results
-                ).handle(command)
-        return await GetAssessmentResultsHandler(
-            self._required_repository(), self._required_attempt_result_repository()
-        ).handle(command)
+                return await GetAssessmentResultsHandler(uow.assessments, uow.attempt_results).handle(command)
+        return await GetAssessmentResultsHandler(self._required_repository(), self._required_attempt_result_repository()).handle(
+            command
+        )
 
     def _required_repository(self) -> AssessmentRepository:
         if self.repository is None:

@@ -66,8 +66,7 @@ class SQLAlchemySecurityEventRecorder:
                 id=str(uuid4()),
                 user_id=user_id,
                 ip_address=meta.ip,
-                user_agent=(meta.user_agent or None)
-                and meta.user_agent[:MAX_USER_AGENT_LENGTH],
+                user_agent=(meta.user_agent or None) and meta.user_agent[:MAX_USER_AGENT_LENGTH],
                 successful=successful,
                 reason=reason.value if reason else None,
             ),

@@ -82,9 +82,7 @@ def _count(metrics: dict[str, Any], key: str, minimum: int) -> int:
     return value
 
 
-def validate_stage_evidence(
-    stage: str, metrics: dict[str, Any], recorded: dict[str, Any]
-) -> None:
+def validate_stage_evidence(stage: str, metrics: dict[str, Any], recorded: dict[str, Any]) -> None:
     """The evidence each stage must carry (M3-08 stage contract)."""
     if stage == "extracted":
         _count(metrics, "characters", 1)
@@ -96,9 +94,7 @@ def validate_stage_evidence(
     elif stage == "indexed":
         indexed = _count(metrics, "indexed_chunks", 1)
         if indexed != recorded.get("chunks"):
-            raise InvalidStageEvidence(
-                "metrics.indexed_chunks must equal the chunk count reported at chunking"
-            )
+            raise InvalidStageEvidence("metrics.indexed_chunks must equal the chunk count reported at chunking")
         index = metrics.get("index")
         if not isinstance(index, str) or not index.strip():
             raise InvalidStageEvidence("metrics.index must name the durable index")
@@ -194,9 +190,7 @@ class ContentIngestionJob:
         if self.status == IngestionStatus.QUEUED:
             return
         if self.status != IngestionStatus.UPLOADED:
-            raise InvalidJobTransition(
-                f"Cannot queue job in status '{self.status.value}'. Must be UPLOADED."
-            )
+            raise InvalidJobTransition(f"Cannot queue job in status '{self.status.value}'. Must be UPLOADED.")
 
         self.status = IngestionStatus.QUEUED
         self.touch()
@@ -215,18 +209,13 @@ class ContentIngestionJob:
         """A job is dispatched only while queued and, after a retry, only once
         its retry delay has elapsed."""
         if self.status != IngestionStatus.QUEUED:
-            raise InvalidJobTransition(
-                f"Cannot dispatch job in status '{self.status.value}'. Must be QUEUED."
-            )
+            raise InvalidJobTransition(f"Cannot dispatch job in status '{self.status.value}'. Must be QUEUED.")
         now = now or datetime.now(timezone.utc)
         retry_at = self.next_retry_at
         if retry_at is not None and retry_at.tzinfo is None:
             retry_at = retry_at.replace(tzinfo=timezone.utc)  # stored as UTC
         if retry_at is not None and now < retry_at:
-            raise RetryNotDue(
-                f"Retry attempt {self.attempt_count} may not be dispatched before "
-                f"{retry_at.isoformat()}"
-            )
+            raise RetryNotDue(f"Retry attempt {self.attempt_count} may not be dispatched before {retry_at.isoformat()}")
 
     def record_dispatch(self, external_task_id: str) -> None:
         """queued -> processing: AI-service accepted the dispatch. The task id
@@ -277,33 +266,25 @@ class ContentIngestionJob:
 
     def progress_to_extracted(self, metrics: dict[str, Any]) -> None:
         if self.status != IngestionStatus.PROCESSING:
-            raise InvalidJobTransition(
-                f"Cannot transition to EXTRACTED from status '{self.status.value}'. Must be PROCESSING."
-            )
+            raise InvalidJobTransition(f"Cannot transition to EXTRACTED from status '{self.status.value}'. Must be PROCESSING.")
         validate_stage_evidence("extracted", metrics, self.metrics)
         self._advance(IngestionStatus.EXTRACTED, "extraction_completed", metrics)
 
     def progress_to_chunked(self, metrics: dict[str, Any]) -> None:
         if self.status != IngestionStatus.EXTRACTED:
-            raise InvalidJobTransition(
-                f"Cannot transition to CHUNKED from status '{self.status.value}'. Must be EXTRACTED."
-            )
+            raise InvalidJobTransition(f"Cannot transition to CHUNKED from status '{self.status.value}'. Must be EXTRACTED.")
         validate_stage_evidence("chunked", metrics, self.metrics)
         self._advance(IngestionStatus.CHUNKED, "chunking_completed", metrics)
 
     def progress_to_indexed(self, metrics: dict[str, Any]) -> None:
         if self.status != IngestionStatus.CHUNKED:
-            raise InvalidJobTransition(
-                f"Cannot transition to INDEXED from status '{self.status.value}'. Must be CHUNKED."
-            )
+            raise InvalidJobTransition(f"Cannot transition to INDEXED from status '{self.status.value}'. Must be CHUNKED.")
         validate_stage_evidence("indexed", metrics, self.metrics)
         self._advance(IngestionStatus.INDEXED, "indexing_completed", metrics)
 
     def complete(self, metrics: dict[str, Any] | None = None) -> None:
         if self.status != IngestionStatus.INDEXED:
-            raise InvalidJobTransition(
-                f"Cannot complete job in status '{self.status.value}'. Must be INDEXED."
-            )
+            raise InvalidJobTransition(f"Cannot complete job in status '{self.status.value}'. Must be INDEXED.")
 
         self.status = IngestionStatus.READY
         self.current_stage = "ready"
@@ -327,9 +308,7 @@ class ContentIngestionJob:
         """queued -> failed: the dispatch itself failed (backend business
         operation)."""
         if self.status != IngestionStatus.QUEUED:
-            raise InvalidJobTransition(
-                f"A dispatch failure applies to a QUEUED job, not '{self.status.value}'."
-            )
+            raise InvalidJobTransition(f"A dispatch failure applies to a QUEUED job, not '{self.status.value}'.")
         self._record_failure(error_code, error_message, is_retryable, {})
 
     def fail_processing(
@@ -342,9 +321,7 @@ class ContentIngestionJob:
         """processing..indexed -> failed: AI-service reported the active
         attempt failed."""
         if self.status not in ACTIVE_STATUSES:
-            raise InvalidJobTransition(
-                f"A processing failure applies to an active job, not '{self.status.value}'."
-            )
+            raise InvalidJobTransition(f"A processing failure applies to an active job, not '{self.status.value}'.")
         self._record_failure(error_code, error_message, is_retryable, details or {})
 
     def _record_failure(
@@ -390,15 +367,11 @@ class ContentIngestionJob:
         """failed -> queued for a new attempt. The previous task id is cleared,
         so nothing from the failed attempt can match the new one."""
         if self.status != IngestionStatus.FAILED:
-            raise InvalidJobTransition(
-                f"Cannot schedule retry for job in status '{self.status.value}'. Must be FAILED."
-            )
+            raise InvalidJobTransition(f"Cannot schedule retry for job in status '{self.status.value}'. Must be FAILED.")
         if not self.is_retryable:
             raise InvalidJobTransition("Cannot retry a non-retryable failure.")
         if self.attempt_count >= self.max_attempts:
-            raise InvalidJobTransition(
-                f"Maximum attempts ({self.max_attempts}) exceeded. Terminal failure."
-            )
+            raise InvalidJobTransition(f"Maximum attempts ({self.max_attempts}) exceeded. Terminal failure.")
 
         self.attempt_count += 1
         now = datetime.now(timezone.utc)
@@ -494,13 +467,9 @@ class ContentIngestionJob:
         self.last_callback_at = datetime.now(timezone.utc)
         return CallbackOutcome.APPLIED
 
-    def create_reprocess_run(
-        self, created_by: str, correlation_id: str | None = None
-    ) -> ContentIngestionJob:
+    def create_reprocess_run(self, created_by: str, correlation_id: str | None = None) -> ContentIngestionJob:
         if self.status not in (IngestionStatus.READY, IngestionStatus.FAILED):
-            raise InvalidJobTransition(
-                f"Cannot reprocess job in active status '{self.status.value}'. Must be READY or FAILED."
-            )
+            raise InvalidJobTransition(f"Cannot reprocess job in active status '{self.status.value}'. Must be READY or FAILED.")
 
         new_job = ContentIngestionJob.create(
             asset_id=self.asset_id,

@@ -1,4 +1,8 @@
 import pytest
+from fastapi.testclient import TestClient
+from starlette import status
+
+from app.api import identity as identity_api
 from app.domain.identity.user import Device, Session, User
 from app.domain.identity.value_objects import (
     DeviceId,
@@ -9,12 +13,9 @@ from app.domain.identity.value_objects import (
     SessionId,
     UserId,
 )
-from app.api import identity as identity_api
 from app.events.event_bus import EventBus
 from app.infrastructure.security.argon2_password_hasher import Argon2PasswordHasher
 from app.main import app
-from fastapi.testclient import TestClient
-from starlette import status
 
 
 @pytest.fixture(scope="module")

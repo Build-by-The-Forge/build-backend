@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, IngestionStatus
 
@@ -83,9 +84,7 @@ def test_create_content_asset_invalid_data() -> None:
         )
 
     # Invalid SHA-256
-    with pytest.raises(
-        ValueError, match="content_sha256 must be a valid 64-character hex string"
-    ):
+    with pytest.raises(ValueError, match="content_sha256 must be a valid 64-character hex string"):
         ContentAsset.create(
             source_id="csrc-1",
             file_name="doc.pdf",
@@ -156,9 +155,7 @@ def test_create_asset_version_lineage() -> None:
     assert v2_asset.content_sha256 == sha_v2
 
     # Cannot create version with identical SHA-256
-    with pytest.raises(
-        ValueError, match="new version must have different content bytes"
-    ):
+    with pytest.raises(ValueError, match="new version must have different content bytes"):
         v2_asset.create_version(
             file_name="CSC301_v3.pdf",
             mime_type="application/pdf",
@@ -206,9 +203,7 @@ def test_asset_revocation_and_ingestion_status() -> None:
     assert events[0].event_type == "content.asset_revoked"
 
     # Cannot create version from revoked asset
-    with pytest.raises(
-        ValueError, match="cannot create a new version of a revoked asset"
-    ):
+    with pytest.raises(ValueError, match="cannot create a new version of a revoked asset"):
         asset.create_version(
             file_name="CSC301_v2.pdf",
             mime_type="application/pdf",

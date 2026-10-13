@@ -7,14 +7,10 @@ from app.domain.curriculum.adoption import (
 
 
 class InstitutionalAdoptionRepository(Protocol):
-    async def save_adoption(
-        self, adoption: InstitutionalAdoption
-    ) -> InstitutionalAdoption:
+    async def save_adoption(self, adoption: InstitutionalAdoption) -> InstitutionalAdoption:
         raise NotImplementedError
 
-    async def get_adoption_by_id(
-        self, adoption_id: str
-    ) -> InstitutionalAdoption | None:
+    async def get_adoption_by_id(self, adoption_id: str) -> InstitutionalAdoption | None:
         raise NotImplementedError
 
     async def get_active_adoption(

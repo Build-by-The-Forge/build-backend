@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     BenchmarkOutcomeInput,
@@ -23,24 +24,18 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_effective_curriculum_api_endpoints(client) -> None:
     # 1. Tenant A (FUTA) Setup
-    admin_a_id, admin_a_token = await register_and_authenticate(
-        client, f"futa-eff-admin-{uuid4()}@example.com"
-    )
+    admin_a_id, admin_a_token = await register_and_authenticate(client, f"futa-eff-admin-{uuid4()}@example.com")
     tenant_a_id, tenant_a_slug, _, _ = await seed_tenant_context(admin_a_id, "admin")
     admin_a_headers = headers(admin_a_token, tenant_a_slug)
 
-    student_a_id, student_a_token = await register_and_authenticate(
-        client, f"futa-eff-student-{uuid4()}@example.com"
-    )
+    student_a_id, student_a_token = await register_and_authenticate(client, f"futa-eff-student-{uuid4()}@example.com")
     from tests.integration.assessment.test_attempt_api import add_membership
 
     await add_membership(student_a_id, tenant_a_id, "student")
     student_a_headers = headers(student_a_token, tenant_a_slug)
 
     # Tenant B (UNILAG) Setup
-    admin_b_id, admin_b_token = await register_and_authenticate(
-        client, f"unilag-eff-admin-{uuid4()}@example.com"
-    )
+    admin_b_id, admin_b_token = await register_and_authenticate(client, f"unilag-eff-admin-{uuid4()}@example.com")
     _, tenant_b_slug, _, _ = await seed_tenant_context(admin_b_id, "admin")
     admin_b_headers = headers(admin_b_token, tenant_b_slug)
 
@@ -94,9 +89,7 @@ async def test_effective_curriculum_api_endpoints(client) -> None:
         ],
     )
     await benchmark_service.validate_candidate(bm.id)
-    await benchmark_service.submit_for_review(
-        bm.id, actor_id="nuc-admin", actor_email="admin@nuc.edu.ng"
-    )
+    await benchmark_service.submit_for_review(bm.id, actor_id="nuc-admin", actor_email="admin@nuc.edu.ng")
     await benchmark_service.approve_curriculum(
         bm.id,
         reviewer_id="nuc-lead",
@@ -150,10 +143,7 @@ async def test_effective_curriculum_api_endpoints(client) -> None:
     assert admin_data["statistics"]["total_credit_units"] == 4
     assert admin_data["courses"][0]["origin"] == "institutional_modified"
     assert len(admin_data["courses"][0]["applied_overrides"]) == 1
-    assert (
-        admin_data["courses"][0]["applied_overrides"][0]["reason"]
-        == "Senate practical laboratory requirement."
-    )
+    assert admin_data["courses"][0]["applied_overrides"][0]["reason"] == "Senate practical laboratory requirement."
 
     # 7. Student queries Student Read Mode Active Curriculum -> 200 OK
     student_eff_res = client.get(

@@ -10,9 +10,7 @@ logger = structlog.get_logger(__name__)
 
 
 class AppError(Exception):
-    def __init__(
-        self, message: str, status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
-    ) -> None:
+    def __init__(self, message: str, status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR) -> None:
         self.message = message
         self.status_code = status_code
         super().__init__(message)
@@ -23,9 +21,7 @@ class RateLimitedError(AppError):
     the response never reveals which rule fired or whether an account exists."""
 
     def __init__(self, retry_after: int) -> None:
-        super().__init__(
-            "too many requests", status_code=status.HTTP_429_TOO_MANY_REQUESTS
-        )
+        super().__init__("too many requests", status_code=status.HTTP_429_TOO_MANY_REQUESTS)
         self.retry_after = max(int(retry_after), 1)
 
 
@@ -60,9 +56,7 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
     )
 
 
-async def validation_exception_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
+async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, RequestValidationError):
         raise TypeError("expected RequestValidationError")
     request_id = getattr(request.state, "request_id", None)
@@ -94,11 +88,7 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
         status_code=exc.status_code,
         path=request.url.path,
     )
-    headers = (
-        {"Retry-After": str(exc.retry_after)}
-        if isinstance(exc, RateLimitedError)
-        else None
-    )
+    headers = {"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None
     return JSONResponse(
         status_code=exc.status_code,
         content={

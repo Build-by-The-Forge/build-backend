@@ -46,9 +46,7 @@ class AttemptAnswer:
         )
         return answer
 
-    def update_selection(
-        self, selected_option_index: int, *, option_count: int
-    ) -> None:
+    def update_selection(self, selected_option_index: int, *, option_count: int) -> None:
         if selected_option_index < 0:
             raise ValueError("selected_option_index must be non-negative")
         if selected_option_index >= option_count:

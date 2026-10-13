@@ -85,18 +85,14 @@ def make_user(hasher) -> User:
 
 
 def handler(repo, hasher):
-    return AuthenticateUserHandler(
-        repository=repo, password_hasher=hasher, token_service=JWTTokenService()
-    )
+    return AuthenticateUserHandler(repository=repo, password_hasher=hasher, token_service=JWTTokenService())
 
 
 async def test_unknown_email_is_rejected_after_a_dummy_verification():
     hasher = SpyHasher()
 
     with pytest.raises(AppError) as exc:
-        await handler(FakeUsers(), hasher).handle(
-            AuthenticateUserCommand(email=EMAIL, password=PASSWORD)
-        )
+        await handler(FakeUsers(), hasher).handle(AuthenticateUserCommand(email=EMAIL, password=PASSWORD))
 
     assert exc.value.status_code == 401
     assert hasher.dummy_calls == 1
@@ -107,9 +103,7 @@ async def test_wrong_password_is_rejected_without_a_dummy_verification():
     repo = FakeUsers(make_user(hasher))
 
     with pytest.raises(AppError) as exc:
-        await handler(repo, hasher).handle(
-            AuthenticateUserCommand(email=EMAIL, password="WrongHorse-Battery-9")
-        )
+        await handler(repo, hasher).handle(AuthenticateUserCommand(email=EMAIL, password="WrongHorse-Battery-9"))
 
     assert exc.value.status_code == 401
     assert hasher.dummy_calls == 0
@@ -128,9 +122,7 @@ async def test_invalid_input_fails_like_bad_credentials(email, password):
     repo = FakeUsers(make_user(hasher))
 
     with pytest.raises(AppError) as exc:
-        await handler(repo, hasher).handle(
-            AuthenticateUserCommand(email=email, password=password)
-        )
+        await handler(repo, hasher).handle(AuthenticateUserCommand(email=email, password=password))
 
     assert exc.value.status_code == 401
     assert str(exc.value) == "invalid credentials"
@@ -142,9 +134,7 @@ async def test_successful_login_upgrades_an_outdated_hash():
     user = make_user(weak)
     repo = FakeUsers(user)
 
-    await handler(repo, current).handle(
-        AuthenticateUserCommand(email=EMAIL, password=PASSWORD)
-    )
+    await handler(repo, current).handle(AuthenticateUserCommand(email=EMAIL, password=PASSWORD))
 
     assert repo.saved == [user]
     assert not current.needs_rehash(user.password_hash)
@@ -155,9 +145,7 @@ async def test_successful_login_with_current_hash_does_not_rewrite_it():
     hasher = Argon2PasswordHasher()
     repo = FakeUsers(make_user(hasher))
 
-    await handler(repo, hasher).handle(
-        AuthenticateUserCommand(email=EMAIL, password=PASSWORD)
-    )
+    await handler(repo, hasher).handle(AuthenticateUserCommand(email=EMAIL, password=PASSWORD))
 
     assert repo.saved == []
 

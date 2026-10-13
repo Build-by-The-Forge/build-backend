@@ -1,4 +1,6 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.application.curriculum.curriculum_source_service import (
     CurriculumSourceService,
 )
@@ -6,7 +8,6 @@ from app.events.event_bus import EventBus
 from app.infrastructure.curriculum.repositories import (
     SqlAlchemyCurriculumSourceRepository,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

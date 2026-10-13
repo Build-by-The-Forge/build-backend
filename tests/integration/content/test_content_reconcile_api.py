@@ -64,9 +64,7 @@ async def test_reconcile_applies_an_undelivered_failure(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert resp.json()["data"]["status"] == "failed"
     assert resp.json()["data"]["error_code"] == "INGESTION_PIPELINE_UNAVAILABLE"
-    assert resp.json()["meta"]["reconciled"] == [
-        {"event_id": report.events[0]["event_id"], "outcome": "applied"}
-    ]
+    assert resp.json()["meta"]["reconciled"] == [{"event_id": report.events[0]["event_id"], "outcome": "applied"}]
     assert calls == [(job["external_task_id"], tenant_id)]
 
 

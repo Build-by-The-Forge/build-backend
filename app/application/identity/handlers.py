@@ -35,7 +35,6 @@ from app.domain.repositories.session import SessionRepository
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 
-
 DEFAULT_SESSION_LIFETIME = timedelta(days=30)
 DEFAULT_REFRESH_IDLE_LIFETIME = timedelta(days=14)
 
@@ -75,9 +74,7 @@ class RefreshTokenReuseError(Exception):
 
 
 class RegisterUserHandler:
-    def __init__(
-        self, repository: UserRepository, password_hasher: PasswordHasher
-    ) -> None:
+    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
         self.repository = repository
         self.password_hasher = password_hasher
 
@@ -118,9 +115,7 @@ class AuthenticationFailed(AppError):
     """Sign-in refused. Carries the account (if one matched) for the audit
     trail; the HTTP response is the same as a plain AppError."""
 
-    def __init__(
-        self, message: str, status_code: int, reason: str, user_id: str | None
-    ) -> None:
+    def __init__(self, message: str, status_code: int, reason: str, user_id: str | None) -> None:
         super().__init__(message, status_code=status_code)
         self.reason = reason
         self.user_id = user_id
@@ -170,9 +165,7 @@ class AuthenticateUserHandler:
         # Checked only after the password verifies, so this reveals the
         # account state only to someone who already holds the credentials.
         if not user.can_authenticate:
-            raise AuthenticationFailed(
-                "account is not active", 403, "account_not_active", user.id.value
-            )
+            raise AuthenticationFailed("account is not active", 403, "account_not_active", user.id.value)
 
         if self.password_hasher.needs_rehash(user.password_hash):
             user.change_password(password, self.password_hasher)
@@ -232,9 +225,7 @@ class RefreshSessionHandler:
         if not command.refresh_token:
             raise invalid
 
-        stored = await self.refresh_token_repository.get_by_hash(
-            hash_token(command.refresh_token)
-        )
+        stored = await self.refresh_token_repository.get_by_hash(hash_token(command.refresh_token))
         if stored is None or stored.revoked_at is not None:
             raise invalid
         if stored.rotated_at is not None:
@@ -308,9 +299,7 @@ class LogoutSessionHandler:
         if session is None or session.user_id.value != command.user_id:
             raise AppError("session not found", status_code=404)
 
-        await RevokeSessionHandler(
-            self.session_repository, self.refresh_token_repository
-        ).handle(command.session_id)
+        await RevokeSessionHandler(self.session_repository, self.refresh_token_repository).handle(command.session_id)
 
 
 async def revoke_user_sessions(
@@ -320,9 +309,7 @@ async def revoke_user_sessions(
     except_session_id: str | None = None,
 ) -> int:
     """Revoke every live session of the user together with its refresh tokens."""
-    session_ids = await session_repository.revoke_all_for_user(
-        user_id, except_session_id=except_session_id
-    )
+    session_ids = await session_repository.revoke_all_for_user(user_id, except_session_id=except_session_id)
     for session_id in session_ids:
         await refresh_token_repository.revoke_for_session(session_id)
     return len(session_ids)
@@ -338,9 +325,7 @@ class LogoutAllSessionsHandler:
         self.refresh_token_repository = refresh_token_repository
 
     async def handle(self, command: LogoutAllSessionsCommand) -> int:
-        return await revoke_user_sessions(
-            self.session_repository, self.refresh_token_repository, command.user_id
-        )
+        return await revoke_user_sessions(self.session_repository, self.refresh_token_repository, command.user_id)
 
 
 DEFAULT_PASSWORD_RESET_LIFETIME = timedelta(hours=1)
@@ -429,9 +414,7 @@ class ResetPasswordHandler:
         except ValueError as exc:
             raise AppError(str(exc), status_code=422) from exc
 
-        user_id = await self.repository.consume_password_reset_token(
-            hash_token(command.token)
-        )
+        user_id = await self.repository.consume_password_reset_token(hash_token(command.token))
         if user_id is None:
             raise AppError("invalid reset token", status_code=401)
 
@@ -445,9 +428,7 @@ class ResetPasswordHandler:
         await self.repository.save(user)
         await self.repository.invalidate_password_reset_tokens(user_id)
         # Whoever prompted the reset may hold a live session; end them all.
-        await revoke_user_sessions(
-            self.session_repository, self.refresh_token_repository, user_id
-        )
+        await revoke_user_sessions(self.session_repository, self.refresh_token_repository, user_id)
         return user
 
 
@@ -476,9 +457,7 @@ def email_verification_email(request: EmailVerificationRequest) -> EmailMessage:
     )
 
 
-async def issue_email_verification(
-    repository: UserRepository, user: User, lifetime: timedelta
-) -> EmailVerificationRequest:
+async def issue_email_verification(repository: UserRepository, user: User, lifetime: timedelta) -> EmailVerificationRequest:
     """Replace any outstanding verification code of the user with a new one."""
     await repository.invalidate_verification_tokens(user.id.value)
     raw_token = secrets.token_urlsafe(32)
@@ -487,9 +466,7 @@ async def issue_email_verification(
         hash_token(raw_token),
         expires_at=datetime.now(timezone.utc) + lifetime,
     )
-    return EmailVerificationRequest(
-        email=user.email.value, raw_token=raw_token, expires_in=lifetime
-    )
+    return EmailVerificationRequest(email=user.email.value, raw_token=raw_token, expires_in=lifetime)
 
 
 class RequestEmailVerificationHandler:
@@ -501,9 +478,7 @@ class RequestEmailVerificationHandler:
         self.repository = repository
         self.lifetime = lifetime
 
-    async def handle(
-        self, command: RequestEmailVerificationCommand
-    ) -> EmailVerificationRequest | None:
+    async def handle(self, command: RequestEmailVerificationCommand) -> EmailVerificationRequest | None:
         try:
             email = Email(command.email)
         except ValueError as exc:
@@ -512,11 +487,7 @@ class RequestEmailVerificationHandler:
         user = await self.repository.get_by_email(email.value)
         # Only pending accounts that may sign in get a code; the caller's
         # response must not reveal which case applied.
-        if (
-            user is None
-            or not user.can_authenticate
-            or user.status is not AccountStatus.PENDING_VERIFICATION
-        ):
+        if user is None or not user.can_authenticate or user.status is not AccountStatus.PENDING_VERIFICATION:
             return None
         return await issue_email_verification(self.repository, user, self.lifetime)
 
@@ -529,20 +500,14 @@ class VerifyEmailHandler:
         if not command.token:
             raise AppError("invalid verification token", status_code=422)
 
-        user_id = await self.repository.consume_verification_token(
-            hash_token(command.token)
-        )
+        user_id = await self.repository.consume_verification_token(hash_token(command.token))
         if user_id is None:
             raise AppError("invalid verification token", status_code=401)
 
         user = await self.repository.get_by_id(user_id)
         # Verification only ever activates a pending account; it must not
         # bring back one that was locked, disabled or deleted.
-        if (
-            user is None
-            or not user.can_authenticate
-            or user.status is not AccountStatus.PENDING_VERIFICATION
-        ):
+        if user is None or not user.can_authenticate or user.status is not AccountStatus.PENDING_VERIFICATION:
             raise AppError("invalid verification token", status_code=401)
 
         user.verify_email()
@@ -582,14 +547,10 @@ class ChangePasswordHandler:
             current_password = Password(command.current_password)
         except ValueError:
             current_password = None
-        if current_password is None or not self.password_hasher.verify(
-            current_password, user.password_hash
-        ):
+        if current_password is None or not self.password_hasher.verify(current_password, user.password_hash):
             raise CurrentPasswordIncorrect()
         if command.new_password == command.current_password:
-            raise AppError(
-                "new password must differ from the current password", status_code=422
-            )
+            raise AppError("new password must differ from the current password", status_code=422)
 
         user.change_password(new_password, self.password_hasher)
         await self.repository.save(user)

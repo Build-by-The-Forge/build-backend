@@ -48,9 +48,7 @@ async def list_assessments(
     course_id: str | None = None,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
-    assessments = await service.list_assessments(
-        tenant_id=context.tenant_id or "", course_id=course_id
-    )
+    assessments = await service.list_assessments(tenant_id=context.tenant_id or "", course_id=course_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -68,9 +66,7 @@ async def get_assessment(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
-    assessment = await service.get_assessment(
-        assessment_id, tenant_id=context.tenant_id or ""
-    )
+    assessment = await service.get_assessment(assessment_id, tenant_id=context.tenant_id or "")
     if assessment is None:
         raise HTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
@@ -102,9 +98,7 @@ async def publish_assessment(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_PUBLISH)),
 ) -> JSONResponse:
-    assessment = await service.publish_assessment(
-        assessment_id, context.tenant_id or ""
-    )
+    assessment = await service.publish_assessment(assessment_id, context.tenant_id or "")
     if assessment is None:
         raise HTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
@@ -133,9 +127,7 @@ async def get_assessment_results(
     request: Request,
     limit: int = 50,
     offset: int = 0,
-    context: TenantContext = Depends(
-        require_permission(Permission.ASSESSMENT_RESULT_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_RESULT_READ)),
 ) -> JSONResponse:
     if limit < 1 or limit > 100:
         raise HTTPException(

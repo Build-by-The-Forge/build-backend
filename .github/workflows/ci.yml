@@ -3,9 +3,15 @@ on:
   push:
     branches: [main, develop]
   pull_request:
+  # Weekly: new advisories appear without any commit. Scheduled runs execute
+  # the audit jobs only (the test jobs skip them).
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,8 +20,8 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e '.[dev]'
+          python -m pip install pip==26.2.1
+          pip install -r requirements-dev.txt
       - name: Lint
         run: |
           ruff check app tests scripts pg_smoke
@@ -26,6 +32,7 @@ jobs:
     # The suite above builds its SQLite schema from the ORM models, so it
     # cannot see migrations that disagree with the models. This job checks
     # the schema production actually gets (docs/alembic.md).
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -58,8 +65,8 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e '.[dev]'
+          python -m pip install pip==26.2.1
+          pip install -r requirements-dev.txt
       - name: Migrate an empty database to head
         run: alembic upgrade head
       - name: Single head, database at head
@@ -80,3 +87,59 @@ jobs:
         run: pytest tests/infrastructure/test_service_auth_middleware.py -q
       - name: Signed AI-service callbacks against real Redis
         run: pytest tests/integration/content/test_signed_callbacks.py -q
+  security:
+    # Known advisories in the pinned dependencies, under the exception policy
+    # (docs/security-advisories.md). Needs the network for the advisory
+    # database.
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install pip-audit
+        run: |
+          python -m pip install pip==26.2.1
+          pip install pip-audit==2.10.1
+      - name: Audit requirements.txt and requirements-dev.txt
+        run: python -m scripts.audit_python_packages requirements
+  image:
+    # The production image as it would be deployed: built from this commit,
+    # then its contents and user, its Python packages and its OS packages.
+    # Nothing is published from this workflow; a publish step added later
+    # must `needs: image` so only a checked and audited image can ship.
+    name: Production image
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_BUILDKIT: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build the production image
+        run: >-
+          docker build --target production
+          --label org.opencontainers.image.revision=${{ github.sha }}
+          -t build-backend:ci .
+      - name: Contents and user (scripts/check_backend_image.sh)
+        run: scripts/check_backend_image.sh build-backend:ci
+      - name: Python packages in the image
+        run: |
+          python -m pip install pip==26.2.1
+          pip install pip-audit==2.10.1
+          python -m scripts.audit_python_packages image build-backend:ci
+      - name: OS packages in the image (scripts/scan_image_os.sh)
+        run: scripts/scan_image_os.sh build-backend:ci
+  secrets:
+    # Secrets in the tracked files: gitleaks, pinned by digest, findings
+    # redacted (scripts/scan_secrets.sh). Accepted findings: .gitleaksignore.
+    # Not scheduled: with the scanner pinned, only a commit can add a finding.
+    if: github.event_name != 'schedule'
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan the tracked files
+        run: scripts/scan_secrets.sh

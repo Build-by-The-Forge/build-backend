@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from app.application.curriculum.curriculum_source_service import (
     CurriculumSourceService,
 )
@@ -15,23 +16,17 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_benchmark_curriculum_api_endpoints(client) -> None:
     # 1. Admin setup
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"bm-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"bm-admin-{uuid4()}@example.com")
     _, admin_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, admin_slug)
 
     # 2. Lecturer setup
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"bm-lecturer-{uuid4()}@example.com"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"bm-lecturer-{uuid4()}@example.com")
     _, lecturer_slug, _, _ = await seed_tenant_context(lecturer_id, "lecturer")
     lecturer_headers = headers(lecturer_token, lecturer_slug)
 
     # 3. Student setup
-    student_id, student_token = await register_and_authenticate(
-        client, f"bm-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"bm-student-{uuid4()}@example.com")
     _, student_slug, _, _ = await seed_tenant_context(student_id, "student")
     student_headers = headers(student_token, student_slug)
 

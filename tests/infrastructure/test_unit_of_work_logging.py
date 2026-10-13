@@ -36,9 +36,7 @@ async def test_client_errors_roll_back_at_info_without_their_message(exc):
     assert "exception" not in entry
 
 
-@pytest.mark.parametrize(
-    "exc", [RuntimeError("database exploded"), AppError("boom", status_code=500)]
-)
+@pytest.mark.parametrize("exc", [RuntimeError("database exploded"), AppError("boom", status_code=500)])
 async def test_unexpected_errors_still_roll_back_at_error(exc):
     (entry,) = await _fail_inside(exc)
 

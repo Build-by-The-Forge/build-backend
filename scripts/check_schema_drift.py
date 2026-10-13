@@ -12,11 +12,12 @@ import os
 import sys
 from typing import Any
 
-import app.main  # noqa: F401  (imports every model onto Base.metadata)
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from app.db.base import Base
 from sqlalchemy.ext.asyncio import create_async_engine
+
+import app.main  # noqa: F401  (imports every model onto Base.metadata)
+from app.db.base import Base
 
 # Models whose design is deferred; they are marked "NOT MIGRATED".
 DEFERRED_TABLES = frozenset({"curriculum_versions", "course_prerequisites"})

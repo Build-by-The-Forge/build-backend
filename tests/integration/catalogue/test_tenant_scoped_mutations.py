@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import CourseModel
 from app.infrastructure.db.models.tenant_core import (
@@ -10,13 +12,10 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
-from sqlalchemy import select
 from tests.integration.identity_helpers import verify_email
 
 
-async def seed_course_context(
-    client, role: str = "lecturer"
-) -> tuple[str, str, str, str, str]:
+async def seed_course_context(client, role: str = "lecturer") -> tuple[str, str, str, str, str]:
     payload = {"email": f"mutation-{uuid4()}@example.com", "password": "StrongPass123!"}
     registered = client.post("/identity/users", json=payload)
     assert registered.status_code == 201
@@ -147,9 +146,7 @@ async def test_lecturer_updates_course_in_own_tenant(client):
     assert response.status_code == 200
     assert response.json()["data"]["title"] == "Updated Course Title"
     async with SessionLocal() as session:
-        course = await session.scalar(
-            select(CourseModel).where(CourseModel.id == course_id)
-        )
+        course = await session.scalar(select(CourseModel).where(CourseModel.id == course_id))
     assert course is not None
     assert course.tenant_id == tenant_id
     assert course.title == "Updated Course Title"
@@ -173,20 +170,14 @@ async def test_cross_tenant_course_update_returns_not_found(client):
 
 @pytest.mark.asyncio
 async def test_course_archive_and_publish_are_tenant_scoped(client):
-    _, tenant_slug, _, course_id, token = await seed_course_context(
-        client, "faculty_admin"
-    )
+    _, tenant_slug, _, course_id, token = await seed_course_context(client, "faculty_admin")
     request_headers = headers(token, tenant_slug)
 
-    archived = client.post(
-        f"/catalogue/courses/{course_id}/archive", headers=request_headers
-    )
+    archived = client.post(f"/catalogue/courses/{course_id}/archive", headers=request_headers)
     assert archived.status_code == 200
     assert archived.json()["data"]["status"] == "archived"
 
-    published = client.post(
-        f"/catalogue/courses/{course_id}/publish", headers=request_headers
-    )
+    published = client.post(f"/catalogue/courses/{course_id}/publish", headers=request_headers)
     assert published.status_code == 200
     assert published.json()["data"]["status"] == "active"
 
@@ -196,12 +187,8 @@ async def test_student_cannot_archive_or_publish_course(client):
     _, tenant_slug, _, course_id, token = await seed_course_context(client, "student")
     request_headers = headers(token, tenant_slug)
 
-    archive = client.post(
-        f"/catalogue/courses/{course_id}/archive", headers=request_headers
-    )
-    publish = client.post(
-        f"/catalogue/courses/{course_id}/publish", headers=request_headers
-    )
+    archive = client.post(f"/catalogue/courses/{course_id}/archive", headers=request_headers)
+    publish = client.post(f"/catalogue/courses/{course_id}/publish", headers=request_headers)
 
     assert archive.status_code == 403
     assert publish.status_code == 403

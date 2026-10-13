@@ -4,9 +4,7 @@ from app.domain.assessment.attempt import AssessmentAttempt
 
 
 class AttemptRepository(Protocol):
-    async def save(
-        self, attempt: AssessmentAttempt, tenant_id: str | None = None
-    ) -> AssessmentAttempt:
+    async def save(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         raise NotImplementedError
 
     async def get_by_id(
@@ -25,12 +23,8 @@ class AttemptRepository(Protocol):
     ) -> AssessmentAttempt | None:
         raise NotImplementedError
 
-    async def list_by_user(
-        self, user_id: str, tenant_id: str
-    ) -> list[AssessmentAttempt]:
+    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
         raise NotImplementedError
 
-    async def update(
-        self, attempt: AssessmentAttempt, tenant_id: str | None = None
-    ) -> AssessmentAttempt:
+    async def update(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         raise NotImplementedError

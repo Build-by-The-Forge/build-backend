@@ -13,9 +13,6 @@ from app.application.identity.ports.security_events import (
 from app.application.identity.throttle import AuthThrottle
 from app.application.identity.user_service import UserService
 from app.bootstrap.container import build_container
-from app.infrastructure.identity.security_event_recorder import (
-    SQLAlchemySecurityEventRecorder,
-)
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
 from app.core.dependencies import (
@@ -27,6 +24,9 @@ from app.core.exceptions import AppError, RateLimitedError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.request_context import client_ip as _client_ip
 from app.core.tenant_context import TenantContext
+from app.infrastructure.identity.security_event_recorder import (
+    SQLAlchemySecurityEventRecorder,
+)
 
 router = APIRouter(prefix="/identity", tags=["identity"])
 container = build_container()
@@ -81,15 +81,11 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
     try:
         attempt = await throttle.before_login(email, ip)
     except RateLimitedError:
-        await security_events.record_login(
-            user_id=None, successful=False, reason=LoginFailureReason.RATE_LIMITED
-        )
+        await security_events.record_login(user_id=None, successful=False, reason=LoginFailureReason.RATE_LIMITED)
         raise
 
     try:
-        issued = await service.authenticate_user(
-            email, password, device_id=device_id, user_agent=user_agent
-        )
+        issued = await service.authenticate_user(email, password, device_id=device_id, user_agent=user_agent)
     except AppError as exc:
         if exc.status_code == status.HTTP_401_UNAUTHORIZED:
             locked = await throttle.login_failed(attempt)
@@ -148,9 +144,7 @@ def _issued_session_response(issued: IssuedSession, request_id: str | None) -> J
                 "user_id": session.user_id.value,
                 "session_id": session.id.value,
                 "device_id": session.device_id.value if session.device_id else None,
-                "access_token": service.token_service.issue_access_token(
-                    session.user_id.value, session.id.value
-                ),
+                "access_token": service.token_service.issue_access_token(session.user_id.value, session.id.value),
                 "token_type": "Bearer",
                 "expires_in": settings.auth_access_token_ttl_seconds,
                 "refresh_token": issued.refresh_token,
@@ -257,9 +251,7 @@ async def resend_verification(request: Request, payload: dict[str, str]) -> JSON
         content={
             "success": True,
             "data": {},
-            "meta": {
-                "message": "If this email needs verification, a new code has been sent."
-            },
+            "meta": {"message": "If this email needs verification, a new code has been sent."},
             "request_id": request_id,
         },
     )
@@ -289,9 +281,7 @@ async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResp
         content={
             "success": True,
             "data": {},
-            "meta": {
-                "message": "If an account exists for this email, a reset code has been sent."
-            },
+            "meta": {"message": "If an account exists for this email, a reset code has been sent."},
             "request_id": request_id,
         },
     )
@@ -338,11 +328,7 @@ async def change_password(
     await throttle.before_password_change(principal.user_id)
 
     try:
-        if not (
-            isinstance(current_password, str)
-            and isinstance(new_password, str)
-            and isinstance(revoke_other_sessions, bool)
-        ):
+        if not (isinstance(current_password, str) and isinstance(new_password, str) and isinstance(revoke_other_sessions, bool)):
             raise AppError("invalid change-password payload", status_code=422)
         revoked = await service.change_password(
             principal.user_id,
@@ -450,9 +436,7 @@ async def get_tenant_context(
 async def get_permissions(
     context: TenantContext = Depends(get_current_tenant_context),
 ) -> JSONResponse:
-    permissions = sorted(
-        permission.value for permission in authorization.permissions_for(context)
-    )
+    permissions = sorted(permission.value for permission in authorization.permissions_for(context))
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

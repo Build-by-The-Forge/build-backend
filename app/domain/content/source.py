@@ -71,34 +71,20 @@ class ContentSource:
         if not created_by_email.strip():
             raise ValueError("created_by_email cannot be empty")
 
-        st = (
-            ContentSourceType(source_type)
-            if isinstance(source_type, str)
-            else source_type
-        )
-        al = (
-            AuthorityLevel(authority_level)
-            if isinstance(authority_level, str)
-            else authority_level
-        )
+        st = ContentSourceType(source_type) if isinstance(source_type, str) else source_type
+        al = AuthorityLevel(authority_level) if isinstance(authority_level, str) else authority_level
         vis = VisibilityScope(visibility) if isinstance(visibility, str) else visibility
 
         # Invariant 1: Regulatory authority requires platform visibility and no tenant scoping
         if al == AuthorityLevel.REGULATORY:
             if vis != VisibilityScope.PLATFORM:
-                raise ValueError(
-                    "regulatory content sources must have platform visibility"
-                )
+                raise ValueError("regulatory content sources must have platform visibility")
             if tenant_id is not None:
-                raise ValueError(
-                    "regulatory content sources cannot be scoped to a single tenant"
-                )
+                raise ValueError("regulatory content sources cannot be scoped to a single tenant")
 
         # Invariant 2: Non-platform visibility scopes require tenant_id
         if vis != VisibilityScope.PLATFORM and not tenant_id:
-            raise ValueError(
-                f"visibility scope '{vis.value}' requires a valid tenant_id"
-            )
+            raise ValueError(f"visibility scope '{vis.value}' requires a valid tenant_id")
 
         # Invariant 3: Specific sub-tenant visibility requirements
         if vis == VisibilityScope.FACULTY and not faculty_id:
@@ -110,9 +96,7 @@ class ContentSource:
 
         # Invariant 4: Institutional authority requires institutional tenant association
         if al == AuthorityLevel.INSTITUTIONAL and vis == VisibilityScope.PLATFORM:
-            raise ValueError(
-                "institutional content sources cannot have platform-wide visibility"
-            )
+            raise ValueError("institutional content sources cannot have platform-wide visibility")
 
         now = datetime.now(timezone.utc)
         source = cls(

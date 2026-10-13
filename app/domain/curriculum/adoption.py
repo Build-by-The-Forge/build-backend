@@ -60,23 +60,15 @@ class CurriculumOverride:
         if not adoption_id.strip():
             raise ValueError("adoption_id cannot be empty")
         if not reason or not reason.strip():
-            raise ValueError(
-                "academic rationale (reason) is mandatory for institutional overrides"
-            )
+            raise ValueError("academic rationale (reason) is mandatory for institutional overrides")
         if not created_by.strip():
             raise ValueError("created_by cannot be empty")
         if not created_by_email.strip():
             raise ValueError("created_by_email cannot be empty")
 
-        ov_type = (
-            OverrideType(override_type)
-            if isinstance(override_type, str)
-            else override_type
-        )
+        ov_type = OverrideType(override_type) if isinstance(override_type, str) else override_type
 
-        norm_course_code = (
-            "".join(target_course_code.split()).upper() if target_course_code else None
-        )
+        norm_course_code = "".join(target_course_code.split()).upper() if target_course_code else None
 
         if (
             ov_type
@@ -86,18 +78,14 @@ class CurriculumOverride:
             )
             and not norm_course_code
         ):
-            raise ValueError(
-                f"target_course_code is required for override type '{ov_type.value}'"
-            )
+            raise ValueError(f"target_course_code is required for override type '{ov_type.value}'")
 
         if ov_type == OverrideType.ADD_COURSE:
             payload = custom_payload or {}
             required_keys = ("code", "title", "credit_units", "level", "semester")
             missing = [k for k in required_keys if k not in payload]
             if missing:
-                raise ValueError(
-                    f"custom_payload for add_course is missing required fields: {', '.join(missing)}"
-                )
+                raise ValueError(f"custom_payload for add_course is missing required fields: {', '.join(missing)}")
 
         return cls(
             id=override_id or str(uuid4()),
@@ -166,12 +154,8 @@ class InstitutionalAdoption:
             programme_id=programme_id.strip(),
             benchmark_curriculum_id=benchmark_curriculum_id.strip(),
             benchmark_version=benchmark_version.strip(),
-            benchmark_fingerprint=(
-                benchmark_fingerprint.strip() if benchmark_fingerprint else None
-            ),
-            academic_session_id=(
-                academic_session_id.strip() if academic_session_id else None
-            ),
+            benchmark_fingerprint=(benchmark_fingerprint.strip() if benchmark_fingerprint else None),
+            academic_session_id=(academic_session_id.strip() if academic_session_id else None),
             status=AdoptionStatus.DRAFT,
             notes=notes.strip() if notes else None,
             adopted_by=adopted_by.strip(),
@@ -197,9 +181,7 @@ class InstitutionalAdoption:
 
     def activate(self, activated_by: str | None = None) -> None:
         if self.status != AdoptionStatus.DRAFT:
-            raise ValueError(
-                f"only draft adoptions can be activated, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only draft adoptions can be activated, current status is '{self.status.value}'")
         self.status = AdoptionStatus.ACTIVE
         self.updated_at = datetime.now(timezone.utc)
         self._record_event(
@@ -218,9 +200,7 @@ class InstitutionalAdoption:
 
     def supersede(self) -> None:
         if self.status != AdoptionStatus.ACTIVE:
-            raise ValueError(
-                f"only active adoptions can be superseded, current status is '{self.status.value}'"
-            )
+            raise ValueError(f"only active adoptions can be superseded, current status is '{self.status.value}'")
         self.status = AdoptionStatus.SUPERSEDED
         self.updated_at = datetime.now(timezone.utc)
         self._record_event(

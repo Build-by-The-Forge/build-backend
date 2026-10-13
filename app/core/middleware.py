@@ -46,7 +46,5 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             current_request.reset(context_token)
 
         response.headers["x-request-id"] = request_id
-        response.headers["x-response-time-ms"] = str(
-            round((time.perf_counter() - request.state.start_time) * 1000, 3)
-        )
+        response.headers["x-response-time-ms"] = str(round((time.perf_counter() - request.state.start_time) * 1000, 3))
         return response

@@ -55,13 +55,9 @@ class ListCoursesHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, department_id: str | None = None, tenant_id: str | None = None
-    ) -> list[Course]:
+    async def handle(self, department_id: str | None = None, tenant_id: str | None = None) -> list[Course]:
         if department_id:
-            return await self.repository.list_by_department(
-                department_id, tenant_id=tenant_id
-            )
+            return await self.repository.list_by_department(department_id, tenant_id=tenant_id)
         return await self.repository.list_all(tenant_id=tenant_id)
 
 
@@ -70,9 +66,7 @@ class CreateTopicHandler:
         self.repository = repository
 
     async def handle(self, command: CreateTopicCommand) -> Topic | None:
-        course = await self.repository.get_by_id(
-            command.course_id, tenant_id=command.tenant_id
-        )
+        course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
         if course is None:
             return None
 
@@ -80,11 +74,7 @@ class CreateTopicHandler:
             course_id=course.id,
             title=TopicTitle(command.title),
             slug=TopicSlug(command.slug),
-            description=(
-                TopicDescription(command.description)
-                if command.description is not None
-                else None
-            ),
+            description=(TopicDescription(command.description) if command.description is not None else None),
             sequence=TopicSequence(command.sequence),
         )
         course.add_topic(topic)
@@ -97,28 +87,18 @@ class UpdateTopicHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateTopicCommand) -> Topic | None:
-        course = await self.repository.get_by_topic_id(
-            command.topic_id, tenant_id=command.tenant_id
-        )
+        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
         if course is None:
             return None
         topic = next(
-            (
-                candidate
-                for candidate in course.topics
-                if candidate.id.value == command.topic_id
-            ),
+            (candidate for candidate in course.topics if candidate.id.value == command.topic_id),
             None,
         )
         if topic is None:
             return None
         topic.update_details(
             title=TopicTitle(command.title) if command.title is not None else None,
-            description=(
-                TopicDescription(command.description)
-                if command.description is not None
-                else None
-            ),
+            description=(TopicDescription(command.description) if command.description is not None else None),
         )
         await self.repository.save(course, tenant_id=command.tenant_id)
         return topic
@@ -128,12 +108,8 @@ class CreateLearningOutcomeHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: CreateLearningOutcomeCommand
-    ) -> LearningOutcome | None:
-        course = await self.repository.get_by_topic_id(
-            command.topic_id, tenant_id=command.tenant_id
-        )
+    async def handle(self, command: CreateLearningOutcomeCommand) -> LearningOutcome | None:
+        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
         if course is None:
             return None
         topic = next(
@@ -156,21 +132,12 @@ class UpdateLearningOutcomeHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: UpdateLearningOutcomeCommand
-    ) -> LearningOutcome | None:
-        course = await self.repository.get_by_learning_outcome_id(
-            command.learning_outcome_id, tenant_id=command.tenant_id
-        )
+    async def handle(self, command: UpdateLearningOutcomeCommand) -> LearningOutcome | None:
+        course = await self.repository.get_by_learning_outcome_id(command.learning_outcome_id, tenant_id=command.tenant_id)
         if course is None:
             return None
         outcome = next(
-            (
-                item
-                for topic in course.topics
-                for item in topic.learning_outcomes
-                if item.id.value == command.learning_outcome_id
-            ),
+            (item for topic in course.topics for item in topic.learning_outcomes if item.id.value == command.learning_outcome_id),
             None,
         )
         if outcome is None:
@@ -185,12 +152,8 @@ class CreateReferenceMaterialHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: CreateReferenceMaterialCommand
-    ) -> ReferenceMaterial | None:
-        course = await self.repository.get_by_topic_id(
-            command.topic_id, tenant_id=command.tenant_id
-        )
+    async def handle(self, command: CreateReferenceMaterialCommand) -> ReferenceMaterial | None:
+        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
         if course is None:
             return None
         if not any(topic.id.value == command.topic_id for topic in course.topics):
@@ -199,9 +162,7 @@ class CreateReferenceMaterialHandler:
             course_id=course.id,
             title=ReferenceMaterialTitle(command.title),
             material_type=ReferenceMaterialType(command.material_type),
-            url=(
-                ReferenceMaterialUrl(command.url) if command.url is not None else None
-            ),
+            url=(ReferenceMaterialUrl(command.url) if command.url is not None else None),
         )
         course.add_reference(material)
         await self.repository.save(course, tenant_id=command.tenant_id)
@@ -212,38 +173,20 @@ class UpdateReferenceMaterialHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: UpdateReferenceMaterialCommand
-    ) -> ReferenceMaterial | None:
-        course = await self.repository.get_by_reference_material_id(
-            command.reference_material_id, tenant_id=command.tenant_id
-        )
+    async def handle(self, command: UpdateReferenceMaterialCommand) -> ReferenceMaterial | None:
+        course = await self.repository.get_by_reference_material_id(command.reference_material_id, tenant_id=command.tenant_id)
         if course is None:
             return None
         material = next(
-            (
-                item
-                for item in course.references
-                if item.id.value == command.reference_material_id
-            ),
+            (item for item in course.references if item.id.value == command.reference_material_id),
             None,
         )
         if material is None:
             return None
         material.update_details(
-            title=(
-                ReferenceMaterialTitle(command.title)
-                if command.title is not None
-                else None
-            ),
-            material_type=(
-                ReferenceMaterialType(command.material_type)
-                if command.material_type is not None
-                else None
-            ),
-            url=(
-                ReferenceMaterialUrl(command.url) if command.url is not None else None
-            ),
+            title=(ReferenceMaterialTitle(command.title) if command.title is not None else None),
+            material_type=(ReferenceMaterialType(command.material_type) if command.material_type is not None else None),
+            url=(ReferenceMaterialUrl(command.url) if command.url is not None else None),
         )
         await self.repository.save(course, tenant_id=command.tenant_id)
         return material
@@ -254,9 +197,7 @@ class UpdateCourseHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateCourseCommand) -> Course | None:
-        course = await self.repository.get_by_id(
-            command.course_id, tenant_id=command.tenant_id
-        )
+        course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
         if course is None:
             return None
         course.update_details(
@@ -270,9 +211,7 @@ class TransitionCourseHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, course_id: str, tenant_id: str | None, transition: str
-    ) -> Course | None:
+    async def handle(self, course_id: str, tenant_id: str | None, transition: str) -> Course | None:
         course = await self.repository.get_by_id(course_id, tenant_id=tenant_id)
         if course is None:
             return None

@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from app.domain.curriculum.adoption import (
     AdoptionStatus,
     CurriculumOverride,
@@ -63,9 +64,7 @@ def test_curriculum_override_validation() -> None:
         )
 
     # 2. Course modification without target_course_code raises ValueError
-    with pytest.raises(
-        ValueError, match="target_course_code is required for override type"
-    ):
+    with pytest.raises(ValueError, match="target_course_code is required for override type"):
         CurriculumOverride.create(
             adoption_id="adopt-1",
             override_type=OverrideType.MODIFY_COURSE,
@@ -77,18 +76,14 @@ def test_curriculum_override_validation() -> None:
         )
 
     # 3. Add course without required payload fields raises ValueError
-    with pytest.raises(
-        ValueError, match="custom_payload for add_course is missing required fields"
-    ):
+    with pytest.raises(ValueError, match="custom_payload for add_course is missing required fields"):
         CurriculumOverride.create(
             adoption_id="adopt-1",
             override_type=OverrideType.ADD_COURSE,
             reason="FUTA general studies requirement",
             created_by="user-1",
             created_by_email="user@futa.edu.ng",
-            custom_payload={
-                "code": "GNS101"
-            },  # missing title, credit_units, level, semester
+            custom_payload={"code": "GNS101"},  # missing title, credit_units, level, semester
         )
 
     # 4. Valid course modification override

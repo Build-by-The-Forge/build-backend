@@ -4,6 +4,7 @@ verification steps of A.5 that do not need Redis or a request body stream."""
 import base64
 
 import pytest
+
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
     EMPTY_BODY_SHA256,
@@ -119,18 +120,15 @@ def test_vector_intermediate_values() -> None:
     assert encode_context(CONTEXT) == CONTEXT_HEADER
     assert sha256_hex(BODY) == BODY_SHA256
     assert sha256_hex(CONTEXT_JSON) == CONTEXT_SHA256
-    assert (
-        canonical_request(
-            service=SERVICE,
-            method=METHOD,
-            target=TARGET,
-            timestamp=TIMESTAMP,
-            request_id=REQUEST_ID,
-            body_sha256=BODY_SHA256,
-            context_sha256=CONTEXT_SHA256,
-        )
-        == CANONICAL.encode("ascii")
-    )
+    assert canonical_request(
+        service=SERVICE,
+        method=METHOD,
+        target=TARGET,
+        timestamp=TIMESTAMP,
+        request_id=REQUEST_ID,
+        body_sha256=BODY_SHA256,
+        context_sha256=CONTEXT_SHA256,
+    ) == CANONICAL.encode("ascii")
 
 
 def test_vector_signature() -> None:
@@ -172,11 +170,7 @@ _MUTATIONS = {
     "timestamp": {"timestamp": "1760000001"},
     "request id": {"request_id": "3f1c0d9e-6b0a-4c55-9d43-1c2b8f7a9e11"},
     "body": {"body_sha256": sha256_hex(b'{"topic":"Thermodynamics","count":6}')},
-    "context": {
-        "context_sha256": sha256_hex(
-            CONTEXT_JSON.replace(b"6f1c2a7e-4b3d", b"6f1c2a7e-4b3e")
-        )
-    },
+    "context": {"context_sha256": sha256_hex(CONTEXT_JSON.replace(b"6f1c2a7e-4b3d", b"6f1c2a7e-4b3e"))},
 }
 
 
@@ -223,9 +217,7 @@ def test_verifier_refuses_a_changed_request(kwargs) -> None:
 @pytest.mark.parametrize("field", ["tenant_id", "user_id", "permissions"])
 def test_verifier_refuses_a_swapped_context(field: str) -> None:
     swapped = dict(CONTEXT)
-    swapped[field] = (
-        ["ai.use"] if field == "permissions" else "11111111-2222-4333-8444-555555555555"
-    )
+    swapped[field] = ["ai.use"] if field == "permissions" else "11111111-2222-4333-8444-555555555555"
     with pytest.raises(ServiceAuthError, match="signature mismatch"):
         _verify(_vector_headers(**{HEADER_CONTEXT: encode_context(swapped)}))
 
@@ -234,9 +226,7 @@ def test_verifier_refuses_a_changed_timestamp_or_request_id() -> None:
     with pytest.raises(ServiceAuthError, match="signature mismatch"):
         _verify(_vector_headers(**{HEADER_TIMESTAMP: "1760000001"}))
     with pytest.raises(ServiceAuthError, match="signature mismatch"):
-        _verify(
-            _vector_headers(**{HEADER_REQUEST_ID: "3f1c0d9e-6b0a-4c55-9d43-1c2b8f7a9e11"})
-        )
+        _verify(_vector_headers(**{HEADER_REQUEST_ID: "3f1c0d9e-6b0a-4c55-9d43-1c2b8f7a9e11"}))
 
 
 # --- Directions and secrets -------------------------------------------------
@@ -480,9 +470,7 @@ def test_a_non_canonical_context_is_refused_even_with_a_valid_signature() -> Non
         body_sha256=BODY_SHA256,
         context_sha256=sha256_hex(raw),
     )
-    headers = _vector_headers(
-        **{HEADER_CONTEXT: _b64(raw), HEADER_SIGNATURE: compute_signature(SECRET, canonical)}
-    )
+    headers = _vector_headers(**{HEADER_CONTEXT: _b64(raw), HEADER_SIGNATURE: compute_signature(SECRET, canonical)})
     with pytest.raises(ServiceAuthError, match="not canonical JSON"):
         _verify(headers)
 

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.curriculum.audit import (
     BenchmarkAuditAction,
     BenchmarkAuditLog,
 )
 from app.domain.repositories.benchmark_audit import BenchmarkAuditRepository
 from app.infrastructure.db.models.benchmark_audit import BenchmarkAuditLogModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _model_to_domain(model: BenchmarkAuditLogModel) -> BenchmarkAuditLog:
@@ -59,12 +60,8 @@ class SqlAlchemyBenchmarkAuditRepository(BenchmarkAuditRepository):
         models = (await self._session.scalars(statement)).all()
         return [_model_to_domain(m) for m in models]
 
-    async def list_recent(
-        self, limit: int = 50, action: str | None = None
-    ) -> list[BenchmarkAuditLog]:
-        statement = select(BenchmarkAuditLogModel).order_by(
-            BenchmarkAuditLogModel.created_at.desc()
-        )
+    async def list_recent(self, limit: int = 50, action: str | None = None) -> list[BenchmarkAuditLog]:
+        statement = select(BenchmarkAuditLogModel).order_by(BenchmarkAuditLogModel.created_at.desc())
         if action is not None:
             statement = statement.where(BenchmarkAuditLogModel.action == action)
         statement = statement.limit(limit)

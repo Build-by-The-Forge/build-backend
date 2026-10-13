@@ -73,11 +73,7 @@ class ContentAsset:
             raise ValueError("asset_version must be at least 1")
 
         st = AssetStatus(status) if isinstance(status, str) else status
-        ing_st = (
-            IngestionStatus(ingestion_status)
-            if isinstance(ingestion_status, str)
-            else ingestion_status
-        )
+        ing_st = IngestionStatus(ingestion_status) if isinstance(ingestion_status, str) else ingestion_status
 
         now = datetime.now(timezone.utc)
         asset = cls(
@@ -134,9 +130,7 @@ class ContentAsset:
 
         clean_new_sha = content_sha256.strip().lower()
         if clean_new_sha == self.content_sha256:
-            raise ValueError(
-                "new version must have different content bytes (SHA-256 is identical to current version)"
-            )
+            raise ValueError("new version must have different content bytes (SHA-256 is identical to current version)")
 
         new_asset = ContentAsset.create(
             source_id=self.source_id,
@@ -196,11 +190,7 @@ class ContentAsset:
         error_code: str | None = None,
         error_message: str | None = None,
     ) -> None:
-        new_status = (
-            IngestionStatus(ingestion_status)
-            if isinstance(ingestion_status, str)
-            else ingestion_status
-        )
+        new_status = IngestionStatus(ingestion_status) if isinstance(ingestion_status, str) else ingestion_status
         if self.ingestion_status == new_status:
             return
 

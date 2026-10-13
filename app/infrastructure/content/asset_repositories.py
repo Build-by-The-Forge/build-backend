@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.domain.repositories.content_asset import ContentAssetRepository
@@ -8,8 +11,6 @@ from app.infrastructure.content.asset_mappers import (
     content_asset_to_model,
 )
 from app.infrastructure.db.models.content import ContentAssetModel
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyContentAssetRepository(ContentAssetRepository):
@@ -36,9 +37,7 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         model = res.scalar_one_or_none()
         return content_asset_model_to_domain(model) if model else None
 
-    async def get_asset_by_hash(
-        self, content_sha256: str, tenant_id: str | None = None
-    ) -> ContentAsset | None:
+    async def get_asset_by_hash(self, content_sha256: str, tenant_id: str | None = None) -> ContentAsset | None:
         clean_sha = content_sha256.strip().lower()
         if tenant_id is None:
             stmt = select(ContentAssetModel).where(
@@ -54,9 +53,7 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         model = res.scalar_one_or_none()
         return content_asset_model_to_domain(model) if model else None
 
-    async def list_assets_by_source(
-        self, source_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentAsset], int]:
+    async def list_assets_by_source(self, source_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentAsset], int]:
         base = select(ContentAssetModel).where(ContentAssetModel.source_id == source_id)
         count_stmt = select(func.count()).select_from(base.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
@@ -103,17 +100,11 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         if status is not None:
             stmt = stmt.where(ContentAssetModel.status == status.value)
         if ingestion_status is not None:
-            stmt = stmt.where(
-                ContentAssetModel.ingestion_status == ingestion_status.value
-            )
+            stmt = stmt.where(ContentAssetModel.ingestion_status == ingestion_status.value)
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
         total = (await self._session.execute(count_stmt)).scalar_one()
 
-        stmt = (
-            stmt.order_by(ContentAssetModel.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = stmt.order_by(ContentAssetModel.created_at.desc()).limit(limit).offset(offset)
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_asset_model_to_domain(m) for m in models], total

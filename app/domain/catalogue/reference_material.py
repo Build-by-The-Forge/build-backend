@@ -63,9 +63,7 @@ class ReferenceMaterial:
 
     def archive(self) -> None:
         if self.status == ReferenceMaterialStatus.ARCHIVED:
-            raise ReferenceMaterialAlreadyArchivedError(
-                "reference material already archived"
-            )
+            raise ReferenceMaterialAlreadyArchivedError("reference material already archived")
         self.status = ReferenceMaterialStatus.ARCHIVED
         self.touch()
         self._events.append(

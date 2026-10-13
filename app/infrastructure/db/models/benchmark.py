@@ -29,13 +29,9 @@ class BenchmarkCurriculumModel(Base):
     discipline_group: Mapped[str] = mapped_column(String(100), nullable=False)
     programme_name: Mapped[str] = mapped_column(String(150), nullable=False)
     programme_code: Mapped[str] = mapped_column(String(30), nullable=False)
-    degree_level: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="undergraduate"
-    )
+    degree_level: Mapped[str] = mapped_column(String(50), nullable=False, default="undergraduate")
     version: Mapped[str] = mapped_column(String(50), nullable=False)
-    minimum_credit_units: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=120
-    )
+    minimum_credit_units: Mapped[int] = mapped_column(Integer, nullable=False, default=120)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="candidate")
     review_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -92,9 +88,7 @@ class BenchmarkCourseModel(Base):
     level: Mapped[int] = mapped_column(Integer, nullable=False)
     semester: Mapped[int] = mapped_column(Integer, nullable=False)
     is_compulsory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    course_category: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="core"
-    )
+    course_category: Mapped[str] = mapped_column(String(50), nullable=False, default="core")
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(

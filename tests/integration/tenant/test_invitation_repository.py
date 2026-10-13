@@ -2,13 +2,14 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app.domain.tenant.invitation import InvitationStatus, TenantInvitation
 from app.domain.tenant.value_objects import MembershipRole, TenantId
 from app.infrastructure.db.models.tenant_core import TenantModel
 from app.infrastructure.tenant.invitation_repository import (
     SQLAlchemyTenantInvitationRepository,
 )
-from sqlalchemy.exc import IntegrityError
 
 
 async def _tenant(session) -> str:

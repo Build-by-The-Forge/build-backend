@@ -32,9 +32,7 @@ class AdoptBenchmarkCurriculumHandler:
         self.adoption_repo = adoption_repo
         self.benchmark_repo = benchmark_repo
 
-    async def handle(
-        self, command: AdoptBenchmarkCurriculumCommand
-    ) -> tuple[InstitutionalAdoption, list[DomainEvent]]:
+    async def handle(self, command: AdoptBenchmarkCurriculumCommand) -> tuple[InstitutionalAdoption, list[DomainEvent]]:
         benchmark = await self.benchmark_repo.get_by_id(command.benchmark_curriculum_id)
         if benchmark is None:
             raise ValueError("benchmark curriculum not found")
@@ -43,9 +41,7 @@ class AdoptBenchmarkCurriculumHandler:
             BenchmarkStatus.ACTIVE,
             BenchmarkStatus.APPROVED,
         ):
-            raise ValueError(
-                f"cannot adopt benchmark in status '{benchmark.status.value}', must be active or approved"
-            )
+            raise ValueError(f"cannot adopt benchmark in status '{benchmark.status.value}', must be active or approved")
 
         adoption = InstitutionalAdoption.create_draft(
             tenant_id=command.tenant_id,
@@ -81,11 +77,7 @@ class AddCurriculumOverrideHandler:
                 f"cannot add overrides to adoption in status '{adoption.status.value}', overrides are immutable once activated"
             )
 
-        ov_type = (
-            OverrideType(command.override_type)
-            if isinstance(command.override_type, str)
-            else command.override_type
-        )
+        ov_type = OverrideType(command.override_type) if isinstance(command.override_type, str) else command.override_type
 
         # Validate that course-level overrides target a course that exists in the adopted benchmark
         if ov_type in (
@@ -93,12 +85,8 @@ class AddCurriculumOverrideHandler:
             OverrideType.OMIT_COURSE,
         ):
             if not command.target_course_code:
-                raise ValueError(
-                    f"target_course_code is required for override type '{ov_type.value}'"
-                )
-            benchmark_courses = await self.benchmark_repo.list_courses(
-                adoption.benchmark_curriculum_id
-            )
+                raise ValueError(f"target_course_code is required for override type '{ov_type.value}'")
+            benchmark_courses = await self.benchmark_repo.list_courses(adoption.benchmark_curriculum_id)
             existing_codes = {c.code.upper() for c in benchmark_courses}
             if command.target_course_code.upper() not in existing_codes:
                 raise ValueError(
@@ -178,9 +166,7 @@ class GetAdoptionDetailHandler:
     def __init__(self, adoption_repo: InstitutionalAdoptionRepository) -> None:
         self.adoption_repo = adoption_repo
 
-    async def handle(
-        self, command: GetAdoptionDetailCommand
-    ) -> tuple[InstitutionalAdoption, list[CurriculumOverride]]:
+    async def handle(self, command: GetAdoptionDetailCommand) -> tuple[InstitutionalAdoption, list[CurriculumOverride]]:
         adoption = await self.adoption_repo.get_adoption_by_id(command.adoption_id)
         if adoption is None or adoption.tenant_id != command.tenant_id:
             raise ValueError("adoption not found")
@@ -193,9 +179,7 @@ class ListAdoptionsHandler:
     def __init__(self, adoption_repo: InstitutionalAdoptionRepository) -> None:
         self.adoption_repo = adoption_repo
 
-    async def handle(
-        self, command: ListAdoptionsCommand
-    ) -> list[InstitutionalAdoption]:
+    async def handle(self, command: ListAdoptionsCommand) -> list[InstitutionalAdoption]:
         return await self.adoption_repo.list_adoptions_by_tenant(
             tenant_id=command.tenant_id,
             programme_id=command.programme_id,

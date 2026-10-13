@@ -13,9 +13,7 @@ class BenchmarkCurriculumRepository(Protocol):
     async def get_by_id(self, curriculum_id: str) -> BenchmarkCurriculum | None:
         raise NotImplementedError
 
-    async def get_by_snapshot_and_programme(
-        self, source_snapshot_id: str, programme_code: str
-    ) -> BenchmarkCurriculum | None:
+    async def get_by_snapshot_and_programme(self, source_snapshot_id: str, programme_code: str) -> BenchmarkCurriculum | None:
         raise NotImplementedError
 
     async def get_active_by_programme(
@@ -36,9 +34,7 @@ class BenchmarkCurriculumRepository(Protocol):
     async def get_course(self, course_id: str) -> BenchmarkCourse | None:
         raise NotImplementedError
 
-    async def get_course_by_code(
-        self, curriculum_id: str, code: str
-    ) -> BenchmarkCourse | None:
+    async def get_course_by_code(self, curriculum_id: str, code: str) -> BenchmarkCourse | None:
         raise NotImplementedError
 
     async def list_courses(

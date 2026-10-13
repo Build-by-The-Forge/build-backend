@@ -15,43 +15,31 @@ from app.events.event_bus import EventBus
 
 
 class RegisterContentAssetHandler:
-    def __init__(
-        self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
-    async def handle(
-        self, cmd: RegisterContentAssetCommand
-    ) -> tuple[ContentAsset, bool]:
+    async def handle(self, cmd: RegisterContentAssetCommand) -> tuple[ContentAsset, bool]:
         """Registers a new content asset or returns the existing deduplicated asset if SHA-256 matches."""
         # 1. Validate ContentSource existence and accessibility
         source = await self._uow.sources.get_source_by_id(cmd.source_id)
         if source is None:
             raise ValueError(f"ContentSource with id '{cmd.source_id}' does not exist")
         if source.status == SourceStatus.REVOKED:
-            raise ValueError(
-                f"Cannot register asset against revoked source '{cmd.source_id}'"
-            )
+            raise ValueError(f"Cannot register asset against revoked source '{cmd.source_id}'")
 
         # 2. Scope validation
         if source.visibility == VisibilityScope.PLATFORM:
             target_tenant_id = None
         else:
             if cmd.tenant_id is None:
-                raise ValueError(
-                    "tenant_id is required for tenant-scoped content sources"
-                )
+                raise ValueError("tenant_id is required for tenant-scoped content sources")
             if source.tenant_id != cmd.tenant_id:
-                raise ValueError(
-                    f"tenant_id mismatch: source belongs to tenant '{source.tenant_id}', got '{cmd.tenant_id}'"
-                )
+                raise ValueError(f"tenant_id mismatch: source belongs to tenant '{source.tenant_id}', got '{cmd.tenant_id}'")
             target_tenant_id = cmd.tenant_id
 
         # 3. Deduplication Check (Tenant-scoped / Platform-scoped)
-        existing = await self._uow.assets.get_asset_by_hash(
-            cmd.content_sha256, target_tenant_id
-        )
+        existing = await self._uow.assets.get_asset_by_hash(cmd.content_sha256, target_tenant_id)
         if existing is not None and existing.status == AssetStatus.ACTIVE:
             # Deterministic reuse: skip redundant ingestion pipeline
             return existing, True
@@ -81,18 +69,14 @@ class RegisterContentAssetHandler:
 
 
 class CreateAssetVersionHandler:
-    def __init__(
-        self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
     async def handle(self, cmd: CreateAssetVersionCommand) -> ContentAsset:
         parent = await self._uow.assets.get_asset_by_id(cmd.parent_asset_id)
         if parent is None:
-            raise ValueError(
-                f"Parent asset with id '{cmd.parent_asset_id}' does not exist"
-            )
+            raise ValueError(f"Parent asset with id '{cmd.parent_asset_id}' does not exist")
         if parent.status == AssetStatus.REVOKED:
             raise ValueError("Cannot create a new version of a revoked asset")
 
@@ -123,9 +107,7 @@ class CreateAssetVersionHandler:
 
 
 class RevokeContentAssetHandler:
-    def __init__(
-        self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
         self._uow = uow
         self._event_bus = event_bus
 
@@ -134,11 +116,7 @@ class RevokeContentAssetHandler:
         if asset is None:
             raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
 
-        if (
-            cmd.tenant_id is not None
-            and asset.tenant_id is not None
-            and asset.tenant_id != cmd.tenant_id
-        ):
+        if cmd.tenant_id is not None and asset.tenant_id is not None and asset.tenant_id != cmd.tenant_id:
             raise ValueError("Permission denied: asset belongs to another tenant")
 
         asset.revoke(cmd.reason)
@@ -159,11 +137,7 @@ class GetContentAssetHandler:
         asset = await self._uow.assets.get_asset_by_id(query.asset_id)
         if asset is None:
             return None
-        if (
-            query.tenant_id is not None
-            and asset.tenant_id is not None
-            and asset.tenant_id != query.tenant_id
-        ):
+        if query.tenant_id is not None and asset.tenant_id is not None and asset.tenant_id != query.tenant_id:
             return None
         return asset
 
@@ -173,18 +147,14 @@ class FindAssetByHashHandler:
         self._uow = uow
 
     async def handle(self, query: FindAssetByHashQuery) -> ContentAsset | None:
-        return await self._uow.assets.get_asset_by_hash(
-            query.content_sha256, query.tenant_id
-        )
+        return await self._uow.assets.get_asset_by_hash(query.content_sha256, query.tenant_id)
 
 
 class ListContentAssetsHandler:
     def __init__(self, uow: ContentUnitOfWorkPort) -> None:
         self._uow = uow
 
-    async def handle(
-        self, query: ListContentAssetsQuery
-    ) -> tuple[list[ContentAsset], int]:
+    async def handle(self, query: ListContentAssetsQuery) -> tuple[list[ContentAsset], int]:
         return await self._uow.assets.list_assets(
             tenant_id=query.tenant_id,
             source_id=query.source_id,

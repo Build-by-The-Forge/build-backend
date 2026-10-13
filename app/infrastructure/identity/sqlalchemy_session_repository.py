@@ -33,9 +33,7 @@ class SQLAlchemySessionRepository(SessionRepository):
         return session_model_to_domain(model) if model is not None else None
 
     async def get_by_refresh_token_hash(self, token_hash: str) -> Session | None:
-        statement = select(SessionModel).where(
-            SessionModel.refresh_token_hash == token_hash
-        )
+        statement = select(SessionModel).where(SessionModel.refresh_token_hash == token_hash)
         result = await self._session.scalars(statement)
         model = result.first()
         return session_model_to_domain(model) if model is not None else None
@@ -53,16 +51,10 @@ class SQLAlchemySessionRepository(SessionRepository):
         return [session_model_to_domain(model) for model in result.all()]
 
     async def revoke(self, session_id: str) -> None:
-        statement = (
-            update(SessionModel)
-            .where(SessionModel.id == session_id)
-            .values(revoked_at=datetime.now(timezone.utc))
-        )
+        statement = update(SessionModel).where(SessionModel.id == session_id).values(revoked_at=datetime.now(timezone.utc))
         await self._session.execute(statement)
 
-    async def revoke_all_for_user(
-        self, user_id: str, except_session_id: str | None = None
-    ) -> list[str]:
+    async def revoke_all_for_user(self, user_id: str, except_session_id: str | None = None) -> list[str]:
         """Revoke every unrevoked session of the user (optionally sparing one)."""
         statement = select(SessionModel.id).where(
             SessionModel.user_id == user_id,
@@ -73,9 +65,7 @@ class SQLAlchemySessionRepository(SessionRepository):
         session_ids = list(await self._session.scalars(statement))
         if session_ids:
             await self._session.execute(
-                update(SessionModel)
-                .where(SessionModel.id.in_(session_ids))
-                .values(revoked_at=datetime.now(timezone.utc))
+                update(SessionModel).where(SessionModel.id.in_(session_ids)).values(revoked_at=datetime.now(timezone.utc))
             )
         return session_ids
 

@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from app.application.curriculum.curriculum_source_service import (
     CurriculumSourceService,
 )
@@ -15,15 +16,11 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_benchmark_governance_api_flow(client) -> None:
     # 1. Auth setup
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"bm-gov-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"bm-gov-admin-{uuid4()}@example.com")
     _, admin_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, admin_slug)
 
-    student_id, student_token = await register_and_authenticate(
-        client, f"bm-gov-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"bm-gov-student-{uuid4()}@example.com")
     _, student_slug, _, _ = await seed_tenant_context(student_id, "student")
     student_headers = headers(student_token, student_slug)
 

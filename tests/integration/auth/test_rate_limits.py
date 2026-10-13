@@ -62,8 +62,8 @@ def test_successful_sign_in_resets_the_failure_count(client):
 
 def test_blocked_account_status_is_not_a_failure(client):
     """A correct password for a disabled account (403) does not count."""
-    from tests.integration.auth.test_session_enforcement import _set_user
     from app.infrastructure.identity.models import UserStatus
+    from tests.integration.auth.test_session_enforcement import _set_user
 
     email = _register(client)
     user_id = client.post("/identity/authenticate", json={"email": email, "password": PASSWORD}).json()["data"]["user_id"]

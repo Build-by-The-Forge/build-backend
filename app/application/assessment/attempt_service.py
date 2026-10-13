@@ -40,45 +40,33 @@ class AttemptService:
         self.event_bus = event_bus
         self.uow_factory = uow_factory
 
-    async def start_attempt(
-        self, assessment_id: str, tenant_id: str, user_id: str
-    ) -> AssessmentAttempt:
+    async def start_attempt(self, assessment_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt:
         command = StartAttemptCommand(assessment_id, tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                attempt = await StartAttemptHandler(
-                    uow.attempts, uow.assessments
-                ).handle(command)
+                attempt = await StartAttemptHandler(uow.attempts, uow.assessments).handle(command)
                 events = attempt.pull_events()
             self._publish_events(events)
             return attempt
-        attempt = await StartAttemptHandler(
-            self._required_repository(), self._required_assessment_repository()
-        ).handle(command)
+        attempt = await StartAttemptHandler(self._required_repository(), self._required_assessment_repository()).handle(command)
         self._publish_events(attempt.pull_events())
         return attempt
 
-    async def get_attempt(
-        self, attempt_id: str, tenant_id: str, user_id: str
-    ) -> AssessmentAttempt | None:
+    async def get_attempt(self, attempt_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt | None:
         command = GetAttemptCommand(attempt_id, tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await GetAttemptHandler(uow.attempts).handle(command)
         return await GetAttemptHandler(self._required_repository()).handle(command)
 
-    async def list_my_attempts(
-        self, tenant_id: str, user_id: str
-    ) -> list[AssessmentAttempt]:
+    async def list_my_attempts(self, tenant_id: str, user_id: str) -> list[AssessmentAttempt]:
         command = ListMyAttemptsCommand(tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 return await ListMyAttemptsHandler(uow.attempts).handle(command)
         return await ListMyAttemptsHandler(self._required_repository()).handle(command)
 
-    async def submit_attempt(
-        self, attempt_id: str, tenant_id: str, user_id: str
-    ) -> AssessmentAttempt | None:
+    async def submit_attempt(self, attempt_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt | None:
         command = SubmitAttemptCommand(attempt_id, tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
@@ -91,25 +79,19 @@ class AttemptService:
                 events = attempt.pull_events() if attempt is not None else []
             self._publish_events(events)
             return attempt
-        attempt = await SubmitAttemptHandler(self._required_repository()).handle(
-            command
-        )
+        attempt = await SubmitAttemptHandler(self._required_repository()).handle(command)
         if attempt is not None:
             self._publish_events(attempt.pull_events())
         return attempt
 
-    async def get_attempt_questions(
-        self, attempt_id: str, tenant_id: str, user_id: str
-    ) -> list[AttemptQuestionSnapshot] | None:
+    async def get_attempt_questions(self, attempt_id: str, tenant_id: str, user_id: str) -> list[AttemptQuestionSnapshot] | None:
         command = GetAttemptQuestionsCommand(attempt_id, tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetAttemptQuestionsHandler(
-                    uow.attempts, uow.assessments
-                ).handle(command)
-        return await GetAttemptQuestionsHandler(
-            self._required_repository(), self._required_assessment_repository()
-        ).handle(command)
+                return await GetAttemptQuestionsHandler(uow.attempts, uow.assessments).handle(command)
+        return await GetAttemptQuestionsHandler(self._required_repository(), self._required_assessment_repository()).handle(
+            command
+        )
 
     async def get_attempt_result(
         self,
@@ -126,12 +108,8 @@ class AttemptService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetAttemptResultHandler(
-                    uow.attempts, uow.attempt_results
-                ).handle(command)
-        return await GetAttemptResultHandler(
-            self._required_repository(), self._required_result_repository()
-        ).handle(command)
+                return await GetAttemptResultHandler(uow.attempts, uow.attempt_results).handle(command)
+        return await GetAttemptResultHandler(self._required_repository(), self._required_result_repository()).handle(command)
 
     def _required_repository(self) -> AttemptRepository:
         if self.repository is None:

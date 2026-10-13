@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.content.enums import (
     AuthorityLevel,
     ContentSourceType,
@@ -13,8 +16,6 @@ from app.infrastructure.content.mappers import (
     content_source_to_model,
 )
 from app.infrastructure.db.models.content import ContentSourceModel
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyContentSourceRepository(ContentSourceRepository):
@@ -37,12 +38,8 @@ class SqlAlchemyContentSourceRepository(ContentSourceRepository):
         model = (await self._session.scalars(statement)).first()
         return content_source_model_to_domain(model) if model is not None else None
 
-    async def get_source_by_code(
-        self, code: str, tenant_id: str | None = None
-    ) -> ContentSource | None:
-        statement = select(ContentSourceModel).where(
-            ContentSourceModel.code == code.upper()
-        )
+    async def get_source_by_code(self, code: str, tenant_id: str | None = None) -> ContentSource | None:
+        statement = select(ContentSourceModel).where(ContentSourceModel.code == code.upper())
         if tenant_id is not None:
             statement = statement.where(
                 or_(
@@ -51,9 +48,7 @@ class SqlAlchemyContentSourceRepository(ContentSourceRepository):
                 )
             )
         else:
-            statement = statement.where(
-                ContentSourceModel.visibility == VisibilityScope.PLATFORM.value
-            )
+            statement = statement.where(ContentSourceModel.visibility == VisibilityScope.PLATFORM.value)
         model = (await self._session.scalars(statement)).first()
         return content_source_model_to_domain(model) if model is not None else None
 
@@ -86,9 +81,7 @@ class SqlAlchemyContentSourceRepository(ContentSourceRepository):
         if source_type is not None:
             conditions.append(ContentSourceModel.source_type == source_type.value)
         if authority_level is not None:
-            conditions.append(
-                ContentSourceModel.authority_level == authority_level.value
-            )
+            conditions.append(ContentSourceModel.authority_level == authority_level.value)
         if status is not None:
             conditions.append(ContentSourceModel.status == status.value)
 
@@ -98,10 +91,6 @@ class SqlAlchemyContentSourceRepository(ContentSourceRepository):
         count_query = select(func.count()).select_from(base_query.subquery())
         total_count = (await self._session.scalar(count_query)) or 0
 
-        paginated_query = (
-            base_query.order_by(ContentSourceModel.code.asc())
-            .limit(limit)
-            .offset(offset)
-        )
+        paginated_query = base_query.order_by(ContentSourceModel.code.asc()).limit(limit).offset(offset)
         models = (await self._session.scalars(paginated_query)).all()
         return [content_source_model_to_domain(m) for m in models], total_count

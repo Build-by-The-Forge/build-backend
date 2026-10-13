@@ -19,19 +19,13 @@ class ContentIngestionJobRepository(Protocol):
         competing callbacks for one job are applied one at a time."""
         raise NotImplementedError
 
-    async def get_latest_job_for_asset(
-        self, asset_id: str
-    ) -> ContentIngestionJob | None:
+    async def get_latest_job_for_asset(self, asset_id: str) -> ContentIngestionJob | None:
         raise NotImplementedError
 
-    async def list_jobs_for_asset(
-        self, asset_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentIngestionJob], int]:
+    async def list_jobs_for_asset(self, asset_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentIngestionJob], int]:
         raise NotImplementedError
 
-    async def list_pending_jobs(
-        self, tenant_id: str | None = None, limit: int = 50
-    ) -> list[ContentIngestionJob]:
+    async def list_pending_jobs(self, tenant_id: str | None = None, limit: int = 50) -> list[ContentIngestionJob]:
         raise NotImplementedError
 
     async def list_jobs(

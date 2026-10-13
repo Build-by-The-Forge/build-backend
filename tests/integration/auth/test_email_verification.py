@@ -82,7 +82,10 @@ def test_code_is_stored_only_as_sha256(client):
     code = _code_for(email)
 
     hashes = set(
-        _db(client, lambda db: db.scalars(select(VerificationTokenModel.token_hash).where(VerificationTokenModel.user_id == user_id)))
+        _db(
+            client,
+            lambda db: db.scalars(select(VerificationTokenModel.token_hash).where(VerificationTokenModel.user_id == user_id)),
+        )
     )
 
     assert code not in hashes

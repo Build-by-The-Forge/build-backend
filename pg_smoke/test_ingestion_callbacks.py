@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
+
 from app.application.content.job_commands import HandleAICallbackCommand
 from app.application.content.job_handlers import HandleAICallbackHandler
 from app.bootstrap.container import sqlalchemy_content_uow
@@ -24,7 +26,6 @@ from app.domain.content.enums import (
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.infrastructure.db.models.tenant_core import TenantModel
-from sqlalchemy import text
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -71,9 +72,7 @@ async def _processing_job() -> ContentIngestionJob:
             tenant_id=tenant_id,
         )
         await uow.assets.save_asset(asset)
-        job = ContentIngestionJob.create(
-            asset_id=asset.id, source_id=source.id, tenant_id=tenant_id, created_by="usr-1"
-        )
+        job = ContentIngestionJob.create(asset_id=asset.id, source_id=source.id, tenant_id=tenant_id, created_by="usr-1")
         job.queue()
         job.record_dispatch(f"task-{uuid4().hex}")
         await uow.jobs.save_job(job)
@@ -102,16 +101,11 @@ async def _apply(cmd: HandleAICallbackCommand, hold: float = 0.0) -> CallbackOut
 async def _status_and_ledger(job_id: str) -> tuple[str, list[tuple[str, str]]]:
     async with SessionLocal() as session:
         status = (
-            await session.execute(
-                text("SELECT status FROM content_ingestion_jobs WHERE id = :id"), {"id": job_id}
-            )
+            await session.execute(text("SELECT status FROM content_ingestion_jobs WHERE id = :id"), {"id": job_id})
         ).scalar_one()
         rows = (
             await session.execute(
-                text(
-                    "SELECT event_id, outcome FROM content_ingestion_events "
-                    "WHERE job_id = :id ORDER BY event_id"
-                ),
+                text("SELECT event_id, outcome FROM content_ingestion_events WHERE job_id = :id ORDER BY event_id"),
                 {"id": job_id},
             )
         ).all()
@@ -157,8 +151,6 @@ async def test_deleting_a_job_removes_its_ledger():
         await session.execute(text("DELETE FROM content_ingestion_jobs WHERE id = :id"), {"id": job.id})
         await session.commit()
         left = (
-            await session.execute(
-                text("SELECT count(*) FROM content_ingestion_events WHERE event_id = 'evt-del'")
-            )
+            await session.execute(text("SELECT count(*) FROM content_ingestion_events WHERE event_id = 'evt-del'"))
         ).scalar_one()
     assert left == 0

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import re
 import time
-from urllib.parse import quote
+from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -62,9 +62,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
     ) -> None:
         self._keys_override = keys
         self._base_url = (base_url or settings.ai_service_url).rstrip("/")
-        self._timeout_seconds = (
-            timeout_seconds or settings.ai_service_timeout_seconds
-        )
+        self._timeout_seconds = timeout_seconds or settings.ai_service_timeout_seconds
         self._client = client
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -96,11 +94,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         AI-service only through the signed user context.
         """
         keys = self._keys()
-        mime_val = (
-            asset.mime_type.value
-            if hasattr(asset.mime_type, "value")
-            else str(asset.mime_type)
-        )
+        mime_val = asset.mime_type.value if hasattr(asset.mime_type, "value") else str(asset.mime_type)
         correlation_id = _correlation_id(job)
         body = json.dumps(
             {
@@ -198,24 +192,18 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
             details={"status_code": response.status_code, "body": response.text},
         )
 
-    async def fetch_job_status(
-        self, external_task_id: str, tenant_id: str, correlation_id: str
-    ) -> AIServiceStatusResult:
+    async def fetch_job_status(self, external_task_id: str, tenant_id: str, correlation_id: str) -> AIServiceStatusResult:
         """Signed GET /v1/ingest/tasks/{id} with a system context naming the
         job's tenant (design B.3); AI-service answers only for that tenant."""
         keys = self._keys()
-        url = httpx.URL(
-            f"{self._base_url}/v1/ingest/tasks/{quote(external_task_id, safe='')}"
-        )
+        url = httpx.URL(f"{self._base_url}/v1/ingest/tasks/{quote(external_task_id, safe='')}")
         headers = sign_request(
             direction=Direction.BACKEND_TO_AI,
             keys=keys,
             method="GET",
             target=url.raw_path.decode("ascii"),
             body=b"",
-            context=ServiceContext.for_system(
-                tenant_id=tenant_id, correlation_id=correlation_id
-            ),
+            context=ServiceContext.for_system(tenant_id=tenant_id, correlation_id=correlation_id),
             timestamp=int(time.time()),
         )
 

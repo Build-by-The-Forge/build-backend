@@ -18,9 +18,7 @@ class EffectiveOutcomeResponse(BaseModel):
     description: str
     bloom_level: str
     origin: str
-    applied_overrides: list[AppliedOverrideProvenanceResponse] = Field(
-        default_factory=list
-    )
+    applied_overrides: list[AppliedOverrideProvenanceResponse] = Field(default_factory=list)
 
 
 class EffectiveTopicResponse(BaseModel):
@@ -30,9 +28,7 @@ class EffectiveTopicResponse(BaseModel):
     description: str | None = None
     origin: str
     outcomes: list[EffectiveOutcomeResponse] = Field(default_factory=list)
-    applied_overrides: list[AppliedOverrideProvenanceResponse] = Field(
-        default_factory=list
-    )
+    applied_overrides: list[AppliedOverrideProvenanceResponse] = Field(default_factory=list)
 
 
 class EffectiveCourseResponse(BaseModel):
@@ -47,9 +43,7 @@ class EffectiveCourseResponse(BaseModel):
     description: str | None = None
     origin: str
     topics: list[EffectiveTopicResponse] = Field(default_factory=list)
-    applied_overrides: list[AppliedOverrideProvenanceResponse] = Field(
-        default_factory=list
-    )
+    applied_overrides: list[AppliedOverrideProvenanceResponse] = Field(default_factory=list)
     benchmark_course_id: str | None = None
 
 

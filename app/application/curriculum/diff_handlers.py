@@ -18,24 +18,14 @@ class CompareBenchmarkCurriculaHandler:
         self.repository = repository
         self.engine = BenchmarkCurriculumDiffEngine()
 
-    async def handle(
-        self, command: CompareBenchmarkCurriculaCommand
-    ) -> BenchmarkCurriculumDiff:
-        source_curriculum = await self.repository.get_by_id(
-            command.source_curriculum_id
-        )
+    async def handle(self, command: CompareBenchmarkCurriculaCommand) -> BenchmarkCurriculumDiff:
+        source_curriculum = await self.repository.get_by_id(command.source_curriculum_id)
         if source_curriculum is None:
-            raise ValueError(
-                f"source benchmark curriculum '{command.source_curriculum_id}' not found"
-            )
+            raise ValueError(f"source benchmark curriculum '{command.source_curriculum_id}' not found")
 
-        target_curriculum = await self.repository.get_by_id(
-            command.target_curriculum_id
-        )
+        target_curriculum = await self.repository.get_by_id(command.target_curriculum_id)
         if target_curriculum is None:
-            raise ValueError(
-                f"target benchmark curriculum '{command.target_curriculum_id}' not found"
-            )
+            raise ValueError(f"target benchmark curriculum '{command.target_curriculum_id}' not found")
 
         # Validate both belong to the same benchmark identity
         if (

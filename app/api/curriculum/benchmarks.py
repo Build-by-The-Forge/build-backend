@@ -50,9 +50,7 @@ service = build_container().get(BenchmarkCurriculumService)
 async def ingest_candidate(
     payload: IngestBenchmarkCandidateRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     courses = []
     for c in payload.courses:
@@ -102,9 +100,7 @@ async def ingest_candidate(
             courses=courses,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return JSONResponse(
@@ -123,13 +119,9 @@ async def list_benchmarks(
     request: Request,
     programme_code: str | None = None,
     status_filter: str | None = None,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
-    curricula = await service.list_curricula(
-        programme_code=programme_code, status=status_filter
-    )
+    curricula = await service.list_curricula(programme_code=programme_code, status=status_filter)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -146,9 +138,7 @@ async def compare_benchmarks(
     source_id: str,
     target_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     try:
         diff = await service.compare_curricula(
@@ -156,9 +146,7 @@ async def compare_benchmarks(
             target_curriculum_id=target_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -178,9 +166,7 @@ async def compare_benchmarks(
 async def get_benchmark(
     curriculum_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     curriculum = await service.get_curriculum(curriculum_id)
     if curriculum is None:
@@ -205,9 +191,7 @@ async def list_courses(
     request: Request,
     level: int | None = None,
     semester: int | None = None,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     curriculum = await service.get_curriculum(curriculum_id)
     if curriculum is None:
@@ -216,9 +200,7 @@ async def list_courses(
             detail="benchmark curriculum not found",
         )
 
-    courses = await service.list_courses(
-        curriculum_id=curriculum_id, level=level, semester=semester
-    )
+    courses = await service.list_courses(curriculum_id=curriculum_id, level=level, semester=semester)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -240,9 +222,7 @@ async def get_course_detail(
     curriculum_id: str,
     course_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     course = await service.get_course(course_id)
     if course is None or course.benchmark_curriculum_id != curriculum_id:
@@ -266,16 +246,12 @@ async def get_course_detail(
 async def validate_candidate(
     curriculum_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         curriculum, validation_result = await service.validate_candidate(curriculum_id)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -300,9 +276,7 @@ async def submit_for_review(
     curriculum_id: str,
     payload: SubmitReviewRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         curriculum, audit_log = await service.submit_for_review(
@@ -312,9 +286,7 @@ async def submit_for_review(
             notes=payload.notes,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -337,9 +309,7 @@ async def approve_curriculum(
     curriculum_id: str,
     payload: ApproveBenchmarkRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         curriculum, audit_log = await service.approve_curriculum(
@@ -349,9 +319,7 @@ async def approve_curriculum(
             reason=payload.reason,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -372,9 +340,7 @@ async def reject_curriculum(
     curriculum_id: str,
     payload: RejectBenchmarkRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         curriculum, audit_log = await service.reject_curriculum(
@@ -384,9 +350,7 @@ async def reject_curriculum(
             reason=payload.reason,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -407,9 +371,7 @@ async def revise_curriculum(
     curriculum_id: str,
     payload: ReviseBenchmarkRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         curriculum, audit_log = await service.revise_curriculum(
@@ -419,9 +381,7 @@ async def revise_curriculum(
             reason=payload.reason,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -441,9 +401,7 @@ async def revise_curriculum(
 async def get_audit_trail(
     curriculum_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     audit_logs = await service.get_audit_trail(curriculum_id)
     return JSONResponse(
@@ -461,9 +419,7 @@ async def get_audit_trail(
 async def activate_curriculum(
     curriculum_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_MANAGE)),
 ) -> JSONResponse:
     try:
         curriculum, superseded = await service.activate_curriculum(
@@ -471,9 +427,7 @@ async def activate_curriculum(
             activated_by=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -481,17 +435,9 @@ async def activate_curriculum(
             "success": True,
             "data": {
                 "activated": _curriculum_summary_payload(curriculum),
-                "superseded": (
-                    _curriculum_summary_payload(superseded)
-                    if superseded is not None
-                    else None
-                ),
+                "superseded": (_curriculum_summary_payload(superseded) if superseded is not None else None),
             },
-            "meta": {
-                "superseded_curriculum_id": (
-                    superseded.id if superseded is not None else None
-                )
-            },
+            "meta": {"superseded_curriculum_id": (superseded.id if superseded is not None else None)},
             "request_id": getattr(request.state, "request_id", None),
         },
     )
@@ -506,9 +452,7 @@ async def get_active_benchmark(
     programme_code: str,
     request: Request,
     degree_level: str = "undergraduate",
-    context: TenantContext = Depends(
-        require_permission(Permission.CURRICULUM_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     curriculum = await service.get_active_curriculum(
         discipline_group=discipline_group,

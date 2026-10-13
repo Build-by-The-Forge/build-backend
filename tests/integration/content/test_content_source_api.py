@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel
 from tests.integration.assessment.test_attempt_api import headers
@@ -31,33 +32,23 @@ async def add_membership(user_id: str, tenant_id: str, role: str) -> None:
 @pytest.mark.asyncio
 async def test_content_source_api_lifecycle_and_rbac(client) -> None:
     # 1. Admin setup (Tenant A)
-    admin_id, admin_token = await register_and_authenticate(
-        client, f"content-admin-{uuid4()}@example.com"
-    )
+    admin_id, admin_token = await register_and_authenticate(client, f"content-admin-{uuid4()}@example.com")
     admin_tenant_id, admin_slug, _, _ = await seed_tenant_context(admin_id, "admin")
     admin_headers = headers(admin_token, admin_slug)
 
     # 2. Lecturer setup (Tenant A)
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"content-lecturer-{uuid4()}@example.com"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"content-lecturer-{uuid4()}@example.com")
     await add_membership(lecturer_id, admin_tenant_id, "lecturer")
     lecturer_headers = headers(lecturer_token, admin_slug)
 
     # 3. Student setup (Tenant A)
-    student_id, student_token = await register_and_authenticate(
-        client, f"content-student-{uuid4()}@example.com"
-    )
+    student_id, student_token = await register_and_authenticate(client, f"content-student-{uuid4()}@example.com")
     await add_membership(student_id, admin_tenant_id, "student")
     student_headers = headers(student_token, admin_slug)
 
     # 4. Foreign Tenant Lecturer (Tenant B)
-    foreign_id, foreign_token = await register_and_authenticate(
-        client, f"foreign-lecturer-{uuid4()}@example.com"
-    )
-    foreign_tenant_id, foreign_slug, _, _ = await seed_tenant_context(
-        foreign_id, "lecturer"
-    )
+    foreign_id, foreign_token = await register_and_authenticate(client, f"foreign-lecturer-{uuid4()}@example.com")
+    foreign_tenant_id, foreign_slug, _, _ = await seed_tenant_context(foreign_id, "lecturer")
     foreign_headers = headers(foreign_token, foreign_slug)
 
     # 5. Student attempt to create content source -> 403 Forbidden
@@ -149,10 +140,14 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
     assert inst_code not in foreign_codes  # Tenant A private source is HIDDEN
 
     # 11. Foreign Lecturer attempts direct GET on Tenant A source -> 403 Forbidden
-    foreign_get = client.get(
-        f"/content/sources/{inst_source_id}", headers=foreign_headers
-    )
+    foreign_get = client.get(f"/content/sources/{inst_source_id}", headers=foreign_headers)
     assert foreign_get.status_code == 403
+
+    # 11b. Foreign Lecturer reads the Platform source directly -> 200 OK
+    foreign_platform_get = client.get(f"/content/sources/{reg_source_id}", headers=foreign_headers)
+    assert foreign_platform_get.status_code == 200, foreign_platform_get.text
+    assert foreign_platform_get.json()["data"]["id"] == reg_source_id
+    assert foreign_platform_get.json()["data"]["code"] == reg_code
 
     # 12. Lecturer updates metadata -> 200 OK
     update_res = client.patch(
@@ -164,10 +159,7 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
         },
     )
     assert update_res.status_code == 200
-    assert (
-        update_res.json()["data"]["name"]
-        == "CSC201 Object Oriented Programming Notes (Updated)"
-    )
+    assert update_res.json()["data"]["name"] == "CSC201 Object Oriented Programming Notes (Updated)"
     assert update_res.json()["data"]["publisher"] == "FUTA Press"
 
     # 13. Deprecate source -> 200 OK

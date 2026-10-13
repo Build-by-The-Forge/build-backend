@@ -16,14 +16,10 @@ class RegisterCurriculumSourceHandler:
     def __init__(self, repository: CurriculumSourceRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: RegisterCurriculumSourceCommand
-    ) -> CurriculumSource:
+    async def handle(self, command: RegisterCurriculumSourceCommand) -> CurriculumSource:
         existing = await self.repository.get_source_by_code(command.code)
         if existing is not None:
-            raise ValueError(
-                f"curriculum source with code '{command.code}' already exists"
-            )
+            raise ValueError(f"curriculum source with code '{command.code}' already exists")
 
         source = CurriculumSource.create(
             code=command.code,
@@ -40,9 +36,7 @@ class GetCurriculumSourceHandler:
     def __init__(self, repository: CurriculumSourceRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: GetCurriculumSourceCommand
-    ) -> CurriculumSource | None:
+    async def handle(self, command: GetCurriculumSourceCommand) -> CurriculumSource | None:
         return await self.repository.get_source_by_id(command.source_id)
 
 
@@ -50,9 +44,7 @@ class ListCurriculumSourcesHandler:
     def __init__(self, repository: CurriculumSourceRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: ListCurriculumSourcesCommand
-    ) -> list[CurriculumSource]:
+    async def handle(self, command: ListCurriculumSourcesCommand) -> list[CurriculumSource]:
         return await self.repository.list_sources(status=command.status)
 
 
@@ -60,9 +52,7 @@ class RecordCurriculumSnapshotHandler:
     def __init__(self, repository: CurriculumSourceRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: RecordCurriculumSnapshotCommand
-    ) -> tuple[CurriculumSnapshot, bool, list[DomainEvent]]:
+    async def handle(self, command: RecordCurriculumSnapshotCommand) -> tuple[CurriculumSnapshot, bool, list[DomainEvent]]:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
             raise ValueError(f"curriculum source '{command.source_id}' not found")
@@ -93,9 +83,7 @@ class ListCurriculumSnapshotsHandler:
     def __init__(self, repository: CurriculumSourceRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, command: ListCurriculumSnapshotsCommand
-    ) -> tuple[list[CurriculumSnapshot], int] | None:
+    async def handle(self, command: ListCurriculumSnapshotsCommand) -> tuple[list[CurriculumSnapshot], int] | None:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
             return None

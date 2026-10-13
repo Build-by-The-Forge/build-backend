@@ -8,12 +8,25 @@ name: boundary-gate
 # contents:read on Build-by-The-Forge/ai-service). Without it the job fails
 # at the first step, and the documented local gate
 # (scripts/m3_boundary_gate.sh) remains the M3 exit gate.
+#
+# Which ai-service: feat/m3-boundary, where the M3 boundary work lives, until
+# that branch is merged into ai-service's main through the approved process.
+# Only after that merge is verified does the default below change to main (a
+# one-line change). A manual run can name any branch, tag or commit. Each run
+# resolves the ref to one commit when it checks it out, records it, and
+# scripts/m3_boundary_gate.sh fails if the checkout changes during the run.
+#
+# Runs on pull requests too, so a boundary regression is caught before merge;
+# there are no path filters, so the check always reports. Branch protection
+# on main should require it. Pull requests from forks get no secrets and fail
+# at the token step instead of passing.
 on:
   workflow_dispatch:
     inputs:
       ai_service_ref:
         description: ai-service branch, tag or commit
-        default: main
+        default: feat/m3-boundary
+  pull_request:
   push:
     branches: [main]
 
@@ -21,6 +34,8 @@ jobs:
   boundary-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      AI_SERVICE_REF: ${{ inputs.ai_service_ref || 'feat/m3-boundary' }}
     steps:
       - name: Require the ai-service read token
         env:
@@ -33,14 +48,41 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: build-backend
-      - uses: actions/checkout@v4
+      - id: ai_checkout
+        uses: actions/checkout@v4
         with:
           repository: Build-by-The-Forge/ai-service
-          ref: ${{ inputs.ai_service_ref || 'main' }}
+          ref: ${{ env.AI_SERVICE_REF }}
           token: ${{ secrets.AI_SERVICE_READ_TOKEN }}
           path: ai-service
+      - name: Explain a failed ai-service checkout
+        if: failure() && steps.ai_checkout.outcome == 'failure'
+        run: |
+          echo "::error::Could not check out Build-by-The-Forge/ai-service at '$AI_SERVICE_REF'." \
+            "Either AI_SERVICE_READ_TOKEN lacks contents:read on that repository (or has expired)," \
+            "or the ref does not exist there."
+      # The gate scripts run `python` on the runner: generating deploy/m3.env
+      # (git-ignored, so always generated here) and M6's random secrets.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Record the revisions under test
+        run: |
+          backend=$(git -C build-backend rev-parse HEAD)
+          ai=$(git -C ai-service rev-parse HEAD)
+          echo "backend:    $backend"
+          echo "ai-service: $ai ($AI_SERVICE_REF)"
+          {
+            echo "### Revisions under test"
+            echo "- backend: \`$backend\`"
+            echo "- ai-service: \`$ai\` (ref \`$AI_SERVICE_REF\`)"
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Boundary gate
         working-directory: build-backend
+        env:
+          # The same read-only token fetches the OCR model mirror release
+          # assets during the ai-service build (BuildKit secret).
+          OCR_MODELS_TOKEN: ${{ secrets.AI_SERVICE_READ_TOKEN }}
         run: scripts/m3_boundary_gate.sh
       - name: Service logs on failure
         if: failure()

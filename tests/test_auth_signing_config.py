@@ -1,4 +1,5 @@
 import pytest
+
 from app.core.config import Settings
 
 STRONG = "s" * 32

@@ -1,4 +1,5 @@
 import pytest
+
 from app.application.assessment.assessment_service import AssessmentService
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.errors import AssessmentAlreadyArchivedError
@@ -19,44 +20,27 @@ class InMemoryAssessmentRepository:
     def __init__(self) -> None:
         self.items: dict[str, Assessment] = {}
 
-    async def save(
-        self, assessment: Assessment, tenant_id: str | None = None
-    ) -> Assessment:
+    async def save(self, assessment: Assessment, tenant_id: str | None = None) -> Assessment:
         self.items[assessment.id] = assessment
         return assessment
 
-    async def get_by_id(
-        self, assessment_id: str, tenant_id: str | None = None
-    ) -> Assessment | None:
+    async def get_by_id(self, assessment_id: str, tenant_id: str | None = None) -> Assessment | None:
         assessment = self.items.get(assessment_id)
-        if (
-            assessment is not None
-            and tenant_id is not None
-            and assessment.tenant_id != tenant_id
-        ):
+        if assessment is not None and tenant_id is not None and assessment.tenant_id != tenant_id:
             return None
         return assessment
 
-    async def list_by_course(
-        self, course_id: str, tenant_id: str | None = None
-    ) -> list[Assessment]:
+    async def list_by_course(self, course_id: str, tenant_id: str | None = None) -> list[Assessment]:
         return [
             assessment
             for assessment in self.items.values()
-            if assessment.course_id == course_id
-            and (tenant_id is None or assessment.tenant_id == tenant_id)
+            if assessment.course_id == course_id and (tenant_id is None or assessment.tenant_id == tenant_id)
         ]
 
     async def list_all(self, tenant_id: str | None = None) -> list[Assessment]:
-        return [
-            assessment
-            for assessment in self.items.values()
-            if tenant_id is None or assessment.tenant_id == tenant_id
-        ]
+        return [assessment for assessment in self.items.values() if tenant_id is None or assessment.tenant_id == tenant_id]
 
-    async def update(
-        self, assessment: Assessment, tenant_id: str | None = None
-    ) -> Assessment:
+    async def update(self, assessment: Assessment, tenant_id: str | None = None) -> Assessment:
         existing = await self.get_by_id(assessment.id, tenant_id=tenant_id)
         if existing is None:
             raise ValueError("assessment not found")
@@ -68,9 +52,7 @@ class InMemoryQuestionRepository:
     def __init__(self, question: Question) -> None:
         self.question = question
 
-    async def get_by_id(
-        self, question_id: str, tenant_id: str | None = None
-    ) -> Question | None:
+    async def get_by_id(self, question_id: str, tenant_id: str | None = None) -> Question | None:
         if question_id != self.question.id.value:
             return None
         if tenant_id is not None and tenant_id != self.question.tenant_id:
@@ -79,9 +61,7 @@ class InMemoryQuestionRepository:
 
 
 class InMemoryCourseRepository:
-    async def get_by_id(
-        self, course_id: str, tenant_id: str | None = None
-    ) -> object | None:
+    async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> object | None:
         if course_id == "course-123" and tenant_id == "tenant-123":
             return object()
         return None
@@ -148,9 +128,7 @@ async def test_create_get_and_list_assessments(
 async def test_update_and_publish_assessment(
     assessment_service: AssessmentService,
 ) -> None:
-    assessment = await assessment_service.create_assessment(
-        "tenant-123", "course-123", "Midterm", "Original instructions", 60
-    )
+    assessment = await assessment_service.create_assessment("tenant-123", "course-123", "Midterm", "Original instructions", 60)
 
     updated = await assessment_service.update_assessment(
         assessment.id,
@@ -172,22 +150,16 @@ async def test_update_and_publish_assessment(
 async def test_add_question_preserves_question_snapshot_and_rejects_duplicate(
     assessment_service: AssessmentService,
 ) -> None:
-    assessment = await assessment_service.create_assessment(
-        "tenant-123", "course-123", "Midterm", "Answer all questions.", 60
-    )
+    assessment = await assessment_service.create_assessment("tenant-123", "course-123", "Midterm", "Answer all questions.", 60)
 
-    added = await assessment_service.add_question(
-        assessment.id, "question-123", "tenant-123"
-    )
+    added = await assessment_service.add_question(assessment.id, "question-123", "tenant-123")
 
     assert added is not None
     assert added.questions[0].prompt == "Which data structure is FIFO?"
     assert added.questions[0].marks == 2
 
     with pytest.raises(ValueError, match="already exists"):
-        await assessment_service.add_question(
-            assessment.id, "question-123", "tenant-123"
-        )
+        await assessment_service.add_question(assessment.id, "question-123", "tenant-123")
 
 
 @pytest.mark.asyncio
@@ -198,9 +170,7 @@ async def test_create_requires_course_in_direct_repository_mode() -> None:
     )
 
     with pytest.raises(ValueError, match="catalogue repository is required"):
-        await service.create_assessment(
-            "tenant-123", "course-123", "Midterm", "Answer all questions.", 60
-        )
+        await service.create_assessment("tenant-123", "course-123", "Midterm", "Answer all questions.", 60)
 
 
 @pytest.mark.asyncio
@@ -220,9 +190,7 @@ async def test_assessment_events_are_published_after_application_operations() ->
         catalogue_repository=InMemoryCourseRepository(),
         event_bus=event_bus,
     )
-    assessment = await service.create_assessment(
-        "tenant-123", "course-123", "Midterm", "Answer all questions.", 60
-    )
+    assessment = await service.create_assessment("tenant-123", "course-123", "Midterm", "Answer all questions.", 60)
     await service.add_question(assessment.id, "question-123", "tenant-123")
     await service.update_assessment(assessment.id, "tenant-123", title="Updated")
     await service.publish_assessment(assessment.id, "tenant-123")
@@ -238,12 +206,8 @@ async def test_assessment_events_are_published_after_application_operations() ->
 async def test_archived_assessment_update_propagates_domain_error(
     assessment_service: AssessmentService,
 ) -> None:
-    assessment = await assessment_service.create_assessment(
-        "tenant-123", "course-123", "Midterm", "Answer all questions.", 60
-    )
+    assessment = await assessment_service.create_assessment("tenant-123", "course-123", "Midterm", "Answer all questions.", 60)
     assessment.archive()
 
     with pytest.raises(AssessmentAlreadyArchivedError):
-        await assessment_service.update_assessment(
-            assessment.id, "tenant-123", title="Should fail"
-        )
+        await assessment_service.update_assessment(assessment.id, "tenant-123", title="Should fail")

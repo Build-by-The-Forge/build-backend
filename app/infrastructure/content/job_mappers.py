@@ -5,9 +5,7 @@ from app.domain.content.job import ContentIngestionJob
 from app.infrastructure.db.models.content import ContentIngestionJobModel
 
 
-def content_job_to_model(
-    job: ContentIngestionJob, model: ContentIngestionJobModel | None = None
-) -> ContentIngestionJobModel:
+def content_job_to_model(job: ContentIngestionJob, model: ContentIngestionJobModel | None = None) -> ContentIngestionJobModel:
     if model is None:
         model = ContentIngestionJobModel(id=job.id)
 

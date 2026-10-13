@@ -1,4 +1,6 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     BenchmarkOutcomeInput,
@@ -16,7 +18,6 @@ from app.infrastructure.curriculum.benchmark_repositories import (
 from app.infrastructure.curriculum.repositories import (
     SqlAlchemyCurriculumSourceRepository,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

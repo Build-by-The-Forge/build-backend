@@ -2,9 +2,10 @@
 
 import httpx
 import pytest
+from fastapi import FastAPI, Request
+
 from app.main import app
 from app.middleware.body_limit import RequestBodyLimitMiddleware
-from fastapi import FastAPI, Request
 
 
 def tiny_app(limit: int = 100) -> FastAPI:

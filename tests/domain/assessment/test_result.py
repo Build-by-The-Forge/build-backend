@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.assessment.result import AttemptResult, QuestionResult
 
 
@@ -60,9 +61,7 @@ def test_question_result_creation_and_validation() -> None:
             is_correct=False,
         )
 
-    with pytest.raises(
-        ValueError, match="awarded_marks must be between 0 and max_marks"
-    ):
+    with pytest.raises(ValueError, match="awarded_marks must be between 0 and max_marks"):
         QuestionResult(
             assessment_question_id="aq-1",
             selected_option_index=0,

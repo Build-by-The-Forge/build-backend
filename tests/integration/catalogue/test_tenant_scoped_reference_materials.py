@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import ReferenceMaterialModel
 from app.infrastructure.db.models.tenant_core import MembershipModel
-from sqlalchemy import select
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,
@@ -49,9 +50,7 @@ async def test_reference_material_creation_requires_authentication(client):
 
 @pytest.mark.asyncio
 async def test_student_cannot_create_reference_material(client):
-    tenant_id, tenant_slug, _, course_id, lecturer_token = await seed_course_context(
-        client, "lecturer"
-    )
+    tenant_id, tenant_slug, _, course_id, lecturer_token = await seed_course_context(client, "lecturer")
     topic_id = await create_topic(client, tenant_slug, course_id, lecturer_token)
 
     payload = {
@@ -103,11 +102,7 @@ async def test_reference_material_round_trip_and_list(client):
     assert listed.json()["data"] == [material]
 
     async with SessionLocal() as session:
-        stored = await session.scalar(
-            select(ReferenceMaterialModel).where(
-                ReferenceMaterialModel.id == material["id"]
-            )
-        )
+        stored = await session.scalar(select(ReferenceMaterialModel).where(ReferenceMaterialModel.id == material["id"]))
     assert stored is not None
     assert stored.course_id == course_id
     assert stored.title == "Course Handbook"
@@ -115,9 +110,7 @@ async def test_reference_material_round_trip_and_list(client):
 
 @pytest.mark.asyncio
 async def test_reference_material_update_and_archive(client):
-    _, tenant_slug, _, course_id, token = await seed_course_context(
-        client, "faculty_admin"
-    )
+    _, tenant_slug, _, course_id, token = await seed_course_context(client, "faculty_admin")
     topic_id = await create_topic(client, tenant_slug, course_id, token)
     material = await create_reference(client, tenant_slug, topic_id, token)
     request_headers = headers(token, tenant_slug)
@@ -172,9 +165,7 @@ async def test_reference_material_invalid_payload_returns_validation_error(clien
 
 @pytest.mark.asyncio
 async def test_reference_material_cross_tenant_access_is_denied(client):
-    _, tenant_a_slug, _, course_a_id, token_a = await seed_course_context(
-        client, "lecturer"
-    )
+    _, tenant_a_slug, _, course_a_id, token_a = await seed_course_context(client, "lecturer")
     topic_a_id = await create_topic(client, tenant_a_slug, course_a_id, token_a)
     material = await create_reference(client, tenant_a_slug, topic_a_id, token_a)
     _, tenant_b_slug, _, _, token_b = await seed_course_context(client, "faculty_admin")

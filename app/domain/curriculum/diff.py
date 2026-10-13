@@ -220,17 +220,13 @@ class BenchmarkCurriculumDiffEngine:
         if source.title != target.title:
             field_diffs.append(FieldDiff("title", source.title, target.title))
         if source.credit_units != target.credit_units:
-            field_diffs.append(
-                FieldDiff("credit_units", source.credit_units, target.credit_units)
-            )
+            field_diffs.append(FieldDiff("credit_units", source.credit_units, target.credit_units))
         if source.level != target.level:
             field_diffs.append(FieldDiff("level", source.level, target.level))
         if source.semester != target.semester:
             field_diffs.append(FieldDiff("semester", source.semester, target.semester))
         if source.is_compulsory != target.is_compulsory:
-            field_diffs.append(
-                FieldDiff("is_compulsory", source.is_compulsory, target.is_compulsory)
-            )
+            field_diffs.append(FieldDiff("is_compulsory", source.is_compulsory, target.is_compulsory))
         if source.course_category != target.course_category:
             field_diffs.append(
                 FieldDiff(
@@ -242,9 +238,7 @@ class BenchmarkCurriculumDiffEngine:
         if source.sequence != target.sequence:
             field_diffs.append(FieldDiff("sequence", source.sequence, target.sequence))
         if source.description != target.description:
-            field_diffs.append(
-                FieldDiff("description", source.description, target.description)
-            )
+            field_diffs.append(FieldDiff("description", source.description, target.description))
 
         # Sort field diffs deterministically
         field_diffs.sort(key=lambda f: f.field)
@@ -341,9 +335,7 @@ class BenchmarkCurriculumDiffEngine:
         if source.title != target.title:
             field_diffs.append(FieldDiff("title", source.title, target.title))
         if source.description != target.description:
-            field_diffs.append(
-                FieldDiff("description", source.description, target.description)
-            )
+            field_diffs.append(FieldDiff("description", source.description, target.description))
         field_diffs.sort(key=lambda f: f.field)
 
         outcome_diffs = self._compare_outcomes(source.outcomes, target.outcomes, stats)
@@ -410,9 +402,7 @@ class BenchmarkCurriculumDiffEngine:
     ) -> OutcomeDiff | None:
         field_diffs: list[FieldDiff] = []
         if source.description != target.description:
-            field_diffs.append(
-                FieldDiff("description", source.description, target.description)
-            )
+            field_diffs.append(FieldDiff("description", source.description, target.description))
         if source.bloom_level != target.bloom_level:
             field_diffs.append(
                 FieldDiff(
@@ -461,10 +451,7 @@ class BenchmarkCurriculumDiffEngine:
                 {
                     "code": c.code,
                     "action": c.action.value,
-                    "fields": [
-                        {"field": f.field, "old": f.old_value, "new": f.new_value}
-                        for f in c.field_diffs
-                    ],
+                    "fields": [{"field": f.field, "old": f.old_value, "new": f.new_value} for f in c.field_diffs],
                 }
                 for c in course_diffs
             ],

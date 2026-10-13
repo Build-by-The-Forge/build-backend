@@ -71,9 +71,7 @@ async def test_tokens_forged_from_a_user_id_are_rejected(client, session, forge)
 @pytest.mark.asyncio
 async def test_refresh_token_is_not_accepted_as_an_access_token(client, session):
     _, tokens = _register_and_login(client)
-    resp = client.get(
-        "/identity/whoami", headers={"Authorization": f"Bearer {tokens['refresh_token']}"}
-    )
+    resp = client.get("/identity/whoami", headers={"Authorization": f"Bearer {tokens['refresh_token']}"})
     assert resp.status_code == 401
 
 

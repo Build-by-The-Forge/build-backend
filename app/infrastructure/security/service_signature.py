@@ -46,9 +46,7 @@ EMPTY_BODY_SHA256 = hashlib.sha256(b"").hexdigest()
 
 _SIGNATURE_RE = re.compile(r"v1=[0-9a-f]{64}")
 _TIMESTAMP_RE = re.compile(r"[1-9][0-9]{0,11}")
-_UUID4_RE = re.compile(
-    r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
-)
+_UUID4_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
 _BASE64URL_RE = re.compile(r"[A-Za-z0-9_-]*")
 
 
@@ -99,17 +97,11 @@ def sha256_hex(data: bytes) -> str:
 
 
 def canonical_context_bytes(context: Mapping[str, Any]) -> bytes:
-    return json.dumps(
-        context, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    ).encode("ascii")
+    return json.dumps(context, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
 
 
 def encode_context(context: Mapping[str, Any]) -> str:
-    return (
-        base64.urlsafe_b64encode(canonical_context_bytes(context))
-        .rstrip(b"=")
-        .decode("ascii")
-    )
+    return base64.urlsafe_b64encode(canonical_context_bytes(context)).rstrip(b"=").decode("ascii")
 
 
 def _reject_constant(name: str) -> Any:
@@ -259,9 +251,7 @@ class CheckedHeaders:
     context_bytes: bytes
 
 
-def check_headers(
-    *, direction: Direction, headers: Mapping[str, str], now: int
-) -> CheckedHeaders:
+def check_headers(*, direction: Direction, headers: Mapping[str, str], now: int) -> CheckedHeaders:
     """A.5 steps 1-5, in order. ``direction`` is the direction this receiver
     accepts. Runs before the body is read."""
     values = _signed_headers(headers)
@@ -319,8 +309,7 @@ def check_signature(
         context_sha256=sha256_hex(checked.context_bytes),
     )
     if not any(
-        hmac.compare_digest(compute_signature(secret, canonical), checked.signature)
-        for secret in keys.verification_secrets
+        hmac.compare_digest(compute_signature(secret, canonical), checked.signature) for secret in keys.verification_secrets
     ):
         raise ServiceAuthError("signature mismatch")
 
@@ -345,6 +334,4 @@ def verify_request(
 ) -> VerifiedServiceRequest:
     """A.5 steps 1-5 and 7 for an already-hashed body."""
     checked = check_headers(direction=direction, headers=headers, now=now)
-    return check_signature(
-        checked, keys=keys, method=method, target=target, body_sha256=body_sha256
-    )
+    return check_signature(checked, keys=keys, method=method, target=target, body_sha256=body_sha256)

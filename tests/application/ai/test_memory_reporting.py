@@ -1,6 +1,7 @@
 """LearningMemoryReporter: best effort, exact permission, bounded calls (M5 R3)."""
 
 import pytest
+
 from app.application.ai.memory_reporting import MAX_OBSERVATIONS, LearningMemoryReporter
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIAssistantError, MemoryObservation

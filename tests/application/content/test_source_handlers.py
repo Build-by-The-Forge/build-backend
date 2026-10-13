@@ -1,4 +1,5 @@
 import pytest
+
 from app.application.content.source_commands import (
     ActivateContentSourceCommand,
     DeprecateContentSourceCommand,
@@ -39,16 +40,11 @@ class InMemoryContentSourceRepository(ContentSourceRepository):
     async def get_source_by_id(self, source_id: str) -> ContentSource | None:
         return self.sources.get(source_id)
 
-    async def get_source_by_code(
-        self, code: str, tenant_id: str | None = None
-    ) -> ContentSource | None:
+    async def get_source_by_code(self, code: str, tenant_id: str | None = None) -> ContentSource | None:
         for s in self.sources.values():
             if s.code == code.upper():
                 if tenant_id is not None:
-                    if (
-                        s.tenant_id == tenant_id
-                        or s.visibility == VisibilityScope.PLATFORM
-                    ):
+                    if s.tenant_id == tenant_id or s.visibility == VisibilityScope.PLATFORM:
                         return s
                 else:
                     if s.visibility == VisibilityScope.PLATFORM:
@@ -69,10 +65,7 @@ class InMemoryContentSourceRepository(ContentSourceRepository):
         for s in self.sources.values():
             if tenant_id is not None:
                 if include_platform:
-                    if (
-                        s.tenant_id != tenant_id
-                        and s.visibility != VisibilityScope.PLATFORM
-                    ):
+                    if s.tenant_id != tenant_id and s.visibility != VisibilityScope.PLATFORM:
                         continue
                 else:
                     if s.tenant_id != tenant_id:
@@ -159,13 +152,9 @@ async def test_update_and_lifecycle_handlers() -> None:
     event_bus = EventBus()
     published_events = []
     event_bus.subscribe("content.source_updated", lambda e: published_events.append(e))
-    event_bus.subscribe(
-        "content.source_deprecated", lambda e: published_events.append(e)
-    )
+    event_bus.subscribe("content.source_deprecated", lambda e: published_events.append(e))
     event_bus.subscribe("content.source_revoked", lambda e: published_events.append(e))
-    event_bus.subscribe(
-        "content.source_activated", lambda e: published_events.append(e)
-    )
+    event_bus.subscribe("content.source_activated", lambda e: published_events.append(e))
 
     reg_handler = RegisterContentSourceHandler(repo, event_bus)
     update_handler = UpdateContentSourceHandler(repo, event_bus)
@@ -199,9 +188,7 @@ async def test_update_and_lifecycle_handlers() -> None:
     assert updated.author_name == "Author Person"
 
     # Deprecate
-    dep = await dep_handler.handle(
-        DeprecateContentSourceCommand(source_id=source.id, reason="Old edition")
-    )
+    dep = await dep_handler.handle(DeprecateContentSourceCommand(source_id=source.id, reason="Old edition"))
     assert dep.status == SourceStatus.DEPRECATED
 
     # Reactivate
@@ -209,9 +196,7 @@ async def test_update_and_lifecycle_handlers() -> None:
     assert act.status == SourceStatus.ACTIVE
 
     # Revoke
-    rev = await rev_handler.handle(
-        RevokeContentSourceCommand(source_id=source.id, reason="Invalid license")
-    )
+    rev = await rev_handler.handle(RevokeContentSourceCommand(source_id=source.id, reason="Invalid license"))
     assert rev.status == SourceStatus.REVOKED
 
     # Get
@@ -264,9 +249,7 @@ async def test_list_content_sources_handler() -> None:
     )
 
     # Query from FUTA perspective (should see CCMAS + FUTA_CSC)
-    items, total = await list_handler.handle(
-        ListContentSourcesQuery(tenant_id="tenant-futa", include_platform=True)
-    )
+    items, total = await list_handler.handle(ListContentSourcesQuery(tenant_id="tenant-futa", include_platform=True))
     codes = [s.code for s in items]
     assert total == 2
     assert "CCMAS" in codes

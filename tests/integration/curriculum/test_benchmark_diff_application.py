@@ -1,4 +1,6 @@
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     BenchmarkOutcomeInput,
@@ -15,7 +17,6 @@ from app.infrastructure.curriculum.benchmark_repositories import (
 from app.infrastructure.curriculum.repositories import (
     SqlAlchemyCurriculumSourceRepository,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
@@ -195,7 +196,5 @@ async def test_compare_different_programmes_raises_error(
         version="2026.01",
     )
 
-    with pytest.raises(
-        ValueError, match="cannot compare curricula of different programmes"
-    ):
+    with pytest.raises(ValueError, match="cannot compare curricula of different programmes"):
         await service.compare_curricula(c1.id, c2.id)

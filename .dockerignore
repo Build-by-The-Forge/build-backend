@@ -6,12 +6,17 @@
 .venv*/
 venv
 
+# Patterns match from the context root only; `**/` covers every directory.
 __pycache__
+**/__pycache__
 *.py[cod]
+**/*.py[cod]
 .pytest_cache
+**/.pytest_cache
 .mypy_cache
 **/.mypy_cache
 .ruff_cache
+**/.ruff_cache
 .coverage
 coverage.xml
 htmlcov

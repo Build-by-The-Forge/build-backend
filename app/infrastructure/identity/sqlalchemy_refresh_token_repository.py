@@ -27,9 +27,7 @@ class SQLAlchemyRefreshTokenRepository(RefreshTokenRepository):
         await self._session.flush()
 
     async def get_by_hash(self, token_hash: str) -> StoredRefreshToken | None:
-        model = await self._session.scalar(
-            select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash)
-        )
+        model = await self._session.scalar(select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash))
         if model is None:
             return None
         return StoredRefreshToken(

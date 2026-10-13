@@ -41,10 +41,7 @@ class ValidateBenchmarkCandidateHandler:
         validation_result = self.validator.validate(curriculum, full_courses)
 
         events: list[DomainEvent] = []
-        if (
-            validation_result.is_valid
-            and curriculum.status == BenchmarkStatus.CANDIDATE
-        ):
+        if validation_result.is_valid and curriculum.status == BenchmarkStatus.CANDIDATE:
             curriculum.mark_validated()
             await self.repository.save(curriculum)
             events = curriculum.pull_events()

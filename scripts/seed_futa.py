@@ -4,6 +4,9 @@ import logging
 import os
 from datetime import date
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from app.domain.tenant.academic_session import AcademicSession
 from app.domain.tenant.department import Department
 from app.domain.tenant.faculty import Faculty
@@ -30,8 +33,6 @@ from app.domain.tenant.value_objects import (
     TenantSlug,
 )
 from app.infrastructure.tenant.unit_of_work import TenantUnitOfWork
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -140,9 +141,7 @@ def seed():
 
         faculty_map = {}
         for name, slug in FACULTIES:
-            f = Faculty.create(
-                tenant_id=tenant.id, name=FacultyName(name), slug=FacultySlug(slug)
-            )
+            f = Faculty.create(tenant_id=tenant.id, name=FacultyName(name), slug=FacultySlug(slug))
             uow.faculties.add(f)
             faculty_map[slug] = f
             log.info(" Faculty %s - %s", slug, name)

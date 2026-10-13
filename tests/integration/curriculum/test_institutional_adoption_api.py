@@ -1,6 +1,7 @@
 from uuid import UUID, uuid4
 
 import pytest
+
 from app.application.curriculum.benchmark_commands import (
     BenchmarkCourseInput,
     BenchmarkOutcomeInput,
@@ -23,22 +24,16 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_institutional_adoption_api_and_tenant_isolation(client) -> None:
     # 1. Tenant A (FUTA) admin and student setup
-    admin_a_id, admin_a_token = await register_and_authenticate(
-        client, f"futa-admin-{uuid4()}@example.com"
-    )
+    admin_a_id, admin_a_token = await register_and_authenticate(client, f"futa-admin-{uuid4()}@example.com")
     _, tenant_a_slug, _, _ = await seed_tenant_context(admin_a_id, "admin")
     admin_a_headers = headers(admin_a_token, tenant_a_slug)
 
-    student_a_id, student_a_token = await register_and_authenticate(
-        client, f"futa-student-{uuid4()}@example.com"
-    )
+    student_a_id, student_a_token = await register_and_authenticate(client, f"futa-student-{uuid4()}@example.com")
     _, _, _, _ = await seed_tenant_context(student_a_id, "student")
     student_a_headers = headers(student_a_token, tenant_a_slug)
 
     # Tenant B (UNILAG) admin setup
-    admin_b_id, admin_b_token = await register_and_authenticate(
-        client, f"unilag-admin-{uuid4()}@example.com"
-    )
+    admin_b_id, admin_b_token = await register_and_authenticate(client, f"unilag-admin-{uuid4()}@example.com")
     _, tenant_b_slug, _, _ = await seed_tenant_context(admin_b_id, "admin")
     admin_b_headers = headers(admin_b_token, tenant_b_slug)
 
@@ -92,9 +87,7 @@ async def test_institutional_adoption_api_and_tenant_isolation(client) -> None:
         ],
     )
     await benchmark_service.validate_candidate(benchmark_candidate.id)
-    await benchmark_service.submit_for_review(
-        benchmark_candidate.id, actor_id="nuc-admin", actor_email="nuc@build.internal"
-    )
+    await benchmark_service.submit_for_review(benchmark_candidate.id, actor_id="nuc-admin", actor_email="nuc@build.internal")
     await benchmark_service.approve_curriculum(
         benchmark_candidate.id,
         reviewer_id="nuc-lead",

@@ -1,6 +1,7 @@
 from uuid import UUID
 
 import pytest
+
 from app.domain.content.enums import (
     AuthorityLevel,
     ContentSourceType,
@@ -87,9 +88,7 @@ def test_regulatory_invariants_enforced() -> None:
         )
 
     # Regulatory with non-platform visibility -> REJECT
-    with pytest.raises(
-        ValueError, match="regulatory content sources must have platform visibility"
-    ):
+    with pytest.raises(ValueError, match="regulatory content sources must have platform visibility"):
         ContentSource.create(
             code="REG_FAIL_2",
             name="Regulatory Fail 2",
@@ -134,9 +133,7 @@ def test_visibility_scope_invariants_enforced() -> None:
         )
 
     # Faculty scope without faculty_id -> REJECT
-    with pytest.raises(
-        ValueError, match="faculty visibility scope requires faculty_id"
-    ):
+    with pytest.raises(ValueError, match="faculty visibility scope requires faculty_id"):
         ContentSource.create(
             code="SCOP_FAIL_2",
             name="Scope Fail 2",
@@ -150,9 +147,7 @@ def test_visibility_scope_invariants_enforced() -> None:
         )
 
     # Department scope without department_id -> REJECT
-    with pytest.raises(
-        ValueError, match="department visibility scope requires department_id"
-    ):
+    with pytest.raises(ValueError, match="department visibility scope requires department_id"):
         ContentSource.create(
             code="SCOP_FAIL_3",
             name="Scope Fail 3",
@@ -166,9 +161,7 @@ def test_visibility_scope_invariants_enforced() -> None:
         )
 
     # Programme scope without programme_id -> REJECT
-    with pytest.raises(
-        ValueError, match="programme visibility scope requires programme_id"
-    ):
+    with pytest.raises(ValueError, match="programme visibility scope requires programme_id"):
         ContentSource.create(
             code="SCOP_FAIL_4",
             name="Scope Fail 4",
@@ -231,9 +224,7 @@ def test_status_transitions_and_metadata_updates() -> None:
     assert events[0].event_type == "content.source_revoked"
 
     # Cannot update metadata when revoked
-    with pytest.raises(
-        ValueError, match="cannot update metadata of a revoked content source"
-    ):
+    with pytest.raises(ValueError, match="cannot update metadata of a revoked content source"):
         source.update_metadata(name="New Name")
 
     # Cannot deprecate when revoked
@@ -284,20 +275,9 @@ def test_is_accessible_by_scoping_rules() -> None:
         faculty_id="fac-science",
         department_id="dept-csc",
     )
-    assert (
-        dept_source.is_accessible_by(tenant_id="tenant-futa", department_id="dept-csc")
-        is True
-    )
-    assert (
-        dept_source.is_accessible_by(tenant_id="tenant-futa", department_id="dept-mth")
-        is False
-    )
-    assert (
-        dept_source.is_accessible_by(
-            tenant_id="tenant-unilag", department_id="dept-csc"
-        )
-        is False
-    )
+    assert dept_source.is_accessible_by(tenant_id="tenant-futa", department_id="dept-csc") is True
+    assert dept_source.is_accessible_by(tenant_id="tenant-futa", department_id="dept-mth") is False
+    assert dept_source.is_accessible_by(tenant_id="tenant-unilag", department_id="dept-csc") is False
 
     # 4. Revoked source is never accessible
     tenant_source.revoke(reason="Removed")

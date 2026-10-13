@@ -55,7 +55,5 @@ class AIServiceIngestionGateway(Protocol):
     ) -> AIServiceDispatchResult:
         raise NotImplementedError
 
-    async def fetch_job_status(
-        self, external_task_id: str, tenant_id: str, correlation_id: str
-    ) -> AIServiceStatusResult:
+    async def fetch_job_status(self, external_task_id: str, tenant_id: str, correlation_id: str) -> AIServiceStatusResult:
         raise NotImplementedError

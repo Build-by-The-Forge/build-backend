@@ -163,13 +163,8 @@ class EffectiveCurriculumResolver:
         # Conflict Detection: Cannot MODIFY and OMIT the same course
         for code, ov_list in course_overrides_by_code.items():
             types = {o.override_type for o in ov_list}
-            if (
-                OverrideType.MODIFY_COURSE in types
-                and OverrideType.OMIT_COURSE in types
-            ):
-                raise ValueError(
-                    f"conflicting overrides for course '{code}': cannot modify and omit the same course"
-                )
+            if OverrideType.MODIFY_COURSE in types and OverrideType.OMIT_COURSE in types:
+                raise ValueError(f"conflicting overrides for course '{code}': cannot modify and omit the same course")
 
             # Detect duplicate field overrides on same course
             seen_fields: set[str] = set()
@@ -177,9 +172,7 @@ class EffectiveCurriculumResolver:
                 if o.override_type == OverrideType.MODIFY_COURSE and o.field_overrides:
                     for field_name in o.field_overrides:
                         if field_name in seen_fields:
-                            raise ValueError(
-                                f"duplicate field override '{field_name}' on course '{code}'"
-                            )
+                            raise ValueError(f"duplicate field override '{field_name}' on course '{code}'")
                         seen_fields.add(field_name)
 
         # 3. Resolve Benchmark Courses
@@ -191,9 +184,7 @@ class EffectiveCurriculumResolver:
             c_overrides = course_overrides_by_code.get(code, [])
 
             # Check if omitted
-            omissions = [
-                o for o in c_overrides if o.override_type == OverrideType.OMIT_COURSE
-            ]
+            omissions = [o for o in c_overrides if o.override_type == OverrideType.OMIT_COURSE]
             if omissions:
                 omit_ov = omissions[0]
                 omitted_courses.append(
@@ -212,9 +203,7 @@ class EffectiveCurriculumResolver:
                 continue
 
             # Process course field modifications
-            mod_ovs = [
-                o for o in c_overrides if o.override_type == OverrideType.MODIFY_COURSE
-            ]
+            mod_ovs = [o for o in c_overrides if o.override_type == OverrideType.MODIFY_COURSE]
             applied_provs: list[AppliedOverrideProvenance] = []
 
             title = b_course.title
@@ -269,8 +258,7 @@ class EffectiveCurriculumResolver:
                             id=b_outcome.id,
                             sequence=b_outcome.sequence,
                             description=b_outcome.description,
-                            bloom_level=b_outcome.bloom_level
-                            or BloomTaxonomyLevel.UNDERSTAND,
+                            bloom_level=b_outcome.bloom_level or BloomTaxonomyLevel.UNDERSTAND,
                             origin=EntityOrigin.NATIONAL_BENCHMARK,
                         )
                     )
@@ -318,9 +306,7 @@ class EffectiveCurriculumResolver:
             semester = int(payload.get("semester", 1))
             sequence = int(payload.get("sequence", 99))
             is_compulsory = bool(payload.get("is_compulsory", False))
-            course_category = str(
-                payload.get("course_category", "institutional_custom")
-            )
+            course_category = str(payload.get("course_category", "institutional_custom"))
             description = payload.get("description")
 
             topics_payload = payload.get("topics", [])
@@ -393,17 +379,9 @@ class EffectiveCurriculumResolver:
         # 6. Statistics Calculation
         total_credits = sum(c.credit_units for c in resolved_courses)
         total_courses_count = len(resolved_courses)
-        nat_count = sum(
-            1 for c in resolved_courses if c.origin == EntityOrigin.NATIONAL_BENCHMARK
-        )
-        mod_count = sum(
-            1
-            for c in resolved_courses
-            if c.origin == EntityOrigin.INSTITUTIONAL_MODIFIED
-        )
-        custom_count = sum(
-            1 for c in resolved_courses if c.origin == EntityOrigin.INSTITUTIONAL_CUSTOM
-        )
+        nat_count = sum(1 for c in resolved_courses if c.origin == EntityOrigin.NATIONAL_BENCHMARK)
+        mod_count = sum(1 for c in resolved_courses if c.origin == EntityOrigin.INSTITUTIONAL_MODIFIED)
+        custom_count = sum(1 for c in resolved_courses if c.origin == EntityOrigin.INSTITUTIONAL_CUSTOM)
         omitted_count = len(omitted_courses)
 
         stats = EffectiveCurriculumStatistics(
@@ -423,9 +401,7 @@ class EffectiveCurriculumResolver:
             "programme_id": adoption.programme_id,
             "benchmark_curriculum_id": benchmark.id,
             "benchmark_version": benchmark.version,
-            "benchmark_fingerprint": adoption.benchmark_fingerprint
-            or benchmark.review_fingerprint
-            or "",
+            "benchmark_fingerprint": adoption.benchmark_fingerprint or benchmark.review_fingerprint or "",
             "courses": [
                 {
                     "code": c.code,
@@ -437,31 +413,21 @@ class EffectiveCurriculumResolver:
                     "is_compulsory": c.is_compulsory,
                     "course_category": c.course_category,
                     "origin": c.origin.value,
-                    "overrides": [
-                        {"id": p.override_id, "type": p.override_type}
-                        for p in c.applied_overrides
-                    ],
+                    "overrides": [{"id": p.override_id, "type": p.override_type} for p in c.applied_overrides],
                     "topics": [
                         {
                             "sequence": t.sequence,
                             "title": t.title,
-                            "outcomes": [
-                                {"sequence": o.sequence, "bloom": o.bloom_level.value}
-                                for o in t.outcomes
-                            ],
+                            "outcomes": [{"sequence": o.sequence, "bloom": o.bloom_level.value} for o in t.outcomes],
                         }
                         for t in c.topics
                     ],
                 }
                 for c in resolved_courses
             ],
-            "omitted_courses": [
-                {"code": o.code, "override_id": o.override_id} for o in omitted_courses
-            ],
+            "omitted_courses": [{"code": o.code, "override_id": o.override_id} for o in omitted_courses],
         }
-        canonical_json = json.dumps(
-            canonical_projection, sort_keys=True, separators=(",", ":")
-        )
+        canonical_json = json.dumps(canonical_projection, sort_keys=True, separators=(",", ":"))
         eff_fingerprint = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
 
         return EffectiveCurriculum(

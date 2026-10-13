@@ -20,21 +20,15 @@ from app.events.event_bus import EventBus
 
 
 class RegisterContentSourceHandler:
-    def __init__(
-        self, repository: ContentSourceRepository, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, repository: ContentSourceRepository, event_bus: EventBus | None = None) -> None:
         self.repository = repository
         self.event_bus = event_bus
 
     async def handle(self, command: RegisterContentSourceCommand) -> ContentSource:
         clean_code = command.code.strip().upper()
-        existing = await self.repository.get_source_by_code(
-            clean_code, command.tenant_id
-        )
+        existing = await self.repository.get_source_by_code(clean_code, command.tenant_id)
         if existing is not None:
-            raise ValueError(
-                f"content source with code '{clean_code}' already exists in this scope"
-            )
+            raise ValueError(f"content source with code '{clean_code}' already exists in this scope")
 
         source = ContentSource.create(
             code=clean_code,
@@ -64,9 +58,7 @@ class RegisterContentSourceHandler:
 
 
 class UpdateContentSourceHandler:
-    def __init__(
-        self, repository: ContentSourceRepository, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, repository: ContentSourceRepository, event_bus: EventBus | None = None) -> None:
         self.repository = repository
         self.event_bus = event_bus
 
@@ -93,9 +85,7 @@ class UpdateContentSourceHandler:
 
 
 class DeprecateContentSourceHandler:
-    def __init__(
-        self, repository: ContentSourceRepository, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, repository: ContentSourceRepository, event_bus: EventBus | None = None) -> None:
         self.repository = repository
         self.event_bus = event_bus
 
@@ -113,9 +103,7 @@ class DeprecateContentSourceHandler:
 
 
 class RevokeContentSourceHandler:
-    def __init__(
-        self, repository: ContentSourceRepository, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, repository: ContentSourceRepository, event_bus: EventBus | None = None) -> None:
         self.repository = repository
         self.event_bus = event_bus
 
@@ -133,9 +121,7 @@ class RevokeContentSourceHandler:
 
 
 class ActivateContentSourceHandler:
-    def __init__(
-        self, repository: ContentSourceRepository, event_bus: EventBus | None = None
-    ) -> None:
+    def __init__(self, repository: ContentSourceRepository, event_bus: EventBus | None = None) -> None:
         self.repository = repository
         self.event_bus = event_bus
 
@@ -164,24 +150,10 @@ class ListContentSourcesHandler:
     def __init__(self, repository: ContentSourceRepository) -> None:
         self.repository = repository
 
-    async def handle(
-        self, query: ListContentSourcesQuery
-    ) -> tuple[list[ContentSource], int]:
-        st = (
-            ContentSourceType(query.source_type)
-            if isinstance(query.source_type, str)
-            else query.source_type
-        )
-        al = (
-            AuthorityLevel(query.authority_level)
-            if isinstance(query.authority_level, str)
-            else query.authority_level
-        )
-        status = (
-            SourceStatus(query.status)
-            if isinstance(query.status, str)
-            else query.status
-        )
+    async def handle(self, query: ListContentSourcesQuery) -> tuple[list[ContentSource], int]:
+        st = ContentSourceType(query.source_type) if isinstance(query.source_type, str) else query.source_type
+        al = AuthorityLevel(query.authority_level) if isinstance(query.authority_level, str) else query.authority_level
+        status = SourceStatus(query.status) if isinstance(query.status, str) else query.status
 
         return await self.repository.list_sources(
             tenant_id=query.tenant_id,

@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.tenant.errors import LevelAlreadyArchivedError
 from app.domain.tenant.level import Level
 from app.domain.tenant.value_objects import (

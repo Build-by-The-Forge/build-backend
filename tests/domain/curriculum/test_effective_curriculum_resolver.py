@@ -1,4 +1,5 @@
 import pytest
+
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
     InstitutionalAdoption,
@@ -112,9 +113,7 @@ def test_effective_curriculum_resolver_unmodified_baseline() -> None:
         assert len(c.applied_overrides) == 0
 
 
-def test_effective_curriculum_resolver_with_modifications_additions_and_omissions() -> (
-    None
-):
+def test_effective_curriculum_resolver_with_modifications_additions_and_omissions() -> None:
     benchmark, courses = _sample_benchmark()
     adoption = InstitutionalAdoption.create_draft(
         tenant_id="futa",
@@ -185,9 +184,7 @@ def test_effective_curriculum_resolver_with_modifications_additions_and_omission
         overrides=[ov_mod, ov_add, ov_omit],
     )
 
-    assert (
-        effective.statistics.total_courses == 3
-    )  # COS101, COS102, GNS101 (CSC201 omitted)
+    assert effective.statistics.total_courses == 3  # COS101, COS102, GNS101 (CSC201 omitted)
     assert effective.statistics.total_credit_units == 2 + 3 + 2  # 7
     assert effective.statistics.national_courses_count == 1  # COS101
     assert effective.statistics.modified_courses_count == 1  # COS102
@@ -203,10 +200,7 @@ def test_effective_curriculum_resolver_with_modifications_additions_and_omission
     assert cos102.credit_units == 3
     assert cos102.origin == EntityOrigin.INSTITUTIONAL_MODIFIED
     assert len(cos102.applied_overrides) == 1
-    assert (
-        cos102.applied_overrides[0].reason
-        == "Senate approved 3 units for laboratory component"
-    )
+    assert cos102.applied_overrides[0].reason == "Senate approved 3 units for laboratory component"
 
     # Verify GNS101 has custom origin and structured topic/outcomes
     gns101 = [c for c in effective.courses if c.code == "GNS101"][0]
@@ -256,9 +250,7 @@ def test_effective_curriculum_resolver_pinning_verification_failures() -> None:
         adopted_by="admin-1",
         adopted_by_email="dean@futa.edu.ng",
     )
-    with pytest.raises(
-        ValueError, match="does not match loaded benchmark review fingerprint"
-    ):
+    with pytest.raises(ValueError, match="does not match loaded benchmark review fingerprint"):
         resolver.resolve(bad_fp_adoption, benchmark, courses, [])
 
 

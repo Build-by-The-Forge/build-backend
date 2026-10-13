@@ -1,4 +1,5 @@
 import pytest
+
 from app.application.assessment.attempt_service import AttemptService
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
@@ -9,9 +10,7 @@ class InMemoryAssessmentRepository:
     def __init__(self, assessment: Assessment) -> None:
         self.assessment = assessment
 
-    async def get_by_id(
-        self, assessment_id: str, tenant_id: str | None = None
-    ) -> Assessment | None:
+    async def get_by_id(self, assessment_id: str, tenant_id: str | None = None) -> Assessment | None:
         if assessment_id != self.assessment.id:
             return None
         if tenant_id is not None and tenant_id != self.assessment.tenant_id:
@@ -23,9 +22,7 @@ class InMemoryAttemptRepository:
     def __init__(self) -> None:
         self.items: dict[str, AssessmentAttempt] = {}
 
-    async def save(
-        self, attempt: AssessmentAttempt, tenant_id: str | None = None
-    ) -> AssessmentAttempt:
+    async def save(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         self.items[attempt.id] = attempt
         return attempt
 
@@ -44,9 +41,7 @@ class InMemoryAttemptRepository:
             return None
         return attempt
 
-    async def get_active_for_user(
-        self, assessment_id: str, user_id: str, tenant_id: str
-    ) -> AssessmentAttempt | None:
+    async def get_active_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> AssessmentAttempt | None:
         return next(
             (
                 attempt
@@ -59,18 +54,10 @@ class InMemoryAttemptRepository:
             None,
         )
 
-    async def list_by_user(
-        self, user_id: str, tenant_id: str
-    ) -> list[AssessmentAttempt]:
-        return [
-            attempt
-            for attempt in self.items.values()
-            if attempt.user_id == user_id and attempt.tenant_id == tenant_id
-        ]
+    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
+        return [attempt for attempt in self.items.values() if attempt.user_id == user_id and attempt.tenant_id == tenant_id]
 
-    async def update(
-        self, attempt: AssessmentAttempt, tenant_id: str | None = None
-    ) -> AssessmentAttempt:
+    async def update(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         existing = await self.get_by_id(attempt.id, tenant_id=tenant_id)
         if existing is None:
             raise ValueError("attempt not found")
@@ -99,12 +86,8 @@ def attempt_setup() -> tuple[AttemptService, InMemoryAttemptRepository, list[str
     attempt_repository = InMemoryAttemptRepository()
     events: list[str] = []
     event_bus = EventBus()
-    event_bus.subscribe(
-        "attempt.started", lambda event: events.append(event.event_type)
-    )
-    event_bus.subscribe(
-        "attempt.submitted", lambda event: events.append(event.event_type)
-    )
+    event_bus.subscribe("attempt.started", lambda event: events.append(event.event_type))
+    event_bus.subscribe("attempt.submitted", lambda event: events.append(event.event_type))
     service = AttemptService(
         repository=attempt_repository,
         assessment_repository=InMemoryAssessmentRepository(published_assessment()),

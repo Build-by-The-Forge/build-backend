@@ -20,12 +20,8 @@ class InstitutionalAdoptionModel(Base):
     __tablename__ = "institutional_adoptions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
-    programme_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("programmes.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    programme_id: Mapped[str] = mapped_column(String(36), ForeignKey("programmes.id", ondelete="CASCADE"), nullable=False)
     benchmark_curriculum_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("benchmark_curricula.id", ondelete="RESTRICT"),

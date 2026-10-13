@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+
 import pytest
 
 from app.application.content.job_commands import (
@@ -19,7 +20,6 @@ from app.domain.content.enums import (
     ContentSourceType,
     IngestionStatus,
     SourceStatus,
-    VisibilityScope,
 )
 from app.domain.content.ingestion_event import IngestionEventRecord
 from app.domain.content.job import ContentIngestionJob
@@ -38,9 +38,7 @@ class InMemoryContentSourceRepo:
     async def get_source_by_id(self, source_id: str) -> ContentSource | None:
         return self.sources.get(source_id)
 
-    async def get_source_by_code(
-        self, code: str, tenant_id: str | None = None
-    ) -> ContentSource | None:
+    async def get_source_by_code(self, code: str, tenant_id: str | None = None) -> ContentSource | None:
         for s in self.sources.values():
             if s.code == code and s.tenant_id == tenant_id:
                 return s
@@ -71,18 +69,14 @@ class InMemoryContentAssetRepo:
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         return self.assets.get(asset_id)
 
-    async def get_asset_by_hash(
-        self, content_sha256: str, tenant_id: str | None = None
-    ) -> ContentAsset | None:
+    async def get_asset_by_hash(self, content_sha256: str, tenant_id: str | None = None) -> ContentAsset | None:
         clean = content_sha256.strip().lower()
         for a in self.assets.values():
             if a.content_sha256 == clean and a.tenant_id == tenant_id:
                 return a
         return None
 
-    async def list_assets_by_source(
-        self, source_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentAsset], int]:
+    async def list_assets_by_source(self, source_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentAsset], int]:
         res = [a for a in self.assets.values() if a.source_id == source_id]
         return res[offset : offset + limit], len(res)
 
@@ -125,25 +119,19 @@ class InMemoryContentJobRepo:
     async def get_job_for_update(self, job_id: str) -> ContentIngestionJob | None:
         return self.jobs.get(job_id)
 
-    async def get_latest_job_for_asset(
-        self, asset_id: str
-    ) -> ContentIngestionJob | None:
+    async def get_latest_job_for_asset(self, asset_id: str) -> ContentIngestionJob | None:
         matches = [j for j in self.jobs.values() if j.asset_id == asset_id]
         if not matches:
             return None
         matches.sort(key=lambda j: (j.run_number, j.created_at), reverse=True)
         return matches[0]
 
-    async def list_jobs_for_asset(
-        self, asset_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[ContentIngestionJob], int]:
+    async def list_jobs_for_asset(self, asset_id: str, limit: int = 50, offset: int = 0) -> tuple[list[ContentIngestionJob], int]:
         matches = [j for j in self.jobs.values() if j.asset_id == asset_id]
         matches.sort(key=lambda j: (j.run_number, j.created_at), reverse=True)
         return matches[offset : offset + limit], len(matches)
 
-    async def list_pending_jobs(
-        self, tenant_id: str | None = None, limit: int = 50
-    ) -> list[ContentIngestionJob]:
+    async def list_pending_jobs(self, tenant_id: str | None = None, limit: int = 50) -> list[ContentIngestionJob]:
         now = datetime.now(timezone.utc)
         matches = [
             j

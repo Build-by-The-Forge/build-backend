@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from tests.integration.assessment.test_assessment_api import course_id_for_tenant
 from tests.integration.assessment.test_attempt_api import add_membership, headers
 from tests.integration.assessment.test_question_api import (
@@ -12,12 +13,8 @@ from tests.integration.assessment.test_question_api import (
 @pytest.mark.asyncio
 async def test_attempt_result_api_flow_and_security(client) -> None:
     # 1. Lecturer creates course assessment with 2 questions
-    lecturer_id, lecturer_token = await register_and_authenticate(
-        client, f"result-lecturer-{uuid4()}@example.com"
-    )
-    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(
-        lecturer_id, "lecturer"
-    )
+    lecturer_id, lecturer_token = await register_and_authenticate(client, f"result-lecturer-{uuid4()}@example.com")
+    tenant_id, tenant_slug, topic_id, learning_outcome_id = await seed_tenant_context(lecturer_id, "lecturer")
     lecturer_headers = headers(lecturer_token, tenant_slug)
 
     course_id = await course_id_for_tenant(tenant_id)
@@ -87,9 +84,7 @@ async def test_attempt_result_api_flow_and_security(client) -> None:
     )
 
     # 2. Student 1 starts attempt
-    student1_id, student1_token = await register_and_authenticate(
-        client, f"student1-{uuid4()}@example.com"
-    )
+    student1_id, student1_token = await register_and_authenticate(client, f"student1-{uuid4()}@example.com")
     await add_membership(student1_id, tenant_id, "student")
     student1_headers = headers(student1_token, tenant_slug)
 
@@ -150,9 +145,7 @@ async def test_attempt_result_api_flow_and_security(client) -> None:
         assert "correct_option_index" not in item
 
     # 7. Student 2 cannot access Student 1's result
-    student2_id, student2_token = await register_and_authenticate(
-        client, f"student2-{uuid4()}@example.com"
-    )
+    student2_id, student2_token = await register_and_authenticate(client, f"student2-{uuid4()}@example.com")
     await add_membership(student2_id, tenant_id, "student")
     student2_headers = headers(student2_token, tenant_slug)
 
@@ -171,9 +164,7 @@ async def test_attempt_result_api_flow_and_security(client) -> None:
     assert lecturer_result.json()["data"]["total_score"] == 5
 
     # 9. Cross-tenant isolation check
-    other_tenant_id, other_tenant_slug, _, _ = await seed_tenant_context(
-        student1_id, "student"
-    )
+    other_tenant_id, other_tenant_slug, _, _ = await seed_tenant_context(student1_id, "student")
     other_headers = headers(student1_token, other_tenant_slug)
     cross_tenant_res = client.get(
         f"/assessment/attempts/{attempt_id}/result",

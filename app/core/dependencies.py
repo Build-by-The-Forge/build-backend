@@ -39,9 +39,7 @@ def _unauthorized(detail: str = "invalid token") -> HTTPException:
     )
 
 
-async def get_current_principal(
-    request: Request, uow: UnitOfWork = Depends(get_unit_of_work)
-) -> AuthenticatedPrincipal:
+async def get_current_principal(request: Request, uow: UnitOfWork = Depends(get_unit_of_work)) -> AuthenticatedPrincipal:
     """The single authentication path: verify the signed access token
     (Authorization: Bearer <jwt>) and return the authenticated principal."""
     auth = request.headers.get("authorization")
@@ -56,11 +54,7 @@ async def get_current_principal(
     # Checked on every request so logout, revocation, expiry and account
     # disablement take effect immediately, not when the token expires.
     session = await SQLAlchemySessionRepository(uow.session).get_by_id(claims.session_id)
-    if (
-        session is None
-        or session.user_id.value != claims.user_id
-        or not session.is_active_at(datetime.now(timezone.utc))
-    ):
+    if session is None or session.user_id.value != claims.user_id or not session.is_active_at(datetime.now(timezone.utc)):
         raise _unauthorized()
 
     user = await SQLAlchemyUserRepository(uow.session).get_by_id(claims.user_id)
@@ -115,9 +109,7 @@ async def get_path_tenant_context(
     return await _resolve_tenant_context(slug, principal, uow)
 
 
-async def _resolve_tenant_context(
-    tenant_slug: str, principal: AuthenticatedPrincipal, uow: UnitOfWork
-) -> TenantContext:
+async def _resolve_tenant_context(tenant_slug: str, principal: AuthenticatedPrincipal, uow: UnitOfWork) -> TenantContext:
     tenant_slug = tenant_slug.strip().lower()
 
     tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(tenant_slug)
@@ -127,9 +119,7 @@ async def _resolve_tenant_context(
             detail="tenant access denied",
         )
 
-    membership = await AsyncSqlAlchemyMembershipRepository(
-        uow.session
-    ).get_by_tenant_user(tenant.id.value, principal.user_id)
+    membership = await AsyncSqlAlchemyMembershipRepository(uow.session).get_by_tenant_user(tenant.id.value, principal.user_id)
     if membership is None or not membership.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

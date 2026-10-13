@@ -1,6 +1,9 @@
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import (
     AssetStatus,
@@ -14,8 +17,6 @@ from app.infrastructure.content.asset_repositories import (
     SqlAlchemyContentAssetRepository,
 )
 from app.infrastructure.content.repositories import SqlAlchemyContentSourceRepository
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio

@@ -115,9 +115,7 @@ class Settings(BaseSettings):
     def validate_jwt_signing_keys(self) -> "Settings":
         if not self.auth_jwt_secret:
             if self.app_environment in STRICT_ENVIRONMENTS:
-                raise ValueError(
-                    f"AUTH_JWT_SECRET is required when app_environment is {self.app_environment!r}"
-                )
+                raise ValueError(f"AUTH_JWT_SECRET is required when app_environment is {self.app_environment!r}")
             # No usable default may live in the repository: development and
             # tests get a random per-process key instead.
             self.auth_jwt_secret = secrets.token_urlsafe(48)
@@ -152,22 +150,16 @@ class Settings(BaseSettings):
         strict = self.app_environment in STRICT_ENVIRONMENTS
         if not self.ai_service_url:
             if strict:
-                raise ValueError(
-                    f"AI_SERVICE_URL is required when app_environment is {self.app_environment!r}"
-                )
+                raise ValueError(f"AI_SERVICE_URL is required when app_environment is {self.app_environment!r}")
             self.ai_service_url = DEVELOPMENT_AI_SERVICE_URL
         parts = urlsplit(self.ai_service_url)
         # Requests are signed but responses are not (ruling E.4): outside
         # development the boundary must run over TLS.
         allowed = {"https"} if strict else {"http", "https"}
         if parts.scheme not in allowed or not parts.hostname:
-            raise ValueError(
-                f"AI_SERVICE_URL must be an absolute {' or '.join(sorted(allowed))} URL"
-            )
+            raise ValueError(f"AI_SERVICE_URL must be an absolute {' or '.join(sorted(allowed))} URL")
         if parts.username or parts.password or parts.query or parts.fragment:
-            raise ValueError(
-                "AI_SERVICE_URL must not carry credentials, a query or a fragment"
-            )
+            raise ValueError("AI_SERVICE_URL must not carry credentials, a query or a fragment")
 
         if self.app_environment == "testing":
             # Single-process tests sign and verify with the same settings.
@@ -180,9 +172,7 @@ class Settings(BaseSettings):
         }
         for prefix, (current, previous) in directions.items():
             if current is None and strict:
-                raise ValueError(
-                    f"{prefix}_SECRET is required when app_environment is {self.app_environment!r}"
-                )
+                raise ValueError(f"{prefix}_SECRET is required when app_environment is {self.app_environment!r}")
             if previous is not None and current is None:
                 raise ValueError(f"{prefix}_SECRET_PREVIOUS requires {prefix}_SECRET")
             for name, value in (
@@ -243,9 +233,7 @@ class Settings(BaseSettings):
     @property
     def ai_to_backend_verification_secrets(self) -> tuple[str, ...]:
         """Secrets accepted on inbound AI-service requests: current, then previous."""
-        return tuple(
-            s for s in (self.ai_to_backend_secret, self.ai_to_backend_secret_previous) if s
-        )
+        return tuple(s for s in (self.ai_to_backend_secret, self.ai_to_backend_secret_previous) if s)
 
     @property
     def jwt_verification_keys(self) -> dict[str, str]:

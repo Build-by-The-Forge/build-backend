@@ -23,16 +23,10 @@ service = build_container().get(ContentSourceService)
 async def create_source(
     payload: ContentSourceCreateRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
     # If platform scope requested, ensure caller is platform admin (tenant_id is None or system admin)
-    tenant_id = (
-        None
-        if payload.visibility == VisibilityScope.PLATFORM.value
-        else context.tenant_id
-    )
+    tenant_id = None if payload.visibility == VisibilityScope.PLATFORM.value else context.tenant_id
 
     try:
         source = await service.register_source(
@@ -55,9 +49,7 @@ async def create_source(
             trust_policy=payload.trust_policy,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -79,9 +71,7 @@ async def list_sources(
     include_platform: bool = True,
     limit: int = 50,
     offset: int = 0,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_READ)),
 ) -> JSONResponse:
     if limit < 1 or limit > 100:
         raise HTTPException(
@@ -119,15 +109,11 @@ async def list_sources(
 async def get_source(
     source_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_READ)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_READ)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="content source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
 
     # Check accessibility within caller's tenant
     if not source.is_accessible_by(tenant_id=context.tenant_id):
@@ -152,15 +138,11 @@ async def update_source(
     source_id: str,
     payload: ContentSourceUpdateRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="content source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(
@@ -180,9 +162,7 @@ async def update_source(
             trust_policy=payload.trust_policy,
         )
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -200,15 +180,11 @@ async def deprecate_source(
     source_id: str,
     payload: ContentSourceReasonRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="content source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(
@@ -217,13 +193,9 @@ async def deprecate_source(
         )
 
     try:
-        updated = await service.deprecate_source(
-            source_id=source_id, reason=payload.reason
-        )
+        updated = await service.deprecate_source(source_id=source_id, reason=payload.reason)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -241,15 +213,11 @@ async def revoke_source(
     source_id: str,
     payload: ContentSourceReasonRequest,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="content source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(
@@ -258,13 +226,9 @@ async def revoke_source(
         )
 
     try:
-        updated = await service.revoke_source(
-            source_id=source_id, reason=payload.reason
-        )
+        updated = await service.revoke_source(source_id=source_id, reason=payload.reason)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -281,15 +245,11 @@ async def revoke_source(
 async def activate_source(
     source_id: str,
     request: Request,
-    context: TenantContext = Depends(
-        require_permission(Permission.CONTENT_SOURCE_MANAGE)
-    ),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="content source not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(

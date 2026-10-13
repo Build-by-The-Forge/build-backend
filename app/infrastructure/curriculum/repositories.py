@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.domain.curriculum.source import CurriculumSnapshot, CurriculumSource
 from app.domain.repositories.curriculum_source import CurriculumSourceRepository
 from app.infrastructure.curriculum.mappers import (
@@ -12,8 +15,6 @@ from app.infrastructure.db.models.curriculum import (
     CurriculumSnapshotModel,
     CurriculumSourceModel,
 )
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SqlAlchemyCurriculumSourceRepository(CurriculumSourceRepository):
@@ -21,9 +22,7 @@ class SqlAlchemyCurriculumSourceRepository(CurriculumSourceRepository):
         self._session = session
 
     async def save_source(self, source: CurriculumSource) -> CurriculumSource:
-        statement = select(CurriculumSourceModel).where(
-            CurriculumSourceModel.id == source.id
-        )
+        statement = select(CurriculumSourceModel).where(CurriculumSourceModel.id == source.id)
         model = (await self._session.scalars(statement)).first()
         if model is None:
             model = curriculum_source_to_model(source)
@@ -34,32 +33,24 @@ class SqlAlchemyCurriculumSourceRepository(CurriculumSourceRepository):
         return source
 
     async def get_source_by_id(self, source_id: str) -> CurriculumSource | None:
-        statement = select(CurriculumSourceModel).where(
-            CurriculumSourceModel.id == source_id
-        )
+        statement = select(CurriculumSourceModel).where(CurriculumSourceModel.id == source_id)
         model = (await self._session.scalars(statement)).first()
         return curriculum_source_model_to_domain(model) if model is not None else None
 
     async def get_source_by_code(self, code: str) -> CurriculumSource | None:
-        statement = select(CurriculumSourceModel).where(
-            CurriculumSourceModel.code == code.upper()
-        )
+        statement = select(CurriculumSourceModel).where(CurriculumSourceModel.code == code.upper())
         model = (await self._session.scalars(statement)).first()
         return curriculum_source_model_to_domain(model) if model is not None else None
 
     async def list_sources(self, status: str | None = None) -> list[CurriculumSource]:
-        statement = select(CurriculumSourceModel).order_by(
-            CurriculumSourceModel.code.asc()
-        )
+        statement = select(CurriculumSourceModel).order_by(CurriculumSourceModel.code.asc())
         if status is not None:
             statement = statement.where(CurriculumSourceModel.status == status)
         models = (await self._session.scalars(statement)).all()
         return [curriculum_source_model_to_domain(model) for model in models]
 
     async def save_snapshot(self, snapshot: CurriculumSnapshot) -> CurriculumSnapshot:
-        statement = select(CurriculumSnapshotModel).where(
-            CurriculumSnapshotModel.id == snapshot.id
-        )
+        statement = select(CurriculumSnapshotModel).where(CurriculumSnapshotModel.id == snapshot.id)
         model = (await self._session.scalars(statement)).first()
         if model is None:
             model = curriculum_snapshot_to_model(snapshot)
@@ -79,9 +70,7 @@ class SqlAlchemyCurriculumSourceRepository(CurriculumSourceRepository):
         model = (await self._session.scalars(statement)).first()
         return curriculum_snapshot_model_to_domain(model) if model is not None else None
 
-    async def get_snapshot_by_hash(
-        self, source_id: str, content_sha256: str
-    ) -> CurriculumSnapshot | None:
+    async def get_snapshot_by_hash(self, source_id: str, content_sha256: str) -> CurriculumSnapshot | None:
         statement = select(CurriculumSnapshotModel).where(
             CurriculumSnapshotModel.source_id == source_id,
             CurriculumSnapshotModel.content_sha256 == content_sha256.lower(),
@@ -89,13 +78,9 @@ class SqlAlchemyCurriculumSourceRepository(CurriculumSourceRepository):
         model = (await self._session.scalars(statement)).first()
         return curriculum_snapshot_model_to_domain(model) if model is not None else None
 
-    async def list_snapshots(
-        self, source_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[CurriculumSnapshot], int]:
+    async def list_snapshots(self, source_id: str, limit: int = 50, offset: int = 0) -> tuple[list[CurriculumSnapshot], int]:
         count_stmt = (
-            select(func.count())
-            .select_from(CurriculumSnapshotModel)
-            .where(CurriculumSnapshotModel.source_id == source_id)
+            select(func.count()).select_from(CurriculumSnapshotModel).where(CurriculumSnapshotModel.source_id == source_id)
         )
         total = (await self._session.scalar(count_stmt)) or 0
 

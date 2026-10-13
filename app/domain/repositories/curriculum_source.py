@@ -22,12 +22,8 @@ class CurriculumSourceRepository(Protocol):
     async def get_latest_snapshot(self, source_id: str) -> CurriculumSnapshot | None:
         raise NotImplementedError
 
-    async def get_snapshot_by_hash(
-        self, source_id: str, content_sha256: str
-    ) -> CurriculumSnapshot | None:
+    async def get_snapshot_by_hash(self, source_id: str, content_sha256: str) -> CurriculumSnapshot | None:
         raise NotImplementedError
 
-    async def list_snapshots(
-        self, source_id: str, limit: int = 50, offset: int = 0
-    ) -> tuple[list[CurriculumSnapshot], int]:
+    async def list_snapshots(self, source_id: str, limit: int = 50, offset: int = 0) -> tuple[list[CurriculumSnapshot], int]:
         raise NotImplementedError

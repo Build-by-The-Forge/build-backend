@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
+
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel
 from app.infrastructure.identity.models import SecurityEventModel
-from sqlalchemy import select
 from tests.integration.identity_helpers import verify_email
 from tests.integration.tenant.test_tenant_context import seed_tenant_membership
 

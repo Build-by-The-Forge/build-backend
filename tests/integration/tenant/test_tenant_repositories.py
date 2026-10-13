@@ -2,6 +2,10 @@ from collections.abc import Generator
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
 from app.db.base import Base
 from app.domain.tenant.membership import Membership
 from app.domain.tenant.tenant import Tenant
@@ -18,9 +22,6 @@ from app.infrastructure.tenant.repositories import (
     SqlAlchemyMembershipRepository,
     SqlAlchemyTenantRepository,
 )
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import StaticPool
 
 
 @pytest.fixture

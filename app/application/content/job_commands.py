@@ -91,4 +91,3 @@ class ReconcileIngestionJobCommand:
 
     job_id: str
     tenant_id: str
-

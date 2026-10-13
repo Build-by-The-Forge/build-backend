@@ -135,9 +135,7 @@ async def processing_job(client, monkeypatch) -> tuple[dict, str, dict]:
         },
         headers=h,
     ).json()["data"]["id"]
-    job_id = client.post(
-        f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=h
-    ).json()["data"]["id"]
+    job_id = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=h).json()["data"]["id"]
 
     async def accepted(self, job, asset, source, actor):
         return AIServiceDispatchResult(

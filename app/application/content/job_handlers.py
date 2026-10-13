@@ -4,10 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.application.common.uow import ContentUnitOfWorkPort
-from app.application.identity.ports.security_events import (
-    SecurityEvent,
-    SecurityEventRecorder,
-)
 from app.application.content.job_commands import (
     CreateIngestionJobCommand,
     DispatchIngestionJobCommand,
@@ -18,6 +14,10 @@ from app.application.content.job_commands import (
     ReconcileIngestionJobCommand,
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
+)
+from app.application.identity.ports.security_events import (
+    SecurityEvent,
+    SecurityEventRecorder,
 )
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
@@ -59,9 +59,7 @@ class CreateIngestionJobHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
-        asset = owned_asset(
-            await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id
-        )
+        asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
 
         job = ContentIngestionJob.create(
             asset_id=asset.id,
@@ -119,15 +117,11 @@ class ReprocessAssetHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
-        asset = owned_asset(
-            await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id
-        )
+        asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
         if latest_job is not None:
-            new_job = latest_job.create_reprocess_run(
-                created_by=cmd.created_by, correlation_id=cmd.correlation_id
-            )
+            new_job = latest_job.create_reprocess_run(created_by=cmd.created_by, correlation_id=cmd.correlation_id)
         else:
             new_job = ContentIngestionJob.create(
                 asset_id=asset.id,
@@ -247,9 +241,7 @@ class HandleAICallbackHandler:
         self._event_bus = event_bus
         self._security_events = security_events
 
-    async def handle(
-        self, cmd: HandleAICallbackCommand
-    ) -> tuple[ContentIngestionJob | None, CallbackOutcome | None]:
+    async def handle(self, cmd: HandleAICallbackCommand) -> tuple[ContentIngestionJob | None, CallbackOutcome | None]:
         """Apply one verified AI-service processing event.
 
         In one transaction: lock the job row, check the event ledger, apply
@@ -280,9 +272,7 @@ class HandleAICallbackHandler:
         )
         recorded = await self._uow.ingestion_events.get(cmd.event_id)
         if recorded is not None:
-            if recorded.job_id != job.id or (
-                recorded.payload_sha256 is not None and recorded.payload_sha256 != digest
-            ):
+            if recorded.job_id != job.id or (recorded.payload_sha256 is not None and recorded.payload_sha256 != digest):
                 await self._record_conflict(cmd, recorded.job_id)
                 return job, CallbackOutcome.CONFLICT
             if recorded.payload_sha256 is None:
@@ -371,9 +361,7 @@ class GetLatestJobForAssetHandler:
     def __init__(self, uow: ContentUnitOfWorkPort) -> None:
         self._uow = uow
 
-    async def handle(
-        self, query: GetLatestJobForAssetQuery
-    ) -> ContentIngestionJob | None:
+    async def handle(self, query: GetLatestJobForAssetQuery) -> ContentIngestionJob | None:
         job = await self._uow.jobs.get_latest_job_for_asset(query.asset_id)
         if job is None:
             return None
@@ -386,9 +374,7 @@ class ListIngestionJobsHandler:
     def __init__(self, uow: ContentUnitOfWorkPort) -> None:
         self._uow = uow
 
-    async def handle(
-        self, query: ListIngestionJobsQuery
-    ) -> tuple[list[ContentIngestionJob], int]:
+    async def handle(self, query: ListIngestionJobsQuery) -> tuple[list[ContentIngestionJob], int]:
         return await self._uow.jobs.list_jobs(
             tenant_id=query.tenant_id,
             asset_id=query.asset_id,
@@ -437,9 +423,7 @@ class ReconcileIngestionJobHandler:
     async def handle(self, cmd: ReconcileIngestionJobCommand) -> ReconcileResult:
         job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
         if job.status not in ACTIVE_STATUSES or not job.external_task_id:
-            raise InvalidJobTransition(
-                f"Only an active job can be reconciled, not one that is '{job.status.value}'."
-            )
+            raise InvalidJobTransition(f"Only an active job can be reconciled, not one that is '{job.status.value}'.")
 
         status = await self._gateway.fetch_job_status(
             job.external_task_id,
@@ -452,9 +436,7 @@ class ReconcileIngestionJobHandler:
             or status.run_number != job.run_number
             or status.attempt_count != job.attempt_count
         ):
-            raise ReconcileMismatchError(
-                "AI-service reported on a task that is not this job's active attempt"
-            )
+            raise ReconcileMismatchError("AI-service reported on a task that is not this job's active attempt")
 
         callbacks = HandleAICallbackHandler(self._uow, self._event_bus, self._security_events)
         outcomes: list[tuple[str, str]] = []
@@ -494,4 +476,3 @@ class ReconcileIngestionJobHandler:
 
         refreshed = await self._uow.jobs.get_job_by_id(job.id)
         return ReconcileResult(job=refreshed or job, outcomes=outcomes)
-

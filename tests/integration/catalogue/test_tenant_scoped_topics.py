@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 import pytest
+
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,
@@ -53,9 +54,7 @@ async def test_lecturer_creates_and_reads_topics_in_own_tenant(client):
     assert topic["course_id"] == course_id
     assert topic["sequence"] == 2
 
-    listed = client.get(
-        f"/catalogue/courses/{course_id}/topics", headers=request_headers
-    )
+    listed = client.get(f"/catalogue/courses/{course_id}/topics", headers=request_headers)
     assert listed.status_code == 200
     assert listed.json()["data"] == [topic]
 
@@ -110,9 +109,7 @@ async def test_topics_for_missing_course_return_not_found(client):
 
 @pytest.mark.asyncio
 async def test_lecturer_updates_and_archives_topic(client):
-    _, tenant_slug, _, course_id, token = await seed_course_context(
-        client, "faculty_admin"
-    )
+    _, tenant_slug, _, course_id, token = await seed_course_context(client, "faculty_admin")
     request_headers = headers(token, tenant_slug)
     created = client.post(
         f"/catalogue/courses/{course_id}/topics",
@@ -129,9 +126,7 @@ async def test_lecturer_updates_and_archives_topic(client):
     assert updated.status_code == 200
     assert updated.json()["data"]["title"] == "Updated Topic"
 
-    archived = client.post(
-        f"/catalogue/topics/{topic_id}/archive", headers=request_headers
-    )
+    archived = client.post(f"/catalogue/topics/{topic_id}/archive", headers=request_headers)
     assert archived.status_code == 200
     assert archived.json()["data"]["status"] == "archived"
 

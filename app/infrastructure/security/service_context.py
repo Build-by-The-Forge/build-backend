@@ -65,13 +65,9 @@ class ServiceContext:
 
     def __post_init__(self) -> None:
         _require_uuid("tenant_id", self.tenant_id)
-        if not _is_str(self.correlation_id) or not _CORRELATION_ID_RE.fullmatch(
-            self.correlation_id
-        ):
+        if not _is_str(self.correlation_id) or not _CORRELATION_ID_RE.fullmatch(self.correlation_id):
             raise InvalidServiceContext("correlation_id is malformed")
-        if type(self.permissions) is not tuple or not all(
-            _is_str(p) and p for p in self.permissions
-        ):
+        if type(self.permissions) is not tuple or not all(_is_str(p) and p for p in self.permissions):
             raise InvalidServiceContext("permissions must be non-empty strings")
         if list(self.permissions) != sorted(set(self.permissions)):
             raise InvalidServiceContext("permissions must be sorted and unique")

@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+
 from app.domain.tenant.errors import SemesterAlreadyArchivedError
 from app.domain.tenant.semester import Semester
 from app.domain.tenant.value_objects import (
