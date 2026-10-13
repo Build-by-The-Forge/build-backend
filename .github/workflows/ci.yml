@@ -132,3 +132,14 @@ jobs:
           python -m scripts.audit_python_packages image build-backend:ci
       - name: OS packages in the image (scripts/scan_image_os.sh)
         run: scripts/scan_image_os.sh build-backend:ci
+  secrets:
+    # Secrets in the tracked files: gitleaks, pinned by digest, findings
+    # redacted (scripts/scan_secrets.sh). Accepted findings: .gitleaksignore.
+    # Not scheduled: with the scanner pinned, only a commit can add a finding.
+    if: github.event_name != 'schedule'
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan the tracked files
+        run: scripts/scan_secrets.sh
