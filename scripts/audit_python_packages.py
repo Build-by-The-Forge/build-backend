@@ -1,11 +1,15 @@
 """Known advisories in the backend's Python packages, under the exception policy.
 
     python -m scripts.audit_python_packages requirements
+    python -m scripts.audit_python_packages image <image>
 
-Runs pip-audit (installed by the CI job, pinned there) on the exact pins in
-requirements.txt (runtime) and requirements-dev.txt (development and test
-tools, reported separately), with --no-deps: the files are the full closure.
-Applies security/accepted-advisories.txt (docs/security-advisories.md) and
+`requirements` runs pip-audit (installed by the CI job, pinned there) on the
+exact pins in requirements.txt (runtime) and requirements-dev.txt
+(development and test tools, reported separately), with --no-deps: the files
+are the full closure. `image` audits what is actually installed in a built
+image (its own `pip freeze --all`, run with networking disabled), so a
+difference between the files and the image cannot hide a package. Both apply
+security/accepted-advisories.txt (docs/security-advisories.md) and
 fails on any advisory that is not accepted, on an accepted entry that no
 longer matches a finding, and on an entry past its review date. Needs network
 access for the advisory database.
@@ -159,14 +163,33 @@ def audit_requirements(today: dt.date) -> int:
     return report(runtime + development, counts, today)
 
 
+def audit_image(image: str, today: dt.date) -> int:
+    print(f"Python package audit of image {image}")
+    frozen = subprocess.run(
+        ["docker", "run", "--rm", "--network", "none", "--entrypoint", "python", image, "-m", "pip", "freeze", "--all"],
+        capture_output=True,
+        text=True,
+    )
+    lines = [line for line in frozen.stdout.splitlines() if "==" in line]
+    if frozen.returncode != 0 or not lines:
+        raise RuntimeError(f"could not list the packages in {image} ({frozen.returncode}): {frozen.stderr.strip()[:300]}")
+    with tempfile.TemporaryDirectory() as tmp:
+        installed = Path(tmp) / "image-packages.txt"
+        installed.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        count, findings = pip_audit(installed, "image")
+    return report(findings, {"image": count}, today)
+
+
 def main(argv: list[str]) -> int:
     try:
         if argv[:1] == ["requirements"] and len(argv) == 1:
             return audit_requirements(dt.date.today())
+        if argv[:1] == ["image"] and len(argv) == 2:
+            return audit_image(argv[1], dt.date.today())
     except (ValueError, RuntimeError) as error:
         print(f"  FAIL {error}", file=sys.stderr)
         return 2
-    print(__doc__.strip().splitlines()[2].strip(), file=sys.stderr)
+    print("usage: python -m scripts.audit_python_packages requirements | image <image>", file=sys.stderr)
     return 2
 
 
