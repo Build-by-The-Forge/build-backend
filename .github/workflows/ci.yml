@@ -3,9 +3,15 @@ on:
   push:
     branches: [main, develop]
   pull_request:
+  # Weekly: new advisories appear without any commit. Scheduled runs execute
+  # the audit jobs only (the test jobs skip them).
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +32,7 @@ jobs:
     # The suite above builds its SQLite schema from the ORM models, so it
     # cannot see migrations that disagree with the models. This job checks
     # the schema production actually gets (docs/alembic.md).
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     services:
       postgres:
