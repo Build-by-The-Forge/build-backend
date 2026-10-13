@@ -1,0 +1,14 @@
+# OS package advisories accepted for the backend image (Trivy ignore file),
+# read by scripts/scan_image_os.sh. Policy: docs/security-advisories.md.
+# Each entry needs a statement (the reason, pointing to its assessment) and an
+# expired_at review date, after which Trivy counts the advisory again. An
+# entry that no longer matches a finding fails the scan.
+#
+# vulnerabilities:
+#   - id: CVE-YYYY-NNNNN
+#     purls: ["pkg:deb/debian/<package>"]
+#     statement: <reason; see docs/security-advisories.md>
+#     expired_at: YYYY-MM-DD
+#
+# No advisories are accepted.
+vulnerabilities: []
