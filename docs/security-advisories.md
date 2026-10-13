@@ -41,3 +41,20 @@ or "all transitive") are not allowed.
 ## Current exceptions
 
 None (Python and OS).
+
+## Secret scanning
+
+`scripts/scan_secrets.sh` runs gitleaks (pinned by digest, default rules,
+findings redacted) over the repository's tracked files, the content a CI
+checkout holds; untracked and ignored files such as `deploy/m3.env` are never
+scanned. Any finding fails it unless its fingerprint is in `.gitleaksignore`;
+a fingerprint includes the line, so an accepted finding that moves is
+reported again.
+
+Accepted findings:
+
+| Fingerprint | Reason |
+|---|---|
+| `pg_smoke/test_provisioning_cli.py:generic-api-key:15` | Password constant for throwaway users in an ephemeral test database; valid nowhere else. |
+| `tests/application/identity/test_identity_credential_handlers.py:generic-api-key:106` | Wrong-password value in a unit test (in-memory repository). |
+| `tests/integration/tenant/test_provisioning.py:generic-api-key:22` | Password constant for throwaway users in an ephemeral test database; valid nowhere else. |
