@@ -12,7 +12,7 @@ on:
 jobs:
   test:
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -33,7 +33,7 @@ jobs:
     # cannot see migrations that disagree with the models. This job checks
     # the schema production actually gets (docs/alembic.md).
     if: github.event_name != 'schedule'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     services:
       postgres:
         image: postgres:17
@@ -92,7 +92,7 @@ jobs:
     # (docs/security-advisories.md). Needs the network for the advisory
     # database.
     name: Dependency audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -110,7 +110,7 @@ jobs:
     # Nothing is published from this workflow; a publish step added later
     # must `needs: image` so only a checked and audited image can ship.
     name: Production image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       DOCKER_BUILDKIT: '1'
     steps:
@@ -138,7 +138,7 @@ jobs:
     # Not scheduled: with the scanner pinned, only a commit can add a finding.
     if: github.event_name != 'schedule'
     name: Secret scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - name: Scan the tracked files
