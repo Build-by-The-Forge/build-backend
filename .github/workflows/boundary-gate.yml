@@ -78,14 +78,17 @@ jobs:
             echo "- ai-service: \`$ai\` (ref \`$AI_SERVICE_REF\`)"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Boundary gate
+        id: gate
         working-directory: build-backend
         env:
           # The same read-only token fetches the OCR model mirror release
           # assets during the ai-service build (BuildKit secret).
           OCR_MODELS_TOKEN: ${{ secrets.AI_SERVICE_READ_TOKEN }}
         run: scripts/m3_boundary_gate.sh
+      # Only when the gate itself failed: before it, there is no checkout or
+      # compose stack to collect logs from.
       - name: Service logs on failure
-        if: failure()
+        if: failure() && steps.gate.outcome == 'failure'
         working-directory: build-backend
         run: |
           docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml logs --no-color --tail 300 || true
