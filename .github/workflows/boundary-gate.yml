@@ -45,11 +45,11 @@ jobs:
             echo "::error::AI_SERVICE_READ_TOKEN is not configured; run scripts/m3_boundary_gate.sh locally"
             exit 1
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           path: build-backend
       - id: ai_checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: Build-by-The-Forge/ai-service
           ref: ${{ env.AI_SERVICE_REF }}
@@ -63,7 +63,7 @@ jobs:
             "or the ref does not exist there."
       # The gate scripts run `python` on the runner: generating deploy/m3.env
       # (git-ignored, so always generated here) and M6's random secrets.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       - name: Record the revisions under test
