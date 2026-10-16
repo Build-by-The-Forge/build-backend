@@ -1,7 +1,7 @@
 # Runtime dependencies of the backend: the full closure, exact pins.
 # This file and requirements-dev.txt are the only dependency declaration
 # (the image, CI and local development install from them; pyproject.toml
-# declares none). tests/unit/test_dependency_declarations.py checks that every
+# declares none). tests/test_dependency_declarations.py checks that every
 # import is covered and that the closure is complete.
 #
 # Resolved 2026-10-12 in python:3.13.16-slim (pip 26.2.1) from the previous
