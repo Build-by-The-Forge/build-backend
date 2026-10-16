@@ -12,6 +12,9 @@
 alembic==1.20.0
 argon2-cffi==25.1.0
 asyncpg==0.32.0
+# S3-compatible object storage (Phase 3, P3-1). botocore is pinned to the
+# matching release below; boto3 alone would accept any 1.43.x.
+boto3==1.43.108
 fastapi==0.143.0
 httpx==0.27.2
 opentelemetry-sdk==1.45.1
@@ -29,6 +32,7 @@ annotated-doc==0.0.5
 annotated-types==0.8.0
 anyio==4.15.1
 argon2-cffi-bindings==26.1.0
+botocore==1.43.108
 certifi==2026.7.22
 cffi==2.1.1
 click==8.5.0
@@ -37,19 +41,24 @@ h11==0.16.0
 httpcore==1.0.9
 httptools==0.9.0
 idna==3.20
+jmespath==1.1.0
 Mako==1.4.3
 MarkupSafe==3.0.4
 opentelemetry-api==1.45.1
 opentelemetry-semantic-conventions==0.66b1
 pycparser==3.11
 pydantic_core==2.50.1
+python-dateutil==2.9.0.post0
 # Needed at runtime: Settings reads .env (env_file) through it.
 python-dotenv==1.2.4
 PyYAML==6.0.3
+s3transfer==0.19.2
+six==1.17.0
 sniffio==1.3.1
 starlette==1.7.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
+urllib3==2.8.0
 # uvicorn[standard] requires uvloop only off Windows; it has no Windows wheels.
 uvloop==0.23.0; sys_platform != "win32"
 watchfiles==1.3.0
