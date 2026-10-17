@@ -82,6 +82,80 @@ services:
       retries: 30
     networks: [internal]
 
+  # S3-compatible storage for uploaded documents (Phase 3, D1): SeaweedFS,
+  # pinned by digest.
+  # - Private: not published, and every request must be signed by one of
+  #   three identities from deploy/m3.env. admin creates the bucket
+  #   (object-storage-init only); backend reads, writes and lists it; ai only
+  #   reads it.
+  # - Runs unprivileged, with its data on tmpfs: this topology starts from
+  #   empty storage, as the gate does.
+  # - Its configuration is written inside the container from the
+  #   environment, so no secret is in the command line or on the host.
+  # - Volumes are sized explicitly (64 x 64 MB). The default count, free
+  #   space divided by 30 GB, is one volume on tmpfs, which starves every
+  #   bucket after the first.
+  object-storage:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    user: "10002:10002"
+    tmpfs:
+      - /data:uid=10002,gid=10002
+    environment:
+      BUCKET: build-documents
+      ADMIN_ACCESS_KEY: ${OBJECT_STORAGE_ADMIN_ACCESS_KEY:?set in deploy/m3.env}
+      ADMIN_SECRET_KEY: ${OBJECT_STORAGE_ADMIN_SECRET_KEY:?set in deploy/m3.env}
+      BACKEND_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY:?set in deploy/m3.env}
+      BACKEND_SECRET_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY:?set in deploy/m3.env}
+      AI_ACCESS_KEY: ${OBJECT_STORAGE_AI_ACCESS_KEY:?set in deploy/m3.env}
+      AI_SECRET_KEY: ${OBJECT_STORAGE_AI_SECRET_KEY:?set in deploy/m3.env}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        umask 077
+        cat > /data/s3.json <<EOF
+        {"identities": [
+          {"name": "admin", "credentials": [{"accessKey": "$${ADMIN_ACCESS_KEY}", "secretKey": "$${ADMIN_SECRET_KEY}"}],
+           "actions": ["Admin", "Read", "Write", "List"]},
+          {"name": "backend", "credentials": [{"accessKey": "$${BACKEND_ACCESS_KEY}", "secretKey": "$${BACKEND_SECRET_KEY}"}],
+           "actions": ["Read:$${BUCKET}", "Write:$${BUCKET}", "List:$${BUCKET}"]},
+          {"name": "ai", "credentials": [{"accessKey": "$${AI_ACCESS_KEY}", "secretKey": "$${AI_SECRET_KEY}"}],
+           "actions": ["Read:$${BUCKET}"]}
+        ]}
+        EOF
+        exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/data/s3.json -master.volumeSizeLimitMB=64 -volume.max=64
+    healthcheck:
+      # Readiness, not just a live process: S3's /healthz answers before the
+      # master has elected a leader. object-storage-init then proves a real
+      # write.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9333/cluster/status | grep -q '\"IsLeader\":true' && wget -qO /dev/null http://127.0.0.1:8333/healthz"]
+      interval: 2s
+      retries: 60
+    networks: [internal]
+
+  # Creates the bucket and proves the identities with the app's adapter:
+  # backend read/write, AI read-only, anonymous denied (object-storage/init.py).
+  object-storage-init:
+    image: build-m3-backend
+    depends_on:
+      object-storage:
+        condition: service_healthy
+      backend-migrate:
+        condition: service_completed_successfully
+    environment:
+      PYTHONPATH: /app
+      OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333
+      OBJECT_STORAGE_BUCKET: build-documents
+      OBJECT_STORAGE_ADMIN_ACCESS_KEY: ${OBJECT_STORAGE_ADMIN_ACCESS_KEY}
+      OBJECT_STORAGE_ADMIN_SECRET_KEY: ${OBJECT_STORAGE_ADMIN_SECRET_KEY}
+      OBJECT_STORAGE_BACKEND_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY}
+      OBJECT_STORAGE_BACKEND_SECRET_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY}
+      OBJECT_STORAGE_AI_ACCESS_KEY: ${OBJECT_STORAGE_AI_ACCESS_KEY}
+      OBJECT_STORAGE_AI_SECRET_KEY: ${OBJECT_STORAGE_AI_SECRET_KEY}
+    volumes:
+      - ./object-storage:/object-storage:ro
+    entrypoint: ["python", "/object-storage/init.py"]
+    networks: [internal]
+
   db-init:
     image: postgres:17
     depends_on:
@@ -143,6 +217,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
     environment:
       APP_ENVIRONMENT: development
       POSTGRES_URL: postgresql+asyncpg://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
@@ -152,6 +228,12 @@ services:
       AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
       AUTH_RATE_LIMIT_FAILURE_MODE: closed
       EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
+      # The backend's storage identity (read, write, list on the bucket).
+      # Configured now; the upload endpoint (P3-1 PR 2) is its first user.
+      OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333
+      OBJECT_STORAGE_BUCKET: build-documents
+      OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY}
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY}
     volumes:
       - outbox:/outbox
     ports:
