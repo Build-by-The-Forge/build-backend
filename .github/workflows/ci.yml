@@ -87,6 +87,41 @@ jobs:
         run: pytest tests/infrastructure/test_service_auth_middleware.py -q
       - name: Signed AI-service callbacks against real Redis
         run: pytest tests/integration/content/test_signed_callbacks.py -q
+  storage-gate:
+    # The object-storage adapter against a real S3-compatible service:
+    # SeaweedFS pinned by digest, with identities generated for this run
+    # (scripts/seaweedfs_test_storage.sh). The tests are required here:
+    # missing configuration is a collection error, and any skipped test
+    # fails the job, so it cannot pass without exercising the real service.
+    if: github.event_name != 'schedule'
+    name: Object storage gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          python -m pip install pip==26.2.1
+          pip install -r requirements-dev.txt
+      - name: Start SeaweedFS with generated identities
+        run: scripts/seaweedfs_test_storage.sh start "$GITHUB_ENV"
+      - name: Object storage against the real service (required, none skipped)
+        env:
+          OBJECT_STORAGE_TESTS_REQUIRED: '1'
+        run: |
+          pytest tests/infrastructure/content/test_s3_object_storage_real.py -q -rA -p no:cacheprovider | tee storage-tests.log
+          if grep -qE '(^SKIPPED|[0-9]+ skipped)' storage-tests.log; then
+            echo "::error::object-storage tests were skipped; they are required in this job"
+            exit 1
+          fi
+      - name: SeaweedFS logs on failure
+        if: failure()
+        run: docker logs build-test-seaweedfs 2>&1 | tail -100 || true
+      - name: Stop SeaweedFS
+        if: always()
+        run: scripts/seaweedfs_test_storage.sh stop
   security:
     # Known advisories in the pinned dependencies, under the exception policy
     # (docs/security-advisories.md). Needs the network for the advisory

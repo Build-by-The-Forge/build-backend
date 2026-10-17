@@ -4,7 +4,7 @@ import secrets
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, ValidationInfo, field_validator, model_validator
+from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Environments where a missing or weak signing key must stop startup.
@@ -86,6 +86,21 @@ class Settings(BaseSettings):
     # Reverse proxies (IPs or CIDRs, comma separated) whose X-Forwarded-For
     # is believed. Empty: the direct peer is the client (M6).
     trusted_proxies: str = Field(default="")
+
+    # S3-compatible object storage for uploaded documents (Phase 3, D1).
+    # Optional until the upload path uses it: nothing reads these yet, and
+    # startup does not require them. The endpoint is empty for a provider's
+    # default endpoint; SeaweedFS (local, CI) needs it and path addressing.
+    # The secret is a SecretStr so it never appears in a settings repr or log.
+    object_storage_endpoint_url: str = Field(default="")
+    object_storage_region: str = Field(default="us-east-1")
+    object_storage_bucket: str = Field(default="")
+    object_storage_access_key_id: str | None = Field(default=None)
+    object_storage_secret_access_key: SecretStr | None = Field(default=None)
+    object_storage_addressing_style: Literal["path", "virtual"] = Field(default="path")
+    object_storage_connect_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    object_storage_read_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    object_storage_max_attempts: int = Field(default=3, ge=1, le=10)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

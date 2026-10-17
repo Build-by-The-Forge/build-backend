@@ -35,16 +35,35 @@ export BACKEND_REVISION AI_SERVICE_REVISION
 echo "backend revision:    $BACKEND_REVISION ($(git branch --show-current || true))"
 echo "ai-service revision: $AI_SERVICE_REVISION ($(git -C "$AI_DIR" branch --show-current || true) at $AI_DIR)"
 
-if [[ ! -f deploy/m3.env ]]; then
-  echo "generating deploy/m3.env with fresh random secrets"
-  python - <<'PY'
+# Fresh random values for every name deploy/m3.env lacks. Existing values
+# are kept, so an older file gains the newer names (object storage, P3-1)
+# without any of its secrets being replaced.
+python - <<'PY'
+import os
 import secrets
+
 names = ["POSTGRES_SUPERUSER_PASSWORD", "BUILD_BACKEND_OWNER_PASSWORD", "BUILD_BACKEND_APP_PASSWORD",
-         "BUILD_AI_OWNER_PASSWORD", "BUILD_AI_APP_PASSWORD", "BACKEND_TO_AI_SECRET", "AI_TO_BACKEND_SECRET"]
-with open("deploy/m3.env", "w") as fh:
-    fh.writelines(f"{n}={secrets.token_hex(32)}\n" for n in names)
+         "BUILD_AI_OWNER_PASSWORD", "BUILD_AI_APP_PASSWORD", "BACKEND_TO_AI_SECRET", "AI_TO_BACKEND_SECRET",
+         "OBJECT_STORAGE_ADMIN_ACCESS_KEY", "OBJECT_STORAGE_ADMIN_SECRET_KEY",
+         "OBJECT_STORAGE_BACKEND_ACCESS_KEY", "OBJECT_STORAGE_BACKEND_SECRET_KEY",
+         "OBJECT_STORAGE_AI_ACCESS_KEY", "OBJECT_STORAGE_AI_SECRET_KEY"]
+path = "deploy/m3.env"
+present, ends_with_newline = set(), True
+if os.path.exists(path):
+    with open(path) as fh:
+        text = fh.read()
+    present = {line.split("=", 1)[0].strip() for line in text.splitlines()
+               if "=" in line and not line.lstrip().startswith("#")}
+    ends_with_newline = text == "" or text.endswith("\n")
+missing = [n for n in names if n not in present]
+if missing:
+    print("deploy/m3.env: fresh random values for " + ", ".join(missing))
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    with os.fdopen(fd, "a") as fh:
+        if not ends_with_newline:
+            fh.write("\n")
+        fh.writelines(f"{n}={secrets.token_hex(10 if n.endswith('_ACCESS_KEY') else 32)}\n" for n in missing)
 PY
-fi
 
 cleanup() {
   if [[ -z "${KEEP_STACK:-}" ]]; then

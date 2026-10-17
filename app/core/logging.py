@@ -4,8 +4,18 @@ import structlog
 
 from app.core.redaction import RedactingFilter, redact_event_dict
 
+# The AWS SDK logs request parameters, which can include object bytes, at
+# DEBUG. These loggers stay at WARNING whatever the root level (Phase 3, P3-1).
+_AWS_SDK_LOGGERS = ("boto3", "botocore", "s3transfer", "urllib3")
+
+
+def quiet_aws_sdk_loggers() -> None:
+    for name in _AWS_SDK_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
 
 def configure_logging() -> None:
+    quiet_aws_sdk_loggers()
     structlog.configure(
         processors=[
             redact_event_dict,
