@@ -11,6 +11,7 @@ from app.application.catalogue.course_service import CourseService
 from app.application.content.asset_service import ContentAssetService
 from app.application.content.job_service import ContentIngestionJobService
 from app.application.content.source_service import ContentSourceService
+from app.application.content.upload import ContentAssetUploadService
 from app.application.curriculum.benchmark_service import (
     BenchmarkCurriculumService,
 )
@@ -37,6 +38,7 @@ from app.infrastructure.catalogue.unit_of_work import (
     CourseUnitOfWork,
     catalogue_unit_of_work,
 )
+from app.infrastructure.content.s3_object_storage import S3ObjectStorage
 from app.infrastructure.content.unit_of_work import (
     ContentUnitOfWork,
     content_unit_of_work,
@@ -89,6 +91,13 @@ def build_auth_throttle() -> AuthThrottle:
             mode=settings.auth_rate_limit_failure_mode,
         )
     )
+
+
+@functools.cache
+def document_storage() -> S3ObjectStorage:
+    """The document store (P3-1), built from settings on first use: an
+    unconfigured store fails the upload that needs it, not startup."""
+    return S3ObjectStorage.from_settings()
 
 
 @functools.cache
@@ -227,6 +236,15 @@ def build_container() -> Container:
         ContentAssetService(
             event_bus=event_bus,
             uow_factory=sqlalchemy_content_uow,
+        ),
+    )
+    container.register(
+        ContentAssetUploadService,
+        ContentAssetUploadService(
+            uow_factory=sqlalchemy_content_uow,
+            storage_factory=document_storage,
+            bucket=lambda: settings.object_storage_bucket,
+            event_bus=event_bus,
         ),
     )
     container.register(
