@@ -10,6 +10,12 @@ class ContentAssetRepository(Protocol):
     async def save_asset(self, asset: ContentAsset) -> ContentAsset:
         raise NotImplementedError
 
+    async def insert_asset(self, asset: ContentAsset) -> ContentAsset:
+        """Insert only: a row with the same id, or anything else violating a
+        constraint, fails at flush or commit instead of being updated.
+        Uploads depend on that for their idempotency contract."""
+        raise NotImplementedError
+
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         raise NotImplementedError
 
