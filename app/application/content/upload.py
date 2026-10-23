@@ -280,7 +280,8 @@ class ContentAssetUploadService:
         try:
             return self._storage_factory()
         except ObjectStorageError as exc:
-            raise UploadError("object storage is not configured", code="OBJECT_STORAGE_NOT_CONFIGURED", status_code=503) from exc
+            # An operator problem, not the client's: 500, with no Retry-After.
+            raise UploadError("object storage is not configured", code="OBJECT_STORAGE_NOT_CONFIGURED") from exc
 
     async def _existing(self, source_id: str, tenant_id: str, asset_id: str) -> ContentAsset | None:
         async with self._uow_factory() as uow:

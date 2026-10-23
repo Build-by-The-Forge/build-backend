@@ -159,7 +159,7 @@ async def test_unavailable_storage_is_503_with_retry_after(client, tenant_a, sto
     assert response.headers["Retry-After"] == "5"
 
 
-async def test_unconfigured_storage_is_503_and_needed_only_to_store(client, tenant_a, monkeypatch):
+async def test_unconfigured_storage_is_500_and_needed_only_to_store(client, tenant_a, monkeypatch):
     def unconfigured():
         raise ObjectStorageConfigurationError("no bucket")
 
@@ -169,5 +169,6 @@ async def test_unconfigured_storage_is_503_and_needed_only_to_store(client, tena
     response = upload(client, tenant_a, pdf(), key="k-unconfigured")
 
     assert refused.json()["error"]["code"] == "UNSUPPORTED_MEDIA_TYPE"
-    assert response.status_code == 503
+    assert response.status_code == 500
     assert response.json()["error"]["code"] == "OBJECT_STORAGE_NOT_CONFIGURED"
+    assert "Retry-After" not in response.headers
