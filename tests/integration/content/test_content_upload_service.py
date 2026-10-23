@@ -6,12 +6,10 @@ import hashlib
 import io
 import sys
 import uuid
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import pytest
 import structlog
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.application.content.upload import (
     SIGNATURE_BYTES,
@@ -39,7 +37,6 @@ from app.domain.content.storage import (
     ObjectStorageUnavailableError,
     StoredObject,
 )
-from app.infrastructure.content.unit_of_work import ContentUnitOfWork
 
 BUCKET = "build-documents"
 TENANT = "tenant-a"  # replaced per test by the tenant fixture
@@ -96,19 +93,6 @@ class FakeStorage:
         if self.delete_error is not None:
             raise self.delete_error
         self.objects.pop(key, None)
-
-
-@pytest.fixture
-def uow_factory(engine: AsyncEngine):
-    maker = async_sessionmaker(bind=engine, expire_on_commit=False)
-
-    @asynccontextmanager
-    async def factory() -> AsyncIterator[ContentUnitOfWork]:
-        async with maker() as session:
-            async with ContentUnitOfWork(session) as uow:
-                yield uow
-
-    return factory
 
 
 async def _source(uow_factory, *, tenant_id=None, visibility=VisibilityScope.TENANT, revoked=False):
