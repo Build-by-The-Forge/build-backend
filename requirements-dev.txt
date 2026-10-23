@@ -33,4 +33,4 @@ platformdirs==4.13.0
 pluggy==1.6.0
 Pygments==2.21.0
 python-discovery==1.6.2
-virtualenv==21.14.7
+virtualenv==21.14.9
