@@ -111,7 +111,7 @@ jobs:
         env:
           OBJECT_STORAGE_TESTS_REQUIRED: '1'
         run: |
-          pytest tests/infrastructure/content/test_s3_object_storage_real.py -q -rA -p no:cacheprovider | tee storage-tests.log
+          pytest tests/infrastructure/content/test_s3_object_storage_real.py             tests/integration/content/test_content_upload_real_storage.py             -q -rA -p no:cacheprovider | tee storage-tests.log
           if grep -qE '(^SKIPPED|[0-9]+ skipped)' storage-tests.log; then
             echo "::error::object-storage tests were skipped; they are required in this job"
             exit 1
