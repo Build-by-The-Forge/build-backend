@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.content.asset_schemas import (
@@ -9,15 +9,19 @@ from app.api.content.asset_schemas import (
     ContentAssetRevokeRequest,
     ContentAssetVersionRequest,
 )
+from app.api.content.upload_body import received_upload
 from app.application.content.asset_service import ContentAssetService
+from app.application.content.upload import ContentAssetUploadService, DuplicateContentError, UploadError
 from app.bootstrap.container import build_container
-from app.core.authorization import Permission
+from app.core.authorization import Permission, authorization
+from app.core.config import settings
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import AssetStatus, IngestionStatus
 
 router = APIRouter(prefix="", tags=["content-assets"])
 service = build_container().get(ContentAssetService)
+upload_service = build_container().get(ContentAssetUploadService)
 
 
 @router.post(
@@ -55,6 +59,54 @@ async def register_asset(
     resp_data = ContentAssetResponse.from_domain(asset, is_deduplicated=is_deduplicated).model_dump(mode="json")
     status_code = status.HTTP_200_OK if is_deduplicated else status.HTTP_201_CREATED
     return JSONResponse(status_code=status_code, content={"data": resp_data})
+
+
+@router.post(
+    "/sources/{source_id}/assets/upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ContentAssetResponse,
+)
+async def upload_asset(
+    source_id: str,
+    request: Request,
+    file_name: str | None = Query(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+) -> JSONResponse:
+    """Upload a document as the raw request body (docs/p3-1-pr2-upload-design.md).
+
+    ``file_name`` (percent-encoded query parameter) is a display name only.
+    Size, SHA-256 and type come from the bytes; the Content-Type header
+    decides nothing. ``Idempotency-Key`` is required: the same key and bytes
+    return the original asset (200).
+    """
+    try:
+        async with received_upload(
+            request,
+            max_bytes=settings.max_upload_bytes,
+            timeout_seconds=settings.upload_read_timeout_seconds,
+        ) as body:
+            result = await upload_service.upload(
+                source_id=source_id,
+                tenant_id=context.tenant_id,
+                user_id=context.user_id,
+                user_email=f"{context.user_id}@build.internal",
+                file_name=file_name,
+                idempotency_key=idempotency_key,
+                body=body,
+                correlation_id=getattr(request.state, "request_id", None),
+            )
+    except UploadError as exc:
+        error: dict[str, object] = {"code": exc.code, "message": str(exc)}
+        # The existing asset is named only to a caller who may read assets.
+        if isinstance(exc, DuplicateContentError) and authorization.can(context, Permission.CONTENT_ASSET_READ):
+            error["existing_asset_id"] = exc.existing_asset_id
+        headers = {"Retry-After": "5"} if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE else None
+        return JSONResponse(status_code=exc.status_code, content={"error": error}, headers=headers)
+
+    data = ContentAssetResponse.from_domain(result.asset).model_dump(mode="json")
+    status_code = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
+    return JSONResponse(status_code=status_code, content={"data": data})
 
 
 @router.get(

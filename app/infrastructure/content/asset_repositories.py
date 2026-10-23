@@ -31,6 +31,14 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         await self._session.flush()
         return content_asset_model_to_domain(model)
 
+    async def insert_asset(self, asset: ContentAsset) -> ContentAsset:
+        # Never a select-then-update: a concurrent insert of the same id must
+        # reach the database and fail on its primary key (P3-1 PR 2 uploads).
+        model = content_asset_to_model(asset)
+        self._session.add(model)
+        await self._session.flush()
+        return content_asset_model_to_domain(model)
+
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         stmt = select(ContentAssetModel).where(ContentAssetModel.id == asset_id)
         res = await self._session.execute(stmt)
