@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 import pytest
 import structlog
+from sqlalchemy.exc import IntegrityError
 
 from app.application.content.upload import (
     SIGNATURE_BYTES,
@@ -371,6 +372,53 @@ async def test_a_failed_compensation_is_logged_and_counted(uow_factory, failing_
     assert entry["error_code"] == "OBJECT_STORAGE_UNAVAILABLE"
     assert PDF.decode() not in repr(entry)
     assert len(storage.objects) == 1  # the orphan the metric reports
+
+
+def _unreadable_after_insert(uow_factory, insert_error: Exception):
+    """Units of work whose insert fails with ``insert_error``; every read
+    after that failure fails too (the database went away)."""
+    state = {"failed": False}
+
+    @asynccontextmanager
+    async def factory():
+        async with uow_factory() as uow:
+            if state["failed"]:
+                raise RuntimeError("database unreachable")
+
+            async def fail(_asset):
+                state["failed"] = True
+                raise insert_error
+
+            uow.assets.insert_asset = fail
+            yield uow
+
+    return factory
+
+
+@pytest.mark.parametrize(
+    ("insert_error", "reason"),
+    [
+        (RuntimeError("commit lost"), "commit_unverified"),
+        (IntegrityError("INSERT", {}, Exception("duplicate key")), "race_unresolved"),
+    ],
+)
+async def test_an_object_kept_because_no_row_can_be_read_is_logged_and_counted(uow_factory, storage, insert_error, reason):
+    """Whether a committed row uses the object is unknown, so it is kept
+    (never delete what may be in use) and reported as a possible orphan."""
+    source = await _source(uow_factory)
+    service = ContentAssetUploadService(
+        uow_factory=_unreadable_after_insert(uow_factory, insert_error), storage_factory=lambda: storage, bucket=lambda: BUCKET
+    )
+    counter = content_upload_orphaned_objects_total.labels(reason=reason)
+    before = counter._value.get()
+
+    with structlog.testing.capture_logs() as logs, pytest.raises(Exception):
+        await _upload(service, source, key=f"k-{reason}")
+
+    assert counter._value.get() == before + 1
+    entry = next(e for e in logs if e["event"] == "upload_compensation_skipped")
+    assert (entry["asset_id"], entry["reason"]) == (derive_asset_id(TENANT, source.id, f"k-{reason}"), reason)
+    assert len(storage.objects) == 1  # kept, and reported
 
 
 async def test_storage_unavailable_is_a_retryable_503_and_creates_no_asset(service, storage, uow_factory):

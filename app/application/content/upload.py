@@ -256,7 +256,12 @@ class ContentAssetUploadService:
             # is decided by what was committed, not by the error's text:
             # - a row with our id is a primary-key race on the same key;
             # - a row with our content is the (tenant, SHA-256) rule.
-            winner = await self._asset_by_id(asset_id)
+            try:
+                winner = await self._asset_by_id(asset_id)
+            except Exception:
+                # The winner is unknown, so the object may be its: keep it, reported.
+                self._report_kept_object(asset_id, correlation_id, "race_unresolved")
+                raise
             if winner is not None:
                 if winner.content_sha256 == body.sha256:
                     return UploadResult(winner, created=False)  # its object is ours: same key
@@ -268,7 +273,10 @@ class ContentAssetUploadService:
                 raise DuplicateContentError(same_content.id) from None
             raise
         except Exception:
-            if not await self._referenced(asset_id, body.sha256):
+            referenced = await self._referenced(asset_id, body.sha256)
+            if referenced is None:
+                self._report_kept_object(asset_id, correlation_id, "commit_unverified")
+            elif not referenced:
                 await self._compensate(storage, storage_key, asset_id, correlation_id, "commit_failed")
             raise
 
@@ -336,14 +344,14 @@ class ContentAssetUploadService:
         async with self._uow_factory() as uow:
             return await uow.assets.get_asset_by_hash(sha256, tenant_id)
 
-    async def _referenced(self, asset_id: str, sha256: str) -> bool:
+    async def _referenced(self, asset_id: str, sha256: str) -> bool | None:
         """Whether a committed row references the object we stored (same id
-        and SHA-256, hence the same key). Unknown counts as referenced: never
-        delete what might be in use."""
+        and SHA-256, hence the same key); None when that cannot be read.
+        Unknown is never deleted: it might be in use."""
         try:
             row = await self._asset_by_id(asset_id)
         except Exception:
-            return True
+            return None
         return row is not None and row.content_sha256 == sha256
 
     async def _compensate(
@@ -361,3 +369,10 @@ class ContentAssetUploadService:
                 reason=reason,
                 error_code=error_code,
             )
+
+    @staticmethod
+    def _report_kept_object(asset_id: str, correlation_id: str | None, reason: str) -> None:
+        """An object kept because whether a row references it could not be
+        read: possibly an orphan, so it reaches the same log and metric."""
+        content_upload_orphaned_objects_total.labels(reason=reason).inc()
+        logger.warning("upload_compensation_skipped", asset_id=asset_id, correlation_id=correlation_id, reason=reason)
