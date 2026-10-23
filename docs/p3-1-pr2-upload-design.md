@@ -56,22 +56,26 @@
 | New key, valid upload | **201 Created** | New row; object stored first |
 | Same key, same source, same payload | **200 OK**, the original asset | Same derived id; SHA-256 matches. The object's presence is checked (`head`); a missing object is re-stored from the identical bytes |
 | Same key reused with a different payload | **409 Conflict** (`IDEMPOTENCY_KEY_REUSED`) | Same id, different SHA-256. A different payload means a different object key, so nothing is overwritten; anything the losing request stored is deleted |
-| Same key, different source or tenant | Independent asset; never one from outside the caller's scope | Scope and source are part of the id derivation |
-| Concurrent requests with the same key | One logical asset; no duplicate rows | The database's primary key on `content_assets.id` refuses the second insert. The loser reads the winner: same SHA-256 gives 200, a different one gives 409 |
+| Same key, different source or tenant | Independent asset; never one from outside the caller's scope | Scope and source are part of the id derivation. Within the tenant, identical bytes are still duplicate content (next row) |
+| Different key, bytes the tenant already has (any source) | **409 Conflict** (`DUPLICATE_CONTENT`); `existing_asset_id` is included only when the caller holds `CONTENT_ASSET_READ` | The existing `UNIQUE (tenant_id, content_sha256)`, `uq_content_assets_tenant_hash` (migration 0016). Checked before anything is stored; nothing is stored |
+| Concurrent requests with the same key | One logical asset; no duplicate rows | The primary key on `content_assets.id` refuses the second insert. The loser reads the winner by id: same SHA-256 gives 200, a different one gives 409 `IDEMPOTENCY_KEY_REUSED` |
+| Concurrent requests with the same bytes under different keys | One asset; the loser gets 409 `DUPLICATE_CONTENT` | `uq_content_assets_tenant_hash` refuses the second insert. The loser finds no row with its id and reads the winner by hash |
 | Process crash after the object is stored, before the commit | A retry with the same key and bytes recovers: **201** | Same id and the same object key. Re-storing identical bytes is idempotent, and the commit then succeeds. No orphan |
 
 - **No success before both exist:** a successful response is returned only after the object is stored (SHA-256 verified by the adapter, and by the service through `x-amz-checksum-sha256`) and the row is committed.
-- **No content-hash deduplication** in the upload path. Identical bytes under two keys are two assets.
+- **Option A (decided in the PR 2 review): the existing tenant-wide hash constraint stays, and PR 2 adds no migration.** Identical bytes under two keys are one asset; the second upload is refused with `DUPLICATE_CONTENT`, never silently merged. A broader asset identity (per source, versions) is PR 3's decision.
+- **Insert-only persistence.** The upload inserts a new row (`insert_asset`); it never updates one. The existing `save_asset` selects then updates, so in a race it would overwrite the winner's row; the upload path does not use it.
+- **Classifying a lost race.** An `IntegrityError` on insert is classified from the committed rows, not from the error text: a row with our derived id is a primary-key collision (same key); otherwise a row with our SHA-256 in the tenant is a content collision (different key). Neither found: the error is re-raised, after compensation.
 - **Existing behaviour, flagged for PR 3:** `RegisterContentAssetHandler` (client-supplied `storage_uri`) returns any active asset with the same SHA-256 in the tenant, **even one from another source**. It also lets any tenant member with `CONTENT_ASSET_UPLOAD` add assets to a platform-scoped source. PR 3, which restricts that endpoint, decides both rules.
 
 ## 6. Order of operations, compensation and orphans
 
 1. Validate the request, source and scope. Stream, hash and detect the type.
-2. If the derived asset id exists: SHA-256 equal gives 200 (healing a missing object); different gives 409. Nothing more is stored.
+2. If the derived asset id exists: SHA-256 equal gives 200 (healing a missing object); different gives 409 `IDEMPOTENCY_KEY_REUSED`. Otherwise, if the tenant has an asset with this SHA-256: 409 `DUPLICATE_CONTENT`. Nothing more is stored.
 3. `put(key, bytes, expected_sha256=...)`.
 4. Insert the row and commit, then return 201.
 
-**Compensation.** If step 4 fails, the object is deleted, unless a committed row now references that same key. That happens when a concurrent request with the same key and payload won; its object is ours, so we answer 200.
+**Compensation.** If step 4 fails, the object is deleted, unless a committed row now references that same key. That happens when a concurrent request with the same key and payload won; its object is ours, so we answer 200. A loser with the same key and other bytes, or with the same bytes under another key, stored under its own object key, which no row references: it is deleted (`reason` `concurrent_key_reuse` or `concurrent_duplicate_content` if that delete fails).
 - **When compensation fails:** a structured warning is logged (correlation id, asset id, error code; never bytes, credentials or full URIs), and the counter `content_upload_orphaned_objects_total{reason}` is incremented.
 - **The response stays an error.** Tests prove that a persistence failure triggers compensation, and that a compensation failure is surfaced in the log and the metric.
 
@@ -87,7 +91,7 @@
 | 403 | No `CONTENT_ASSET_UPLOAD` permission; a platform-scoped source (`PLATFORM_SOURCE_UPLOAD_NOT_SUPPORTED`) |
 | 404 | No such source, or a source in another tenant (indistinguishable) |
 | 408 | The body was not read within `upload_read_timeout_seconds` |
-| 409 | `IDEMPOTENCY_KEY_REUSED`; revoked source |
+| 409 | `IDEMPOTENCY_KEY_REUSED`; `DUPLICATE_CONTENT`; revoked source |
 | 413 | Over `max_upload_bytes` (declared or counted) |
 | 415 | Unknown signature, or an extension that disagrees with it |
 | 503 | Object storage unavailable (retryable); the response says so |
@@ -102,7 +106,9 @@
 - temporary-file cleanup on every path;
 - id derivation and scope.
 
-**Application:** every row of the idempotency table, with a fake storage. That includes concurrency (two requests racing on one key, same and different payloads), compensation, a failed compensation reaching the log and the metric, and healing of a missing object.
+**Application:** every row of the idempotency table, with a fake storage. That includes concurrency (two requests racing on one key, same and different payloads, and on the same bytes under two keys), compensation, a failed compensation reaching the log and the metric, and healing of a missing object.
+
+**PostgreSQL (`pg_smoke`, in `postgres-gate`):** the three races run for real against the migrated schema. Both requests are held inside `put` until each has passed the pre-checks, so the constraints decide; the loser is classified correctly and leaves no object.
 
 **API:** status codes, the 1 MiB limit unchanged on other routes, and permission and scope.
 
@@ -113,6 +119,7 @@
 ## 9. Out of scope
 
 - Restricting the client-supplied `storage_uri` registration, and its hash deduplication: PR 3.
+- A broader asset identity (per-source or versioned assets, and whether `uq_content_assets_tenant_hash` should change): PR 3.
 - AI-service fetching: PR 4.
 - Orphan reconciliation: P3-6, tracked.
 - Asset versions by upload: a follow-up, using the same mechanism.
