@@ -101,6 +101,11 @@ class Settings(BaseSettings):
     object_storage_connect_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     object_storage_read_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     object_storage_max_attempts: int = Field(default=3, ge=1, le=10)
+    # Document uploads (P3-1 PR 2, docs/p3-1-pr2-upload-design.md). The size
+    # limit applies to the upload route only; every other route keeps
+    # max_request_body_bytes. Out-of-range values fail validation at startup.
+    max_upload_bytes: int = Field(default=25 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    upload_read_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
