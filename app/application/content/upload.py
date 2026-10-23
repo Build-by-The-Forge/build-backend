@@ -100,6 +100,16 @@ class UploadStorageUnavailableError(UploadError):
     code = "OBJECT_STORAGE_UNAVAILABLE"
 
 
+class UploadTooLargeError(UploadError):
+    status_code = 413
+    code = "UPLOAD_TOO_LARGE"
+
+
+class UploadReadTimeoutError(UploadError):
+    status_code = 408
+    code = "UPLOAD_READ_TIMEOUT"
+
+
 class DuplicateContentError(UploadError):
     """The tenant already has an asset with these exact bytes: the database
     keeps one asset per (tenant, SHA-256), uq_content_assets_tenant_hash.
@@ -211,9 +221,11 @@ class ContentAssetUploadService:
 
         asset_id = derive_asset_id(tenant_id, source_id, key)
         storage_key = object_key(tenant_id, asset_id, body.sha256)
-        storage = self._storage_factory()
 
         existing = await self._existing(source_id, tenant_id, asset_id)
+        # The storage client is created only once it is needed: a request
+        # refused above never depends on storage configuration.
+        storage = self._storage()
         if existing is not None:
             return await self._replay(existing, body, storage, storage_key)
         same_content = await self._asset_by_hash(body.sha256, tenant_id)
@@ -263,6 +275,12 @@ class ContentAssetUploadService:
         if events:
             self._event_bus.publish_all(events)
         return UploadResult(saved, created=True)
+
+    def _storage(self) -> ObjectStorage:
+        try:
+            return self._storage_factory()
+        except ObjectStorageError as exc:
+            raise UploadError("object storage is not configured", code="OBJECT_STORAGE_NOT_CONFIGURED", status_code=503) from exc
 
     async def _existing(self, source_id: str, tenant_id: str, asset_id: str) -> ContentAsset | None:
         async with self._uow_factory() as uow:
