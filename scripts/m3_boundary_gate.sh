@@ -101,6 +101,10 @@ scripts/check_backend_image.sh build-m3-backend || status=$?
 
 "${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down" || status=$?
 
+# Storage secret keys: in no image layer or configuration, and in no log
+# written by the run so far.
+scripts/check_storage_secrets.sh || status=$?
+
 echo "C11: stopping redis"
 "${COMPOSE[@]}" stop redis
 "${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m redis_down || status=$?
