@@ -44,6 +44,7 @@ DISPATCH_FIELDS = {
     "idempotency_key",
     "mime_type",
     "content_sha256",
+    "file_size_bytes",
     "storage_uri",
     "correlation_id",
 }

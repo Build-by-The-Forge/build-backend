@@ -106,6 +106,9 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
                 "idempotency_key": f"{job.id}-r{job.run_number}-a{job.attempt_count}",
                 "mime_type": mime_val,
                 "content_sha256": asset.content_sha256,
+                # The AI-service verifies the fetched object's size as well
+                # as its SHA-256 (ai-service P3-1 PR 4).
+                "file_size_bytes": asset.file_size_bytes,
                 "storage_uri": asset.storage_uri,
                 "correlation_id": correlation_id,
             },
