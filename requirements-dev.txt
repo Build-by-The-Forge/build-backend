@@ -21,7 +21,7 @@ cfgv==3.5.0
 colorama==0.4.6; sys_platform == "win32"
 coverage==7.16.2
 distlib==0.4.3
-filelock==4.1.1
+filelock==4.2.1
 identify==2.6.20
 iniconfig==2.3.1
 librt==0.16.0
@@ -33,4 +33,4 @@ platformdirs==4.13.0
 pluggy==1.6.0
 Pygments==2.21.0
 python-discovery==1.6.2
-virtualenv==21.14.9
+virtualenv==21.14.10
