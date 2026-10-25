@@ -18,6 +18,16 @@ from app.domain.content.source import ContentSource
 router = APIRouter(prefix="/sources", tags=["content-sources"])
 service = build_container().get(ContentSourceService)
 
+# No platform-administrator path exists yet (P3-1 PR 3a): every route here
+# runs in a tenant context, and a tenant member must not create or change
+# what every tenant sees. Platform sources stay readable.
+PLATFORM_WRITE_REFUSED = "platform content sources cannot be created or changed from a tenant"
+
+
+def _refuse_platform_write(source: ContentSource) -> None:
+    if source.visibility == VisibilityScope.PLATFORM:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
+
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_source(
@@ -25,8 +35,9 @@ async def create_source(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
-    # If platform scope requested, ensure caller is platform admin (tenant_id is None or system admin)
-    tenant_id = None if payload.visibility == VisibilityScope.PLATFORM.value else context.tenant_id
+    if payload.visibility == VisibilityScope.PLATFORM.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
+    tenant_id = context.tenant_id
 
     try:
         source = await service.register_source(
@@ -149,6 +160,7 @@ async def update_source(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot update content source outside tenant scope",
         )
+    _refuse_platform_write(source)
 
     try:
         updated = await service.update_source(
@@ -191,6 +203,7 @@ async def deprecate_source(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot manage content source outside tenant scope",
         )
+    _refuse_platform_write(source)
 
     try:
         updated = await service.deprecate_source(source_id=source_id, reason=payload.reason)
@@ -224,6 +237,7 @@ async def revoke_source(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot manage content source outside tenant scope",
         )
+    _refuse_platform_write(source)
 
     try:
         updated = await service.revoke_source(source_id=source_id, reason=payload.reason)
@@ -256,6 +270,7 @@ async def activate_source(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot manage content source outside tenant scope",
         )
+    _refuse_platform_write(source)
 
     updated = await service.activate_source(source_id=source_id)
 
