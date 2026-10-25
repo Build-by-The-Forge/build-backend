@@ -33,6 +33,7 @@ class CreateAssetVersionCommand:
     created_by_email: str
     metadata: dict[str, Any] = field(default_factory=dict)
     asset_id: str | None = None
+    tenant_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

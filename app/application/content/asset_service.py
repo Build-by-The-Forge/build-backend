@@ -85,6 +85,7 @@ class ContentAssetService:
         created_by_email: str,
         metadata: dict[str, Any] | None = None,
         asset_id: str | None = None,
+        tenant_id: str | None = None,
     ) -> ContentAsset:
         cmd = CreateAssetVersionCommand(
             parent_asset_id=parent_asset_id,
@@ -97,6 +98,7 @@ class ContentAssetService:
             created_by_email=created_by_email,
             metadata=metadata or {},
             asset_id=asset_id,
+            tenant_id=tenant_id,
         )
 
         if self._uow_factory is not None:

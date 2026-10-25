@@ -10,6 +10,7 @@ from app.api.content.asset_schemas import (
     ContentAssetVersionRequest,
 )
 from app.api.content.upload_body import received_upload
+from app.application.content.access import ContentAccessError
 from app.application.content.asset_service import ContentAssetService
 from app.application.content.upload import ContentAssetUploadService, DuplicateContentError, UploadError
 from app.bootstrap.container import build_container
@@ -22,6 +23,12 @@ from app.domain.content.enums import AssetStatus, IngestionStatus
 router = APIRouter(prefix="", tags=["content-assets"])
 service = build_container().get(ContentAssetService)
 upload_service = build_container().get(ContentAssetUploadService)
+
+
+def _access_refused(exc: ContentAccessError) -> JSONResponse:
+    """A refused write, by class: 404 for content outside the caller's
+    tenant, 403 for platform content (app/application/content/access.py)."""
+    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": str(exc)}})
 
 
 @router.post(
@@ -48,6 +55,8 @@ async def register_asset(
             tenant_id=context.tenant_id,
             metadata=payload.metadata,
         )
+    except ContentAccessError as exc:
+        return _access_refused(exc)
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
@@ -207,7 +216,10 @@ async def create_asset_version(
             created_by=context.user_id,
             created_by_email=f"{context.user_id}@build.internal",
             metadata=payload.metadata,
+            tenant_id=context.tenant_id,
         )
+    except ContentAccessError as exc:
+        return _access_refused(exc)
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
@@ -237,6 +249,8 @@ async def revoke_asset(
             revoked_by=context.user_id,
             tenant_id=context.tenant_id,
         )
+    except ContentAccessError as exc:
+        return _access_refused(exc)
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = (

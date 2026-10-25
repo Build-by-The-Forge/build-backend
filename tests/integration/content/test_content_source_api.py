@@ -4,12 +4,33 @@ from uuid import uuid4
 import pytest
 
 from app.db.session import SessionLocal
+from app.domain.content.enums import AuthorityLevel, ContentSourceType, VisibilityScope
+from app.domain.content.source import ContentSource
+from app.infrastructure.content.unit_of_work import ContentUnitOfWork
 from app.infrastructure.db.models.tenant_core import MembershipModel
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
     seed_tenant_context,
 )
+
+
+async def seed_platform_source(code: str) -> str:
+    """A platform source written at system level: no HTTP route may create
+    one from a tenant (P3-1 PR 3a)."""
+    source = ContentSource.create(
+        code=code,
+        name="NUC CCMAS Computer Science",
+        source_type=ContentSourceType.CCMAS,
+        authority_level=AuthorityLevel.REGULATORY,
+        visibility=VisibilityScope.PLATFORM,
+        created_by="system",
+        created_by_email="system@build.internal",
+    )
+    async with SessionLocal() as session:
+        async with ContentUnitOfWork(session) as uow:
+            await uow.sources.save_source(source)
+    return source.id
 
 
 async def add_membership(user_id: str, tenant_id: str, role: str) -> None:
@@ -65,7 +86,9 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
     )
     assert student_create.status_code == 403
 
-    # 6. Admin creates platform-wide regulatory source -> 201 Created
+    # 6. A tenant admin cannot create a platform-wide source -> 403 (P3-1
+    # PR 3a: platform content is not writable from a tenant). The platform
+    # source the steps below read is seeded as a system-level write.
     reg_code = f"CCMAS_CS_{uuid4().hex[:6].upper()}"
     reg_create = client.post(
         "/content/sources",
@@ -80,13 +103,8 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
             "description": "National benchmark curriculum",
         },
     )
-    assert reg_create.status_code == 201, reg_create.text
-    reg_data = reg_create.json()["data"]
-    reg_source_id = reg_data["id"]
-    assert reg_data["code"] == reg_code
-    assert reg_data["authority_level"] == "regulatory"
-    assert reg_data["visibility"] == "platform"
-    assert reg_data["status"] == "active"
+    assert reg_create.status_code == 403, reg_create.text
+    reg_source_id = await seed_platform_source(reg_code)
 
     # 7. Lecturer creates tenant-scoped institutional source -> 201 Created
     inst_code = f"CSC201_NOTES_{uuid4().hex[:6].upper()}"
