@@ -24,6 +24,7 @@ from app.domain.content.gateway import AIServiceDispatchResult, IngestionDispatc
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
+from tests.application.content.managed_storage import BUCKET, OBJECTS, managed
 from tests.application.content.test_job_handlers import FakeContentUnitOfWork
 
 
@@ -84,15 +85,16 @@ async def test_dispatch_ingestion_handler() -> None:
         created_by="usr-1",
         created_by_email="u@example.com",
     )
+    managed(asset)
     await uow.assets.save_asset(asset)
 
     # 1. Create job
-    create_handler = CreateIngestionJobHandler(uow, bus)
+    create_handler = CreateIngestionJobHandler(uow, bus, bucket=BUCKET)
     job = await create_handler.handle(CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1"))
     assert job.status == IngestionStatus.QUEUED
 
     # 2. Dispatch job
-    dispatch_handler = DispatchIngestionJobHandler(uow, gateway, bus)
+    dispatch_handler = DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET)
     dispatched_job = await dispatch_handler.handle(dispatch_cmd(job.id))
 
     assert dispatched_job.status == IngestionStatus.PROCESSING
@@ -141,11 +143,12 @@ async def test_ai_callback_pipeline_progression_and_idempotency() -> None:
         created_by="usr-1",
         created_by_email="u@example.com",
     )
+    managed(asset)
     await uow.assets.save_asset(asset)
 
-    create_handler = CreateIngestionJobHandler(uow, bus)
+    create_handler = CreateIngestionJobHandler(uow, bus, bucket=BUCKET)
     job = await create_handler.handle(CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1"))
-    await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
+    await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
 
     callback_handler = HandleAICallbackHandler(uow, bus)
 
@@ -259,6 +262,7 @@ async def test_stale_attempt_protection() -> None:
         created_by="usr-1",
         created_by_email="u@example.com",
     )
+    managed(asset)
     await uow.assets.save_asset(asset)
 
     # Create Job and retry it -> attempt_count becomes 2
@@ -310,7 +314,7 @@ async def test_dispatch_of_another_tenants_or_platform_job_is_refused(job_tenant
     await uow.jobs.save_job(job)
 
     with pytest.raises(ValueError, match="does not exist"):
-        await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
+        await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
 
     assert gateway.dispatched_jobs == []
     assert job.status == IngestionStatus.QUEUED
@@ -336,6 +340,7 @@ async def test_failed_dispatch_is_recorded_not_raised(retryable) -> None:
         created_by="usr-1",
         created_by_email="u@example.com",
     )
+    managed(asset)
     await uow.assets.save_asset(asset)
     source = ContentSource.create(
         code="SRC_X",
@@ -351,7 +356,9 @@ async def test_failed_dispatch_is_recorded_not_raised(retryable) -> None:
     job.queue()
     await uow.jobs.save_job(job)
 
-    result = await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
+    result = await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle(
+        dispatch_cmd(job.id)
+    )
 
     assert result.status == IngestionStatus.FAILED
     assert (result.error_code, result.is_retryable) == ("AI_SERVICE_UNAVAILABLE", retryable)
@@ -484,6 +491,7 @@ async def test_a_retried_job_is_not_dispatched_before_its_delay() -> None:
         created_by="usr-1",
         created_by_email="u@example.com",
     )
+    managed(asset)
     await uow.assets.save_asset(asset)
     job = ContentIngestionJob.create(asset_id=asset.id, source_id=source.id, tenant_id="tenant-1", created_by="usr-1")
     job.queue()
@@ -493,7 +501,7 @@ async def test_a_retried_job_is_not_dispatched_before_its_delay() -> None:
     await uow.jobs.save_job(job)
 
     with pytest.raises(RetryNotDue):
-        await DispatchIngestionJobHandler(uow, gateway, bus).handle(dispatch_cmd(job.id))
+        await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
     assert gateway.dispatched_jobs == []
     assert job.status == IngestionStatus.QUEUED
 

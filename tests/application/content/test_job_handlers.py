@@ -25,6 +25,7 @@ from app.domain.content.ingestion_event import IngestionEventRecord
 from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
+from tests.application.content.managed_storage import BUCKET, managed
 
 
 class InMemoryContentSourceRepo:
@@ -203,12 +204,13 @@ async def _asset(uow, tenant_id="tenant-1") -> ContentAsset:
         created_by_email="usr-1@example.com",
         tenant_id=tenant_id,
     )
+    managed(asset)
     await uow.assets.save_asset(asset)
     return asset
 
 
 async def _job(uow, bus, asset, tenant_id="tenant-1", **kwargs) -> ContentIngestionJob:
-    return await CreateIngestionJobHandler(uow, bus).handle(
+    return await CreateIngestionJobHandler(uow, bus, bucket=BUCKET).handle(
         CreateIngestionJobCommand(asset_id=asset.id, tenant_id=tenant_id, created_by="usr-1", **kwargs)
     )
 
@@ -280,7 +282,7 @@ async def test_reprocess_asset_starts_a_new_run() -> None:
     asset = await _asset(uow)
     _to_ready(await _job(uow, bus, asset))
 
-    new_job = await ReprocessAssetHandler(uow, bus).handle(
+    new_job = await ReprocessAssetHandler(uow, bus, bucket=BUCKET).handle(
         ReprocessAssetCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-admin")
     )
 
@@ -295,7 +297,7 @@ async def test_reprocess_of_another_tenants_or_platform_asset_is_refused(asset_t
     asset = await _asset(uow, tenant_id=asset_tenant)
 
     with pytest.raises(ValueError, match="does not exist"):
-        await ReprocessAssetHandler(uow, bus).handle(
+        await ReprocessAssetHandler(uow, bus, bucket=BUCKET).handle(
             ReprocessAssetCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-admin")
         )
     assert uow.jobs.jobs == {}

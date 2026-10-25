@@ -24,13 +24,16 @@ def uow_factory(engine: AsyncEngine):
 
 @pytest.fixture(autouse=True)
 def managed_storage(monkeypatch) -> InMemoryStorage:
-    """An in-memory object store behind the upload service, with a
-    configured bucket: assets are created through the upload endpoint
-    (P3-1 PR 3b). Tests that need their own store patch over this one."""
+    """One in-memory object store behind both the upload service and the
+    dispatch check, with a configured bucket: assets are created through the
+    upload endpoint and only managed objects are dispatched (P3-1 PR 3b).
+    Tests that need their own store patch over this one."""
     from app.api.content import assets as assets_api
+    from app.api.content import jobs as jobs_api
     from app.core.config import settings
 
     storage = InMemoryStorage()
     monkeypatch.setattr(settings, "object_storage_bucket", BUCKET)
     monkeypatch.setattr(assets_api.upload_service, "_storage_factory", lambda: storage)
+    monkeypatch.setattr(jobs_api.service, "_storage_factory", lambda: storage)
     return storage

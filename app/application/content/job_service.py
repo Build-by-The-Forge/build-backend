@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from app.application.common.uow import ContentUnitOfWorkFactory, ContentUnitOfWorkPort
@@ -27,11 +28,14 @@ from app.application.content.job_handlers import (
     RetryIngestionJobHandler,
 )
 from app.application.identity.ports.security_events import SecurityEventRecorder
+from app.core.config import settings
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import AIServiceIngestionGateway
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob
+from app.domain.content.storage import ObjectStorage
 from app.events.event_bus import EventBus
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
+from app.infrastructure.content.s3_object_storage import S3ObjectStorage
 
 
 class ContentIngestionJobService:
@@ -42,12 +46,19 @@ class ContentIngestionJobService:
         uow_factory: ContentUnitOfWorkFactory | None = None,
         gateway: AIServiceIngestionGateway | None = None,
         security_events: SecurityEventRecorder | None = None,
+        storage_factory: Callable[[], ObjectStorage] | None = None,
+        bucket: Callable[[], str] | None = None,
     ) -> None:
         self._uow = uow
         self._event_bus = event_bus or EventBus()
         self._uow_factory = uow_factory
         self._gateway = gateway or HttpAIServiceIngestionGateway()
         self._security_events = security_events
+        # Only assets in managed storage are queued or dispatched, and the
+        # object is checked before dispatch (design section 10). Defaults are
+        # the configured storage, built when first needed, never "no check".
+        self._storage_factory = storage_factory or S3ObjectStorage.from_settings
+        self._bucket = bucket or (lambda: settings.object_storage_bucket)
 
     async def create_job(
         self,
@@ -68,10 +79,10 @@ class ContentIngestionJobService:
         )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await CreateIngestionJobHandler(uow, self._event_bus).handle(cmd)
+                return await CreateIngestionJobHandler(uow, self._event_bus, bucket=self._bucket()).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await CreateIngestionJobHandler(self._uow, self._event_bus).handle(cmd)
+        return await CreateIngestionJobHandler(self._uow, self._event_bus, bucket=self._bucket()).handle(cmd)
 
     async def retry_job(self, job_id: str, tenant_id: str, delay_seconds: int = 30) -> ContentIngestionJob:
         cmd = RetryIngestionJobCommand(job_id=job_id, tenant_id=tenant_id, delay_seconds=delay_seconds)
@@ -97,10 +108,10 @@ class ContentIngestionJobService:
         )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await ReprocessAssetHandler(uow, self._event_bus).handle(cmd)
+                return await ReprocessAssetHandler(uow, self._event_bus, bucket=self._bucket()).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await ReprocessAssetHandler(self._uow, self._event_bus).handle(cmd)
+        return await ReprocessAssetHandler(self._uow, self._event_bus, bucket=self._bucket()).handle(cmd)
 
     async def dispatch_job(
         self,
@@ -121,10 +132,15 @@ class ContentIngestionJobService:
         )
         if self._uow_factory is not None:
             async with self._uow_factory() as uow:
-                return await DispatchIngestionJobHandler(uow, self._gateway, self._event_bus).handle(cmd)
+                return await self._dispatch_handler(uow).handle(cmd)
         if self._uow is None:
             raise RuntimeError("ContentIngestionJobService requires uow or uow_factory")
-        return await DispatchIngestionJobHandler(self._uow, self._gateway, self._event_bus).handle(cmd)
+        return await self._dispatch_handler(self._uow).handle(cmd)
+
+    def _dispatch_handler(self, uow: ContentUnitOfWorkPort) -> DispatchIngestionJobHandler:
+        return DispatchIngestionJobHandler(
+            uow, self._gateway, self._event_bus, storage=self._storage_factory, bucket=self._bucket()
+        )
 
     async def handle_callback(
         self,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -15,6 +16,7 @@ from app.application.content.job_commands import (
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
 )
+from app.application.content.upload import managed_storage_key
 from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
@@ -33,6 +35,12 @@ from app.domain.content.job import (
     InvalidJobTransition,
     InvalidStageEvidence,
 )
+from app.domain.content.storage import (
+    ObjectNotFoundError,
+    ObjectStorage,
+    ObjectStorageError,
+    ObjectStorageUnavailableError,
+)
 from app.events.event_bus import EventBus
 
 
@@ -47,6 +55,24 @@ def owned_job(job: ContentIngestionJob | None, tenant_id: str, job_id: str) -> C
     return job
 
 
+class UnmanagedAssetError(ValueError):
+    """The asset's storage_uri is not the server-managed reference for its
+    row (design section 10): it is never queued or sent to the AI-service."""
+
+    code = "ASSET_NOT_IN_MANAGED_STORAGE"
+
+
+def require_managed_storage(asset: ContentAsset, bucket: str) -> str:
+    key = managed_storage_key(asset, bucket)
+    if key is None:
+        raise UnmanagedAssetError("the asset is not in managed storage, so it cannot be processed; upload it instead")
+    return key
+
+
+# Dispatch refusals about the asset itself; they are not AI-service errors.
+ASSET_DISPATCH_REFUSALS = frozenset({"ASSET_NOT_IN_MANAGED_STORAGE", "ASSET_OBJECT_MISSING", "ASSET_OBJECT_MISMATCH"})
+
+
 def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> ContentAsset:
     if asset is None or asset.tenant_id is None or asset.tenant_id != tenant_id:
         raise ValueError(f"ContentAsset with id '{asset_id}' does not exist")
@@ -54,12 +80,14 @@ def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> Co
 
 
 class CreateIngestionJobHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
+    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None, *, bucket: str) -> None:
         self._uow = uow
         self._event_bus = event_bus
+        self._bucket = bucket
 
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
+        require_managed_storage(asset, self._bucket)
 
         job = ContentIngestionJob.create(
             asset_id=asset.id,
@@ -112,12 +140,14 @@ class RetryIngestionJobHandler:
 
 
 class ReprocessAssetHandler:
-    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None) -> None:
+    def __init__(self, uow: ContentUnitOfWorkPort, event_bus: EventBus | None = None, *, bucket: str) -> None:
         self._uow = uow
         self._event_bus = event_bus
+        self._bucket = bucket
 
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
+        require_managed_storage(asset, self._bucket)
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
         if latest_job is not None:
@@ -154,10 +184,36 @@ class DispatchIngestionJobHandler:
         uow: ContentUnitOfWorkPort,
         gateway: AIServiceIngestionGateway,
         event_bus: EventBus | None = None,
+        *,
+        storage: Callable[[], ObjectStorage],
+        bucket: str,
     ) -> None:
         self._uow = uow
         self._gateway = gateway
         self._event_bus = event_bus
+        # Required, with no default: no configuration dispatches an asset
+        # whose object was not checked (design section 10).
+        self._storage = storage
+        self._bucket = bucket
+
+    async def _object_refusal(self, asset: ContentAsset) -> tuple[str, str, bool] | None:
+        """Why the asset must not reach the AI-service, as (code, message,
+        retryable), or None when its managed object exists and matches."""
+        key = managed_storage_key(asset, self._bucket)
+        if key is None:
+            return ("ASSET_NOT_IN_MANAGED_STORAGE", "the asset is not in managed storage", False)
+        try:
+            info = await self._storage().head(key)
+        except ObjectNotFoundError:
+            return ("ASSET_OBJECT_MISSING", "the asset's stored object does not exist", False)
+        except ObjectStorageUnavailableError:
+            return ("OBJECT_STORAGE_UNAVAILABLE", "object storage is unavailable; retry later", True)
+        except ObjectStorageError as exc:
+            code = getattr(exc, "error_code", "OBJECT_STORAGE_FAILURE")
+            return (code, "the asset's stored object could not be checked", True)
+        if info.size_bytes != asset.file_size_bytes or (info.sha256 is not None and info.sha256 != asset.content_sha256):
+            return ("ASSET_OBJECT_MISMATCH", "the asset's stored object does not match its recorded size or SHA-256", False)
+        return None
 
     async def handle(self, cmd: DispatchIngestionJobCommand) -> ContentIngestionJob:
         job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
@@ -185,6 +241,12 @@ class DispatchIngestionJobHandler:
         # else is refused before AI-service is contacted.
         job.ensure_dispatchable()
 
+        # Only a managed, existing, matching object reaches the AI-service.
+        refusal = await self._object_refusal(asset)
+        if refusal is not None:
+            code, message, retryable = refusal
+            return await self._record_dispatch_failure(job, asset, code, message, retryable)
+
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
                 job=job,
@@ -195,27 +257,13 @@ class DispatchIngestionJobHandler:
             job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
         except Exception as exc:
-            error_code = getattr(exc, "error_code", "AI_DISPATCH_FAILED")
-            is_retryable = getattr(exc, "is_retryable", True)
-            job.fail_dispatch(
-                error_code=error_code,
-                error_message=str(exc),
-                is_retryable=is_retryable,
+            return await self._record_dispatch_failure(
+                job,
+                asset,
+                getattr(exc, "error_code", "AI_DISPATCH_FAILED"),
+                str(exc),
+                getattr(exc, "is_retryable", True),
             )
-            asset.update_ingestion_status(
-                IngestionStatus.FAILED,
-                error_code=error_code,
-                error_message=str(exc),
-            )
-            # queued -> failed is a recorded business outcome, not an error to
-            # roll back: return normally so the unit of work commits it, and
-            # let the caller report the failure from the job's state.
-            saved_failed = await self._uow.jobs.save_job(job)
-            await self._uow.assets.save_asset(asset)
-            failure_events = job.pull_events() + asset.pull_events()
-            if self._event_bus and failure_events:
-                self._event_bus.publish_all(failure_events)
-            return saved_failed
 
         job_events = job.pull_events()
         asset_events = asset.pull_events()
@@ -228,6 +276,21 @@ class DispatchIngestionJobHandler:
             self._event_bus.publish_all(all_events)
 
         return saved_job
+
+    async def _record_dispatch_failure(
+        self, job: ContentIngestionJob, asset: ContentAsset, error_code: str, message: str, retryable: bool
+    ) -> ContentIngestionJob:
+        job.fail_dispatch(error_code=error_code, error_message=message, is_retryable=retryable)
+        asset.update_ingestion_status(IngestionStatus.FAILED, error_code=error_code, error_message=message)
+        # queued -> failed is a recorded business outcome, not an error to
+        # roll back: return normally so the unit of work commits it, and
+        # let the caller report the failure from the job's state.
+        saved_failed = await self._uow.jobs.save_job(job)
+        await self._uow.assets.save_asset(asset)
+        failure_events = job.pull_events() + asset.pull_events()
+        if self._event_bus and failure_events:
+            self._event_bus.publish_all(failure_events)
+        return saved_failed
 
 
 class HandleAICallbackHandler:
