@@ -1,6 +1,6 @@
 # P3-1 PR 3 — asset registration and identity: design (proposed)
 
-Status: **approved** (decisions in section 8). PR 3a, the authorization fixes F1, F2 and F6, merged as #20 (`9c9fe90`). This document now governs PR 3b.
+Status: **approved** (decisions in section 8). PR 3a, the authorization fixes F1, F2 and F6, merged as #20 (`9c9fe90`). This document governed PR 3b; section 11 maps its acceptance criteria to the implementation.
 
 PR 2 added `POST /content/sources/{id}/assets/upload`. It is server-generated identity over verified bytes, with an explicit duplicate-content rule (`docs/p3-1-pr2-upload-design.md`). PR 3 makes every other way of creating or changing an asset obey the same trust boundary and identity policy, so that no older path can bypass them.
 
@@ -257,3 +257,16 @@ A retry can never create a second version of the same parent, because a key belo
   - Unavailable storage is a retryable failure (`OBJECT_STORAGE_UNAVAILABLE`), as an unavailable AI-service already is.
   - The object check is a required dependency of the dispatch handler; there is no configuration that skips it.
 - PR 4 verifies the bytes again when the AI-service fetches them.
+
+## 11. Implementation (PR 3b)
+
+| Acceptance criterion | Where it is enforced | Proof |
+|---|---|---|
+| Legacy registration and version routes cannot mutate assets; documented 410 | `app/api/content/assets.py` (bodies never read); handlers, commands, service methods and schemas removed | `test_the_retired_routes_answer_410_and_create_nothing` |
+| Upload is the only asset-creation path | `ContentAssetUploadService.upload` / `upload_version` are the only creators | the full suite creates every asset by upload |
+| Cross-tenant and platform authorization stays green | `ensure_tenant_may_write`; `_visible_source` (404 for another tenant's source) | `test_content_authorization_api.py` (PR 3a cases on the new routes, plus source 404s) |
+| A failed replacement leaves the old version current | supersede and insert in one transaction | `test_storage_failure_leaves_the_parent_current`, `test_a_failed_insert_rolls_the_supersede_back_and_removes_the_object` |
+| Concurrent versions are consistent | conditional `UPDATE … WHERE status='active'` under the row lock | `pg_smoke/test_content_version_race.py` (two versions, the same request twice, revoke during store) |
+| A retry after an ambiguous failure never transitions twice | child id from tenant, parent and key | `test_a_retry_returns_the_same_version_and_never_supersedes_twice`; the pg race of a request with itself |
+| Untrusted or inconsistent storage references cannot reach the AI-service | `managed_storage_key`; job creation and reprocess refuse; dispatch `head`s and checks size and SHA-256 | `test_dispatch_storage_gate.py`, `test_content_dispatch_boundary_api.py` (the gateway is asserted never called) |
+| The boundary gate uses the upload endpoint and real object storage | `boundary/conftest.py` uploads to the m3 stack's SeaweedFS | the hosted boundary gate |
