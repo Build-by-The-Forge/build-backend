@@ -99,9 +99,13 @@ if settings.cors_origins:
 app.add_middleware(
     RequestBodyLimitMiddleware,
     max_body_bytes=settings.max_request_body_bytes,
-    # Document uploads (P3-1 PR 2) take up to max_upload_bytes; every other
+    # Document uploads and version uploads (P3-1 PR 2, PR 3b) take up to
+    # max_upload_bytes; every other
     # route keeps max_request_body_bytes.
-    route_limits=[RouteBodyLimit("POST", r"/content/sources/[^/]+/assets/upload", settings.max_upload_bytes)],
+    route_limits=[
+        RouteBodyLimit("POST", r"/content/sources/[^/]+/assets/upload", settings.max_upload_bytes),
+        RouteBodyLimit("POST", r"/content/assets/[^/]+/versions/upload", settings.max_upload_bytes),
+    ],
 )
 app.include_router(health_router)
 app.include_router(api_router)

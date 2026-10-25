@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.responses import JSONResponse
 
@@ -12,7 +14,13 @@ from app.api.content.asset_schemas import (
 from app.api.content.upload_body import received_upload
 from app.application.content.access import ContentAccessError
 from app.application.content.asset_service import ContentAssetService
-from app.application.content.upload import ContentAssetUploadService, DuplicateContentError, UploadError
+from app.application.content.upload import (
+    ContentAssetUploadService,
+    DuplicateContentError,
+    UploadedBody,
+    UploadError,
+    UploadResult,
+)
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
@@ -89,22 +97,69 @@ async def upload_asset(
     decides nothing. ``Idempotency-Key`` is required: the same key and bytes
     return the original asset (200).
     """
+    return await _receive_upload(
+        request,
+        context,
+        lambda body: upload_service.upload(
+            source_id=source_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            user_email=f"{context.user_id}@build.internal",
+            file_name=file_name,
+            idempotency_key=idempotency_key,
+            body=body,
+            correlation_id=getattr(request.state, "request_id", None),
+        ),
+    )
+
+
+@router.post(
+    "/assets/{asset_id}/versions/upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ContentAssetResponse,
+)
+async def upload_asset_version(
+    asset_id: str,
+    request: Request,
+    file_name: str | None = Query(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+) -> JSONResponse:
+    """A new version of an asset from uploaded bytes (P3-1 PR 3b, design
+    section 9). The asset must be the caller's tenant's current version; it
+    stays current until the new version is recorded. A retry with the same
+    ``Idempotency-Key`` and bytes returns the same version (200) and never
+    supersedes twice."""
+    return await _receive_upload(
+        request,
+        context,
+        lambda body: upload_service.upload_version(
+            parent_asset_id=asset_id,
+            tenant_id=context.tenant_id,
+            user_id=context.user_id,
+            user_email=f"{context.user_id}@build.internal",
+            file_name=file_name,
+            idempotency_key=idempotency_key,
+            body=body,
+            correlation_id=getattr(request.state, "request_id", None),
+        ),
+    )
+
+
+async def _receive_upload(
+    request: Request, context: TenantContext, store: Callable[[UploadedBody], Awaitable[UploadResult]]
+) -> JSONResponse:
+    """Stream the body, run ``store`` on it, and answer as the upload
+    contract says: 201 created, 200 replayed, typed errors by class."""
     try:
         async with received_upload(
             request,
             max_bytes=settings.max_upload_bytes,
             timeout_seconds=settings.upload_read_timeout_seconds,
         ) as body:
-            result = await upload_service.upload(
-                source_id=source_id,
-                tenant_id=context.tenant_id,
-                user_id=context.user_id,
-                user_email=f"{context.user_id}@build.internal",
-                file_name=file_name,
-                idempotency_key=idempotency_key,
-                body=body,
-                correlation_id=getattr(request.state, "request_id", None),
-            )
+            result = await store(body)
+    except ContentAccessError as exc:
+        return _access_refused(exc)
     except UploadError as exc:
         error: dict[str, object] = {"code": exc.code, "message": str(exc)}
         # The existing asset is named only to a caller who may read assets.
