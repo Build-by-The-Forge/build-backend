@@ -1,22 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 from app.application.common.uow import ContentUnitOfWorkFactory, ContentUnitOfWorkPort
 from app.application.content.asset_commands import (
-    CreateAssetVersionCommand,
     FindAssetByHashQuery,
     GetContentAssetQuery,
     ListContentAssetsQuery,
-    RegisterContentAssetCommand,
     RevokeContentAssetCommand,
 )
 from app.application.content.asset_handlers import (
-    CreateAssetVersionHandler,
     FindAssetByHashHandler,
     GetContentAssetHandler,
     ListContentAssetsHandler,
-    RegisterContentAssetHandler,
     RevokeContentAssetHandler,
 )
 from app.domain.content.asset import ContentAsset
@@ -34,82 +28,6 @@ class ContentAssetService:
         self._uow = uow
         self._event_bus = event_bus or EventBus()
         self._uow_factory = uow_factory
-
-    async def register_asset(
-        self,
-        source_id: str,
-        file_name: str,
-        mime_type: str,
-        file_size_bytes: int,
-        content_sha256: str,
-        storage_uri: str,
-        created_by: str,
-        created_by_email: str,
-        tenant_id: str | None = None,
-        metadata: dict[str, Any] | None = None,
-        asset_id: str | None = None,
-    ) -> tuple[ContentAsset, bool]:
-        cmd = RegisterContentAssetCommand(
-            source_id=source_id,
-            file_name=file_name,
-            mime_type=mime_type,
-            file_size_bytes=file_size_bytes,
-            content_sha256=content_sha256,
-            storage_uri=storage_uri,
-            created_by=created_by,
-            created_by_email=created_by_email,
-            tenant_id=tenant_id,
-            metadata=metadata or {},
-            asset_id=asset_id,
-        )
-
-        if self._uow_factory is not None:
-            async with self._uow_factory() as uow:
-                handler = RegisterContentAssetHandler(uow, self._event_bus)
-                return await handler.handle(cmd)
-
-        if self._uow is None:
-            raise RuntimeError("ContentAssetService requires uow or uow_factory")
-        handler = RegisterContentAssetHandler(self._uow, self._event_bus)
-        return await handler.handle(cmd)
-
-    async def create_version(
-        self,
-        parent_asset_id: str,
-        file_name: str,
-        mime_type: str,
-        file_size_bytes: int,
-        content_sha256: str,
-        storage_uri: str,
-        created_by: str,
-        created_by_email: str,
-        metadata: dict[str, Any] | None = None,
-        asset_id: str | None = None,
-        tenant_id: str | None = None,
-    ) -> ContentAsset:
-        cmd = CreateAssetVersionCommand(
-            parent_asset_id=parent_asset_id,
-            file_name=file_name,
-            mime_type=mime_type,
-            file_size_bytes=file_size_bytes,
-            content_sha256=content_sha256,
-            storage_uri=storage_uri,
-            created_by=created_by,
-            created_by_email=created_by_email,
-            metadata=metadata or {},
-            asset_id=asset_id,
-            tenant_id=tenant_id,
-        )
-
-        if self._uow_factory is not None:
-            async with self._uow_factory() as uow:
-                handler = CreateAssetVersionHandler(uow, self._event_bus)
-                return await handler.handle(cmd)
-
-        if self._uow is None:
-            raise RuntimeError("ContentAssetService requires uow or uow_factory")
-        handler = CreateAssetVersionHandler(self._uow, self._event_bus)
-        return await handler.handle(cmd)
 
     async def revoke_asset(
         self,

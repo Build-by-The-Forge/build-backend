@@ -6,10 +6,8 @@ from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.content.asset_schemas import (
-    ContentAssetRegisterRequest,
     ContentAssetResponse,
     ContentAssetRevokeRequest,
-    ContentAssetVersionRequest,
 )
 from app.api.content.upload_body import received_upload
 from app.application.content.access import ContentAccessError
@@ -37,45 +35,6 @@ def _access_refused(exc: ContentAccessError) -> JSONResponse:
     """A refused write, by class: 404 for content outside the caller's
     tenant, 403 for platform content (app/application/content/access.py)."""
     return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": str(exc)}})
-
-
-@router.post(
-    "/sources/{source_id}/assets",
-    status_code=status.HTTP_201_CREATED,
-    response_model=ContentAssetResponse,
-)
-async def register_asset(
-    source_id: str,
-    payload: ContentAssetRegisterRequest,
-    request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
-) -> JSONResponse:
-    try:
-        asset, is_deduplicated = await service.register_asset(
-            source_id=source_id,
-            file_name=payload.file_name,
-            mime_type=payload.mime_type,
-            file_size_bytes=payload.file_size_bytes,
-            content_sha256=payload.content_sha256,
-            storage_uri=payload.storage_uri,
-            created_by=context.user_id,
-            created_by_email=f"{context.user_id}@build.internal",
-            tenant_id=context.tenant_id,
-            metadata=payload.metadata,
-        )
-    except ContentAccessError as exc:
-        return _access_refused(exc)
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "INVALID_CONTENT_ASSET", "message": str(exc)}},
-        )
-
-    resp_data = ContentAssetResponse.from_domain(asset, is_deduplicated=is_deduplicated).model_dump(mode="json")
-    status_code = status.HTTP_200_OK if is_deduplicated else status.HTTP_201_CREATED
-    return JSONResponse(status_code=status_code, content={"data": resp_data})
 
 
 @router.post(
@@ -250,44 +209,6 @@ async def list_all_assets(
 
 
 @router.post(
-    "/assets/{asset_id}/version",
-    status_code=status.HTTP_201_CREATED,
-    response_model=ContentAssetResponse,
-)
-async def create_asset_version(
-    asset_id: str,
-    payload: ContentAssetVersionRequest,
-    request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
-) -> JSONResponse:
-    try:
-        new_asset = await service.create_version(
-            parent_asset_id=asset_id,
-            file_name=payload.file_name,
-            mime_type=payload.mime_type,
-            file_size_bytes=payload.file_size_bytes,
-            content_sha256=payload.content_sha256,
-            storage_uri=payload.storage_uri,
-            created_by=context.user_id,
-            created_by_email=f"{context.user_id}@build.internal",
-            metadata=payload.metadata,
-            tenant_id=context.tenant_id,
-        )
-    except ContentAccessError as exc:
-        return _access_refused(exc)
-    except ValueError as exc:
-        msg = str(exc).lower()
-        status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
-        return JSONResponse(
-            status_code=status_code,
-            content={"error": {"code": "INVALID_ASSET_VERSION", "message": str(exc)}},
-        )
-
-    resp_data = ContentAssetResponse.from_domain(new_asset).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_201_CREATED, content={"data": resp_data})
-
-
-@router.post(
     "/assets/{asset_id}/revoke",
     response_model=ContentAssetResponse,
 )
@@ -320,3 +241,40 @@ async def revoke_asset(
 
     resp_data = ContentAssetResponse.from_domain(revoked).model_dump(mode="json")
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
+
+
+# Retired routes (P3-1 PR 3b, design section 8). They answer 410 to any
+# request without reading its body: nothing is validated, persisted or
+# forwarded, so a client-supplied storage location can no longer become an
+# asset. They stay registered for one release so a stale client gets this
+# answer instead of a 404 or 405.
+REGISTRATION_RETIRED = {
+    "error": {
+        "code": "ASSET_REGISTRATION_RETIRED",
+        "message": "asset registration is retired: upload the document's bytes with "
+        "POST /content/sources/{source_id}/assets/upload",
+    }
+}
+VERSION_RETIRED = {
+    "error": {
+        "code": "ASSET_VERSION_RETIRED",
+        "message": "this version route is retired: upload the new version's bytes with "
+        "POST /content/assets/{asset_id}/versions/upload",
+    }
+}
+
+
+@router.post("/sources/{source_id}/assets", status_code=status.HTTP_410_GONE)
+async def register_asset(
+    source_id: str,
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_410_GONE, content=REGISTRATION_RETIRED)
+
+
+@router.post("/assets/{asset_id}/version", status_code=status.HTTP_410_GONE)
+async def create_asset_version(
+    asset_id: str,
+    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+) -> JSONResponse:
+    return JSONResponse(status_code=status.HTTP_410_GONE, content=VERSION_RETIRED)

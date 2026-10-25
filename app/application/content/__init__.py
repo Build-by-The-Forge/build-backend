@@ -1,17 +1,13 @@
 from app.application.content.asset_commands import (
-    CreateAssetVersionCommand,
     FindAssetByHashQuery,
     GetContentAssetQuery,
     ListContentAssetsQuery,
-    RegisterContentAssetCommand,
     RevokeContentAssetCommand,
 )
 from app.application.content.asset_handlers import (
-    CreateAssetVersionHandler,
     FindAssetByHashHandler,
     GetContentAssetHandler,
     ListContentAssetsHandler,
-    RegisterContentAssetHandler,
     RevokeContentAssetHandler,
 )
 from app.application.content.asset_service import ContentAssetService
@@ -74,14 +70,10 @@ __all__ = [
     "ListContentSourcesHandler",
     "ContentSourceService",
     # Asset
-    "RegisterContentAssetCommand",
-    "CreateAssetVersionCommand",
     "RevokeContentAssetCommand",
     "GetContentAssetQuery",
     "FindAssetByHashQuery",
     "ListContentAssetsQuery",
-    "RegisterContentAssetHandler",
-    "CreateAssetVersionHandler",
     "RevokeContentAssetHandler",
     "GetContentAssetHandler",
     "FindAssetByHashHandler",

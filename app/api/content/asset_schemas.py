@@ -8,24 +8,6 @@ from pydantic import BaseModel, Field
 from app.domain.content.asset import ContentAsset
 
 
-class ContentAssetRegisterRequest(BaseModel):
-    file_name: str = Field(..., min_length=1, max_length=255)
-    mime_type: str = Field(..., min_length=1, max_length=100)
-    file_size_bytes: int = Field(..., gt=0)
-    content_sha256: str = Field(..., min_length=64, max_length=64)
-    storage_uri: str = Field(..., min_length=1, max_length=1024)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ContentAssetVersionRequest(BaseModel):
-    file_name: str = Field(..., min_length=1, max_length=255)
-    mime_type: str = Field(..., min_length=1, max_length=100)
-    file_size_bytes: int = Field(..., gt=0)
-    content_sha256: str = Field(..., min_length=64, max_length=64)
-    storage_uri: str = Field(..., min_length=1, max_length=1024)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
 class ContentAssetRevokeRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
 

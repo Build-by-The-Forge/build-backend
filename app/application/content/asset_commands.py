@@ -1,39 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from app.domain.content.enums import AssetStatus, IngestionStatus
-
-
-@dataclass(frozen=True, slots=True)
-class RegisterContentAssetCommand:
-    source_id: str
-    file_name: str
-    mime_type: str
-    file_size_bytes: int
-    content_sha256: str
-    storage_uri: str
-    created_by: str
-    created_by_email: str
-    tenant_id: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    asset_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class CreateAssetVersionCommand:
-    parent_asset_id: str
-    file_name: str
-    mime_type: str
-    file_size_bytes: int
-    content_sha256: str
-    storage_uri: str
-    created_by: str
-    created_by_email: str
-    metadata: dict[str, Any] = field(default_factory=dict)
-    asset_id: str | None = None
-    tenant_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
