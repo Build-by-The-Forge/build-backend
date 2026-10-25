@@ -57,6 +57,12 @@ x-ai-env: &ai-env
   MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   LOG_LEVEL: INFO
+  # The AI-service's storage identity: read-only on the bucket the backend
+  # writes (P3-1 PR 5 fetches and verifies each dispatched document).
+  OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333
+  OBJECT_STORAGE_BUCKET: build-documents
+  OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_AI_ACCESS_KEY:?set in deploy/m3.env}
+  OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_AI_SECRET_KEY:?set in deploy/m3.env}
 
 services:
   postgres:
@@ -251,6 +257,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
     environment:
       <<: *ai-env
       DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
@@ -270,6 +278,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
     environment:
       <<: *ai-env
       DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
