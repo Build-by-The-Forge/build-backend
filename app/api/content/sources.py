@@ -24,6 +24,15 @@ service = build_container().get(ContentSourceService)
 PLATFORM_WRITE_REFUSED = "platform content sources cannot be created or changed from a tenant"
 
 
+def _visible_source(source: ContentSource | None, context: TenantContext) -> ContentSource:
+    """The source, if it exists for the caller: their tenant's or a platform
+    source. Another tenant's source is answered exactly like a missing one
+    (404), on reads and writes alike (P3-1 PR 3b)."""
+    if source is None or (source.visibility != VisibilityScope.PLATFORM and source.tenant_id != context.tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+    return source
+
+
 def _refuse_platform_write(source: ContentSource) -> None:
     if source.visibility == VisibilityScope.PLATFORM:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
@@ -122,9 +131,7 @@ async def get_source(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_READ)),
 ) -> JSONResponse:
-    source = await service.get_source(source_id)
-    if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+    source = _visible_source(await service.get_source(source_id), context)
 
     # Check accessibility within caller's tenant
     if not source.is_accessible_by(tenant_id=context.tenant_id):
@@ -151,9 +158,7 @@ async def update_source(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
-    source = await service.get_source(source_id)
-    if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+    source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(
@@ -194,9 +199,7 @@ async def deprecate_source(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
-    source = await service.get_source(source_id)
-    if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+    source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(
@@ -228,9 +231,7 @@ async def revoke_source(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
-    source = await service.get_source(source_id)
-    if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+    source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(
@@ -261,9 +262,7 @@ async def activate_source(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
-    source = await service.get_source(source_id)
-    if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+    source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
         raise HTTPException(

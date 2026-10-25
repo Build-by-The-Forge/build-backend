@@ -157,9 +157,12 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
     assert reg_code in foreign_codes  # Platform source is visible
     assert inst_code not in foreign_codes  # Tenant A private source is HIDDEN
 
-    # 11. Foreign Lecturer attempts direct GET on Tenant A source -> 403 Forbidden
+    # 11. Foreign Lecturer attempts direct GET on Tenant A source -> 404, the
+    # same answer as a missing source (P3-1 PR 3b: no existence leak)
     foreign_get = client.get(f"/content/sources/{inst_source_id}", headers=foreign_headers)
-    assert foreign_get.status_code == 403
+    missing_get = client.get(f"/content/sources/{uuid4()}", headers=foreign_headers)
+    assert foreign_get.status_code == missing_get.status_code == 404
+    assert foreign_get.json()["meta"]["error"] == missing_get.json()["meta"]["error"]
 
     # 11b. Foreign Lecturer reads the Platform source directly -> 200 OK
     foreign_platform_get = client.get(f"/content/sources/{reg_source_id}", headers=foreign_headers)

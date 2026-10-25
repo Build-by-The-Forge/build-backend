@@ -148,6 +148,29 @@ async def test_the_owner_tenant_can_still_version_and_revoke(client, two_tenants
     assert revoke.status_code == 200, revoke.text
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("get", "/content/sources/{source}", None),
+        ("patch", "/content/sources/{source}", {"name": "Hijacked name"}),
+        ("post", "/content/sources/{source}/deprecate", REASON),
+        ("post", "/content/sources/{source}/revoke", REASON),
+        ("post", "/content/sources/{source}/activate", {}),
+    ],
+)
+async def test_another_tenants_source_is_answered_like_a_missing_one(client, two_tenants, method, path, body):
+    a, b = two_tenants
+    kwargs = {"headers": b["h"]} | ({"json": body} if body is not None else {})
+
+    response = getattr(client, method)(path.format(source=a["source"]), **kwargs)
+    missing = getattr(client, method)(path.format(source=uuid4()), **kwargs)
+
+    assert response.status_code == missing.status_code == 404, response.text
+    assert response.json()["meta"]["error"] == missing.json()["meta"]["error"]
+    after = client.get(f"/content/sources/{a['source']}", headers=a["h"]).json()["data"]
+    assert (after["name"], after["status"]) == ("Authorization notes", "active")
+
+
 # --- tenants against platform content --------------------------------------------------------
 
 
