@@ -14,6 +14,7 @@ from app.infrastructure.content.unit_of_work import ContentUnitOfWork
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import register_and_authenticate, seed_tenant_context
 from tests.integration.content.test_content_source_api import add_membership, seed_platform_source
+from tests.integration.content.uploads import pdf_bytes, upload_asset
 
 REASON = {"reason": "Regression check"}
 
@@ -33,8 +34,14 @@ def _register_body(**overrides) -> dict:
     return body | overrides
 
 
-def _version_body() -> dict:
-    return _register_body(file_name="v2.pdf", storage_uri="s3://attacker/v2.pdf")
+def _upload_version(client, asset_id, h):
+    request_headers = dict(h) | {"Idempotency-Key": f"k-{uuid4().hex}", "Content-Type": "application/octet-stream"}
+    return client.post(
+        f"/content/assets/{asset_id}/versions/upload",
+        params={"file_name": "v2.pdf"},
+        headers=request_headers,
+        content=pdf_bytes(),
+    )
 
 
 async def _tenant(client, role: str = "lecturer") -> dict:
@@ -62,7 +69,7 @@ def _source(client, tenant) -> str:
 
 
 def _asset(client, tenant, source_id) -> str:
-    response = client.post(f"/content/sources/{source_id}/assets", headers=tenant["h"], json=_register_body())
+    response = upload_asset(client, source_id, headers=tenant["h"])
     assert response.status_code == 201, response.text
     return response.json()["data"]["id"]
 
@@ -105,7 +112,7 @@ async def two_tenants(client):
 async def test_another_tenant_cannot_version_or_supersede_an_asset(client, two_tenants):
     a, b = two_tenants
 
-    response = client.post(f"/content/assets/{a['asset']}/version", headers=b["h"], json=_version_body())
+    response = _upload_version(client, a["asset"], b["h"])
 
     assert response.status_code == 404, response.text
     assert response.json()["error"]["code"] == "CONTENT_NOT_FOUND"
@@ -126,13 +133,15 @@ async def test_another_tenant_cannot_revoke_an_asset_or_learn_that_it_exists(cli
     assert _asset_state(client, a, a["asset"])["status"] == "active"
 
 
-async def test_another_tenant_cannot_register_into_a_source_or_learn_its_owner(client, two_tenants):
+async def test_another_tenant_cannot_add_to_a_source_or_learn_its_owner(client, two_tenants):
     a, b = two_tenants
 
-    response = client.post(f"/content/sources/{a['source']}/assets", headers=b["h"], json=_register_body())
+    response = upload_asset(client, a["source"], headers=b["h"])
+    retired = client.post(f"/content/sources/{a['source']}/assets", headers=b["h"], json=_register_body())
 
     assert response.status_code == 404, response.text
     assert a["id"] not in response.text
+    assert retired.status_code == 410  # registration is retired for everyone (PR 3b)
     listed = client.get(f"/content/sources/{a['source']}/assets", headers=a["h"]).json()["data"]
     assert [asset["id"] for asset in listed] == [a["asset"]]
 
@@ -140,12 +149,35 @@ async def test_another_tenant_cannot_register_into_a_source_or_learn_its_owner(c
 async def test_the_owner_tenant_can_still_version_and_revoke(client, two_tenants):
     a, _ = two_tenants
 
-    version = client.post(f"/content/assets/{a['asset']}/version", headers=a["h"], json=_version_body())
+    version = _upload_version(client, a["asset"], a["h"])
     revoke = client.post(f"/content/assets/{version.json()['data']['id']}/revoke", headers=a["h"], json=REASON)
 
     assert version.status_code == 201, version.text
     assert _asset_state(client, a, a["asset"])["status"] == "superseded"
     assert revoke.status_code == 200, revoke.text
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "body"),
+    [
+        ("get", "/content/sources/{source}", None),
+        ("patch", "/content/sources/{source}", {"name": "Hijacked name"}),
+        ("post", "/content/sources/{source}/deprecate", REASON),
+        ("post", "/content/sources/{source}/revoke", REASON),
+        ("post", "/content/sources/{source}/activate", {}),
+    ],
+)
+async def test_another_tenants_source_is_answered_like_a_missing_one(client, two_tenants, method, path, body):
+    a, b = two_tenants
+    kwargs = {"headers": b["h"]} | ({"json": body} if body is not None else {})
+
+    response = getattr(client, method)(path.format(source=a["source"]), **kwargs)
+    missing = getattr(client, method)(path.format(source=uuid4()), **kwargs)
+
+    assert response.status_code == missing.status_code == 404, response.text
+    assert response.json()["meta"]["error"] == missing.json()["meta"]["error"]
+    after = client.get(f"/content/sources/{a['source']}", headers=a["h"]).json()["data"]
+    assert (after["name"], after["status"]) == ("Authorization notes", "active")
 
 
 # --- tenants against platform content --------------------------------------------------------
@@ -203,11 +235,14 @@ async def test_a_tenant_cannot_change_a_platform_source(client, platform_content
 async def test_a_tenant_cannot_add_change_or_revoke_platform_assets(client, platform_content):
     tenant = await _tenant(client)
 
+    upload = upload_asset(client, platform_content["source"], headers=tenant["h"])
     register = client.post(f"/content/sources/{platform_content['source']}/assets", headers=tenant["h"], json=_register_body())
-    version = client.post(f"/content/assets/{platform_content['asset']}/version", headers=tenant["h"], json=_version_body())
+    version = _upload_version(client, platform_content["asset"], tenant["h"])
     revoke = client.post(f"/content/assets/{platform_content['asset']}/revoke", headers=tenant["h"], json=REASON)
 
-    for response in (register, version, revoke):
+    assert (upload.status_code, upload.json()["error"]["code"]) == (403, "PLATFORM_SOURCE_UPLOAD_NOT_SUPPORTED")
+    assert register.status_code == 410  # retired (PR 3b)
+    for response in (version, revoke):
         assert response.status_code == 403, response.text
         assert response.json()["error"]["code"] == "PLATFORM_CONTENT_NOT_WRITABLE"
     async with SessionLocal() as session:

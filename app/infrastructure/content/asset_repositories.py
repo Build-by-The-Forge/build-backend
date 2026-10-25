@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
+from datetime import datetime, timezone
+
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.content.asset import ContentAsset
@@ -38,6 +40,18 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         self._session.add(model)
         await self._session.flush()
         return content_asset_model_to_domain(model)
+
+    async def supersede_if_active(self, asset_id: str) -> bool:
+        # A conditional UPDATE, never read-then-write: a concurrent
+        # transaction superseding the same row waits on its lock, then finds
+        # it no longer active and matches nothing.
+        result = await self._session.execute(
+            update(ContentAssetModel)
+            .where(ContentAssetModel.id == asset_id, ContentAssetModel.status == AssetStatus.ACTIVE.value)
+            .values(status=AssetStatus.SUPERSEDED.value, updated_at=datetime.now(timezone.utc))
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount == 1
 
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         stmt = select(ContentAssetModel).where(ContentAssetModel.id == asset_id)

@@ -14,7 +14,11 @@ from app.api.content.job_schemas import (
     IngestionJobResponse,
     IngestionJobRetryRequest,
 )
-from app.application.content.job_handlers import ReconcileMismatchError
+from app.application.content.job_handlers import (
+    ASSET_DISPATCH_REFUSALS,
+    ReconcileMismatchError,
+    UnmanagedAssetError,
+)
 from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
@@ -54,6 +58,11 @@ async def trigger_ingestion_job(
             created_by=context.user_id,
             max_attempts=payload.max_attempts,
             correlation_id=payload.correlation_id,
+        )
+    except UnmanagedAssetError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": exc.code, "message": str(exc)}},
         )
     except ValueError as exc:
         msg = str(exc).lower()
@@ -211,6 +220,11 @@ async def reprocess_asset(
             created_by=context.user_id,
             correlation_id=payload.correlation_id,
         )
+    except UnmanagedAssetError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"error": {"code": exc.code, "message": str(exc)}},
+        )
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
@@ -272,8 +286,17 @@ async def dispatch_ingestion_job(
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
     if job.status == IngestionStatus.FAILED:
         # The dispatch failed and the job's failed state was saved; report it.
+        # A refused asset is the request's conflict, unavailable storage is
+        # ours and retryable; anything else came from the AI-service.
+        if job.error_code in ASSET_DISPATCH_REFUSALS:
+            failure_status, headers = status.HTTP_409_CONFLICT, None
+        elif job.error_code == "OBJECT_STORAGE_UNAVAILABLE":
+            failure_status, headers = status.HTTP_503_SERVICE_UNAVAILABLE, {"Retry-After": "5"}
+        else:
+            failure_status, headers = status.HTTP_502_BAD_GATEWAY, None
         return JSONResponse(
-            status_code=status.HTTP_502_BAD_GATEWAY,
+            headers=headers,
+            status_code=failure_status,
             content={
                 "error": {
                     "code": job.error_code or "AI_DISPATCH_FAILED",

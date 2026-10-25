@@ -253,6 +253,8 @@ def build_container() -> Container:
             event_bus=event_bus,
             uow_factory=sqlalchemy_content_uow,
             security_events=security_events,
+            storage_factory=document_storage,
+            bucket=lambda: settings.object_storage_bucket,
         ),
     )
     return container

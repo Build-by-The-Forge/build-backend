@@ -297,18 +297,19 @@ def create_job(backend: httpx.Client, tenant: Tenant) -> dict[str, Any]:
         headers=h,
     )
     assert source.status_code == 201, source.text
+    # The only way to create an asset (P3-1 PR 3b): real bytes uploaded to
+    # the stack's object storage, so dispatch checks a real stored object.
+    document = b"%PDF-1.7\n% BUILD boundary gate\n" + uuid.uuid4().hex.encode() * 8
     asset = backend.post(
-        f"/content/sources/{source.json()['data']['id']}/assets",
-        json={
-            "file_name": "boundary.pdf",
-            "mime_type": "application/pdf",
-            "file_size_bytes": 10,
-            "content_sha256": hashlib.sha256(uuid.uuid4().bytes).hexdigest(),
-            "storage_uri": f"s3://build-assets/{tenant.slug}/boundary.pdf",
-        },
-        headers=h,
+        f"/content/sources/{source.json()['data']['id']}/assets/upload",
+        params={"file_name": "boundary.pdf"},
+        content=document,
+        headers=h | {"Idempotency-Key": f"boundary-{uuid.uuid4().hex}", "Content-Type": "application/octet-stream"},
     )
     assert asset.status_code == 201, asset.text
+    stored = asset.json()["data"]
+    assert stored["content_sha256"] == hashlib.sha256(document).hexdigest()
+    assert stored["storage_uri"].startswith("s3://build-documents/tenants/")
     job = backend.post(f"/content/assets/{asset.json()['data']['id']}/jobs", json={"max_attempts": 3}, headers=h)
     assert job.status_code == 201, job.text
     return job.json()["data"]

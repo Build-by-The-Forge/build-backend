@@ -8,6 +8,7 @@ from tests.integration.assessment.test_question_api import (
     seed_tenant_context,
 )
 from tests.integration.content.test_content_source_api import add_membership
+from tests.integration.content.uploads import upload_asset
 
 
 @pytest.mark.asyncio
@@ -41,17 +42,7 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
     assert source_res.status_code == 201, source_res.text
     source_id = source_res.json()["data"]["id"]
 
-    asset_res = client.post(
-        f"/content/sources/{source_id}/assets",
-        json={
-            "file_name": "ai_course.pdf",
-            "mime_type": "application/pdf",
-            "file_size_bytes": 10240,
-            "content_sha256": "8" * 64,
-            "storage_uri": "s3://build-assets/ai_course.pdf",
-        },
-        headers=lecturer_headers,
-    )
+    asset_res = upload_asset(client, source_id, headers=lecturer_headers, name="ai_course.pdf")
     assert asset_res.status_code == 201, asset_res.text
     asset_id = asset_res.json()["data"]["id"]
 
@@ -130,17 +121,7 @@ async def test_failed_dispatch_is_persisted_and_reported(client, monkeypatch) ->
         },
         headers=admin_headers,
     ).json()["data"]["id"]
-    asset_id = client.post(
-        f"/content/sources/{source_id}/assets",
-        json={
-            "file_name": "f.pdf",
-            "mime_type": "application/pdf",
-            "file_size_bytes": 10,
-            "content_sha256": "9" * 64,
-            "storage_uri": "s3://build-assets/f.pdf",
-        },
-        headers=admin_headers,
-    ).json()["data"]["id"]
+    asset_id = upload_asset(client, source_id, headers=admin_headers, name="f.pdf").json()["data"]["id"]
     job_id = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=admin_headers).json()["data"]["id"]
 
     async def failing_dispatch(self, job, asset, source, actor):
