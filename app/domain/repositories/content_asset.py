@@ -16,6 +16,13 @@ class ContentAssetRepository(Protocol):
         Uploads depend on that for their idempotency contract."""
         raise NotImplementedError
 
+    async def supersede_if_active(self, asset_id: str) -> bool:
+        """Mark the asset superseded only if it is still active, in one
+        conditional UPDATE; True if it was. The version transition depends on
+        it: under the database's row lock, two concurrent versions of one
+        asset cannot both succeed (P3-1 PR 3b, design section 9)."""
+        raise NotImplementedError
+
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         raise NotImplementedError
 
