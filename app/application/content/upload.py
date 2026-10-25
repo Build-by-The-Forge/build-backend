@@ -20,9 +20,10 @@ import structlog
 from sqlalchemy.exc import IntegrityError
 
 from app.application.common.uow import ContentUnitOfWorkFactory
+from app.application.content.access import ContentNotFoundError, ensure_tenant_may_write
 from app.core.metrics import content_upload_orphaned_objects_total
 from app.domain.content.asset import ContentAsset
-from app.domain.content.enums import SourceStatus, VisibilityScope
+from app.domain.content.enums import AssetStatus, SourceStatus, VisibilityScope
 from app.domain.content.storage import (
     ObjectIntegrityError,
     ObjectNotFoundError,
@@ -110,6 +111,24 @@ class UploadReadTimeoutError(UploadError):
     code = "UPLOAD_READ_TIMEOUT"
 
 
+class AssetVersionConflictError(UploadError):
+    """The asset is no longer the current version: it was superseded,
+    possibly by a concurrent request. Version the current one instead."""
+
+    status_code = 409
+    code = "ASSET_VERSION_CONFLICT"
+
+
+class AssetNotVersionableError(UploadError):
+    status_code = 409
+    code = "ASSET_NOT_VERSIONABLE"
+
+
+class _ParentNoLongerActive(Exception):
+    """Raised inside the version transaction to abandon it (rollback) when
+    the conditional supersede matched nothing."""
+
+
 class DuplicateContentError(UploadError):
     """The tenant already has an asset with these exact bytes: the database
     keeps one asset per (tenant, SHA-256), uq_content_assets_tenant_hash.
@@ -177,6 +196,17 @@ def detect_mime_type(head: bytes, file_name: str) -> str:
                 )
             return mime_type
     raise UnsupportedUploadTypeError("only PDF, PNG and JPEG documents are accepted")
+
+
+# Versions have their own namespace, so no upload key can derive a
+# version's id and no version key an upload's.
+BUILD_VERSION_NAMESPACE = uuid.UUID("b7e1c4d2-3f5a-4e8b-9c61-0a2d7f3e5b84")
+
+
+def derive_version_id(tenant_id: str, parent_asset_id: str, idempotency_key: str) -> str:
+    """A key is scoped to one parent: a retry of the same version request
+    derives the same child (design section 9)."""
+    return str(uuid.uuid5(BUILD_VERSION_NAMESPACE, f"{tenant_id}:{parent_asset_id}:{idempotency_key}"))
 
 
 def derive_asset_id(tenant_id: str, source_id: str, idempotency_key: str) -> str:
@@ -305,6 +335,133 @@ class ContentAssetUploadService:
         if events:
             self._event_bus.publish_all(events)
         return UploadResult(saved, created=True)
+
+    async def upload_version(
+        self,
+        *,
+        parent_asset_id: str,
+        tenant_id: str,
+        user_id: str,
+        user_email: str,
+        file_name: str | None,
+        idempotency_key: str | None,
+        body: UploadedBody,
+        correlation_id: str | None = None,
+    ) -> UploadResult:
+        """A new version of ``parent_asset_id`` from uploaded bytes: a state
+        transition (design section 9). The parent stays current until the
+        child is durably recorded, and at most one child supersedes it."""
+        key = validate_idempotency_key(idempotency_key)
+        name = validate_file_name(file_name)
+        if body.size_bytes == 0:
+            raise InvalidUploadRequestError("the upload is empty", code="EMPTY_UPLOAD")
+        mime_type = detect_mime_type(body.head, name)
+
+        parent = await self._version_parent(parent_asset_id, tenant_id)
+        child_id = derive_version_id(tenant_id, parent.id, key)
+        storage_key = object_key(tenant_id, child_id, body.sha256)
+
+        # A retry of a request that already succeeded returns its child; it
+        # never makes a second transition.
+        existing = await self._asset_by_id(child_id)
+        storage = self._storage()
+        if existing is not None:
+            return await self._replay(existing, body, storage, storage_key)
+        if parent.status == AssetStatus.REVOKED:
+            raise AssetNotVersionableError("a revoked asset cannot get a new version")
+        if parent.status != AssetStatus.ACTIVE:
+            raise AssetVersionConflictError("the asset is not the current version")
+        same_content = await self._asset_by_hash(body.sha256, tenant_id)
+        if same_content is not None:
+            raise DuplicateContentError(same_content.id)
+
+        await self._store(storage, storage_key, body, mime_type)
+
+        child = parent.create_version(
+            file_name=name,
+            mime_type=mime_type,
+            file_size_bytes=body.size_bytes,
+            content_sha256=body.sha256,
+            storage_uri=storage_uri_for(self._bucket(), storage_key),
+            created_by=user_id,
+            created_by_email=user_email,
+            metadata={"upload": {"detected_mime_type": mime_type}},
+            asset_id=child_id,
+        )
+        events = parent.pull_events() + child.pull_events()
+        try:
+            # One transaction: the conditional supersede, then the insert. A
+            # failure anywhere rolls the supersede back, so the parent stays
+            # current.
+            async with self._uow_factory() as uow:
+                if not await uow.assets.supersede_if_active(parent.id):
+                    raise _ParentNoLongerActive
+                saved = await uow.assets.insert_asset(child)
+        except (IntegrityError, _ParentNoLongerActive) as exc:
+            return await self._resolve_lost_version(
+                exc, storage, storage_key, child_id, parent.id, body, tenant_id, correlation_id
+            )
+        except Exception:
+            referenced = await self._referenced(child_id, body.sha256)
+            if referenced is None:
+                self._report_kept_object(child_id, correlation_id, "commit_unverified")
+            elif not referenced:
+                await self._compensate(storage, storage_key, child_id, correlation_id, "commit_failed")
+            raise
+
+        if events:
+            self._event_bus.publish_all(events)
+        return UploadResult(saved, created=True)
+
+    async def _version_parent(self, parent_asset_id: str, tenant_id: str) -> ContentAsset:
+        async with self._uow_factory() as uow:
+            parent = await uow.assets.get_asset_by_id(parent_asset_id)
+            if parent is None:
+                raise ContentNotFoundError("asset not found")
+            ensure_tenant_may_write(parent.tenant_id, tenant_id, what="asset")
+            source = await uow.sources.get_source_by_id(parent.source_id)
+        if source is None or source.tenant_id != tenant_id:
+            raise ContentNotFoundError("asset not found")
+        if source.status == SourceStatus.REVOKED:
+            raise UploadSourceRevokedError("the source is revoked")
+        return parent
+
+    async def _resolve_lost_version(
+        self,
+        exc: Exception,
+        storage: ObjectStorage,
+        storage_key: str,
+        child_id: str,
+        parent_id: str,
+        body: UploadedBody,
+        tenant_id: str,
+        correlation_id: str | None,
+    ) -> UploadResult:
+        """Classify a version that did not commit from the committed rows,
+        as uploads do (PR 2): the same request won, the key or the bytes are
+        taken, or the parent stopped being current."""
+        try:
+            winner = await self._asset_by_id(child_id)
+            same_content = None if winner else await self._asset_by_hash(body.sha256, tenant_id)
+            parent_now = None if (winner or same_content) else await self._asset_by_id(parent_id)
+        except Exception:
+            # Whether a committed row uses the object is unknown: keep it, reported.
+            self._report_kept_object(child_id, correlation_id, "race_unresolved")
+            raise
+        if winner is not None:
+            if winner.content_sha256 == body.sha256:
+                return UploadResult(winner, created=False)  # the same request won; its object is ours
+            await self._compensate(storage, storage_key, child_id, correlation_id, "concurrent_key_reuse")
+            raise IdempotencyKeyReusedError("this Idempotency-Key was already used for different content") from None
+        if same_content is not None:
+            await self._compensate(storage, storage_key, child_id, correlation_id, "concurrent_duplicate_content")
+            raise DuplicateContentError(same_content.id) from None
+        await self._compensate(storage, storage_key, child_id, correlation_id, "concurrent_version")
+        if parent_now is not None and parent_now.status == AssetStatus.REVOKED:
+            raise AssetNotVersionableError("a revoked asset cannot get a new version") from None
+        if isinstance(exc, _ParentNoLongerActive) or parent_now is None or parent_now.status != AssetStatus.ACTIVE:
+            raise AssetVersionConflictError("the asset is not the current version") from None
+        raise exc
 
     def _storage(self) -> ObjectStorage:
         try:
