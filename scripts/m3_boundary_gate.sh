@@ -99,7 +99,7 @@ status=0
 # The production image holds what production runs and nothing else.
 scripts/check_backend_image.sh build-m3-backend || status=$?
 
-"${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down" || status=$?
+"${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down and not storage_down" || status=$?
 
 # Storage secret keys: in no image layer or configuration, and in no log
 # written by the run so far.
@@ -119,6 +119,13 @@ scripts/m6_refusal_selftest.sh || status=$?
 # Phase 2 Step 2: real OCR in the AI-service image with networking disabled,
 # from the models baked into it (no runtime download).
 "${AI_SERVICE_DIR:-../ai-service}/scripts/test_offline_ocr_image.sh" build-m3-ai-service || status=$?
+
+# P3-1: object storage stopped. Uploads and dispatches must fail as
+# retryable and never reach the AI-service. Last, because the store keeps
+# its data on tmpfs: nothing after this needs it.
+echo "P3-1: stopping object storage"
+"${COMPOSE[@]}" stop object-storage
+"${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
 
 # The whole run tested one revision of each repository: neither checkout may
 # have moved since it was recorded.
