@@ -1,5 +1,6 @@
 import pytest
 
+from app.application.content.access import ContentNotFoundError
 from app.application.content.asset_commands import (
     CreateAssetVersionCommand,
     FindAssetByHashQuery,
@@ -175,8 +176,8 @@ async def test_register_asset_validations() -> None:
     bus = EventBus()
     handler = RegisterContentAssetHandler(uow, bus)
 
-    # Source does not exist
-    with pytest.raises(ValueError, match="does not exist"):
+    # Source does not exist: the same typed answer as another tenant's source
+    with pytest.raises(ContentNotFoundError, match="source not found"):
         await handler.handle(
             RegisterContentAssetCommand(
                 source_id="nonexistent",

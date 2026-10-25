@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.application.common.uow import ContentUnitOfWorkPort
+from app.application.content.access import ContentNotFoundError, ensure_tenant_may_write
 from app.application.content.asset_commands import (
     CreateAssetVersionCommand,
     FindAssetByHashQuery,
@@ -24,18 +25,19 @@ class RegisterContentAssetHandler:
         # 1. Validate ContentSource existence and accessibility
         source = await self._uow.sources.get_source_by_id(cmd.source_id)
         if source is None:
-            raise ValueError(f"ContentSource with id '{cmd.source_id}' does not exist")
+            raise ContentNotFoundError("source not found")
+        # 2. Scope: another tenant's source does not exist for the caller,
+        # and platform sources are not writable from a tenant (PR 3a).
+        owner = None if source.visibility == VisibilityScope.PLATFORM else source.tenant_id
+        ensure_tenant_may_write(owner, cmd.tenant_id, what="source")
         if source.status == SourceStatus.REVOKED:
             raise ValueError(f"Cannot register asset against revoked source '{cmd.source_id}'")
 
-        # 2. Scope validation
         if source.visibility == VisibilityScope.PLATFORM:
             target_tenant_id = None
         else:
             if cmd.tenant_id is None:
                 raise ValueError("tenant_id is required for tenant-scoped content sources")
-            if source.tenant_id != cmd.tenant_id:
-                raise ValueError(f"tenant_id mismatch: source belongs to tenant '{source.tenant_id}', got '{cmd.tenant_id}'")
             target_tenant_id = cmd.tenant_id
 
         # 3. Deduplication Check (Tenant-scoped / Platform-scoped)
@@ -76,7 +78,10 @@ class CreateAssetVersionHandler:
     async def handle(self, cmd: CreateAssetVersionCommand) -> ContentAsset:
         parent = await self._uow.assets.get_asset_by_id(cmd.parent_asset_id)
         if parent is None:
-            raise ValueError(f"Parent asset with id '{cmd.parent_asset_id}' does not exist")
+            raise ContentNotFoundError("asset not found")
+        # The caller's tenant must own the parent (PR 3a: versioning had no
+        # tenant check, so any tenant could supersede another's asset).
+        ensure_tenant_may_write(parent.tenant_id, cmd.tenant_id, what="asset")
         if parent.status == AssetStatus.REVOKED:
             raise ValueError("Cannot create a new version of a revoked asset")
 
@@ -114,10 +119,10 @@ class RevokeContentAssetHandler:
     async def handle(self, cmd: RevokeContentAssetCommand) -> ContentAsset:
         asset = await self._uow.assets.get_asset_by_id(cmd.asset_id)
         if asset is None:
-            raise ValueError(f"ContentAsset with id '{cmd.asset_id}' does not exist")
-
-        if cmd.tenant_id is not None and asset.tenant_id is not None and asset.tenant_id != cmd.tenant_id:
-            raise ValueError("Permission denied: asset belongs to another tenant")
+            raise ContentNotFoundError("asset not found")
+        # Another tenant's asset is not found (it was a 403 that confirmed it
+        # exists); platform assets are not revocable from a tenant (PR 3a).
+        ensure_tenant_may_write(asset.tenant_id, cmd.tenant_id, what="asset")
 
         asset.revoke(cmd.reason)
         events = asset.pull_events()
