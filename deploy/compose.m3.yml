@@ -313,6 +313,11 @@ services:
       BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}
       AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
       EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
+      # The backend's storage identity, so tests can tamper with or delete
+      # an uploaded object (P3-1 PR 6). Never printed.
+      BOUNDARY_STORAGE_ENDPOINT: http://object-storage:8333
+      BOUNDARY_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY}
+      BOUNDARY_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY}
     volumes:
       - outbox:/outbox:ro
       - ../boundary:/app/boundary:ro
