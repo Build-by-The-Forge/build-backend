@@ -114,8 +114,10 @@ async def _status_and_ledger(job_id: str) -> tuple[str, list[tuple[str, str]]]:
 
 async def test_two_stage_events_racing_apply_exactly_once():
     job = await _processing_job()
-    first = _cmd(job, "evt-a", event_type="stage_progress", stage="extracted", metrics=EXTRACTED)
-    second = _cmd(job, "evt-b", event_type="stage_progress", stage="extracted", metrics=EXTRACTED)
+    # Event ids are global in the ledger: unique per run, so the test repeats
+    # against the same database.
+    first = _cmd(job, f"evt-a-{uuid4().hex}", event_type="stage_progress", stage="extracted", metrics=EXTRACTED)
+    second = _cmd(job, f"evt-b-{uuid4().hex}", event_type="stage_progress", stage="extracted", metrics=EXTRACTED)
 
     outcomes = await asyncio.gather(_apply(first, hold=0.3), _apply(second, hold=0.3))
 
@@ -127,14 +129,15 @@ async def test_two_stage_events_racing_apply_exactly_once():
 
 async def test_the_same_event_delivered_concurrently_is_applied_once():
     job = await _processing_job()
-    cmd = _cmd(job, "evt-same", event_type="job_failed", error_code="X", error_message="x")
+    event_id = f"evt-same-{uuid4().hex}"
+    cmd = _cmd(job, event_id, event_type="job_failed", error_code="X", error_message="x")
 
     outcomes = await asyncio.gather(_apply(cmd, hold=0.3), _apply(cmd, hold=0.3))
 
     assert sorted(o.value for o in outcomes if o) == ["applied", "duplicate"]
     status, ledger = await _status_and_ledger(job.id)
     assert status == IngestionStatus.FAILED.value
-    assert ledger == [("evt-same", "applied")]
+    assert ledger == [(event_id, "applied")]
 
 
 async def test_a_not_allowed_event_leaves_no_ledger_row():
@@ -146,11 +149,14 @@ async def test_a_not_allowed_event_leaves_no_ledger_row():
 
 async def test_deleting_a_job_removes_its_ledger():
     job = await _processing_job()
-    await _apply(_cmd(job, "evt-del", event_type="job_failed"))
+    event_id = f"evt-del-{uuid4().hex}"
+    await _apply(_cmd(job, event_id, event_type="job_failed"))
     async with SessionLocal() as session:
         await session.execute(text("DELETE FROM content_ingestion_jobs WHERE id = :id"), {"id": job.id})
         await session.commit()
         left = (
-            await session.execute(text("SELECT count(*) FROM content_ingestion_events WHERE event_id = 'evt-del'"))
+            await session.execute(
+                text("SELECT count(*) FROM content_ingestion_events WHERE event_id = :event_id"), {"event_id": event_id}
+            )
         ).scalar_one()
     assert left == 0
