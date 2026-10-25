@@ -1,6 +1,6 @@
 # P3-1 PR 3 — asset registration and identity: design (proposed)
 
-Status: **proposed, for review.** No code changes until the decisions in section 7 are settled.
+Status: **approved** (decisions in section 8). PR 3a, the authorization fixes F1, F2 and F6, merged as #20 (`9c9fe90`). This document now governs PR 3b.
 
 PR 2 added `POST /content/sources/{id}/assets/upload`. It is server-generated identity over verified bytes, with an explicit duplicate-content rule (`docs/p3-1-pr2-upload-design.md`). PR 3 makes every other way of creating or changing an asset obey the same trust boundary and identity policy, so that no older path can bypass them.
 
@@ -181,3 +181,79 @@ Proposed order once settled:
 - **PR 3a** (F1, F2, F6 authorization fixes).
 - **PR 3b**: `managed_storage_key` and the dispatch gate; version-by-upload; register and old version answer 410; the boundary fixture moves to upload; typed errors.
 - Each PR merges only when its own gates and the boundary gate pass.
+
+## 8. Decisions (approved)
+
+All four proposals in section 7 were approved, with these additions.
+
+1. **PR 3a first.** Merged as #20. A sweep of all 23 content routes went beyond F1 and F2. Platform sources could also be edited, deprecated, activated and revoked by any tenant, because the write routes reused the read rule `is_accessible_by`. All of that is contained by one rule, `ensure_tenant_may_write`: another tenant's content is 404, and platform content written from a tenant is 403.
+2. **Register is retired (410).** It must not process the payload, persist anything, or forward its `storage_uri`. Internal callers are migrated before it is disabled; the boundary fixture moves to real uploads against real object storage.
+3. **Version by upload is a state transition** (section 9).
+4. **Platform-admin content creation stays out of scope** until its authorization and a database-level duplicate rule for `tenant_id IS NULL` are reviewed.
+
+Added requirements:
+- **Dispatch boundary.** A syntactically valid `storage_uri` is not enough to reach the AI-service. The key must be the managed key for that row. At dispatch, the stored object must exist and match the row's size and SHA-256 (section 10).
+- **Source existence.** Another tenant's source must answer 404 on reads and on writes alike (it was 403 "outside tenant scope").
+
+## 9. Version by upload: the transition
+
+`POST /content/assets/{asset_id}/versions/upload` takes a raw body, `file_name` and `Idempotency-Key`, with the same limits and verification as upload.
+
+**Authorization.**
+- The parent must be owned by the caller's tenant: 404 otherwise, 403 for platform (PR 3a rule).
+- The parent's source must be the caller's.
+- The parent must be `ACTIVE`: 409 `ASSET_VERSION_CONFLICT` if it is already superseded, 409 `ASSET_NOT_VERSIONABLE` if it is revoked.
+
+**Identity.**
+- The child's id is `uuid5(namespace, f"{tenant}:{source}:version:{parent_id}:{key}")`, so a key is scoped to one parent.
+- Its object key is the managed key for that id and its bytes, and its `storage_uri` is server-generated.
+
+**Order.**
+1. Validate the request; stream and hash the body; authorize the parent.
+2. A replay check by the child's id, as for upload.
+3. A duplicate check by hash across the tenant, the parent included.
+4. Store the object.
+5. In **one transaction**:
+   1. `UPDATE content_assets SET status='superseded' WHERE id = :parent AND status = 'active'`. If that matches no row, the transaction is abandoned.
+   2. Insert the child.
+   3. Commit.
+
+**Concurrency mechanism: optimistic, enforced by the database.**
+- The conditional `UPDATE` is the guard. Under PostgreSQL's row lock, a second transaction updating the same parent waits for the first, then re-checks `status = 'active'` and matches nothing. At most one child can ever supersede a given parent.
+- The insert happens in the same transaction, so a failure anywhere (insert, commit, constraint) rolls the supersede back. **The parent stays current until the child is durably recorded.**
+- The loser is classified from committed rows, as in PR 2:
+  - a child with its own id and bytes means the same request won, so it is a replay: 200, and the object is kept;
+  - a child with its own id but other bytes means `IDEMPOTENCY_KEY_REUSED`;
+  - a row with its hash means `DUPLICATE_CONTENT`;
+  - otherwise the parent was superseded or revoked by someone else: `ASSET_VERSION_CONFLICT`.
+- Every loser that does not own the stored object compensates it, with the same log and metric as PR 2.
+
+**Retries after an ambiguous failure.** Suppose the client cannot tell whether a version request succeeded. A retry with the same key and bytes derives the same child id:
+- if the first attempt committed, the replay check returns the child (200), with no second transition;
+- if it did not commit, the parent is still active and the retry performs the one transition.
+
+A retry can never create a second version of the same parent, because a key belongs to one parent, and after the first success the parent is no longer active.
+
+**Outcomes.**
+
+| Case | Result |
+|---|---|
+| New key, parent active, new bytes | 201: child `ACTIVE`, version `n+1`, `parent_asset_id` set; parent `SUPERSEDED` |
+| Same key, same bytes (retry) | 200: the same child |
+| Same key, other bytes | 409 `IDEMPOTENCY_KEY_REUSED` |
+| Bytes already in the tenant (parent included) | 409 `DUPLICATE_CONTENT` (`existing_asset_id` only with `CONTENT_ASSET_READ`) |
+| Parent superseded | 409 `ASSET_VERSION_CONFLICT` |
+| Parent revoked | 409 `ASSET_NOT_VERSIONABLE` |
+| Another tenant's parent / platform parent | 404 / 403 |
+| Storage unavailable / commit fails | 503 / 500. The parent is still current, and the object is compensated |
+
+## 10. The dispatch boundary
+
+`managed_storage_key(asset, bucket)` returns the object key only when `storage_uri` is exactly `s3://{bucket}/tenants/{asset.tenant_id}/assets/{asset.id}/{asset.content_sha256}`. That means the configured bucket, and the row's own tenant, id and hash. Anything else returns None: another bucket, a missing or foreign tenant, path tricks, case changes, or extra segments.
+
+- **Job creation and reprocess** refuse an unmanaged asset: 409 `ASSET_NOT_IN_MANAGED_STORAGE`, and no job is created.
+- **Dispatch** checks again (jobs created before PR 3b exist), then `head`s the object. It must exist, its size must equal `file_size_bytes`, and its reported SHA-256, when storage reports one, must equal `content_sha256`.
+  - Any failure is recorded as a non-retryable dispatch failure (`ASSET_NOT_IN_MANAGED_STORAGE`, `ASSET_OBJECT_MISSING`, `ASSET_OBJECT_MISMATCH`). The AI-service is never called.
+  - Unavailable storage is a retryable failure (`OBJECT_STORAGE_UNAVAILABLE`), as an unavailable AI-service already is.
+  - The object check is a required dependency of the dispatch handler; there is no configuration that skips it.
+- PR 4 verifies the bytes again when the AI-service fetches them.
