@@ -11,6 +11,7 @@ from tests.integration.assessment.test_question_api import (
     seed_tenant_context,
 )
 from tests.integration.content.test_content_source_api import add_membership
+from tests.integration.content.uploads import upload_asset
 
 
 @pytest.mark.asyncio
@@ -46,18 +47,7 @@ async def test_content_job_api_and_rbac(client) -> None:
     source_id = source_res.json()["data"]["id"]
 
     # 5. Create Asset
-    sha = "f" * 64
-    asset_res = client.post(
-        f"/content/sources/{source_id}/assets",
-        json={
-            "file_name": "syllabus.pdf",
-            "mime_type": "application/pdf",
-            "file_size_bytes": 10240,
-            "content_sha256": sha,
-            "storage_uri": "s3://build-assets/syllabus.pdf",
-        },
-        headers=lecturer_headers,
-    )
+    asset_res = upload_asset(client, source_id, headers=lecturer_headers, name="syllabus.pdf")
     assert asset_res.status_code == 201, asset_res.text
     asset_id = asset_res.json()["data"]["id"]
 

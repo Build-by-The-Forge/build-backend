@@ -38,6 +38,7 @@ from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
     seed_tenant_context,
 )
+from tests.integration.content.uploads import upload_asset
 
 REDIS_URL = os.getenv("TEST_REDIS_URL")
 pytestmark = pytest.mark.skipif(not REDIS_URL, reason="TEST_REDIS_URL not set")
@@ -124,17 +125,7 @@ async def processing_job(client, monkeypatch) -> tuple[dict, str, dict]:
         },
         headers=h,
     ).json()["data"]["id"]
-    asset_id = client.post(
-        f"/content/sources/{source_id}/assets",
-        json={
-            "file_name": "cb.pdf",
-            "mime_type": "application/pdf",
-            "file_size_bytes": 10,
-            "content_sha256": "7" * 64,
-            "storage_uri": "s3://build-assets/cb.pdf",
-        },
-        headers=h,
-    ).json()["data"]["id"]
+    asset_id = upload_asset(client, source_id, headers=h, name="cb.pdf").json()["data"]["id"]
     job_id = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=h).json()["data"]["id"]
 
     async def accepted(self, job, asset, source, actor):
