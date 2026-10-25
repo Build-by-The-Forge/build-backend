@@ -187,6 +187,28 @@ def object_key(tenant_id: str, asset_id: str, sha256: str) -> str:
     return f"tenants/{tenant_id}/assets/{asset_id}/{sha256}"
 
 
+def storage_uri_for(bucket: str, key: str) -> str:
+    return f"s3://{bucket}/{key}"
+
+
+def managed_storage_key(asset: ContentAsset, bucket: str) -> str | None:
+    """The object key of ``asset`` if its ``storage_uri`` is exactly the one
+    the upload service writes for this row: the configured bucket and the
+    row's own tenant, id and SHA-256. Otherwise None (design section 10).
+
+    Only such a reference may reach the AI-service. A legacy or
+    client-supplied URI is never trusted for being well formed: a foreign
+    bucket, another tenant's or asset's prefix, another hash, a platform
+    row, extra segments or any other spelling all return None.
+    """
+    if not asset.tenant_id or not bucket:
+        return None
+    key = object_key(asset.tenant_id, asset.id, asset.content_sha256)
+    if asset.storage_uri != storage_uri_for(bucket, key):
+        return None
+    return key
+
+
 class ContentAssetUploadService:
     def __init__(
         self,
@@ -241,7 +263,7 @@ class ContentAssetUploadService:
             mime_type=mime_type,
             file_size_bytes=body.size_bytes,
             content_sha256=body.sha256,
-            storage_uri=f"s3://{self._bucket()}/{storage_key}",
+            storage_uri=storage_uri_for(self._bucket(), storage_key),
             created_by=user_id,
             created_by_email=user_email,
             metadata={"upload": {"detected_mime_type": mime_type}},
