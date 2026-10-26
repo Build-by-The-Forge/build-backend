@@ -105,19 +105,19 @@ scripts/check_backend_image.sh build-m3-backend || status=$?
 # written by the run so far.
 scripts/check_storage_secrets.sh || status=$?
 
+# P3-1: object storage stopped. Uploads and dispatches must fail as
+# retryable and never reach the AI-service. Before C11: after a Redis outage
+# the auth throttle keeps refusing logins for a while, and these cases log
+# in. The store keeps its data on tmpfs; nothing after this needs it.
+echo "P3-1: stopping object storage"
+"${COMPOSE[@]}" stop object-storage
+"${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
+
 echo "C11: stopping redis"
 "${COMPOSE[@]}" stop redis
 "${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m redis_down || status=$?
 # Back to healthy before anything else runs against the stack.
 "${COMPOSE[@]}" up -d --wait redis
-
-# P3-1: object storage stopped. Uploads and dispatches must fail as
-# retryable and never reach the AI-service. Run while the rest of the stack
-# is healthy (the M6 steps below replace containers); the store keeps its
-# data on tmpfs and nothing after this needs it.
-echo "P3-1: stopping object storage"
-"${COMPOSE[@]}" stop object-storage
-"${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
 
 # M6: the production startup path, with the same images.
 scripts/m6_production_startup.sh || status=$?
