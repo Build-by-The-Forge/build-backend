@@ -59,3 +59,26 @@ def test_c25_ai_service_can_use_its_own_tables():
     )
     run("DELETE FROM session_memory WHERE tenant_id = $1", tenant)
     run("DELETE FROM learning_memory WHERE tenant_id = $1", tenant)
+
+
+def test_c25_ai_service_can_use_its_chunk_index():
+    # document_chunks (ai-service P3-4): pgvector and the generated
+    # full-text column work for the runtime role, not only the owner.
+    tenant = str(uuid.uuid4())
+    run(
+        "INSERT INTO document_chunks (chunk_id, tenant_id, asset_id, run_number, chunk_index,"
+        " page_start, page_end, content, embedding, embedding_model)"
+        " VALUES ($1, $2, 'c25', 1, 0, 1, 1, 'Charges repel', $3::text::vector, 'c25')",
+        str(uuid.uuid4()),
+        tenant,
+        "[" + ",".join(["1"] + ["0"] * 383) + "]",
+    )
+    [row] = run(
+        "SELECT embedding <=> $2::text::vector AS distance,"
+        " content_tsv @@ plainto_tsquery('english', 'repelling charge') AS matches"
+        " FROM document_chunks WHERE tenant_id = $1",
+        tenant,
+        "[" + ",".join(["1"] + ["0"] * 383) + "]",
+    )
+    assert row["distance"] == 0 and row["matches"] is True
+    run("DELETE FROM document_chunks WHERE tenant_id = $1", tenant)
