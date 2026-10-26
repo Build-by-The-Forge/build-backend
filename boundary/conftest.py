@@ -285,8 +285,36 @@ def tenant_b(backend: httpx.Client) -> Tenant:
 
 
 def pdf_document() -> bytes:
-    """A small PDF, unique per call (duplicate content is tenant-wide)."""
-    return b"%PDF-1.7\n% BUILD boundary gate\n" + uuid.uuid4().hex.encode() * 8
+    """A valid one-page PDF with a real text layer, unique per call
+    (duplicate content is tenant-wide). The AI-service extracts it (P3-2),
+    so it must be a PDF a reader can open, not just bytes that start with
+    %PDF-. Built here with correct offsets; no PDF library needed."""
+    marker = uuid.uuid4().hex
+    lines = [
+        "BUILD boundary gate document",
+        f"Reference {marker}",
+        "Electric charge is conserved: in every interaction the total charge",
+        "before equals the total charge after. Like charges repel and unlike",
+        "charges attract, with a force that falls with the square of distance.",
+    ]
+    text = "BT /F1 12 Tf 72 720 Td 16 TL " + " ".join(f"({line}) '" for line in lines) + " ET"
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(text), text.encode("latin-1")),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.7\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return bytes(out)
 
 
 def create_source(backend: httpx.Client, tenant: Tenant) -> str:
