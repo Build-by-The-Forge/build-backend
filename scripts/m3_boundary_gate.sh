@@ -108,7 +108,16 @@ scripts/check_storage_secrets.sh || status=$?
 echo "C11: stopping redis"
 "${COMPOSE[@]}" stop redis
 "${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m redis_down || status=$?
-"${COMPOSE[@]}" start redis
+# Back to healthy before anything else runs against the stack.
+"${COMPOSE[@]}" up -d --wait redis
+
+# P3-1: object storage stopped. Uploads and dispatches must fail as
+# retryable and never reach the AI-service. Run while the rest of the stack
+# is healthy (the M6 steps below replace containers); the store keeps its
+# data on tmpfs and nothing after this needs it.
+echo "P3-1: stopping object storage"
+"${COMPOSE[@]}" stop object-storage
+"${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
 
 # M6: the production startup path, with the same images.
 scripts/m6_production_startup.sh || status=$?
@@ -119,13 +128,6 @@ scripts/m6_refusal_selftest.sh || status=$?
 # Phase 2 Step 2: real OCR in the AI-service image with networking disabled,
 # from the models baked into it (no runtime download).
 "${AI_SERVICE_DIR:-../ai-service}/scripts/test_offline_ocr_image.sh" build-m3-ai-service || status=$?
-
-# P3-1: object storage stopped. Uploads and dispatches must fail as
-# retryable and never reach the AI-service. Last, because the store keeps
-# its data on tmpfs: nothing after this needs it.
-echo "P3-1: stopping object storage"
-"${COMPOSE[@]}" stop object-storage
-"${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
 
 # The whole run tested one revision of each repository: neither checkout may
 # have moved since it was recorded.
