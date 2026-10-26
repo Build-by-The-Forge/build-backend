@@ -206,11 +206,12 @@ def test_no_legacy_ai_tables_exist():
 def test_every_table_belongs_to_exactly_one_service():
     owners = _owners()
     ai_tables = {t for t, o in owners.items() if o == "build_ai_owner"}
-    required = {"learning_memory", "session_memory", "ai_service_alembic_version"}
-    # document_chunks (P3-4) arrives with ai-service#22; until it merges the
-    # gate runs against AI-service revisions with and without it. Tightened
-    # back to exact equality once it is on the AI-service main.
-    assert required <= ai_tables <= required | {"document_chunks"}
+    assert ai_tables == {
+        "document_chunks",
+        "learning_memory",
+        "session_memory",
+        "ai_service_alembic_version",
+    }
     assert {o for t, o in owners.items() if t not in ai_tables} == {"build_backend_owner"}
     assert owners["users"] == owners["tenants"] == owners["memberships"] == "build_backend_owner"
 
