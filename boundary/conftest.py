@@ -42,6 +42,7 @@ if not (BACKEND_URL and AI_URL and B2A and A2B):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "redis_down: C11, run only while Redis is stopped")
+    config.addinivalue_line("markers", "storage_down: P3-1, run only while object storage is stopped")
 
 
 BACKEND_ID = "build-backend"
@@ -283,8 +284,12 @@ def tenant_b(backend: httpx.Client) -> Tenant:
 # --- Content ---------------------------------------------------------------------------
 
 
-def create_job(backend: httpx.Client, tenant: Tenant) -> dict[str, Any]:
-    h = tenant.h("lecturer")
+def pdf_document() -> bytes:
+    """A small PDF, unique per call (duplicate content is tenant-wide)."""
+    return b"%PDF-1.7\n% BUILD boundary gate\n" + uuid.uuid4().hex.encode() * 8
+
+
+def create_source(backend: httpx.Client, tenant: Tenant) -> str:
     source = backend.post(
         "/content/sources",
         json={
@@ -294,25 +299,67 @@ def create_job(backend: httpx.Client, tenant: Tenant) -> dict[str, Any]:
             "authority_level": "institutional",
             "visibility": "tenant",
         },
-        headers=h,
+        headers=tenant.h("lecturer"),
     )
     assert source.status_code == 201, source.text
-    # The only way to create an asset (P3-1 PR 3b): real bytes uploaded to
-    # the stack's object storage, so dispatch checks a real stored object.
-    document = b"%PDF-1.7\n% BUILD boundary gate\n" + uuid.uuid4().hex.encode() * 8
-    asset = backend.post(
-        f"/content/sources/{source.json()['data']['id']}/assets/upload",
+    return source.json()["data"]["id"]
+
+
+def upload(backend: httpx.Client, tenant: Tenant, source_id: str, document: bytes) -> httpx.Response:
+    return backend.post(
+        f"/content/sources/{source_id}/assets/upload",
         params={"file_name": "boundary.pdf"},
         content=document,
-        headers=h | {"Idempotency-Key": f"boundary-{uuid.uuid4().hex}", "Content-Type": "application/octet-stream"},
+        headers=tenant.h("lecturer")
+        | {"Idempotency-Key": f"boundary-{uuid.uuid4().hex}", "Content-Type": "application/octet-stream"},
     )
-    assert asset.status_code == 201, asset.text
-    stored = asset.json()["data"]
+
+
+def create_asset(backend: httpx.Client, tenant: Tenant, document: bytes | None = None) -> dict[str, Any]:
+    """An asset created the only way there is (P3-1 PR 3b): real bytes
+    uploaded to the stack's object storage."""
+    document = document if document is not None else pdf_document()
+    response = upload(backend, tenant, create_source(backend, tenant), document)
+    assert response.status_code == 201, response.text
+    stored = response.json()["data"]
     assert stored["content_sha256"] == hashlib.sha256(document).hexdigest()
     assert stored["storage_uri"].startswith("s3://build-documents/tenants/")
-    job = backend.post(f"/content/assets/{asset.json()['data']['id']}/jobs", json={"max_attempts": 3}, headers=h)
+    return stored
+
+
+def create_job_for(backend: httpx.Client, tenant: Tenant, asset: dict[str, Any]) -> dict[str, Any]:
+    job = backend.post(f"/content/assets/{asset['id']}/jobs", json={"max_attempts": 3}, headers=tenant.h("lecturer"))
     assert job.status_code == 201, job.text
     return job.json()["data"]
+
+
+def create_job(backend: httpx.Client, tenant: Tenant) -> dict[str, Any]:
+    return create_job_for(backend, tenant, create_asset(backend, tenant))
+
+
+def object_store():
+    """The stack's object store with the backend's identity (read, write,
+    list), for tests that tamper with or delete what an upload stored."""
+    import boto3
+    from botocore.config import Config
+
+    return boto3.session.Session().client(
+        "s3",
+        endpoint_url=os.environ["BOUNDARY_STORAGE_ENDPOINT"],
+        region_name="us-east-1",
+        aws_access_key_id=os.environ["BOUNDARY_STORAGE_ACCESS_KEY"],
+        aws_secret_access_key=os.environ["BOUNDARY_STORAGE_SECRET_KEY"],
+        config=Config(
+            s3={"addressing_style": "path"},
+            retries={"max_attempts": 2},
+            request_checksum_calculation="when_required",
+            response_checksum_validation="when_required",
+        ),
+    )
+
+
+def object_key(asset: dict[str, Any]) -> str:
+    return asset["storage_uri"].split("/", 3)[3]
 
 
 def get_job(backend: httpx.Client, tenant: Tenant, job_id: str) -> dict[str, Any]:
