@@ -34,6 +34,11 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO build_backend_owner, build_ai_owner;
 GRANT USAGE ON SCHEMA public TO build_backend_app, build_ai_app;
 
+-- Extensions: pgvector, for the AI-service's document_chunks index (P3-4).
+-- Only the superuser can create it (on Supabase it is enabled from the
+-- dashboard); the AI migration checks that it exists and never creates it.
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Future objects each owner creates are usable by its own runtime role only.
 ALTER DEFAULT PRIVILEGES FOR ROLE build_backend_owner IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO build_backend_app;
