@@ -35,6 +35,9 @@ DISPATCH = "/v1/ingest/dispatch"
 BUCKET = "build-documents"
 BACKEND_APP_DSN = os.environ.get("BOUNDARY_BACKEND_APP_DSN", "")
 TERMINAL_STATES = {"failed", "ready"}
+# A fetch-and-verify task normally finishes in about a second; the worker is
+# shared with every other test, so allow for a queue.
+FETCH_TIMEOUT = 180
 
 
 def dispatch(backend, tenant, job_id):
@@ -51,7 +54,7 @@ def test_c22_the_ai_fetches_and_verifies_the_uploaded_document(backend, tenant_a
 
     response = dispatch(backend, tenant_a, job["id"])
     assert response.status_code == 200, response.text
-    final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES)
+    final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
     assert (final["status"], final["error_code"]) == ("failed", "INGESTION_PIPELINE_UNAVAILABLE")
     fetch = final["error_details"]["fetch"]
@@ -73,7 +76,7 @@ def test_a_tampered_object_is_refused_by_the_ai_service(backend, tenant_a):
 
     response = dispatch(backend, tenant_a, job["id"])
     assert response.status_code == 200, response.text
-    final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES)
+    final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
     assert (final["status"], final["error_code"], final["is_retryable"]) == (
         "failed",

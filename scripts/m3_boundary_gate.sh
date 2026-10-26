@@ -66,6 +66,16 @@ if missing:
 PY
 
 cleanup() {
+  local rc=$?
+  # On failure, the services' own logs before they are removed: the
+  # workflow's failure step runs after this, when nothing is left to read.
+  if [[ $rc -ne 0 ]]; then
+    for service in ai-worker ai-service backend; do
+      echo "::group::$service logs (last 150 lines)"
+      "${COMPOSE[@]}" logs --no-color --tail 150 "$service" 2>&1 || true
+      echo "::endgroup::"
+    done
+  fi
   if [[ -z "${KEEP_STACK:-}" ]]; then
     "${COMPOSE[@]}" --profile gate down -v --remove-orphans >/dev/null 2>&1 || true
   fi
