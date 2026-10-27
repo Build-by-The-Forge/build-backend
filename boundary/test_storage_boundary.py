@@ -1,9 +1,9 @@
 """Uploaded documents across the backend and AI-service boundary (P3-1
 PR 6), against the m3 topology's real SeaweedFS.
 
-C22 here proves the verified fetch: whichever way the pipeline ends (see
-conftest.pipeline_outcome while ai-service#25 is merged), its evidence
-records the fetched document's SHA-256, size and type.
+C22 here proves the verified fetch: the ready job's evidence (see
+conftest.pipeline_outcome) records the fetched document's SHA-256, size
+and type.
 
 The storage_down cases run only while object storage is stopped
 (scripts/m3_boundary_gate.sh stops it, as it does Redis for C11).

@@ -365,21 +365,14 @@ def create_job(backend: httpx.Client, tenant: Tenant) -> dict[str, Any]:
     return create_job_for(backend, tenant, create_asset(backend, tenant))
 
 
-PIPELINE_UNAVAILABLE = "INGESTION_PIPELINE_UNAVAILABLE"
-
-
 def pipeline_outcome(job: dict[str, Any]) -> dict[str, Any]:
     """The end of a valid document's ingestion, returning its fetch evidence.
 
-    While ai-service#25 (P3-4: embedding and the durable index) is being
-    merged, the gate runs against AI-service revisions with and without it,
-    so exactly two endings are accepted: the honest stop (failed with
-    INGESTION_PIPELINE_UNAVAILABLE) or ready with the indexed evidence the
-    backend's stage contract requires. Tightened to ready alone afterwards.
+    A valid document ends ready (P3-4), with the evidence the backend's
+    stage contract requires: every chunk durably indexed in
+    document_chunks, the extraction method and characters, and the
+    verified fetch.
     """
-    if job["status"] == "failed":
-        assert job["error_code"] == PIPELINE_UNAVAILABLE, job
-        return job["error_details"]["fetch"]
     assert job["status"] == "ready", job
     metrics = job["metrics"]
     assert metrics["indexed_chunks"] == metrics["chunks"] >= 1, metrics

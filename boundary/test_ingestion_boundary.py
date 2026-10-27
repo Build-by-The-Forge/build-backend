@@ -3,10 +3,9 @@ callbacks to the backend, reconciliation.
 
 C3/C7/C9/C10/C12 at the backend callback, C16, C19-C23.
 
-C22: the full signed path runs end to end, and nothing makes a job `ready`
-without stage evidence. While ai-service#25 (P3-4) is merged the job ends
-either at the honest stop (failed, INGESTION_PIPELINE_UNAVAILABLE) or
-`ready` with indexed evidence; conftest.pipeline_outcome checks both.
+C22: the full signed path runs end to end, and a valid document ends
+`ready` with every stage's evidence (conftest.pipeline_outcome); a late
+callback cannot move it again.
 """
 
 import uuid
