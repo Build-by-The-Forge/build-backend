@@ -284,19 +284,26 @@ def tenant_b(backend: httpx.Client) -> Tenant:
 # --- Content ---------------------------------------------------------------------------
 
 
-def pdf_document(marker: str | None = None) -> bytes:
+def pdf_document(marker: str | None = None, body: list[str] | None = None) -> bytes:
     """A valid one-page PDF with a real text layer, unique per call
     (duplicate content is tenant-wide). The AI-service extracts it (P3-2),
     so it must be a PDF a reader can open, not just bytes that start with
     %PDF-. Built here with correct offsets; no PDF library needed. The
-    "Reference <marker>" line identifies the document in retrieval tests."""
+    "Reference <marker>" line identifies the document in retrieval tests;
+    `body` replaces the default text (Latin-1, no parentheses, one line
+    per entry)."""
     marker = marker or uuid.uuid4().hex
     lines = [
         "BUILD boundary gate document",
         f"Reference {marker}",
-        "Electric charge is conserved: in every interaction the total charge",
-        "before equals the total charge after. Like charges repel and unlike",
-        "charges attract, with a force that falls with the square of distance.",
+        *(
+            body
+            or [
+                "Electric charge is conserved: in every interaction the total charge",
+                "before equals the total charge after. Like charges repel and unlike",
+                "charges attract, with a force that falls with the square of distance.",
+            ]
+        ),
     ]
     text = "BT /F1 12 Tf 72 720 Td 16 TL " + " ".join(f"({line}) '" for line in lines) + " ET"
     objects = [
