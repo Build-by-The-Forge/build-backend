@@ -2,6 +2,12 @@
 
 **Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
 
+**Revision 2.1 (2026-10-27)** answers the review of revision 2 on #38.
+
+- **The flaw:** reclaiming a dead worker's stream entries by pending idle time (`XAUTOCLAIM`) could fence a *healthy* long-running worker. Idle time is independent of the renewed task lease.
+- **The fix:** idle time now only nominates candidates (`XPENDING`, read-only). Reclaim is an atomic Lua transition on the task record that requires an expired lease and a matching owner. Renewal is a matching compare-and-set, so the two serialise in Redis.
+- **New tests:** a handler renewing across five lease windows is never reclaimed, and concurrent renew-and-reclaim always yields exactly one outcome (§7.3, §14).
+
 **Revision 2 (2026-10-27)** answers the review of revision 1 (build-backend#24). That PR was closed by the main-branch force push of 2026-10-26, not by a review decision.
 
 1. **A task's liveness is now a renewed lease** in the AI-service's shared task record (§6, §7).
@@ -136,11 +142,19 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
 2. **Status reports liveness.**
    - `GET /v1/ingest/tasks/{id}` reports `running` only while `lease_until` is in the future. Otherwise it reports `stalled`, with `lease_until` and `heartbeat_at` included.
    - `stalled` is derived from the record and the clock, never stored, so it needs no writer.
-3. **A dead worker's stream entries are reclaimed and fenced.**
-   - Each AI worker periodically runs `XAUTOCLAIM` on entries pending longer than `TASK_LEASE_SECONDS × 2`.
-   - For each one, it marks the task record `lost`, which also fences the old worker: its next renewal or state write fails the `worker_id` check.
-   - It then acknowledges the entry **without running it**.
-   - Recovery belongs to the backend alone: a new attempt with a new task. So a reclaimed entry is never executed twice, and the stream does not grow without bound.
+3. **A dead worker's stream entries are reclaimed and fenced, and only a dead worker's.**
+   - **Stream idle time only nominates candidates.** Redis measures a pending entry's idle time from its last delivery or claim, independently of the task lease. A healthy handler that runs longer than any idle threshold keeps its entry pending, so idle time alone must never reclaim, claim or acknowledge anything. There is no `XAUTOCLAIM`, because it transfers ownership of every idle entry it returns.
+   - **Finding candidates:** each AI worker periodically lists pending entries with `XPENDING … IDLE TASK_LEASE_SECONDS × 2`, which is read-only and changes no ownership.
+   - **The lease decides.** For each candidate, a single Redis Lua script on the task record atomically:
+     1. checks that the record is not terminal;
+     2. checks that `lease_until < now` (the server's `TIME`, so clock skew between workers does not matter);
+     3. checks that `worker_id` equals the entry's pending consumer;
+     4. only if all three hold, sets `state=lost` and replaces `worker_id` with a fence token.
+
+     A record whose lease is live is left untouched, so a renewing handler is never reclaimed, however long it runs.
+   - **Acknowledging:** only when the script reports the transition does the reclaimer `XACK` the entry, **without running it**.
+   - **Renewal is guarded by the same atomicity.** It is a Lua compare-and-set that extends `lease_until` only while `worker_id` still matches and the state is `running`. A renewal and a reclaim of the same record therefore serialise in Redis: either the renewal lands first and the reclaim sees a live lease, or the reclaim lands first and the renewal is refused, after which the worker stops and reports nothing.
+   - **Recovery belongs to the backend alone:** a new attempt with a new task. So a reclaimed entry is never executed twice, and the stream does not grow without bound.
 4. **A zombie cannot cause a false `ready`.**
    - Suppose a "dead" worker was only partitioned, and finishes the old attempt after the backend has retried.
    - Its callbacks name the old attempt and are **stale** at the backend ledger, so they change nothing.
@@ -258,7 +272,9 @@ All take the defaults above and are validated by range.
 **AI-service (Redis):**
 
 - the lease is renewed while a handler runs, and lapses when the worker stops;
-- `XAUTOCLAIM` reclaims a dead consumer's entry, marks it `lost` and acknowledges it without running it;
+- **a healthy handler is never reclaimed:** it renews its lease across at least five lease windows while its entry stays pending well past the idle threshold. Reclaim passes run throughout. The task stays `running` with its owner, the entry stays pending, and the handler completes normally;
+- a dead consumer's entry (no renewals, lease expired) is marked `lost` and acknowledged without being run;
+- **the race:** a renewal and a reclaim of the same record, issued concurrently many times, always end in exactly one outcome. Either the lease is extended and nothing is reclaimed, or the task is `lost`, the renewal is refused and the worker stops. Never both;
 - a fenced worker's renewal and state writes are refused.
 
 **Real storage (storage gate):**
@@ -280,7 +296,7 @@ All take the defaults above and are validated by range.
 
 ## 15. PRs
 
-1. **AI-service:** the task lease and its renewal, `stalled` in status, `XAUTOCLAIM` reclaim and fencing, and system-actor access limited to dispatch and status. This PR includes its Redis and route tests.
+1. **AI-service:** the task lease and its atomic renewal, `stalled` in status, lease-conditioned reclaim and fencing, and system-actor access limited to dispatch and status. This PR includes its Redis and route tests.
 2. **Backend:** the jobs index migration, and the system-actor dispatch path through the gateway.
 3. **Backend:** the worker process (dispatcher and retrier, per-job transactions, shutdown, liveness), with the `pg_smoke` concurrency and lock tests.
 4. **Backend:** the recoverer (lease-aware, with the in-flight cap).
