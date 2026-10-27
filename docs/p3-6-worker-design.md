@@ -1,6 +1,15 @@
-# P3-6 — backend ingestion worker: design (revision 2.4)
+# P3-6 — backend ingestion worker: design (revision 2.5)
 
 **Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
+
+**Revision 2.5 (2026-10-27)** answers the review of 2.4 on #38.
+
+- **The flaw:** revision 2.4 claimed the external fences made *every* effect racing a lost record harmless. That is false while the lost attempt is still the backend's current one: neither fence has moved yet.
+- **The fix:** the guarantee is narrowed to what holds.
+  - The job's row lock serialises N's completion against recovery.
+  - Whichever lands first decides: an honest `ready`, with N's chunks committed first, or a retryable failure that refuses N's later callbacks.
+  - No superseded attempt can write, chunks never mix, and the in-process stop is an optimisation, not the guarantee (§7.1).
+- **New test:** a fault-injection test pauses an effect after its local check, deletes the record, and forces both orderings against recovery (§14).
 
 **Revision 2.4 (2026-10-27)** answers the review of 2.3 on #38.
 
@@ -171,11 +180,18 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
      3. drops every callback for that task still queued in the worker.
 
      Every side-effect boundary in the handler (each stage report, the index write, and completion) checks the fence first and does nothing once it is set.
-   - **External fences cover the check-then-act gap.** A handler can pass its in-process check just before the fence is set. Its effects are still harmless:
-     - its callbacks name a superseded attempt, so the backend ledger treats them as **stale** (C21);
-     - its index write is refused by the authoritative index fence (point 5).
-
-     The in-process stop limits wasted work; the external fences give the guarantee.
+   - **What the external fences do and do not cover (the check-then-act gap).** A handler can pass its in-process check just before its fence is set. What its in-flight effect does then depends on whether the backend has moved on to a newer attempt:
+     - **A newer attempt has been dispatched:** the effect is refused. The callbacks name a superseded attempt and are **stale** at the ledger (C21), and the index write fails the authoritative index fence (point 5).
+     - **The attempt is still the backend's current one** (the record was lost or reclaimed, but recovery has not run yet). Neither fence has moved, so an effect that already passed the local check **can land**. This is not prevented. It is bounded as follows:
+       - **The job's row lock serialises the outcomes.** The recoverer's `fail_processing("AI_TASK_LOST")` for attempt N, and N's `indexed`/`complete` callbacks, each run in a transaction holding the job's row lock (§4), so exactly one ordering wins.
+       - **If N's callbacks land first:** the job reaches `ready` legitimately. N's `indexed` is sent only after N's index write **committed**, so `ready` still means the current attempt's chunks are durable and complete. A later recoverer pass finds the job `ready`, not in flight, and does nothing.
+       - **If recovery lands first:** the job is `failed` (retryable), and N's later callbacks are refused (`TRANSITION_NOT_ALLOWED`: a failed job takes no stage or completion events). Any chunks N already committed stay searchable until the retry's attempt N+1 raises the fence and replaces them (point 5's residual).
+     - **The guarantee, stated precisely:**
+       - a job is `ready` only if the attempt that made it `ready` committed its chunks first;
+       - chunks of two attempts never mix, because a write replaces the asset whole, under the fence;
+       - no superseded attempt can write or make progress;
+       - the in-process stop reduces wasted work, but is **not** what provides correctness.
+     - **Not guaranteed, and deliberately allowed:** the attempt whose record was lost may still complete (and the job become `ready`) if it finishes before recovery, because its work is genuinely complete. A lost record without a lost attempt is therefore not an error.
 2. **Status reports liveness.**
    - `GET /v1/ingest/tasks/{id}` reports `running` only while `lease_until` is in the future. Otherwise it reports `stalled`, with `lease_until` and `heartbeat_at` included.
    - `stalled` is derived from the record and the clock, never stored, so it needs no writer.
@@ -205,7 +221,7 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
    - **Why equality and not "no newer rows":** revision 2.3 refused a write only when the index already held newer rows. A delayed attempt 1 could still write into an **empty** index while attempt 2 had not written yet, or if attempt 2 failed before writing. That made a document whose job is not `ready` searchable. The fence is raised when attempt 2 is *dispatched*, not when it writes, so attempt 1 is refused whether or not the index has any rows. Its content doesn't matter either.
    - **Rows still record their attempt.** `document_chunks.attempt` stays, for provenance and diagnosis, but the fence row is what decides.
    - **Consequence:** only the attempt the backend most recently dispatched can write an asset's index. A reprocess (a new run) and a retry (a new attempt) each raise the fence first. A zombie or late attempt is refused at the database, in the same transaction as the write.
-   - **Residual, stated:** if the current attempt commits its write and then fails before `indexed` reaches the backend (a lost callback), its chunks are searchable while the job is not `ready`. The next attempt raises the fence and replaces them. Gating retrieval on the job's state, so the AI-service holds back chunks until `ready`, is tracked for Mobile API Contracts, where the citation contract's access check lives.
+   - **Residual, stated:** if the current attempt commits its write and the job then does not become `ready` from it, its chunks are searchable while the job is not `ready`. This happens on a lost `indexed` callback, or when recovery fails the attempt first (§7.1's race). The next attempt raises the fence and replaces them. Gating retrieval on the job's state, so the AI-service holds back chunks until `ready`, is tracked for Mobile API Contracts, where the citation contract's access check lives.
 
 ## 8. Orphaned-object reconciliation
 
@@ -355,9 +371,15 @@ All take the defaults above and are validated by range.
 - **the fence only rises:** a duplicate or late dispatch of attempt 1 after attempt 2's leaves the fence at attempt 2. A reprocess (run 2, attempt 1) raises it above run 1, attempt 3;
 - **record expiry during an active handler:** the task record is deleted while its handler runs (simulating TTL expiry or a lost record).
   - The next renewal fails and the handler is cancelled.
-  - No stage callback or completion is sent after the failure.
-  - An index write that races past the in-process check is refused by the fence.
-  - The backend never shows the job `ready` from that attempt: it recovers it as unknown, and a new attempt completes it.
+  - No stage callback or completion is *started* after the failure.
+- **record loss racing an effect already past its check:** with fault injection, attempt N's handler is paused **after** its local fence check and **before** its index write (and, separately, before sending `indexed`). The task record is then deleted, and the effect is raced against a recoverer pass. Both orderings are forced and asserted:
+  - **The effect first:** the write commits, `indexed` and `complete` are accepted, and the job is `ready` with exactly attempt N's chunks. The recoverer pass then changes nothing.
+  - **Recovery first:**
+    - the job is `failed` with `AI_TASK_LOST` (retryable);
+    - N's late `indexed` and `complete` are refused, and the job is never `ready` from attempt N;
+    - attempt N+1 is dispatched, which raises the fence, and N's write, if not yet committed, is refused (`STALE_INDEX_WRITE`);
+    - attempt N+1 reaches `ready` with only its own chunks.
+  - **Both orderings:** no state ever has `ready` without the deciding attempt's committed chunks, nor chunks of two attempts at once.
 - **renewal refreshes the TTL:** after a renewal, the record's `TTL` is back to `TASK_RECORD_TTL_SECONDS`;
 - a system context cannot reach chat or retrieve, nor another tenant's task.
 
