@@ -2,8 +2,10 @@
 
 AI-service runs MODEL_PROVIDER=deterministic in this topology, so answers are
 a fixed format naming the prompt digest; what is verified is the path and the
-scoping, not tutoring quality. Retrieval context names the tenant it searched
-and chat memory comes from AI-service's learning_memory table.
+scoping, not tutoring quality. Retrieval context is the passages AI-service
+retrieved from the durable index for the verified tenant (each tenant has
+its own uploaded document, identified by a marker), and chat memory comes
+from AI-service's learning_memory table.
 """
 
 import asyncio
@@ -12,7 +14,41 @@ import uuid
 import asyncpg
 import pytest
 
-from boundary.conftest import AI_APP_DSN
+from boundary.conftest import AI_APP_DSN, create_asset, create_job_for, pdf_document, wait_for_status
+
+# Ingestion of a one-page PDF takes seconds; the worker is shared with
+# every other test, so allow for a queue.
+READY_TIMEOUT = 180
+
+
+@pytest.fixture(scope="module")
+def documents(backend, tenant_a, tenant_b) -> dict[str, str]:
+    """One ready document per tenant, each with its own marker."""
+    markers = {}
+    for tenant in (tenant_a, tenant_b):
+        marker = uuid.uuid4().hex
+        job = create_job_for(backend, tenant, create_asset(backend, tenant, pdf_document(marker)))
+        dispatched = backend.post(f"/content/jobs/{job['id']}/dispatch", headers=tenant.h("lecturer"))
+        assert dispatched.status_code == 200, dispatched.text
+        final = wait_for_status(backend, tenant, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)
+        assert final["status"] == "ready", final
+        markers[tenant.tenant_id] = marker
+    return markers
+
+
+def assert_retrieved_from(context: list[str], tenant_id: str, own: str, other: str) -> None:
+    """The context is the caller tenant's own document and never the other's.
+
+    While ai-service#26 (P3-5: durable retrieval by default, no invented
+    passage) is merged, the gate runs against AI revisions with and without
+    it; the older one answers with a stand-in naming the tenant it searched.
+    Tightened to real passages alone afterwards.
+    """
+    assert context, "no retrieval context"
+    if context[0].startswith(f"Tenant {tenant_id} retrieval placeholder"):
+        return
+    assert any(own in passage for passage in context), context
+    assert not any(other in passage for passage in context), context
 
 
 async def _seed_memory(rows: list[tuple[str, str, str]]) -> None:
@@ -43,13 +79,14 @@ def memories(tenant_a, tenant_b):
     return own, marker
 
 
-def test_c27_chat_flows_through_both_services(backend, tenant_a):
-    response = backend.post("/ai/chat", json={"message": "What is osmosis?"}, headers=tenant_a.h("student"))
+def test_c27_chat_flows_through_both_services(backend, tenant_a, tenant_b, documents):
+    own, other = documents[tenant_a.tenant_id], documents[tenant_b.tenant_id]
+    response = backend.post("/ai/chat", json={"message": f"What does reference {own} say about charge?"}, headers=tenant_a.h("student"))
     assert response.status_code == 200, response.text
     data = response.json()["data"]
     assert data["answer"].startswith("[deterministic model]")
-    # AI-service's retrieval ran for the member's tenant (C15).
-    assert data["context"] and data["context"][0].startswith(f"Tenant {tenant_a.tenant_id} ")
+    # AI-service retrieved the member's own uploaded document (C15).
+    assert_retrieved_from(data["context"], tenant_a.tenant_id, own, other)
 
 
 def test_c27_explain_and_question_generation_flow(backend, tenant_a):
@@ -67,16 +104,18 @@ def test_c27_a_student_cannot_generate_questions(backend, tenant_a):
     assert response.status_code == 403
 
 
-def test_c15_headers_cannot_choose_another_tenant(backend, tenant_a, tenant_b):
+def test_c15_headers_cannot_choose_another_tenant(backend, tenant_a, tenant_b, documents):
+    own, other = documents[tenant_a.tenant_id], documents[tenant_b.tenant_id]
     spoofed = {
         **tenant_a.h("student"),
         "X-Tenant-ID": tenant_b.tenant_id,
         "X-School-ID": "1",
         "X-BUILD-Context": "e30",
     }
-    response = backend.post("/ai/chat", json={"message": "hello"}, headers=spoofed)
+    # The question names both tenants' documents: only the member's own may come back.
+    response = backend.post("/ai/chat", json={"message": f"reference {other} reference {own}"}, headers=spoofed)
     assert response.status_code == 200, response.text
-    assert response.json()["data"]["context"][0].startswith(f"Tenant {tenant_a.tenant_id} ")
+    assert_retrieved_from(response.json()["data"]["context"], tenant_a.tenant_id, own, other)
 
 
 def test_c15_a_tenant_slug_without_membership_is_refused(backend, tenant_a, tenant_b):
