@@ -1,6 +1,12 @@
-# P3-6 — backend ingestion worker: design (revision 2)
+# P3-6 — backend ingestion worker: design (revision 2.2)
 
 **Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
+
+**Revision 2.2 (2026-10-27)** answers the review of 2.1 on #38.
+
+- **The flaw:** in 2.1 the `lost` transition and the stream `XACK` were two steps. A reclaimer that died between them left an entry pending that no later pass would acknowledge.
+- **The fix:** both now happen in one Lua script over both keys, which share a cluster slot. The script is also idempotent: a record already `lost` for that entry, or already expired, has its entry acknowledged.
+- **New test:** fault injection at each point, then a restart, proves the entry is always eventually acknowledged and never executed (§7.3, §14).
 
 **Revision 2.1 (2026-10-27)** answers the review of revision 2 on #38.
 
@@ -145,14 +151,13 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
 3. **A dead worker's stream entries are reclaimed and fenced, and only a dead worker's.**
    - **Stream idle time only nominates candidates.** Redis measures a pending entry's idle time from its last delivery or claim, independently of the task lease. A healthy handler that runs longer than any idle threshold keeps its entry pending, so idle time alone must never reclaim, claim or acknowledge anything. There is no `XAUTOCLAIM`, because it transfers ownership of every idle entry it returns.
    - **Finding candidates:** each AI worker periodically lists pending entries with `XPENDING … IDLE TASK_LEASE_SECONDS × 2`, which is read-only and changes no ownership.
-   - **The lease decides.** For each candidate, a single Redis Lua script on the task record atomically:
-     1. checks that the record is not terminal;
-     2. checks that `lease_until < now` (the server's `TIME`, so clock skew between workers does not matter);
-     3. checks that `worker_id` equals the entry's pending consumer;
-     4. only if all three hold, sets `state=lost` and replaces `worker_id` with a fence token.
+   - **The lease decides, and the transition and the acknowledgement are one step.** The task record and the stream live in the same Redis instance. In a Redis Cluster, both keys carry the same hash tag (`{ai-tasks}`), so they share a slot. For each candidate, a single Lua script takes both keys and the entry id and runs atomically:
+     1. **Record live:** if the record is not terminal, `lease_until < now` (the server's `TIME`, so clock skew between workers does not matter) and `worker_id` equals the entry's pending consumer, it sets `state=lost`, records the fence token and the entry id (`lost_entry`), and `XACK`s the entry, **without running it**.
+     2. **Record already lost for this entry** (`state=lost` and `lost_entry` equals the entry id): it only `XACK`s. This makes the reclaim idempotent, so no recorded state can strand a pending entry.
+     3. **Record gone:** the record has expired after its TTL, so there is nothing to fence and nothing that can run. It `XACK`s. The backend sees the task as unknown and recovers the job with a new attempt (§6).
+     4. **Otherwise** (a live lease, another owner, or another terminal state), it changes nothing.
 
-     A record whose lease is live is left untouched, so a renewing handler is never reclaimed, however long it runs.
-   - **Acknowledging:** only when the script reports the transition does the reclaimer `XACK` the entry, **without running it**.
+     A record whose lease is live is left untouched, so a renewing handler is never reclaimed, however long it runs. No crash can separate the `lost` transition from the acknowledgement, because both happen inside one script. A reclaimer that dies before or after the script leaves a state the next pass handles (case 1, or cases 2 and 3).
    - **Renewal is guarded by the same atomicity.** It is a Lua compare-and-set that extends `lease_until` only while `worker_id` still matches and the state is `running`. A renewal and a reclaim of the same record therefore serialise in Redis: either the renewal lands first and the reclaim sees a live lease, or the reclaim lands first and the renewal is refused, after which the worker stops and reports nothing.
    - **Recovery belongs to the backend alone:** a new attempt with a new task. So a reclaimed entry is never executed twice, and the stream does not grow without bound.
 4. **A zombie cannot cause a false `ready`.**
@@ -273,7 +278,8 @@ All take the defaults above and are validated by range.
 
 - the lease is renewed while a handler runs, and lapses when the worker stops;
 - **a healthy handler is never reclaimed:** it renews its lease across at least five lease windows while its entry stays pending well past the idle threshold. Reclaim passes run throughout. The task stays `running` with its owner, the entry stays pending, and the handler completes normally;
-- a dead consumer's entry (no renewals, lease expired) is marked `lost` and acknowledged without being run;
+- a dead consumer's entry (no renewals, lease expired) is marked `lost` and acknowledged without being run, in one script: after it, the record is `lost` **and** the entry is no longer pending, with no state where only one holds;
+- **crash and restart:** a reclaimer stopped by fault injection at each point (before the script, between candidate listing and the script, and after the script before its next pass) is restarted, and the entry is eventually acknowledged and never executed. The same holds when a record is already `lost` with that `lost_entry` but the entry is still pending, as an older or interrupted reclaim would leave it, and when the record has expired;
 - **the race:** a renewal and a reclaim of the same record, issued concurrently many times, always end in exactly one outcome. Either the lease is extended and nothing is reclaimed, or the task is `lost`, the renewal is refused and the worker stops. Never both;
 - a fenced worker's renewal and state writes are refused.
 
