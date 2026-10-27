@@ -1,6 +1,11 @@
-# P3-6 — backend ingestion worker: design (revision 2.2)
+# P3-6 — backend ingestion worker: design (revision 2.3)
 
 **Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
+
+**Revision 2.3 (2026-10-27)** answers the review of 2.2 on #38.
+
+- **The hard cap's anchor:** the in-flight cap is measured from `last_dispatched_at`, which is written once per attempt and never by touches, callbacks, renewals or recovery. A live lease can postpone the stage deadline but never the cap. A test renews past the cap (§6, §14).
+- **Fenced index writes:** a write is one transaction (atomic for readers), serialised per asset by an advisory lock. It is refused if the asset already holds a newer `(run, attempt)`, so a delayed old attempt can't overwrite the current index, whatever it would write. This needs a new `document_chunks.attempt` column. Race tests are added (§7.5, §11, §14, §15).
 
 **Revision 2.2 (2026-10-27)** answers the review of 2.1 on #38.
 
@@ -136,7 +141,14 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
 
 **`running` alone never extends a deadline.** Only a lease the AI worker renewed recently does (§7). A dead worker stops renewing, so its lease expires within `TASK_LEASE_SECONDS`, and the next recoverer pass fails and retries the job.
 
-**Hard cap:** a job in flight longer than `WORKER_MAX_IN_FLIGHT_SECONDS` is failed `AI_TASK_TIMEOUT` (retryable) even if its lease is live. The default is 3600 s, above the AI-service's own extraction deadline of 1800 s. This catches a worker that renews its lease but never finishes.
+**Hard cap, measured from a fixed anchor.** A job whose current attempt has been in flight longer than `WORKER_MAX_IN_FLIGHT_SECONDS` is failed `AI_TASK_TIMEOUT` (retryable), even if its lease is live. The default is 3600 s, above the AI-service's own extraction deadline of 1800 s. This catches a worker that renews its lease but never finishes.
+
+- **The anchor:** the cap is measured from `last_dispatched_at`, never from `updated_at`.
+- **Why it's fixed:** `last_dispatched_at` is written once per attempt, by `record_dispatch` (the transition from `queued` to `processing`) when its transaction commits.
+  - A crash before that commit rolls it back, and the duplicate re-dispatch writes it once.
+  - Nothing else writes it: not `touch`, stage callbacks, lease renewals or recoverer passes.
+- **Result:** a live lease can postpone the *stage* deadline, but never the hard cap.
+- **New attempts:** a retried job's next attempt gets a new `last_dispatched_at`, so the cap applies per attempt, and `max_attempts` bounds the total.
 
 ## 7. Task liveness on the AI-service side (new)
 
@@ -163,8 +175,14 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
 4. **A zombie cannot cause a false `ready`.**
    - Suppose a "dead" worker was only partitioned, and finishes the old attempt after the backend has retried.
    - Its callbacks name the old attempt and are **stale** at the backend ledger, so they change nothing.
-   - Its write to the index replaces the same run's chunks with the same deterministic content (same document, run and chunker), so the index is unchanged.
    - `ready` requires the current attempt's `indexed` callback, which follows the current attempt's committed write.
+5. **Index writes are atomic and fenced by run and attempt** (see also §11).
+   - **Atomic replacement:** `PgChunkIndex.replace_asset` deletes the asset's chunks and inserts the new ones in **one transaction**. Readers see the old chunks or the new ones (PostgreSQL MVCC), never a mix and never an empty in-between. A failed write rolls back and leaves the previous chunks.
+   - **The fencing token:** each chunk row records the `attempt` that wrote it, beside its `run_number`. The dispatch payload and every callback already carry the backend attempt.
+   - **One writer at a time per asset:** the write first takes a transaction-scoped advisory lock on `(tenant, asset)`.
+   - **Refusing older writes:** if any existing row for the asset has a greater `(run_number, attempt)` than the writer's, the transaction writes nothing and returns `STALE_INDEX_WRITE`. The handler then reports nothing further for that attempt.
+   - **No reliance on identical content:** a delayed attempt 1 that runs after attempt 2 committed is refused **regardless of what it would write**. Equal content is no longer what keeps the index correct.
+   - **Consequence:** the current attempt's committed chunks can only be replaced by the same or a newer `(run, attempt)`. That is exactly what a reprocess (a new run) or a retry (a new attempt) produces.
 
 ## 8. Orphaned-object reconciliation
 
@@ -217,6 +235,7 @@ The worker signs a **system** context (`ServiceContext.for_system`) naming the j
 
 - **Backend:** no new tables or columns. One migration adds a partial index for the loops' selections: `(status, next_retry_at, created_at)` on `content_ingestion_jobs`. It is reviewed by `scripts/review_migration.py` and checked by the schema-drift gate.
 - **AI-service:** the task record gains `worker_id`, `lease_until` and `heartbeat_at` fields. It is a Redis hash with a TTL, so no schema migration is needed.
+- **AI-service `document_chunks`:** one migration adds `attempt` (integer, not null, default 1, so existing rows are attempt 1) for the index-write fencing in §7.5.
 
 ## 12. Configuration
 
@@ -263,7 +282,8 @@ All take the defaults above and are validated by range.
 - deadline selection;
 - `running` with an expired lease is reported `stalled`;
 - the recoverer touches only on a live lease, and fails on `stalled`;
-- the in-flight cap;
+- **the hard cap is measured from `last_dispatched_at`:** a job whose lease keeps renewing past `WORKER_MAX_IN_FLIGHT_SECONDS` is failed `AI_TASK_TIMEOUT`, though every recoverer pass before that touched it (so `updated_at` stayed fresh);
+- `last_dispatched_at` is unchanged by `touch`, stage callbacks and recoverer passes, and is set once by a dispatch that commits;
 - key parsing (orphan sweep);
 - the shutdown sequence.
 
@@ -298,16 +318,23 @@ All take the defaults above and are validated by range.
   - The job reaches `ready` with `attempt_count == 2`, and only attempt 2's events are applied.
   - It is not merely touched: the test asserts the attempt changed.
 - the killed attempt's late callbacks, replayed, are stale;
+- **a delayed old-attempt index write cannot corrupt the current index** (AI-service integration test, real PostgreSQL):
+  - attempt 2 indexes and commits, then a delayed attempt 1 write for the same asset runs;
+  - it is refused (`STALE_INDEX_WRITE`), the index still holds exactly attempt 2's chunks, and the job stays `ready`;
+  - this holds even when attempt 1's chunks differ;
+  - concurrent writes by two attempts serialise on the advisory lock, ending with the newer attempt's chunks;
+  - a reader running throughout never observes a partial or empty index for the asset;
 - a system context cannot reach chat or retrieve, nor another tenant's task.
 
 ## 15. PRs
 
 1. **AI-service:** the task lease and its atomic renewal, `stalled` in status, lease-conditioned reclaim and fencing, and system-actor access limited to dispatch and status. This PR includes its Redis and route tests.
-2. **Backend:** the jobs index migration, and the system-actor dispatch path through the gateway.
-3. **Backend:** the worker process (dispatcher and retrier, per-job transactions, shutdown, liveness), with the `pg_smoke` concurrency and lock tests.
-4. **Backend:** the recoverer (lease-aware, with the in-flight cap).
-5. **Backend:** the orphan sweeper.
-6. **Compose and the boundary topology** run the worker, with C22 (no manual call) and C23 (worker killed and recovered) automated.
+2. **AI-service:** the `document_chunks.attempt` migration and the fenced, advisory-locked `replace_asset` (§7.5), with its race tests.
+3. **Backend:** the jobs index migration, and the system-actor dispatch path through the gateway.
+4. **Backend:** the worker process (dispatcher and retrier, per-job transactions, shutdown, liveness), with the `pg_smoke` concurrency and lock tests.
+5. **Backend:** the recoverer (lease-aware, with the in-flight cap anchored on `last_dispatched_at`).
+6. **Backend:** the orphan sweeper.
+7. **Compose and the boundary topology** run the worker, with C22 (no manual call) and C23 (worker killed and recovered) automated.
 
 ## 16. Decisions
 
