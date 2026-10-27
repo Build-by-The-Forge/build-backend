@@ -284,12 +284,13 @@ def tenant_b(backend: httpx.Client) -> Tenant:
 # --- Content ---------------------------------------------------------------------------
 
 
-def pdf_document() -> bytes:
+def pdf_document(marker: str | None = None) -> bytes:
     """A valid one-page PDF with a real text layer, unique per call
     (duplicate content is tenant-wide). The AI-service extracts it (P3-2),
     so it must be a PDF a reader can open, not just bytes that start with
-    %PDF-. Built here with correct offsets; no PDF library needed."""
-    marker = uuid.uuid4().hex
+    %PDF-. Built here with correct offsets; no PDF library needed. The
+    "Reference <marker>" line identifies the document in retrieval tests."""
+    marker = marker or uuid.uuid4().hex
     lines = [
         "BUILD boundary gate document",
         f"Reference {marker}",
