@@ -36,17 +36,9 @@ def documents(backend, tenant_a, tenant_b) -> dict[str, str]:
     return markers
 
 
-def assert_retrieved_from(context: list[str], tenant_id: str, own: str, other: str) -> None:
-    """The context is the caller tenant's own document and never the other's.
-
-    While ai-service#26 (P3-5: durable retrieval by default, no invented
-    passage) is merged, the gate runs against AI revisions with and without
-    it; the older one answers with a stand-in naming the tenant it searched.
-    Tightened to real passages alone afterwards.
-    """
+def assert_retrieved_from(context: list[str], own: str, other: str) -> None:
+    """The context is the caller tenant's own document and never the other's."""
     assert context, "no retrieval context"
-    if context[0].startswith(f"Tenant {tenant_id} retrieval placeholder"):
-        return
     assert any(own in passage for passage in context), context
     assert not any(other in passage for passage in context), context
 
@@ -86,7 +78,7 @@ def test_c27_chat_flows_through_both_services(backend, tenant_a, tenant_b, docum
     data = response.json()["data"]
     assert data["answer"].startswith("[deterministic model]")
     # AI-service retrieved the member's own uploaded document (C15).
-    assert_retrieved_from(data["context"], tenant_a.tenant_id, own, other)
+    assert_retrieved_from(data["context"], own, other)
 
 
 def test_c27_explain_and_question_generation_flow(backend, tenant_a):
@@ -115,7 +107,7 @@ def test_c15_headers_cannot_choose_another_tenant(backend, tenant_a, tenant_b, d
     # The question names both tenants' documents: only the member's own may come back.
     response = backend.post("/ai/chat", json={"message": f"reference {other} reference {own}"}, headers=spoofed)
     assert response.status_code == 200, response.text
-    assert_retrieved_from(response.json()["data"]["context"], tenant_a.tenant_id, own, other)
+    assert_retrieved_from(response.json()["data"]["context"], own, other)
 
 
 def test_c15_a_tenant_slug_without_membership_is_refused(backend, tenant_a, tenant_b):
