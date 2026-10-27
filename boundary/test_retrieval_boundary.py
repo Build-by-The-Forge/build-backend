@@ -33,10 +33,10 @@ QUESTION = "How was the charge of the electron first measured?"
 EXPECTED_SPAN = "first measured by Robert Millikan"
 
 
-def retrieve_as(ai, tenant, question: str) -> list[dict]:
-    student = tenant.members["student"]
+def retrieve_as(ai, tenant, role: str, question: str) -> list[dict]:
+    member = tenant.members[role]
     raw = jbytes({"query": question})
-    context = user_context(tenant.tenant_id, student.user_id, ["ai.use"], membership_id=student.membership_id, role="student")
+    context = user_context(tenant.tenant_id, member.user_id, ["ai.use"], membership_id=member.membership_id, role=role)
     response = ai.post(RETRIEVE, content=raw, headers=to_ai("POST", RETRIEVE, raw, context))
     assert response.status_code == 200, response.text
     return response.json()["data"]
@@ -50,12 +50,12 @@ def test_c22_a_question_retrieves_the_expected_passage_of_the_uploaded_document(
     final = wait_for_status(backend, tenant_a, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)
     assert final["status"] == "ready", final
 
-    results = retrieve_as(ai, tenant_a, QUESTION)[:5]
+    results = retrieve_as(ai, tenant_a, "student", QUESTION)[:5]
 
     source = f"asset:{asset['id']}"
     evidence = [r for r in results if r["provenance"]["source_uri"] == source and EXPECTED_SPAN in r["text"]]
     assert evidence, [(r["provenance"], r["text"][:80]) for r in results]
     assert evidence[0]["provenance"]["page_number"] == 1
 
-    others = retrieve_as(ai, tenant_b, QUESTION)
+    others = retrieve_as(ai, tenant_b, "lecturer", QUESTION)
     assert not [r for r in others if r["provenance"]["source_uri"] == source or EXPECTED_SPAN in r["text"]]
