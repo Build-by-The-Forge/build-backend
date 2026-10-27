@@ -3,11 +3,10 @@ callbacks to the backend, reconciliation.
 
 C3/C7/C9/C10/C12 at the backend callback, C16, C19-C23.
 
-Phase 1 has no real ingestion pipeline (plan §13). The shipped worker
-therefore fails every task with INGESTION_PIPELINE_UNAVAILABLE. C22 is
-verified as re-scoped in M3-08: the full signed path runs end to end, the
-job ends `failed` with that error, and nothing makes it `ready` without
-stage evidence.
+C22: the full signed path runs end to end, and nothing makes a job `ready`
+without stage evidence. While ai-service#25 (P3-4) is merged the job ends
+either at the honest stop (failed, INGESTION_PIPELINE_UNAVAILABLE) or
+`ready` with indexed evidence; conftest.pipeline_outcome checks both.
 """
 
 import uuid
@@ -22,6 +21,7 @@ from boundary.conftest import (
     create_job,
     get_job,
     jbytes,
+    pipeline_outcome,
     sign,
     system_context,
     to_ai,
@@ -78,8 +78,7 @@ def processing_job(backend, tenant):
 def test_c22_dispatch_worker_and_signed_callback_reach_the_backend(dispatched):
     # The worker reported through BACKEND_CALLBACK_URL (C18: the only
     # destination), signed; the backend applied it to the tenant's job.
-    assert dispatched["status"] == "failed", dispatched
-    assert dispatched["error_code"] == "INGESTION_PIPELINE_UNAVAILABLE"
+    assert pipeline_outcome(dispatched)["verified"] is True
     assert dispatched["external_task_id"].startswith("task_")
 
 
@@ -88,7 +87,7 @@ def test_c22_the_job_never_becomes_ready_without_stage_evidence(backend, tenant_
     response = post_callback(backend, completed, tenant_a.tenant_id)
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "TRANSITION_NOT_ALLOWED"
-    assert get_job(backend, tenant_a, dispatched["id"])["status"] == "failed"
+    assert get_job(backend, tenant_a, dispatched["id"])["status"] == dispatched["status"]
 
 
 # --- C23: reconciliation ------------------------------------------------------------------
@@ -102,7 +101,7 @@ def test_c23_reconcile_reflects_ai_service_task_state(backend, tenant_a):
     response = backend.post(f"/content/jobs/{job['id']}/reconcile", headers=tenant_a.h("lecturer"))
     assert response.status_code in (200, 409), response.text
     final = wait_for_status(backend, tenant_a, job["id"], TERMINAL)
-    assert (final["status"], final["error_code"]) == ("failed", "INGESTION_PIPELINE_UNAVAILABLE")
+    assert pipeline_outcome(final)["verified"] is True
 
 
 def test_c23_ai_service_task_status_is_tenant_scoped(ai, backend, tenant_a, tenant_b, dispatched):
@@ -126,7 +125,7 @@ def test_c16_another_tenants_job_is_404(backend, tenant_a, tenant_b, dispatched,
         method, f"/content/jobs/{dispatched['id']}{suffix}", headers=tenant_b.h("lecturer"), json={} if method == "POST" else None
     )
     assert response.status_code == 404
-    assert get_job(backend, tenant_a, dispatched["id"])["status"] == "failed"
+    assert get_job(backend, tenant_a, dispatched["id"])["status"] == dispatched["status"]
 
 
 def test_c16_another_tenants_asset_cannot_be_reprocessed(backend, tenant_a, tenant_b, dispatched):
@@ -156,18 +155,23 @@ def worker_events(ai, tenant, job) -> list[dict]:
 
 
 def test_c21_the_workers_own_callback_replayed_is_a_duplicate(ai, backend, tenant_a, dispatched):
-    [*_, failed] = worker_events(ai, tenant_a, dispatched)
-    assert failed["event_type"] == "job_failed"
+    [*_, last] = worker_events(ai, tenant_a, dispatched)
+    terminal = {"failed": "job_failed", "ready": "job_completed"}[dispatched["status"]]
+    assert last["event_type"] == terminal
 
-    response = post_callback(backend, failed, tenant_a.tenant_id)
+    response = post_callback(backend, last, tenant_a.tenant_id)
 
     assert response.status_code == 200, response.text
     assert response.json()["data"]["outcome"] == "duplicate"
 
 
 def test_c21_the_same_event_id_with_other_content_is_409(ai, backend, tenant_a, dispatched):
-    [*_, failed] = worker_events(ai, tenant_a, dispatched)
-    response = post_callback(backend, {**failed, "error_message": "rewritten"}, tenant_a.tenant_id)
+    [*_, last] = worker_events(ai, tenant_a, dispatched)
+    if last["event_type"] == "job_failed":
+        rewritten = {**last, "error_message": "rewritten"}
+    else:
+        rewritten = {**last, "metrics": {**last.get("metrics", {}), "rewritten": True}}
+    response = post_callback(backend, rewritten, tenant_a.tenant_id)
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "EVENT_CONFLICT"
 
@@ -189,13 +193,13 @@ def test_c21_events_for_another_attempt_are_stale(backend, tenant_a, dispatched,
         {"event_type": "stage_progress", "stage": "extracted"},
         {"event_type": "job_completed", "stage": None, "metrics": {}},
     ],
-    ids=["failed-to-extracted", "failed-to-ready"],
+    ids=["terminal-to-extracted", "terminal-to-ready"],
 )
-def test_c21_a_failed_job_cannot_move_again(backend, tenant_a, dispatched, body):
+def test_c21_a_terminal_job_cannot_move_again(backend, tenant_a, dispatched, body):
     response = post_callback(backend, event(dispatched, **body), tenant_a.tenant_id)
     assert response.status_code == 409
     job = get_job(backend, tenant_a, dispatched["id"])
-    assert (job["status"], job["error_code"]) == ("failed", "INGESTION_PIPELINE_UNAVAILABLE")
+    assert (job["status"], job["error_code"]) == (dispatched["status"], dispatched["error_code"])
 
 
 # --- Protocol at the backend callback (C3, C7, C9, C10, C12) ---------------------------------

@@ -1,9 +1,9 @@
 """Uploaded documents across the backend and AI-service boundary (P3-1
 PR 6), against the m3 topology's real SeaweedFS.
 
-C22 at this stage proves a verified fetch, not ingestion: after the AI
-fetches and verifies the document, the task still fails with
-INGESTION_PIPELINE_UNAVAILABLE, carrying the fetch evidence.
+C22 here proves the verified fetch: whichever way the pipeline ends (see
+conftest.pipeline_outcome while ai-service#25 is merged), its evidence
+records the fetched document's SHA-256, size and type.
 
 The storage_down cases run only while object storage is stopped
 (scripts/m3_boundary_gate.sh stops it, as it does Redis for C11).
@@ -24,6 +24,7 @@ from boundary.conftest import (
     object_key,
     object_store,
     pdf_document,
+    pipeline_outcome,
     system_context,
     to_ai,
     upload,
@@ -44,7 +45,7 @@ def dispatch(backend, tenant, job_id):
     return backend.post(f"/content/jobs/{job_id}/dispatch", headers=tenant.h("lecturer"))
 
 
-# --- the happy path: a verified fetch, then the honest pipeline stop -------------------------
+# --- the happy path: a verified fetch, whatever the pipeline then does ----------------------
 
 
 def test_c22_the_ai_fetches_and_verifies_the_uploaded_document(backend, tenant_a):
@@ -56,8 +57,7 @@ def test_c22_the_ai_fetches_and_verifies_the_uploaded_document(backend, tenant_a
     assert response.status_code == 200, response.text
     final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
-    assert (final["status"], final["error_code"]) == ("failed", "INGESTION_PIPELINE_UNAVAILABLE")
-    fetch = final["error_details"]["fetch"]
+    fetch = pipeline_outcome(final)
     assert fetch["verified"] is True
     assert (fetch["sha256"], fetch["size_bytes"]) == (hashlib.sha256(document).hexdigest(), len(document))
     assert fetch["mime_type"] == "application/pdf"
