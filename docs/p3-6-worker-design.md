@@ -1,6 +1,13 @@
-# P3-6 — backend ingestion worker: design (revision 2.3)
+# P3-6 — backend ingestion worker: design (revision 2.4)
 
 **Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
+
+**Revision 2.4 (2026-10-27)** answers the review of 2.3 on #38.
+
+- **Record lifetime:** the atomic renewal also resets the task record's TTL, so a record cannot expire under a renewing handler.
+- **Stopping a fenced handler:** a failed renewal (missing record, other owner, not `running`) cancels the handler and suppresses its remaining callbacks. Every side-effect boundary checks the fence first, and the external fences (stale callbacks, the index fence) cover the gap between that check and the effect (§7.1).
+- **The empty-index fence:** index writes now check an authoritative `ingestion_fences` row. It is raised when AI-service accepts a dispatch and only ever rises, and a write must **equal** it. Revision 2.3's "no newer rows" rule let a late attempt 1 write into an empty index before attempt 2 wrote (§7.5).
+- **New tests:** the empty-index case, the fence only rising, record expiry mid-handler, and TTL refresh on renewal (§14).
 
 **Revision 2.3 (2026-10-27)** answers the review of 2.2 on #38.
 
@@ -157,6 +164,18 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
    - While the handler runs, a background renewal extends `lease_until` every `TASK_LEASE_SECONDS / 3`. Each stage report (`extracted`, `chunked`, `indexed`) renews it too.
    - A terminal state clears the lease.
    - The renewal is a compare-and-set on `worker_id`, so a fenced worker (point 3) cannot renew a task it no longer owns.
+   - **The record cannot expire under a live handler.** The same atomic renewal script that extends `lease_until` also resets the record's Redis TTL to `TASK_RECORD_TTL_SECONDS` (14 days, today's value). A renewing handler therefore always has a record many orders of magnitude longer-lived than any permitted run: the backend's hard cap is 1 h, and the AI's extraction deadline 30 min. A record can only expire after renewals have stopped for 14 days, long after the lease lapsed and the backend recovered the job (§6).
+   - **A failed renewal stops the handler before any further side effect.** A renewal fails when the record is missing, `worker_id` no longer matches, or the state is no longer `running`. The worker then:
+     1. sets the task's in-process fence;
+     2. cancels the handler through its execution context (the cancellation path that already exists);
+     3. drops every callback for that task still queued in the worker.
+
+     Every side-effect boundary in the handler (each stage report, the index write, and completion) checks the fence first and does nothing once it is set.
+   - **External fences cover the check-then-act gap.** A handler can pass its in-process check just before the fence is set. Its effects are still harmless:
+     - its callbacks name a superseded attempt, so the backend ledger treats them as **stale** (C21);
+     - its index write is refused by the authoritative index fence (point 5).
+
+     The in-process stop limits wasted work; the external fences give the guarantee.
 2. **Status reports liveness.**
    - `GET /v1/ingest/tasks/{id}` reports `running` only while `lease_until` is in the future. Otherwise it reports `stalled`, with `lease_until` and `heartbeat_at` included.
    - `stalled` is derived from the record and the clock, never stored, so it needs no writer.
@@ -176,13 +195,17 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
    - Suppose a "dead" worker was only partitioned, and finishes the old attempt after the backend has retried.
    - Its callbacks name the old attempt and are **stale** at the backend ledger, so they change nothing.
    - `ready` requires the current attempt's `indexed` callback, which follows the current attempt's committed write.
-5. **Index writes are atomic and fenced by run and attempt** (see also §11).
+5. **Index writes are atomic and fenced by the authoritative current attempt** (see also §11).
    - **Atomic replacement:** `PgChunkIndex.replace_asset` deletes the asset's chunks and inserts the new ones in **one transaction**. Readers see the old chunks or the new ones (PostgreSQL MVCC), never a mix and never an empty in-between. A failed write rolls back and leaves the previous chunks.
-   - **The fencing token:** each chunk row records the `attempt` that wrote it, beside its `run_number`. The dispatch payload and every callback already carry the backend attempt.
-   - **One writer at a time per asset:** the write first takes a transaction-scoped advisory lock on `(tenant, asset)`.
-   - **Refusing older writes:** if any existing row for the asset has a greater `(run_number, attempt)` than the writer's, the transaction writes nothing and returns `STALE_INDEX_WRITE`. The handler then reports nothing further for that attempt.
-   - **No reliance on identical content:** a delayed attempt 1 that runs after attempt 2 committed is refused **regardless of what it would write**. Equal content is no longer what keeps the index correct.
-   - **Consequence:** the current attempt's committed chunks can only be replaced by the same or a newer `(run, attempt)`. That is exactly what a reprocess (a new run) or a retry (a new attempt) produces.
+   - **An authoritative fence per asset.** A new AI-owned table, `ingestion_fences (tenant_id, asset_id) → (run_number, attempt)`, records which attempt may currently write each asset's index.
+     - It is written when AI-service **accepts a dispatch**, before the task is queued.
+     - It is an upsert that only ever **raises** the fence (`GREATEST` on `(run, attempt)`), so a late or duplicate dispatch of an older attempt cannot lower it.
+     - Dispatch is idempotent (`DUPLICATE`), so re-delivering the same attempt leaves the fence unchanged.
+   - **Writes check the fence under its row lock.** `replace_asset` first locks the asset's fence row (`SELECT … FOR UPDATE`), which also serialises concurrent writers for the asset. It writes only if its `(run, attempt)` **equals** the fence; otherwise it changes nothing and returns `STALE_INDEX_WRITE`.
+   - **Why equality and not "no newer rows":** revision 2.3 refused a write only when the index already held newer rows. A delayed attempt 1 could still write into an **empty** index while attempt 2 had not written yet, or if attempt 2 failed before writing. That made a document whose job is not `ready` searchable. The fence is raised when attempt 2 is *dispatched*, not when it writes, so attempt 1 is refused whether or not the index has any rows. Its content doesn't matter either.
+   - **Rows still record their attempt.** `document_chunks.attempt` stays, for provenance and diagnosis, but the fence row is what decides.
+   - **Consequence:** only the attempt the backend most recently dispatched can write an asset's index. A reprocess (a new run) and a retry (a new attempt) each raise the fence first. A zombie or late attempt is refused at the database, in the same transaction as the write.
+   - **Residual, stated:** if the current attempt commits its write and then fails before `indexed` reaches the backend (a lost callback), its chunks are searchable while the job is not `ready`. The next attempt raises the fence and replaces them. Gating retrieval on the job's state, so the AI-service holds back chunks until `ready`, is tracked for Mobile API Contracts, where the citation contract's access check lives.
 
 ## 8. Orphaned-object reconciliation
 
@@ -235,7 +258,11 @@ The worker signs a **system** context (`ServiceContext.for_system`) naming the j
 
 - **Backend:** no new tables or columns. One migration adds a partial index for the loops' selections: `(status, next_retry_at, created_at)` on `content_ingestion_jobs`. It is reviewed by `scripts/review_migration.py` and checked by the schema-drift gate.
 - **AI-service:** the task record gains `worker_id`, `lease_until` and `heartbeat_at` fields. It is a Redis hash with a TTL, so no schema migration is needed.
-- **AI-service `document_chunks`:** one migration adds `attempt` (integer, not null, default 1, so existing rows are attempt 1) for the index-write fencing in §7.5.
+- **AI-service, the index fence (§7.5):** one migration adds:
+  - `document_chunks.attempt` (integer, not null, default 1, so existing rows are attempt 1);
+  - the AI-owned table `ingestion_fences (tenant_id, asset_id, run_number, attempt, updated_at)`, with primary key `(tenant_id, asset_id)`. It is backfilled from existing chunks: each asset's current `(run, attempt)`.
+
+  It joins `AI_OWNED_TABLES`. The backend's M6 ownership test lists AI tables exactly, so it gains this table in a coordinated PR (the pattern used for `document_chunks`).
 
 ## 12. Configuration
 
@@ -322,14 +349,27 @@ All take the defaults above and are validated by range.
   - attempt 2 indexes and commits, then a delayed attempt 1 write for the same asset runs;
   - it is refused (`STALE_INDEX_WRITE`), the index still holds exactly attempt 2's chunks, and the job stays `ready`;
   - this holds even when attempt 1's chunks differ;
-  - concurrent writes by two attempts serialise on the advisory lock, ending with the newer attempt's chunks;
+  - concurrent writes by two attempts serialise on the fence row's lock, and only the fenced (current) attempt's write lands;
   - a reader running throughout never observes a partial or empty index for the asset;
+- **the empty-index case:** attempt 2 is dispatched (raising the fence) but has not written, or fails before writing. A delayed attempt 1 write is then refused, though the index has no newer rows (or none at all). The asset stays unsearchable rather than showing attempt 1's chunks;
+- **the fence only rises:** a duplicate or late dispatch of attempt 1 after attempt 2's leaves the fence at attempt 2. A reprocess (run 2, attempt 1) raises it above run 1, attempt 3;
+- **record expiry during an active handler:** the task record is deleted while its handler runs (simulating TTL expiry or a lost record).
+  - The next renewal fails and the handler is cancelled.
+  - No stage callback or completion is sent after the failure.
+  - An index write that races past the in-process check is refused by the fence.
+  - The backend never shows the job `ready` from that attempt: it recovers it as unknown, and a new attempt completes it.
+- **renewal refreshes the TTL:** after a renewal, the record's `TTL` is back to `TASK_RECORD_TTL_SECONDS`;
 - a system context cannot reach chat or retrieve, nor another tenant's task.
 
 ## 15. PRs
 
 1. **AI-service:** the task lease and its atomic renewal, `stalled` in status, lease-conditioned reclaim and fencing, and system-actor access limited to dispatch and status. This PR includes its Redis and route tests.
-2. **AI-service:** the `document_chunks.attempt` migration and the fenced, advisory-locked `replace_asset` (§7.5), with its race tests.
+2. **AI-service:** the index fence:
+   - the `ingestion_fences` table and the `document_chunks.attempt` column (one migration, with backfill);
+   - the fence raised at dispatch acceptance;
+   - the fence-locked `replace_asset` (§7.5), with its race and empty-index tests.
+
+   Plus the coordinated backend M6 ownership-test update.
 3. **Backend:** the jobs index migration, and the system-actor dispatch path through the gateway.
 4. **Backend:** the worker process (dispatcher and retrier, per-job transactions, shutdown, liveness), with the `pg_smoke` concurrency and lock tests.
 5. **Backend:** the recoverer (lease-aware, with the in-flight cap anchored on `last_dispatched_at`).
