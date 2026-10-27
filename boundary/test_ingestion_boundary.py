@@ -63,6 +63,20 @@ def post_callback(backend, body: dict, tenant_id: str, **kw):
     return backend.post(CALLBACK_PATH, content=raw, headers=to_backend(CALLBACK_PATH, raw, system_context(tenant_id), **kw))
 
 
+def assert_terminal_unmoved(response, backend, tenant, job: dict) -> None:
+    """A callback that would move a terminal job changes nothing: a failed
+    job refuses it (409); a ready job answers that it is superseded (200),
+    as late callbacks after completion are by design."""
+    if job["status"] == "failed":
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"] == "TRANSITION_NOT_ALLOWED"
+    else:
+        assert response.status_code == 200, response.text
+        assert response.json()["data"]["outcome"] == "superseded"
+    now = get_job(backend, tenant, job["id"])
+    assert (now["status"], now["error_code"], now["metrics"]) == (job["status"], job["error_code"], job["metrics"])
+
+
 def processing_job(backend, tenant):
     """A job in `processing` with an external task id, without the worker
     racing the test: dispatched for real, then reconciled state is ignored."""
@@ -85,9 +99,7 @@ def test_c22_dispatch_worker_and_signed_callback_reach_the_backend(dispatched):
 def test_c22_the_job_never_becomes_ready_without_stage_evidence(backend, tenant_a, dispatched):
     completed = event(dispatched, event_type="job_completed", stage=None, metrics={})
     response = post_callback(backend, completed, tenant_a.tenant_id)
-    assert response.status_code == 409
-    assert response.json()["error"]["code"] == "TRANSITION_NOT_ALLOWED"
-    assert get_job(backend, tenant_a, dispatched["id"])["status"] == dispatched["status"]
+    assert_terminal_unmoved(response, backend, tenant_a, dispatched)
 
 
 # --- C23: reconciliation ------------------------------------------------------------------
@@ -197,9 +209,7 @@ def test_c21_events_for_another_attempt_are_stale(backend, tenant_a, dispatched,
 )
 def test_c21_a_terminal_job_cannot_move_again(backend, tenant_a, dispatched, body):
     response = post_callback(backend, event(dispatched, **body), tenant_a.tenant_id)
-    assert response.status_code == 409
-    job = get_job(backend, tenant_a, dispatched["id"])
-    assert (job["status"], job["error_code"]) == (dispatched["status"], dispatched["error_code"])
+    assert_terminal_unmoved(response, backend, tenant_a, dispatched)
 
 
 # --- Protocol at the backend callback (C3, C7, C9, C10, C12) ---------------------------------
