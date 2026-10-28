@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -169,6 +170,14 @@ class ContentIngestionJobModel(Base):
         Index("ix_content_ingestion_jobs_status", "status"),
         Index("ix_content_ingestion_jobs_pending_retry", "status", "next_retry_at"),
         Index("ix_content_ingestion_jobs_asset_created", "asset_id", "created_at"),
+        # The ingestion worker's loops (P3-6 §11, migration 0024).
+        Index(
+            "ix_content_ingestion_jobs_worker_due",
+            "status",
+            "next_retry_at",
+            "created_at",
+            postgresql_where=text("status IN ('queued', 'failed', 'processing', 'extracted', 'chunked', 'indexed')"),
+        ),
     )
 
 

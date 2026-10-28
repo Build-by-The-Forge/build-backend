@@ -235,9 +235,25 @@ def test_c14_dispatch_without_its_permission_is_403(ai):
     assert ai.post(DISPATCH, content=raw, headers=headers).status_code == 403
 
 
-def test_c14_a_system_context_cannot_act_as_a_user(ai):
-    raw = jbytes({"message": "hello"})
-    assert ai.post(CHAT, content=raw, headers=to_ai("POST", CHAT, raw, system_context(TENANT))).status_code == 403
+@pytest.mark.parametrize("path,permission,body", AI_ROUTES, ids=IDS)
+def test_c14_a_system_context_cannot_act_as_a_user(ai, path, permission, body):
+    """P3-6 §9: the worker's system context reaches no AI route."""
+    raw = jbytes(body)
+    assert ai.post(path, content=raw, headers=to_ai("POST", path, raw, system_context(TENANT))).status_code == 403
+
+
+def test_p36_the_workers_system_context_dispatches_for_its_tenant_only(ai):
+    """P3-6 §9: the backend worker's system context may dispatch; the task
+    belongs to the context's tenant, and another tenant cannot see it."""
+    raw = jbytes(dispatch_body())
+    response = ai.post(DISPATCH, content=raw, headers=to_ai("POST", DISPATCH, raw, system_context(TENANT)))
+    assert response.status_code == 202, response.text
+    task = response.json()["external_task_id"]
+    path = f"/v1/ingest/tasks/{task}"
+    own = ai.get(path, headers=to_ai("GET", path, b"", system_context(TENANT)))
+    assert own.status_code == 200 and own.json()["job_id"] == json.loads(raw)["job_id"]
+    other = ai.get(path, headers=to_ai("GET", path, b"", system_context(str(uuid.uuid4()))))
+    assert other.status_code == 404
 
 
 # --- C29 (AI-service side): the body cannot name an identity ---------------------------

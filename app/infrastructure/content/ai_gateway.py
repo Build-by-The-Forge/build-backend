@@ -16,6 +16,8 @@ from app.domain.content.gateway import (
     AIServiceIngestionGateway,
     AIServiceStatusResult,
     IngestionDispatchActor,
+    JobTenantMissing,
+    SystemDispatchActor,
 )
 from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
@@ -86,12 +88,14 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         job: ContentIngestionJob,
         asset: ContentAsset,
         source: ContentSource,
-        actor: IngestionDispatchActor,
+        actor: IngestionDispatchActor | SystemDispatchActor,
     ) -> AIServiceDispatchResult:
         """Signed dispatch (BUILD Service Signature v1, design B.2).
 
         The body names no tenant and no callback URL; the tenant reaches
-        AI-service only through the signed user context.
+        AI-service only through the signed context: the authorized user's,
+        or the worker's system context naming the job's own tenant (P3-6
+        §9). The attempt identity is always the job's.
         """
         keys = self._keys()
         mime_val = asset.mime_type.value if hasattr(asset.mime_type, "value") else str(asset.mime_type)
@@ -114,14 +118,19 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
             },
             separators=(",", ":"),
         ).encode("utf-8")
-        context = ServiceContext.for_user(
-            tenant_id=actor.tenant_id,
-            user_id=actor.user_id,
-            membership_id=actor.membership_id,
-            role=actor.role,
-            permissions=[actor.permission],
-            correlation_id=correlation_id,
-        )
+        if isinstance(actor, SystemDispatchActor):
+            if actor.tenant_id != job.tenant_id:
+                raise JobTenantMissing(f"a system dispatch must name job {job.id}'s own tenant")
+            context = ServiceContext.for_system(tenant_id=actor.tenant_id, correlation_id=correlation_id)
+        else:
+            context = ServiceContext.for_user(
+                tenant_id=actor.tenant_id,
+                user_id=actor.user_id,
+                membership_id=actor.membership_id,
+                role=actor.role,
+                permissions=[actor.permission],
+                correlation_id=correlation_id,
+            )
 
         url = httpx.URL(f"{self._base_url}/v1/ingest/dispatch")
         headers = sign_request(

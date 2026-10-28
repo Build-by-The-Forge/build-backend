@@ -21,7 +21,7 @@ from app.domain.content.enums import (
     VisibilityScope,
 )
 from app.domain.content.gateway import AIServiceDispatchResult, IngestionDispatchActor
-from app.domain.content.job import CallbackOutcome, ContentIngestionJob
+from app.domain.content.job import CallbackOutcome, ContentIngestionJob, InvalidJobTransition
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
 from tests.application.content.managed_storage import BUCKET, OBJECTS, managed
@@ -767,3 +767,79 @@ async def test_a_gateway_failure_changes_nothing() -> None:
     with pytest.raises(AIServiceGatewayError):
         await _reconcile(uow, StatusGateway(error=error), job_id=job.id)
     assert job.status == IngestionStatus.PROCESSING
+
+
+# --- the worker's system dispatch (P3-6 §9) -------------------------------------------
+
+
+async def _queued_job_with_material(uow, tenant_id: str | None = "tenant-1"):
+    asset = ContentAsset.create(
+        source_id="src-sys",
+        file_name="x.pdf",
+        mime_type=AssetMimeType.PDF,
+        file_size_bytes=10,
+        content_sha256="f" * 64,
+        storage_uri="s3://build/x.pdf",
+        tenant_id=tenant_id,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    managed(asset)
+    await uow.assets.save_asset(asset)
+    source = ContentSource.create(
+        code="SRC_SYS",
+        name="S",
+        source_type=ContentSourceType.CCMAS,
+        authority_level=AuthorityLevel.REGULATORY,
+        visibility=VisibilityScope.PLATFORM,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    await uow.sources.save_source(source)
+    job = ContentIngestionJob.create(asset_id=asset.id, source_id=source.id, tenant_id=tenant_id, created_by="usr-1")
+    job.queue()
+    await uow.jobs.save_job(job)
+    return job, asset
+
+
+@pytest.mark.asyncio
+async def test_the_worker_dispatches_as_the_system_for_the_jobs_own_tenant() -> None:
+    from app.domain.content.gateway import SystemDispatchActor
+
+    uow, bus, gateway = FakeContentUnitOfWork(), EventBus(), FakeAIGateway()
+    job, _ = await _queued_job_with_material(uow)
+
+    result = await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle_system(job)
+
+    assert gateway.actors == [SystemDispatchActor(tenant_id="tenant-1")]
+    assert result.status == IngestionStatus.PROCESSING
+    assert result.external_task_id == f"aitask-{job.id}"
+    assert result.attempt_count == 1  # the backend's attempt, never one the AI-service chose
+
+
+@pytest.mark.asyncio
+async def test_the_worker_never_dispatches_a_job_without_a_tenant() -> None:
+    uow, bus, gateway = FakeContentUnitOfWork(), EventBus(), FakeAIGateway()
+    job, asset = await _queued_job_with_material(uow, tenant_id=None)
+
+    result = await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle_system(job)
+
+    assert gateway.dispatched_jobs == []
+    assert (result.status, result.error_code, result.is_retryable) == (
+        IngestionStatus.FAILED,
+        "JOB_TENANT_MISSING",
+        False,
+    )
+    assert asset.ingestion_status == IngestionStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_the_worker_cannot_dispatch_a_job_that_is_not_due() -> None:
+    uow, bus, gateway = FakeContentUnitOfWork(), EventBus(), FakeAIGateway()
+    job, _ = await _queued_job_with_material(uow)
+    handler = DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET)
+    await handler.handle_system(job)  # now processing
+
+    with pytest.raises(InvalidJobTransition):
+        await handler.handle_system(job)
+    assert gateway.dispatched_jobs == [job.id]  # dispatched once
