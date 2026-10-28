@@ -23,7 +23,12 @@ from app.application.identity.ports.security_events import (
 )
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
-from app.domain.content.gateway import AIServiceIngestionGateway, IngestionDispatchActor
+from app.domain.content.gateway import (
+    AIServiceIngestionGateway,
+    IngestionDispatchActor,
+    JobTenantMissing,
+    SystemDispatchActor,
+)
 from app.domain.content.ingestion_event import (
     IngestionEventRecord,
     canonical_event_digest,
@@ -217,7 +222,36 @@ class DispatchIngestionJobHandler:
 
     async def handle(self, cmd: DispatchIngestionJobCommand) -> ContentIngestionJob:
         job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
+        # The signed context names the job's own tenant (owned_job checked it
+        # is the caller's).
+        actor = IngestionDispatchActor(
+            tenant_id=job.tenant_id or cmd.tenant_id,
+            user_id=cmd.user_id,
+            membership_id=cmd.membership_id,
+            role=cmd.role,
+            permission=cmd.permission,
+        )
+        return await self._dispatch(job, actor)
 
+    async def handle_system(self, job: ContentIngestionJob) -> ContentIngestionJob:
+        """Dispatch as the ingestion worker (P3-6 §9): a signed system
+        context naming the job's own tenant. The job was created, and its
+        dispatch authorized, by a user with the permission; the worker only
+        delivers it. A job without a tenant fails, non-retryably, without
+        contacting the AI-service."""
+        try:
+            actor = SystemDispatchActor.for_job(job)
+        except JobTenantMissing as exc:
+            asset = await self._uow.assets.get_asset_by_id(job.asset_id)
+            if asset is None:
+                raise ValueError(f"ContentAsset with id '{job.asset_id}' does not exist") from exc
+            job.ensure_dispatchable()
+            return await self._record_dispatch_failure(job, asset, exc.error_code, str(exc), False)
+        return await self._dispatch(job, actor)
+
+    async def _dispatch(
+        self, job: ContentIngestionJob, actor: IngestionDispatchActor | SystemDispatchActor
+    ) -> ContentIngestionJob:
         asset = await self._uow.assets.get_asset_by_id(job.asset_id)
         if asset is None:
             raise ValueError(f"ContentAsset with id '{job.asset_id}' does not exist")
@@ -226,16 +260,8 @@ class DispatchIngestionJobHandler:
         if source is None:
             raise ValueError(f"ContentSource with id '{job.source_id}' does not exist")
 
-        # The signed context names the job's own tenant (owned_job checked it
-        # is the caller's). No callback URL is sent: AI-service reports only
-        # to its configured BACKEND_CALLBACK_URL.
-        actor = IngestionDispatchActor(
-            tenant_id=job.tenant_id or cmd.tenant_id,
-            user_id=cmd.user_id,
-            membership_id=cmd.membership_id,
-            role=cmd.role,
-            permission=cmd.permission,
-        )
+        # No callback URL is sent: AI-service reports only to its configured
+        # BACKEND_CALLBACK_URL.
 
         # Only a queued job whose retry delay has elapsed is sent; anything
         # else is refused before AI-service is contacted.

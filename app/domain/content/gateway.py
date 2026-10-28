@@ -45,13 +45,37 @@ class IngestionDispatchActor:
     permission: str
 
 
+@dataclass(frozen=True, slots=True)
+class SystemDispatchActor:
+    """The backend's ingestion worker delivering a job that an authorized
+    user already created (P3-6 §9). It becomes a signed system context: no
+    user, no permissions, and the job's own tenant, the only tenant it may
+    name."""
+
+    tenant_id: str
+
+    @classmethod
+    def for_job(cls, job: ContentIngestionJob) -> SystemDispatchActor:
+        if not job.tenant_id:
+            raise JobTenantMissing(f"job {job.id} has no tenant; the worker cannot dispatch it")
+        return cls(tenant_id=job.tenant_id)
+
+
+class JobTenantMissing(Exception):
+    """A job without a tenant cannot be dispatched by the worker: the system
+    context must name the job's own tenant, and there is none to name."""
+
+    error_code = "JOB_TENANT_MISSING"
+    is_retryable = False
+
+
 class AIServiceIngestionGateway(Protocol):
     async def dispatch_ingestion_job(
         self,
         job: ContentIngestionJob,
         asset: ContentAsset,
         source: ContentSource,
-        actor: IngestionDispatchActor,
+        actor: IngestionDispatchActor | SystemDispatchActor,
     ) -> AIServiceDispatchResult:
         raise NotImplementedError
 

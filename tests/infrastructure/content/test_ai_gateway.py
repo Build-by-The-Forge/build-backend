@@ -343,3 +343,56 @@ async def test_task_status_without_a_secret_is_refused_before_sending(monkeypatc
         await gateway.fetch_job_status("task_1", TENANT, "c")
     assert exc_info.value.error_code == "AI_SERVICE_NOT_CONFIGURED"
     assert sent == []
+
+
+# --- the worker's system dispatch (P3-6 §9) -------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_system_dispatch_is_signed_as_the_system_naming_the_jobs_tenant() -> None:
+    from app.domain.content.gateway import SystemDispatchActor
+
+    source, asset, job = _material()
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _accepted()
+
+    actor = SystemDispatchActor.for_job(job)
+    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor)
+
+    [request] = seen
+    verified = verify_request(
+        direction=Direction.BACKEND_TO_AI,
+        keys=KEYS,
+        method="POST",
+        target=request.url.raw_path.decode(),
+        headers=dict(request.headers),
+        body_sha256=sha256_hex(request.content),
+        now=int(request.headers["x-build-timestamp"]),
+    )
+    # No user, no permissions: only the job's own tenant.
+    assert verified.context == ServiceContext.for_system(tenant_id=TENANT, correlation_id="corr-42")
+    body = json.loads(request.content)
+    assert set(body) == DISPATCH_FIELDS
+    # The attempt identity is the job's, exactly as a user dispatch sends it.
+    assert (body["run_number"], body["attempt_count"]) == (job.run_number, job.attempt_count)
+    assert body["idempotency_key"] == f"{job.id}-r{job.run_number}-a{job.attempt_count}"
+
+
+@pytest.mark.asyncio
+async def test_a_system_dispatch_can_never_name_another_tenant() -> None:
+    from app.domain.content.gateway import JobTenantMissing, SystemDispatchActor
+
+    source, asset, job = _material()
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _accepted()
+
+    other = SystemDispatchActor(tenant_id="11111111-2222-4333-8444-555555555555")
+    with pytest.raises(JobTenantMissing):
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=other)
+    assert seen == []
