@@ -206,11 +206,13 @@ def test_no_legacy_ai_tables_exist():
 def test_every_table_belongs_to_exactly_one_service():
     owners = _owners()
     ai_tables = {t for t, o in owners.items() if o == "build_ai_owner"}
-    base = {"document_chunks", "learning_memory", "session_memory", "ai_service_alembic_version"}
-    # Transitional (P3-6 PR 2): ai-service adds ingestion_fences, the
-    # authoritative index fence. Accept the AI schema before and after that
-    # migration; a follow-up requires it.
-    assert ai_tables in (base, base | {"ingestion_fences"}), ai_tables
+    assert ai_tables == {
+        "document_chunks",
+        "ingestion_fences",
+        "learning_memory",
+        "session_memory",
+        "ai_service_alembic_version",
+    }
     assert {o for t, o in owners.items() if t not in ai_tables} == {"build_backend_owner"}
     assert owners["users"] == owners["tenants"] == owners["memberships"] == "build_backend_owner"
 
