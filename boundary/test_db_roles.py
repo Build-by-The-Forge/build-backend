@@ -61,6 +61,27 @@ def test_c25_ai_service_can_use_its_own_tables():
     run("DELETE FROM learning_memory WHERE tenant_id = $1", tenant)
 
 
+def test_c25_ai_service_can_use_its_index_fence():
+    # ingestion_fences (ai-service P3-6 §7.5): the runtime role raises a
+    # fence (upsert), reads it under a row lock, and removes it.
+    tenant = str(uuid.uuid4())
+    for attempt in (2, 1):
+        run(
+            "INSERT INTO ingestion_fences (tenant_id, asset_id, run_number, attempt) VALUES ($1, 'c25', 1, $2)"
+            " ON CONFLICT (tenant_id, asset_id) DO UPDATE SET run_number = EXCLUDED.run_number,"
+            " attempt = EXCLUDED.attempt"
+            " WHERE (EXCLUDED.run_number, EXCLUDED.attempt) > (ingestion_fences.run_number, ingestion_fences.attempt)",
+            tenant,
+            attempt,
+        )
+    [row] = run(
+        "SELECT run_number, attempt FROM ingestion_fences WHERE tenant_id = $1 AND asset_id = 'c25' FOR UPDATE",
+        tenant,
+    )
+    assert (row["run_number"], row["attempt"]) == (1, 2)  # the fence never lowered
+    run("DELETE FROM ingestion_fences WHERE tenant_id = $1", tenant)
+
+
 def test_c25_ai_service_can_use_its_chunk_index():
     # document_chunks (ai-service P3-4): pgvector and the generated
     # full-text column work for the runtime role, not only the owner.
