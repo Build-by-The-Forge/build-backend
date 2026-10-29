@@ -24,6 +24,7 @@ from app.domain.content.gateway import AIServiceDispatchResult, IngestionDispatc
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob, InvalidJobTransition
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
+from app.infrastructure.content.ai_gateway import AIServiceGatewayError
 from tests.application.content.managed_storage import BUCKET, OBJECTS, managed
 from tests.application.content.test_job_handlers import FakeContentUnitOfWork
 
@@ -55,6 +56,44 @@ class FakeAIGateway:
             accepted_at=datetime.now(timezone.utc),
             status="accepted",
         )
+
+
+@pytest.mark.asyncio
+async def test_callback_before_duplicate_response_adopts_uncertain_task_through_ledger() -> None:
+    uow = FakeContentUnitOfWork()
+    job = ContentIngestionJob.create(
+        asset_id="asset-1",
+        source_id="source-1",
+        tenant_id="tenant-1",
+        created_by="usr-1",
+    )
+    job.queue()
+    assert job.defer_uncertain_dispatch("AI_SERVICE_UNAVAILABLE", "dispatch outcome uncertain") is True
+    dispatch_started_at = job.last_dispatched_at
+    await uow.jobs.save_job(job)
+    handler = HandleAICallbackHandler(uow)
+    command = HandleAICallbackCommand(
+        job_id=job.id,
+        tenant_id="tenant-1",
+        event_id="evt-uncertain",
+        event_type="stage_progress",
+        stage="extracted",
+        external_task_id="task-accepted-remotely",
+        run_number=1,
+        attempt_count=1,
+        metrics={"characters": 100, "pages": 1, "method": "native_text"},
+    )
+
+    callback_job, outcome = await handler.handle(command)
+    assert outcome is CallbackOutcome.APPLIED
+    assert callback_job.status == IngestionStatus.EXTRACTED
+    assert callback_job.external_task_id == "task-accepted-remotely"
+    assert callback_job.last_dispatched_at == dispatch_started_at
+
+    duplicate_job, duplicate_outcome = await handler.handle(command)
+    assert duplicate_outcome is CallbackOutcome.DUPLICATE
+    assert duplicate_job.status == IngestionStatus.EXTRACTED
+    assert len(uow.ingestion_events.records) == 1
 
 
 @pytest.mark.asyncio
@@ -113,6 +152,58 @@ async def test_dispatch_ingestion_handler() -> None:
         )
     ]
     assert asset.ingestion_status == IngestionStatus.PROCESSING
+
+
+@pytest.mark.asyncio
+async def test_uncertain_dispatch_stays_queued_for_the_same_attempt() -> None:
+    uow = FakeContentUnitOfWork()
+    bus = EventBus()
+    source = ContentSource.create(
+        code="CS_SRC_UNCERTAIN",
+        name="Source",
+        source_type=ContentSourceType.CCMAS,
+        authority_level=AuthorityLevel.REGULATORY,
+        visibility=VisibilityScope.PLATFORM,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    await uow.sources.save_source(source)
+    asset = ContentAsset.create(
+        source_id=source.id,
+        file_name="slides.pdf",
+        mime_type=AssetMimeType.PDF,
+        file_size_bytes=2048,
+        content_sha256="c" * 64,
+        storage_uri="s3://build/slides.pdf",
+        tenant_id="tenant-1",
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    managed(asset)
+    await uow.assets.save_asset(asset)
+    job = await CreateIngestionJobHandler(uow, bus, bucket=BUCKET).handle(
+        CreateIngestionJobCommand(asset_id=asset.id, tenant_id="tenant-1", created_by="usr-1")
+    )
+    gateway = FakeAIGateway(
+        AIServiceGatewayError(
+            "dispatch outcome uncertain",
+            error_code="AI_SERVICE_UNAVAILABLE",
+            is_retryable=True,
+            outcome_uncertain=True,
+        )
+    )
+
+    deferred = await DispatchIngestionJobHandler(uow, gateway, bus, storage=lambda: OBJECTS, bucket=BUCKET).handle(
+        dispatch_cmd(job.id)
+    )
+
+    assert deferred.status == IngestionStatus.QUEUED
+    assert deferred.attempt_count == 1
+    assert deferred.external_task_id is None
+    assert deferred.metrics["uncertain_dispatch_count"] == 1
+    assert deferred.next_retry_at is not None
+    assert deferred.attempt_history == []
+    assert asset.ingestion_status == IngestionStatus.QUEUED
 
 
 @pytest.mark.asyncio

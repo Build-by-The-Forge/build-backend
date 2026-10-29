@@ -227,20 +227,73 @@ async def test_acceptance_without_a_task_id_is_an_error() -> None:
     with pytest.raises(AIServiceGatewayError) as exc_info:
         await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
     assert exc_info.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+    assert exc_info.value.outcome_uncertain is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [200, 201, 202, 204])
+async def test_successful_dispatch_requires_a_valid_accepted_response(status_code) -> None:
+    source, asset, job = _material()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if status_code == 204:
+            return httpx.Response(status_code)
+        return httpx.Response(status_code, json={"status": "DUPLICATE", "external_task_id": "task_original"})
+
+    if status_code == 204:
+        with pytest.raises(AIServiceGatewayError) as exc_info:
+            await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        assert exc_info.value.outcome_uncertain is True
+        return
+
+    result = await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    assert (result.status, result.external_task_id) == ("DUPLICATE", "task_original")
+
+
+@pytest.mark.asyncio
+async def test_malformed_success_response_is_uncertain() -> None:
+    source, asset, job = _material()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, text="not json")
+
+    with pytest.raises(AIServiceGatewayError) as exc_info:
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    assert exc_info.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+    assert exc_info.value.outcome_uncertain is True
+
+
+@pytest.mark.asyncio
+async def test_transport_timeout_is_an_uncertain_dispatch() -> None:
+    source, asset, job = _material()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("response timed out", request=request)
+
+    with pytest.raises(AIServiceGatewayError) as exc_info:
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    assert exc_info.value.error_code == "AI_SERVICE_TRANSPORT_ERROR"
+    assert exc_info.value.is_retryable is True
+    assert exc_info.value.outcome_uncertain is True
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("status_code", "error_code", "retryable"),
+    ("status_code", "error_code", "retryable", "outcome_uncertain"),
     [
-        (503, "AI_SERVICE_UNAVAILABLE", True),
-        (502, "AI_SERVICE_UNAVAILABLE", True),
-        (401, "AI_SERVICE_AUTH_ERROR", False),
-        (403, "AI_SERVICE_AUTH_ERROR", False),
-        (422, "AI_SERVICE_REJECTED", False),
+        (408, "AI_SERVICE_UNAVAILABLE", True, True),
+        (429, "AI_SERVICE_UNAVAILABLE", True, True),
+        (500, "AI_SERVICE_UNAVAILABLE", True, True),
+        (502, "AI_SERVICE_UNAVAILABLE", True, True),
+        (503, "AI_SERVICE_UNAVAILABLE", True, True),
+        (504, "AI_SERVICE_UNAVAILABLE", True, True),
+        (401, "AI_SERVICE_AUTH_ERROR", False, False),
+        (403, "AI_SERVICE_AUTH_ERROR", False, False),
+        (422, "AI_SERVICE_REJECTED", False, False),
+        (404, "AI_SERVICE_OUTCOME_UNCERTAIN", True, True),
     ],
 )
-async def test_failure_classification(status_code, error_code, retryable) -> None:
+async def test_failure_classification(status_code, error_code, retryable, outcome_uncertain) -> None:
     source, asset, job = _material()
 
     async def handler(request: httpx.Request) -> httpx.Response:
@@ -248,7 +301,25 @@ async def test_failure_classification(status_code, error_code, retryable) -> Non
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
         await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
-    assert (exc_info.value.error_code, exc_info.value.is_retryable) == (error_code, retryable)
+    assert (exc_info.value.error_code, exc_info.value.is_retryable, exc_info.value.outcome_uncertain) == (
+        error_code,
+        retryable,
+        outcome_uncertain,
+    )
+
+
+@pytest.mark.asyncio
+async def test_idempotency_conflict_is_a_definite_integrity_failure() -> None:
+    source, asset, job = _material()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(409, json={"detail": "IDEMPOTENCY_CONFLICT: different work"})
+
+    with pytest.raises(AIServiceGatewayError) as exc_info:
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    assert exc_info.value.error_code == "AI_IDEMPOTENCY_CONFLICT"
+    assert exc_info.value.is_retryable is False
+    assert exc_info.value.outcome_uncertain is False
 
 
 # --- M3-09: signed task status -----------------------------------------------------------

@@ -29,6 +29,7 @@ from app.infrastructure.security.service_signature import (
 )
 
 _CORRELATION_ID_RE = re.compile(r"[A-Za-z0-9._:-]{1,128}")
+MAX_DISPATCH_TIMEOUT_SECONDS = 10
 
 
 def _correlation_id(job: ContentIngestionJob) -> str:
@@ -47,11 +48,13 @@ class AIServiceGatewayError(Exception):
         error_code: str = "AI_SERVICE_ERROR",
         is_retryable: bool = False,
         details: dict[str, Any] | None = None,
+        outcome_uncertain: bool = False,
     ) -> None:
         super().__init__(message)
         self.error_code = error_code
         self.is_retryable = is_retryable
         self.details = details or {}
+        self.outcome_uncertain = outcome_uncertain
 
 
 class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
@@ -148,60 +151,86 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         client = await self._get_client()
 
         try:
-            response = await client.post(url, content=body, headers=headers)
-        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+            response = await client.post(
+                url,
+                content=body,
+                headers=headers,
+                timeout=min(float(self._timeout_seconds), MAX_DISPATCH_TIMEOUT_SECONDS),
+            )
+        except httpx.TransportError as exc:
             raise AIServiceGatewayError(
-                message=f"Timeout communicating with AI Service at {url}: {exc}",
-                error_code="AI_SERVICE_TIMEOUT",
+                message=f"Transport error communicating with AI Service at {url}: {type(exc).__name__}",
+                error_code="AI_SERVICE_TRANSPORT_ERROR",
                 is_retryable=True,
-            ) from exc
-        except (httpx.ConnectError, httpx.NetworkError) as exc:
-            raise AIServiceGatewayError(
-                message=f"Network error connecting to AI Service at {url}: {exc}",
-                error_code="AI_SERVICE_CONNECTION_ERROR",
-                is_retryable=True,
+                outcome_uncertain=True,
             ) from exc
         finally:
             if should_close:
                 await client.aclose()
 
-        if response.status_code in (200, 201, 202):
-            data = response.json()
-            task_id = data.get("external_task_id") if isinstance(data, dict) else None
-            if not isinstance(task_id, str) or not task_id:
+        if 200 <= response.status_code < 300:
+            try:
+                data = response.json()
+            except ValueError as exc:
                 raise AIServiceGatewayError(
-                    message="AI Service accepted the dispatch without an external_task_id",
+                    message="AI Service returned a malformed dispatch response",
                     error_code="AI_SERVICE_BAD_RESPONSE",
                     is_retryable=True,
+                    details={"status_code": response.status_code},
+                    outcome_uncertain=True,
+                ) from exc
+            task_id = data.get("external_task_id") if isinstance(data, dict) else None
+            dispatch_status = data.get("status") if isinstance(data, dict) else None
+            if not isinstance(task_id, str) or not task_id or dispatch_status not in ("ACCEPTED", "DUPLICATE"):
+                raise AIServiceGatewayError(
+                    message="AI Service returned an invalid dispatch response",
+                    error_code="AI_SERVICE_BAD_RESPONSE",
+                    is_retryable=True,
+                    details={"status_code": response.status_code},
+                    outcome_uncertain=True,
                 )
             return AIServiceDispatchResult(
                 external_task_id=task_id,
                 accepted_at=datetime.now(timezone.utc),
-                status=data.get("status", "accepted"),
+                status=dispatch_status,
                 raw_response=data,
             )
 
-        if response.status_code in (502, 503, 504):
+        if response.status_code == 409 and "IDEMPOTENCY_CONFLICT" in response.text:
             raise AIServiceGatewayError(
-                message=f"AI Service transient error (HTTP {response.status_code}): {response.text}",
-                error_code="AI_SERVICE_UNAVAILABLE",
-                is_retryable=True,
-                details={"status_code": response.status_code, "body": response.text},
-            )
-
-        if response.status_code in (401, 403):
-            raise AIServiceGatewayError(
-                message=f"AI Service authentication failed (HTTP {response.status_code})",
-                error_code="AI_SERVICE_AUTH_ERROR",
+                message="AI Service rejected dispatch because the idempotency key names different work",
+                error_code="AI_IDEMPOTENCY_CONFLICT",
                 is_retryable=False,
                 details={"status_code": response.status_code},
             )
 
+        if response.status_code in (400, 401, 403, 422):
+            error_code = "AI_SERVICE_AUTH_ERROR" if response.status_code in (401, 403) else "AI_SERVICE_REJECTED"
+            raise AIServiceGatewayError(
+                message=f"AI Service refused dispatch before task creation (HTTP {response.status_code})",
+                error_code=error_code,
+                is_retryable=False,
+                details={"status_code": response.status_code},
+            )
+
+        # A transport/gateway error, timeout, unrecognized refusal, or any
+        # response outside the AI-service's documented definite-refusal
+        # contract does not prove whether the task was accepted. Callers must
+        # retry this same attempt and idempotency key.
+        if response.status_code in (408, 429) or 500 <= response.status_code < 600:
+            raise AIServiceGatewayError(
+                message=f"AI Service dispatch outcome is uncertain (HTTP {response.status_code})",
+                error_code="AI_SERVICE_UNAVAILABLE",
+                is_retryable=True,
+                details={"status_code": response.status_code},
+                outcome_uncertain=True,
+            )
         raise AIServiceGatewayError(
-            message=f"AI Service rejected dispatch request (HTTP {response.status_code}): {response.text}",
-            error_code="AI_SERVICE_REJECTED",
-            is_retryable=False,
-            details={"status_code": response.status_code, "body": response.text},
+            message=f"AI Service returned an unexpected dispatch response (HTTP {response.status_code})",
+            error_code="AI_SERVICE_OUTCOME_UNCERTAIN",
+            is_retryable=True,
+            details={"status_code": response.status_code},
+            outcome_uncertain=True,
         )
 
     async def fetch_job_status(self, external_task_id: str, tenant_id: str, correlation_id: str) -> AIServiceStatusResult:

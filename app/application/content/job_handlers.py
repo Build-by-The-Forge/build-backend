@@ -126,7 +126,7 @@ class RetryIngestionJobHandler:
         self._event_bus = event_bus
 
     async def handle(self, cmd: RetryIngestionJobCommand) -> ContentIngestionJob:
-        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
+        job = owned_job(await self._uow.jobs.get_job_for_update(cmd.job_id), cmd.tenant_id, cmd.job_id)
 
         job.schedule_retry(delay_seconds=cmd.delay_seconds)
         job_events = job.pull_events()
@@ -221,7 +221,7 @@ class DispatchIngestionJobHandler:
         return None
 
     async def handle(self, cmd: DispatchIngestionJobCommand) -> ContentIngestionJob:
-        job = owned_job(await self._uow.jobs.get_job_by_id(cmd.job_id), cmd.tenant_id, cmd.job_id)
+        job = owned_job(await self._uow.jobs.get_job_for_update(cmd.job_id), cmd.tenant_id, cmd.job_id)
         # The signed context names the job's own tenant (owned_job checked it
         # is the caller's).
         actor = IngestionDispatchActor(
@@ -283,6 +283,8 @@ class DispatchIngestionJobHandler:
             job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
         except Exception as exc:
+            if getattr(exc, "outcome_uncertain", False) is True:
+                return await self._record_uncertain_dispatch(job, asset, exc)
             return await self._record_dispatch_failure(
                 job,
                 asset,
@@ -317,6 +319,30 @@ class DispatchIngestionJobHandler:
         if self._event_bus and failure_events:
             self._event_bus.publish_all(failure_events)
         return saved_failed
+
+    async def _record_uncertain_dispatch(
+        self,
+        job: ContentIngestionJob,
+        asset: ContentAsset,
+        error: Exception,
+    ) -> ContentIngestionJob:
+        retry_same_attempt = job.defer_uncertain_dispatch(
+            error_code=getattr(error, "error_code", "AI_DISPATCH_UNCERTAIN"),
+            error_message=str(error),
+        )
+        events = job.pull_events()
+        if not retry_same_attempt:
+            asset.update_ingestion_status(
+                IngestionStatus.FAILED,
+                error_code=job.error_code,
+                error_message=job.error_message,
+            )
+            await self._uow.assets.save_asset(asset)
+            events.extend(asset.pull_events())
+        saved_job = await self._uow.jobs.save_job(job)
+        if self._event_bus and events:
+            self._event_bus.publish_all(events)
+        return saved_job
 
 
 class HandleAICallbackHandler:
