@@ -112,7 +112,6 @@ def test_uncertain_dispatch_defers_on_the_same_attempt_and_fails_at_the_bound():
     job = new_job()
     job.queue()
     job_id = (job.run_number, job.attempt_count)
-    last_dispatch = None
 
     for count in range(1, 6):
         if job.next_retry_at is not None:
@@ -124,9 +123,7 @@ def test_uncertain_dispatch_defers_on_the_same_attempt_and_fails_at_the_bound():
             assert can_retry_same_attempt is True
             assert job.status == IngestionStatus.QUEUED
             assert job.next_retry_at is not None and job.next_retry_at > datetime.now(timezone.utc)
-            if last_dispatch is None:
-                last_dispatch = job.last_dispatched_at
-            assert job.last_dispatched_at == last_dispatch
+            assert job.last_dispatched_at is None
         else:
             assert can_retry_same_attempt is False
             assert job.status == IngestionStatus.FAILED

@@ -41,10 +41,11 @@ def dispatch_cmd(job_id: str, tenant_id: str = "tenant-1") -> DispatchIngestionJ
 
 
 class FakeAIGateway:
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(self, error: Exception | None = None, status: str = "accepted") -> None:
         self.dispatched_jobs: list[str] = []
         self.actors: list[IngestionDispatchActor] = []
         self.error = error
+        self.status = status
 
     async def dispatch_ingestion_job(self, job, asset, source, actor) -> AIServiceDispatchResult:
         self.dispatched_jobs.append(job.id)
@@ -54,7 +55,7 @@ class FakeAIGateway:
         return AIServiceDispatchResult(
             external_task_id=f"aitask-{job.id}",
             accepted_at=datetime.now(timezone.utc),
-            status="accepted",
+            status=self.status,
         )
 
 
@@ -70,6 +71,7 @@ async def test_callback_before_duplicate_response_adopts_uncertain_task_through_
     job.queue()
     assert job.defer_uncertain_dispatch("AI_SERVICE_UNAVAILABLE", "dispatch outcome uncertain") is True
     dispatch_started_at = job.last_dispatched_at
+    assert dispatch_started_at is None
     await uow.jobs.save_job(job)
     handler = HandleAICallbackHandler(uow)
     command = HandleAICallbackCommand(
@@ -88,7 +90,8 @@ async def test_callback_before_duplicate_response_adopts_uncertain_task_through_
     assert outcome is CallbackOutcome.APPLIED
     assert callback_job.status == IngestionStatus.EXTRACTED
     assert callback_job.external_task_id == "task-accepted-remotely"
-    assert callback_job.last_dispatched_at == dispatch_started_at
+    assert callback_job.last_dispatched_at is not None
+    assert callback_job.last_dispatched_at != dispatch_started_at
 
     duplicate_job, duplicate_outcome = await handler.handle(command)
     assert duplicate_outcome is CallbackOutcome.DUPLICATE
@@ -97,10 +100,11 @@ async def test_callback_before_duplicate_response_adopts_uncertain_task_through_
 
 
 @pytest.mark.asyncio
-async def test_dispatch_ingestion_handler() -> None:
+@pytest.mark.parametrize("response_status", ["accepted", "duplicate"])
+async def test_dispatch_ingestion_handler_sets_acceptance_anchor(response_status: str) -> None:
     uow = FakeContentUnitOfWork()
     bus = EventBus()
-    gateway = FakeAIGateway()
+    gateway = FakeAIGateway(status=response_status)
 
     source = ContentSource.create(
         code="CS_SRC_DISP",
@@ -139,6 +143,7 @@ async def test_dispatch_ingestion_handler() -> None:
     assert dispatched_job.status == IngestionStatus.PROCESSING
     assert dispatched_job.current_stage == "dispatched_to_ai"
     assert dispatched_job.external_task_id == f"aitask-{job.id}"
+    assert dispatched_job.last_dispatched_at is not None
     assert len(gateway.dispatched_jobs) == 1
     # The signed context will name the job's tenant, the caller and the one
     # checked permission; no callback destination is passed at all.
