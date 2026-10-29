@@ -32,6 +32,16 @@ class ContentIngestionJobRepository(Protocol):
         """Lock and return one due queued job with an expiring durable claim."""
         raise NotImplementedError
 
+    async def claim_next_overdue_job(
+        self,
+        excluded_ids: set[str],
+        processing_seconds: int,
+        stage_seconds: int,
+        max_in_flight_seconds: int,
+    ) -> ContentIngestionJob | None:
+        """Lock and return one active job past its stage deadline or hard cap."""
+        raise NotImplementedError
+
     async def claim_next_retryable_failure(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
         """Lock and return exactly one oldest retryable failure below its cap."""
         raise NotImplementedError

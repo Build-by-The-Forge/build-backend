@@ -13,7 +13,11 @@ from pathlib import Path
 
 import structlog
 
-from app.application.content.job_handlers import DispatchAttemptOutcome, DispatchIngestionJobHandler
+from app.application.content.job_handlers import (
+    DispatchAttemptOutcome,
+    DispatchIngestionJobHandler,
+    RecoverIngestionJobHandler,
+)
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
 from app.db.timeouts import set_transaction_timeouts
@@ -171,6 +175,40 @@ async def _retry_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
             return True
 
 
+async def _recover_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
+    async with SessionLocal() as session:
+        async with ContentUnitOfWork(session) as uow:
+            await set_transaction_timeouts(session)
+            job = await uow.jobs.claim_next_overdue_job(
+                excluded_ids,
+                processing_seconds=settings.worker_stuck_processing_seconds,
+                stage_seconds=settings.worker_stuck_stage_seconds,
+                max_in_flight_seconds=settings.worker_max_in_flight_seconds,
+            )
+            if job is None:
+                return False
+            claimed_ids.append(job.id)
+            result = await RecoverIngestionJobHandler(
+                uow,
+                HttpAIServiceIngestionGateway(),
+                EventBus(),
+            ).handle(
+                job,
+                max_in_flight_seconds=settings.worker_max_in_flight_seconds,
+            )
+            logger.info(
+                "content_job_recovery_pass",
+                job_id=result.job.id,
+                task_id=result.job.external_task_id,
+                run_number=result.job.run_number,
+                attempt=result.job.attempt_count,
+                outcome=result.action,
+                status=result.job.status.value,
+                callback_outcomes=result.callback_outcomes,
+            )
+            return True
+
+
 async def run_dispatch_pass(stop: asyncio.Event | None = None) -> None:
     excluded_ids: set[str] = set()
     processed = 0
@@ -223,6 +261,29 @@ async def run_orphan_sweep_pass(stop: asyncio.Event | None = None) -> None:
     await sweep_orphaned_objects(S3ObjectStorage.from_settings(), bucket=settings.object_storage_bucket)
 
 
+async def run_recoverer_pass(stop: asyncio.Event | None = None) -> None:
+    excluded_ids: set[str] = set()
+    processed = 0
+    while processed < settings.worker_recoverer_batch and not (stop and stop.is_set()):
+        claimed_ids: list[str] = []
+        try:
+            found = await _recover_one(excluded_ids, claimed_ids)
+        except Exception as exc:
+            excluded_ids.update(claimed_ids)
+            logger.error(
+                "content_job_recovery_error",
+                job_id=claimed_ids[-1] if claimed_ids else None,
+                error_type=type(exc).__name__,
+            )
+            if not claimed_ids:
+                raise
+            continue
+        if not found:
+            return
+        excluded_ids.update(claimed_ids)
+        processed += 1
+
+
 def write_health_state(completed_at: dict[str, float], path: Path = HEALTH_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f"{path.name}.", dir=path.parent)
@@ -249,6 +310,7 @@ def check_worker_health(now: float | None = None, path: Path = HEALTH_PATH) -> N
         "dispatch": settings.worker_dispatch_interval_seconds,
         "retry": settings.worker_retry_interval_seconds,
         "orphan_sweep": settings.worker_orphan_sweep_interval_seconds,
+        "recoverer": settings.worker_recoverer_interval_seconds,
     }
     unhealthy = [name for name, interval in intervals.items() if name not in state or current - state[name] > 3 * interval]
     if unhealthy:
@@ -317,6 +379,15 @@ async def serve() -> None:
                 "orphan_sweep",
                 settings.worker_orphan_sweep_interval_seconds,
                 run_orphan_sweep_pass,
+                stop,
+                completed_at,
+            )
+        ),
+        asyncio.create_task(
+            _run_loop(
+                "recoverer",
+                settings.worker_recoverer_interval_seconds,
+                run_recoverer_pass,
                 stop,
                 completed_at,
             )

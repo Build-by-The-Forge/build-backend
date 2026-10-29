@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.content.enums import IngestionStatus
@@ -139,6 +139,57 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
                 ContentIngestionJobModel.status == IngestionStatus.FAILED.value,
                 ContentIngestionJobModel.is_retryable.is_(True),
                 ContentIngestionJobModel.attempt_count < ContentIngestionJobModel.max_attempts,
+            )
+            .order_by(ContentIngestionJobModel.updated_at.asc(), ContentIngestionJobModel.id.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if excluded_ids:
+            stmt = stmt.where(ContentIngestionJobModel.id.not_in(excluded_ids))
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return content_job_model_to_domain(model) if model else None
+
+    async def claim_next_overdue_job(
+        self,
+        excluded_ids: set[str],
+        processing_seconds: int,
+        stage_seconds: int,
+        max_in_flight_seconds: int,
+    ) -> ContentIngestionJob | None:
+        if min(processing_seconds, stage_seconds, max_in_flight_seconds) < 1:
+            raise ValueError("recovery deadlines must be at least 1 second")
+        now = datetime.now(timezone.utc)
+        later_stages = (
+            IngestionStatus.EXTRACTED.value,
+            IngestionStatus.CHUNKED.value,
+            IngestionStatus.INDEXED.value,
+        )
+        due = or_(
+            and_(
+                ContentIngestionJobModel.status == IngestionStatus.PROCESSING.value,
+                ContentIngestionJobModel.updated_at <= now - timedelta(seconds=processing_seconds),
+            ),
+            and_(
+                ContentIngestionJobModel.status.in_(later_stages),
+                ContentIngestionJobModel.updated_at <= now - timedelta(seconds=stage_seconds),
+            ),
+            and_(
+                ContentIngestionJobModel.last_dispatched_at.is_not(None),
+                ContentIngestionJobModel.last_dispatched_at <= now - timedelta(seconds=max_in_flight_seconds),
+            ),
+        )
+        stmt = (
+            select(ContentIngestionJobModel)
+            .where(
+                ContentIngestionJobModel.status.in_(
+                    (
+                        IngestionStatus.PROCESSING.value,
+                        IngestionStatus.EXTRACTED.value,
+                        IngestionStatus.CHUNKED.value,
+                        IngestionStatus.INDEXED.value,
+                    )
+                ),
+                due,
             )
             .order_by(ContentIngestionJobModel.updated_at.asc(), ContentIngestionJobModel.id.asc())
             .limit(1)
