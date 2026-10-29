@@ -21,7 +21,7 @@ def object_key(tenant_id: str, asset_id: str, digest: str) -> str:
 @pytest.mark.asyncio
 async def test_real_sweeper_deletes_old_orphans_and_keeps_recent_referenced_and_unparseable(backend, tenant_a):
     client = object_store()
-    storage = S3ObjectStorage.from_settings()
+    storage = S3ObjectStorage(bucket=BUCKET, client=client)
     unique = uuid.uuid4().hex.encode()
     digest = hashlib.sha256(unique).hexdigest()
     old_key = object_key(str(uuid.uuid4()), str(uuid.uuid4()), digest)
