@@ -1,12 +1,15 @@
 from sqlalchemy import text
 
 from app.db.session import engine
+import pytest
 from app.domain.content.storage import ObjectStoragePage
 from app.infrastructure.content.orphan_sweeper import (
     LOCK_CLASS_ID,
     LOCK_OBJECT_ID,
     sweep_orphaned_objects,
 )
+
+pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 class EmptyStorage:
