@@ -116,6 +116,33 @@ async def test_real_idempotency_follows_the_signed_tenant() -> None:
 
 
 @pytest.mark.asyncio
+async def test_timeout_after_real_ai_acceptance_retries_the_same_key_as_duplicate() -> None:
+    source, asset, job = material(job_id=f"cjob-{uuid4()}")
+    accepted: list[httpx.Response] = []
+
+    async def accept_then_timeout(request: httpx.Request) -> httpx.Response:
+        async with httpx.AsyncClient(timeout=10) as network:
+            response = await network.post(request.url, content=request.content, headers=request.headers)
+        accepted.append(response)
+        raise httpx.ReadTimeout("simulated lost response after remote acceptance", request=request)
+
+    transport = httpx.MockTransport(accept_then_timeout)
+    client = httpx.AsyncClient(transport=transport)
+    uncertain_gateway = HttpAIServiceIngestionGateway(base_url=AI_URL, client=client, keys=ServiceKeys(current=B2A or ""))
+    try:
+        with pytest.raises(AIServiceGatewayError) as timeout:
+            await uncertain_gateway.dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+    finally:
+        await client.aclose()
+
+    assert accepted and accepted[0].status_code == 202
+    assert timeout.value.outcome_uncertain is True
+    duplicate = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+    assert duplicate.status == "DUPLICATE"
+    assert duplicate.external_task_id.startswith("task_")
+
+
+@pytest.mark.asyncio
 async def test_real_dispatch_signed_with_the_other_directions_secret_is_refused() -> None:
     source, asset, job = material()
     with pytest.raises(AIServiceGatewayError) as exc_info:
