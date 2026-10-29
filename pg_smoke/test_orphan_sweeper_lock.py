@@ -1,7 +1,7 @@
+import pytest
 from sqlalchemy import text
 
 from app.db.session import engine
-import pytest
 from app.domain.content.storage import ObjectStoragePage
 from app.infrastructure.content.orphan_sweeper import (
     LOCK_CLASS_ID,
