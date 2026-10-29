@@ -250,6 +250,37 @@ services:
       retries: 60
     networks: [internal]
 
+  backend-worker:
+    image: build-m3-backend
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
+      ai-service:
+        condition: service_healthy
+    environment:
+      APP_ENVIRONMENT: development
+      POSTGRES_URL: postgresql+asyncpg://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
+      REDIS_URL: redis://redis:6379/0
+      AI_SERVICE_URL: http://ai-service:8000
+      BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}
+      AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
+      OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333
+      OBJECT_STORAGE_BUCKET: build-documents
+      OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY}
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY}
+    entrypoint: ["python", "-m", "app.worker"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker", "--check"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    networks: [internal]
+
   ai-service:
     image: build-m3-ai-service
     depends_on:
@@ -308,6 +339,7 @@ services:
       BOUNDARY_BACKEND_URL: http://backend:8000
       BOUNDARY_AI_URL: http://ai-service:8000
       BOUNDARY_AI_APP_DSN: postgresql://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+      BOUNDARY_AI_REDIS_URL: redis://redis:6379/1
       # Seeds faculties/departments only (no API yet); the rest goes over HTTP.
       BOUNDARY_BACKEND_APP_DSN: postgresql://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
       BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}

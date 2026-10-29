@@ -52,6 +52,21 @@ class Settings(BaseSettings):
     ai_service_timeout_seconds: int = Field(default=60)
     ai_service_max_retries: int = Field(default=3)
 
+    # P3-6 worker loops. Dispatch is bounded to ten seconds by the gateway;
+    # these limits guard the database row lock and process shutdown as well.
+    worker_dispatch_interval_seconds: int = Field(default=2, ge=1, le=300)
+    worker_dispatch_batch: int = Field(default=20, ge=1, le=1000)
+    worker_retry_interval_seconds: int = Field(default=10, ge=1, le=3600)
+    worker_retry_batch: int = Field(default=50, ge=1, le=1000)
+    worker_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
+    worker_retry_cap_seconds: int = Field(default=900, ge=1, le=86400)
+    worker_stuck_processing_seconds: int = Field(default=600, ge=1, le=86400)
+    worker_stuck_stage_seconds: int = Field(default=1800, ge=1, le=604800)
+    worker_max_in_flight_seconds: int = Field(default=3600, ge=1, le=604800)
+    worker_orphan_grace_seconds: int = Field(default=86400, ge=3600, le=31536000)
+    worker_orphan_sweep_interval_seconds: int = Field(default=3600, ge=60, le=604800)
+    worker_shutdown_grace_seconds: int = Field(default=25, ge=1, le=120)
+
     # Access-token signing (HS256). The current key signs; the previous key,
     # if set, is still accepted for verification during a rotation.
     auth_jwt_secret: str | None = Field(default=None)
@@ -133,6 +148,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_jwt_signing_keys(self) -> "Settings":
+        if self.worker_retry_cap_seconds < self.worker_retry_base_seconds:
+            raise ValueError("WORKER_RETRY_CAP_SECONDS must be at least WORKER_RETRY_BASE_SECONDS")
         if not self.auth_jwt_secret:
             if self.app_environment in STRICT_ENVIRONMENTS:
                 raise ValueError(f"AUTH_JWT_SECRET is required when app_environment is {self.app_environment!r}")

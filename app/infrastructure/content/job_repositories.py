@@ -99,6 +99,42 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_job_model_to_domain(m) for m in models]
 
+    async def claim_next_due_dispatch(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
+        stmt = (
+            select(ContentIngestionJobModel)
+            .where(
+                ContentIngestionJobModel.status == IngestionStatus.QUEUED.value,
+                or_(
+                    ContentIngestionJobModel.next_retry_at.is_(None),
+                    ContentIngestionJobModel.next_retry_at <= func.now(),
+                ),
+            )
+            .order_by(ContentIngestionJobModel.created_at.asc(), ContentIngestionJobModel.id.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if excluded_ids:
+            stmt = stmt.where(ContentIngestionJobModel.id.not_in(excluded_ids))
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return content_job_model_to_domain(model) if model else None
+
+    async def claim_next_retryable_failure(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
+        stmt = (
+            select(ContentIngestionJobModel)
+            .where(
+                ContentIngestionJobModel.status == IngestionStatus.FAILED.value,
+                ContentIngestionJobModel.is_retryable.is_(True),
+                ContentIngestionJobModel.attempt_count < ContentIngestionJobModel.max_attempts,
+            )
+            .order_by(ContentIngestionJobModel.updated_at.asc(), ContentIngestionJobModel.id.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if excluded_ids:
+            stmt = stmt.where(ContentIngestionJobModel.id.not_in(excluded_ids))
+        model = (await self._session.execute(stmt)).scalar_one_or_none()
+        return content_job_model_to_domain(model) if model else None
+
     async def list_jobs(
         self,
         tenant_id: str | None = None,
