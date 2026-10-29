@@ -251,6 +251,14 @@ async def test_list_page_rejects_invalid_page_size_without_requesting_storage(st
         await storage.list_page(prefix="tenants/", max_keys=max_keys)
 
 
+async def test_list_page_rejects_a_truncated_response_without_a_continuation_token(stubbed):
+    storage, stubber, _ = stubbed
+    stubber.add_response("list_objects_v2", {"IsTruncated": True, "Contents": []})
+
+    with pytest.raises(ObjectStorageError, match="inconsistent continuation token"):
+        await storage.list_page(prefix="tenants/")
+
+
 # --- error mapping --------------------------------------------------------------------------
 
 

@@ -279,9 +279,14 @@ class S3ObjectStorage:
             if not isinstance(key, str) or not isinstance(last_modified, datetime):
                 raise ObjectStorageError("object storage returned an incomplete listing entry")
             objects.append(StoredObjectSummary(key=key, last_modified=last_modified))
+        truncated = response.get("IsTruncated")
+        if not isinstance(truncated, bool):
+            raise ObjectStorageError("object storage returned an invalid listing state")
         token = response.get("NextContinuationToken")
         if token is not None and not isinstance(token, str):
             raise ObjectStorageError("object storage returned an invalid continuation token")
+        if truncated != (token is not None):
+            raise ObjectStorageError("object storage returned an inconsistent continuation token")
         return ObjectStoragePage(objects=tuple(objects), continuation_token=token)
 
     async def delete(self, key: str) -> None:
