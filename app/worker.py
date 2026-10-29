@@ -9,9 +9,12 @@ import signal
 import tempfile
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 import structlog
+from prometheus_client import start_http_server
+from sqlalchemy import func, or_, select
 
 from app.application.content.job_handlers import (
     DispatchAttemptOutcome,
@@ -19,6 +22,14 @@ from app.application.content.job_handlers import (
     RecoverIngestionJobHandler,
 )
 from app.core.config import settings
+from app.core.metrics import (
+    content_in_flight_cap_hits_total,
+    content_jobs_due,
+    content_oldest_due_job_age_seconds,
+    content_recoveries_total,
+    content_retries_scheduled_total,
+    registry,
+)
 from app.db.session import SessionLocal, engine
 from app.db.timeouts import set_transaction_timeouts
 from app.domain.content.enums import IngestionStatus
@@ -28,9 +39,11 @@ from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
 from app.infrastructure.content.orphan_sweeper import sweep_orphaned_objects
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
 from app.infrastructure.content.unit_of_work import ContentUnitOfWork
+from app.infrastructure.db.models.content import ContentIngestionJobModel
 
 logger = structlog.get_logger(__name__)
 HEALTH_PATH = Path(os.getenv("WORKER_HEALTH_PATH", "/tmp/build-backend-worker-health.json"))
+WORKER_METRICS_PORT = 9101
 
 
 def retry_delay_seconds(attempt: int, base: int, cap: int, random_value: float | None = None) -> int:
@@ -45,6 +58,33 @@ def retry_delay_seconds(attempt: int, base: int, cap: int, random_value: float |
     if not 0 <= sample <= 1:
         raise ValueError("random_value must be between zero and one")
     return max(1, round(bounded * (0.8 + 0.4 * sample)))
+
+
+async def update_dispatch_queue_metrics() -> None:
+    now = datetime.now(timezone.utc)
+    stmt = select(func.count(), func.min(ContentIngestionJobModel.created_at)).where(
+        ContentIngestionJobModel.status == IngestionStatus.QUEUED.value,
+        or_(
+            ContentIngestionJobModel.dispatch_claim_token.is_(None),
+            ContentIngestionJobModel.dispatch_claim_expires_at.is_(None),
+            ContentIngestionJobModel.dispatch_claim_expires_at <= now,
+        ),
+        or_(
+            ContentIngestionJobModel.next_retry_at.is_(None),
+            ContentIngestionJobModel.next_retry_at <= now,
+        ),
+    )
+    async with SessionLocal() as session:
+        await set_transaction_timeouts(session)
+        due_count, oldest_created_at = (await session.execute(stmt)).one()
+    content_jobs_due.set(due_count)
+    age = (now - oldest_created_at).total_seconds() if oldest_created_at else 0
+    content_oldest_due_job_age_seconds.set(max(0, age))
+
+
+async def _dispatch_and_measure(stop: asyncio.Event) -> None:
+    await run_dispatch_pass(stop)
+    await update_dispatch_queue_metrics()
 
 
 async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
@@ -121,7 +161,7 @@ async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 )
                 return True
             current_asset = await uow.assets.get_asset_by_id(current.asset_id)
-            result = await DispatchIngestionJobHandler(
+            await DispatchIngestionJobHandler(
                 uow,
                 HttpAIServiceIngestionGateway(),
                 EventBus(),
@@ -132,15 +172,6 @@ async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 current_asset,
                 outcome,
                 claim_token=claim_token,
-            )
-            logger.info(
-                "content_job_dispatch_pass",
-                job_id=result.id,
-                task_id=result.external_task_id or outcome.external_task_id,
-                run_number=result.run_number,
-                attempt=result.attempt_count,
-                status=result.status.value,
-                outcome=("accepted" if outcome.external_task_id is not None else "uncertain" if outcome.uncertain else "failed"),
             )
             return True
 
@@ -159,6 +190,7 @@ async def _retry_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 settings.worker_retry_cap_seconds,
             )
             job.schedule_retry(delay_seconds=delay)
+            content_retries_scheduled_total.inc()
             await uow.jobs.save_job(job)
             asset = await uow.assets.get_asset_by_id(job.asset_id)
             if asset is not None:
@@ -206,6 +238,9 @@ async def _recover_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 status=result.job.status.value,
                 callback_outcomes=result.callback_outcomes,
             )
+            content_recoveries_total.labels(outcome=result.action).inc()
+            if result.action == "timeout":
+                content_in_flight_cap_hits_total.inc()
             return True
 
 
@@ -355,12 +390,13 @@ async def serve() -> None:
 
     completed_at: dict[str, float] = {}
     write_health_state(completed_at)
+    metrics_server, _ = start_http_server(WORKER_METRICS_PORT, registry=registry)
     workers = [
         asyncio.create_task(
             _run_loop(
                 "dispatch",
                 settings.worker_dispatch_interval_seconds,
-                run_dispatch_pass,
+                _dispatch_and_measure,
                 stop,
                 completed_at,
             )
@@ -406,6 +442,8 @@ async def serve() -> None:
     finally:
         if not stop.is_set():
             stop.set()
+        metrics_server.shutdown()
+        metrics_server.server_close()
         await engine.dispose()
 
 

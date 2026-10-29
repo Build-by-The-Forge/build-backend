@@ -4,6 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+import structlog
+
 from app.application.common.uow import ContentUnitOfWorkPort
 from app.application.content.job_commands import (
     CreateIngestionJobCommand,
@@ -20,6 +22,12 @@ from app.application.content.upload import managed_storage_key
 from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
+)
+from app.core.metrics import (
+    content_dispatch_failures_total,
+    content_jobs_dispatched_total,
+    content_terminal_failures_total,
+    content_uncertain_dispatches_total,
 )
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
@@ -49,6 +57,13 @@ from app.domain.content.storage import (
     ObjectStorageUnavailableError,
 )
 from app.events.event_bus import EventBus
+
+logger = structlog.get_logger(__name__)
+
+
+def _metric_error_code(error_code: str) -> str:
+    normalized = "".join(character for character in error_code.upper() if character.isalnum() or character == "_")
+    return normalized[:64] or "UNKNOWN"
 
 
 def owned_job(job: ContentIngestionJob | None, tenant_id: str, job_id: str) -> ContentIngestionJob:
@@ -320,6 +335,15 @@ class DispatchIngestionJobHandler:
                 raise ValueError("An accepted dispatch cannot be recorded without its asset.")
             job.record_dispatch(outcome.external_task_id, claim_token=claim_token)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
+            content_jobs_dispatched_total.inc()
+            logger.info(
+                "content_job_dispatched",
+                job_id=job.id,
+                task_id=outcome.external_task_id,
+                run_number=job.run_number,
+                attempt=job.attempt_count,
+                status=job.status.value,
+            )
             return await self._save_dispatch_state(job, asset)
         if outcome.uncertain:
             return await self._record_uncertain_dispatch(job, asset, outcome, claim_token=claim_token)
@@ -358,6 +382,18 @@ class DispatchIngestionJobHandler:
             is_retryable=retryable,
             claim_token=claim_token,
         )
+        content_dispatch_failures_total.labels(error_code=_metric_error_code(error_code)).inc()
+        if not retryable:
+            content_terminal_failures_total.labels(error_code=_metric_error_code(error_code)).inc()
+        logger.warning(
+            "content_job_dispatch_failed",
+            job_id=job.id,
+            task_id=job.external_task_id,
+            run_number=job.run_number,
+            attempt=job.attempt_count,
+            error_code=_metric_error_code(error_code),
+            retryable=retryable,
+        )
         if asset is not None:
             asset.update_ingestion_status(IngestionStatus.FAILED, error_code=error_code, error_message=message)
         # queued -> failed is a recorded business outcome, not an error to
@@ -379,6 +415,16 @@ class DispatchIngestionJobHandler:
         *,
         claim_token: str | None = None,
     ) -> ContentIngestionJob:
+        content_uncertain_dispatches_total.inc()
+        logger.warning(
+            "content_job_dispatch_uncertain",
+            job_id=job.id,
+            task_id=job.external_task_id,
+            run_number=job.run_number,
+            attempt=job.attempt_count,
+            error_code=_metric_error_code(outcome.error_code or "AI_DISPATCH_UNCERTAIN"),
+            uncertain_attempt=int(job.metrics.get("uncertain_dispatch_count", 0)) + 1,
+        )
         retry_same_attempt = job.defer_uncertain_dispatch(
             error_code=outcome.error_code or "AI_DISPATCH_UNCERTAIN",
             error_message=outcome.error_message or "AI-service dispatch outcome is uncertain",
@@ -450,6 +496,7 @@ class HandleAICallbackHandler:
                 return job, CallbackOutcome.LEGACY
             return job, CallbackOutcome.DUPLICATE
 
+        previous_status = job.status
         outcome = job.apply_callback(
             event_type=cmd.event_type,
             run_number=cmd.run_number,
@@ -497,6 +544,20 @@ class HandleAICallbackHandler:
         saved_job = await self._uow.jobs.save_job(job)
         if self._event_bus and events:
             self._event_bus.publish_all(events)
+        if saved_job.status != previous_status:
+            if saved_job.status is IngestionStatus.FAILED and not saved_job.is_retryable:
+                content_terminal_failures_total.labels(error_code=_metric_error_code(saved_job.error_code or "UNKNOWN")).inc()
+            logger.info(
+                "content_job_transition",
+                job_id=saved_job.id,
+                task_id=cmd.external_task_id,
+                run_number=saved_job.run_number,
+                attempt=cmd.attempt_count,
+                previous_status=previous_status.value,
+                status=saved_job.status.value,
+                outcome="callback",
+                error_code=_metric_error_code(saved_job.error_code) if saved_job.error_code else None,
+            )
         return saved_job, outcome
 
     async def _record_conflict(self, cmd: HandleAICallbackCommand, recorded_job_id: str) -> None:
