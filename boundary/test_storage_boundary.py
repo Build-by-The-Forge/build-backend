@@ -53,8 +53,6 @@ def test_c22_the_ai_fetches_and_verifies_the_uploaded_document(backend, tenant_a
     asset = create_asset(backend, tenant_a, document)
     job = create_job_for(backend, tenant_a, asset)
 
-    response = dispatch(backend, tenant_a, job["id"])
-    assert response.status_code == 200, response.text
     final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
     fetch = pipeline_outcome(final)
@@ -71,11 +69,9 @@ def test_a_tampered_object_is_refused_by_the_ai_service(backend, tenant_a):
     metadata: the backend's head check cannot tell, the AI's hash does."""
     document = pdf_document()
     asset = create_asset(backend, tenant_a, document)
-    job = create_job_for(backend, tenant_a, asset)
     object_store().put_object(Bucket=BUCKET, Key=object_key(asset), Body=document[:-1] + b"X")
+    job = create_job_for(backend, tenant_a, asset)
 
-    response = dispatch(backend, tenant_a, job["id"])
-    assert response.status_code == 200, response.text
     final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
     assert (final["status"], final["error_code"], final["is_retryable"]) == (
@@ -87,25 +83,28 @@ def test_a_tampered_object_is_refused_by_the_ai_service(backend, tenant_a):
 
 def test_a_missing_object_is_refused_before_the_ai_service(backend, tenant_a):
     asset = create_asset(backend, tenant_a)
-    job = create_job_for(backend, tenant_a, asset)
     object_store().delete_object(Bucket=BUCKET, Key=object_key(asset))
+    job = create_job_for(backend, tenant_a, asset)
+    final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
-    response = dispatch(backend, tenant_a, job["id"])
-
-    assert response.status_code == 409, response.text
-    assert response.json()["error"]["code"] == "ASSET_OBJECT_MISSING"
-    assert response.json()["data"]["external_task_id"] is None  # never dispatched
+    assert (final["status"], final["error_code"], final["external_task_id"]) == (
+        "failed",
+        "ASSET_OBJECT_MISSING",
+        None,
+    )
 
 
 def test_an_object_resized_in_storage_is_refused_before_the_ai_service(backend, tenant_a):
     asset = create_asset(backend, tenant_a)
-    job = create_job_for(backend, tenant_a, asset)
     object_store().put_object(Bucket=BUCKET, Key=object_key(asset), Body=b"%PDF-1.7 short")
+    job = create_job_for(backend, tenant_a, asset)
+    final = wait_for_status(backend, tenant_a, job["id"], TERMINAL_STATES, timeout=FETCH_TIMEOUT)
 
-    response = dispatch(backend, tenant_a, job["id"])
-
-    assert response.status_code == 409, response.text
-    assert response.json()["error"]["code"] == "ASSET_OBJECT_MISMATCH"
+    assert (final["status"], final["error_code"], final["external_task_id"]) == (
+        "failed",
+        "ASSET_OBJECT_MISMATCH",
+        None,
+    )
 
 
 # --- authorization: the AI never fetches another tenant's object -----------------------------

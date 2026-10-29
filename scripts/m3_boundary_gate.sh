@@ -119,6 +119,8 @@ scripts/check_storage_secrets.sh || status=$?
 # retryable and never reach the AI-service. Before C11: after a Redis outage
 # the auth throttle keeps refusing logins for a while, and these cases log
 # in. The store keeps its data on tmpfs; nothing after this needs it.
+echo "P3-1: stopping backend workers before the storage-down cases"
+"${COMPOSE[@]}" stop backend-worker
 echo "P3-1: stopping object storage"
 "${COMPOSE[@]}" stop object-storage
 "${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
