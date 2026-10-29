@@ -100,9 +100,7 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_job_model_to_domain(m) for m in models]
 
-    async def claim_next_due_dispatch(
-        self, excluded_ids: set[str], claim_seconds: int = 120
-    ) -> ContentIngestionJob | None:
+    async def claim_next_due_dispatch(self, excluded_ids: set[str], claim_seconds: int = 120) -> ContentIngestionJob | None:
         if claim_seconds < 1:
             raise ValueError("claim_seconds must be at least 1")
         now = datetime.now(timezone.utc)

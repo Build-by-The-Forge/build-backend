@@ -148,13 +148,7 @@ async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 run_number=result.run_number,
                 attempt=result.attempt_count,
                 status=result.status.value,
-                outcome=(
-                    "accepted"
-                    if outcome.external_task_id is not None
-                    else "uncertain"
-                    if outcome.uncertain
-                    else "failed"
-                ),
+                outcome=("accepted" if outcome.external_task_id is not None else "uncertain" if outcome.uncertain else "failed"),
             )
             return True
 

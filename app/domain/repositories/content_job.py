@@ -28,9 +28,7 @@ class ContentIngestionJobRepository(Protocol):
     async def list_pending_jobs(self, tenant_id: str | None = None, limit: int = 50) -> list[ContentIngestionJob]:
         raise NotImplementedError
 
-    async def claim_next_due_dispatch(
-        self, excluded_ids: set[str], claim_seconds: int = 120
-    ) -> ContentIngestionJob | None:
+    async def claim_next_due_dispatch(self, excluded_ids: set[str], claim_seconds: int = 120) -> ContentIngestionJob | None:
         """Lock and return one due queued job with an expiring durable claim."""
         raise NotImplementedError
 

@@ -378,9 +378,7 @@ class ContentIngestionJob:
             )
         )
 
-    def fail_dispatch(
-        self, error_code: str, error_message: str, is_retryable: bool, *, claim_token: str | None = None
-    ) -> None:
+    def fail_dispatch(self, error_code: str, error_message: str, is_retryable: bool, *, claim_token: str | None = None) -> None:
         """queued -> failed: the dispatch itself failed (backend business
         operation)."""
         if self.status != IngestionStatus.QUEUED:
@@ -511,10 +509,7 @@ class ContentIngestionJob:
                 or run_number != self.run_number
                 or attempt_count != self.attempt_count
                 or not external_task_id.strip()
-                or (
-                    self.dispatch_claim_token is None
-                    and self.metrics.get("uncertain_dispatch_attempt") != self.attempt_count
-                )
+                or (self.dispatch_claim_token is None and self.metrics.get("uncertain_dispatch_attempt") != self.attempt_count)
             ):
                 return CallbackOutcome.STALE
             if self.dispatch_claim_token is None:
