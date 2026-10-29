@@ -231,9 +231,7 @@ class ContentIngestionJob:
         self.status = IngestionStatus.PROCESSING
         self.current_stage = "dispatched_to_ai"
         self.external_task_id = task_id
-        uncertain_attempt = self.metrics.get("uncertain_dispatch_attempt") == self.attempt_count
-        uncertain_count = self.metrics.get("uncertain_dispatch_count", 0) if uncertain_attempt else 0
-        if self.last_dispatched_at is None or uncertain_count == 0:
+        if self.last_dispatched_at is None:
             self.last_dispatched_at = now
         self.next_retry_at = None
         if self.started_at is None:
@@ -277,9 +275,6 @@ class ContentIngestionJob:
         count += 1
         self.metrics["uncertain_dispatch_attempt"] = self.attempt_count
         self.metrics["uncertain_dispatch_count"] = count
-
-        if self.last_dispatched_at is None:
-            self.last_dispatched_at = datetime.now(timezone.utc)
 
         if count >= max_uncertain_dispatches:
             self.fail_dispatch(error_code, error_message, is_retryable=True)
@@ -551,6 +546,8 @@ class ContentIngestionJob:
         self.status = IngestionStatus.PROCESSING
         self.current_stage = "dispatched_to_ai"
         self.external_task_id = external_task_id
+        if self.last_dispatched_at is None:
+            self.last_dispatched_at = now
         self.next_retry_at = None
         if self.started_at is None:
             self.started_at = now
