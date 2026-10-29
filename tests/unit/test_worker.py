@@ -84,6 +84,7 @@ def test_worker_settings_defaults_match_the_design():
         {"worker_retry_cap_seconds": 0},
         {"worker_retry_base_seconds": 901},
         {"worker_retry_cap_seconds": 86401},
+        {"worker_retry_base_seconds": 30, "worker_retry_cap_seconds": 29},
         {"worker_stuck_processing_seconds": 0},
         {"worker_stuck_stage_seconds": 0},
         {"worker_max_in_flight_seconds": 0},
