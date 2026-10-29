@@ -15,10 +15,11 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.application.content.job_handlers import DispatchIngestionJobHandler
+from app.application.content.job_handlers import DispatchAttemptOutcome, DispatchIngestionJobHandler
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
 from app.domain.content.enums import IngestionStatus
+from app.domain.content.gateway import JobTenantMissing, SystemDispatchActor
 from app.events.event_bus import EventBus
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
@@ -55,27 +56,105 @@ async def set_transaction_timeouts(session: AsyncSession) -> None:
 
 
 async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
+    job = None
     async with SessionLocal() as session:
         async with ContentUnitOfWork(session) as uow:
             await set_transaction_timeouts(session)
-            job = await uow.jobs.claim_next_due_dispatch(excluded_ids)
-            if job is None:
-                return False
-            claimed_ids.append(job.id)
-            await DispatchIngestionJobHandler(
+            job = await uow.jobs.claim_next_due_dispatch(
+                excluded_ids,
+                claim_seconds=settings.worker_dispatch_claim_seconds,
+            )
+            if job is not None:
+                claimed_ids.append(job.id)
+    if job is None:
+        return False
+
+    async with SessionLocal() as session:
+        async with ContentUnitOfWork(session) as uow:
+            await set_transaction_timeouts(session)
+            asset = await uow.assets.get_asset_by_id(job.asset_id)
+            source = await uow.sources.get_source_by_id(job.source_id)
+            dispatcher = DispatchIngestionJobHandler(
                 uow,
                 HttpAIServiceIngestionGateway(),
                 EventBus(),
                 storage=S3ObjectStorage.from_settings,
                 bucket=settings.object_storage_bucket,
-            ).handle_system(job)
+            )
+
+    claim_token = job.dispatch_claim_token
+    if claim_token is None:
+        raise RuntimeError(f"Claimed job {job.id} has no dispatch claim token.")
+    if asset is None:
+        outcome = DispatchAttemptOutcome(
+            error_code="ASSET_NOT_FOUND",
+            error_message=f"ContentAsset with id '{job.asset_id}' does not exist",
+        )
+    elif source is None:
+        outcome = DispatchAttemptOutcome(
+            error_code="CONTENT_SOURCE_NOT_FOUND",
+            error_message=f"ContentSource with id '{job.source_id}' does not exist",
+        )
+    else:
+        try:
+            actor = SystemDispatchActor.for_job(job)
+        except JobTenantMissing as exc:
+            outcome = DispatchAttemptOutcome(error_code=exc.error_code, error_message=str(exc))
+        else:
+            outcome = await dispatcher.attempt_dispatch(
+                job,
+                asset,
+                source,
+                actor,
+                claim_token=claim_token,
+            )
+
+    async with SessionLocal() as session:
+        async with ContentUnitOfWork(session) as uow:
+            await set_transaction_timeouts(session)
+            current = await uow.jobs.get_job_for_update(job.id)
+            if (
+                current is None
+                or current.status != IngestionStatus.QUEUED
+                or current.attempt_count != job.attempt_count
+                or current.run_number != job.run_number
+                or current.dispatch_claim_token != claim_token
+            ):
+                logger.info(
+                    "content_job_dispatch_result_superseded",
+                    job_id=job.id,
+                    task_id=outcome.external_task_id,
+                    run_number=job.run_number,
+                    attempt=job.attempt_count,
+                )
+                return True
+            current_asset = await uow.assets.get_asset_by_id(current.asset_id)
+            result = await DispatchIngestionJobHandler(
+                uow,
+                HttpAIServiceIngestionGateway(),
+                EventBus(),
+                storage=S3ObjectStorage.from_settings,
+                bucket=settings.object_storage_bucket,
+            ).record_dispatch_outcome(
+                current,
+                current_asset,
+                outcome,
+                claim_token=claim_token,
+            )
             logger.info(
                 "content_job_dispatch_pass",
-                job_id=job.id,
-                task_id=job.external_task_id,
-                run_number=job.run_number,
-                attempt=job.attempt_count,
-                status=job.status.value,
+                job_id=result.id,
+                task_id=result.external_task_id or outcome.external_task_id,
+                run_number=result.run_number,
+                attempt=result.attempt_count,
+                status=result.status.value,
+                outcome=(
+                    "accepted"
+                    if outcome.external_task_id is not None
+                    else "uncertain"
+                    if outcome.uncertain
+                    else "failed"
+                ),
             )
             return True
 

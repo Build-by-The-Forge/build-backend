@@ -30,6 +30,8 @@ def content_job_to_model(job: ContentIngestionJob, model: ContentIngestionJobMod
     model.external_task_id = job.external_task_id
     model.last_dispatched_at = job.last_dispatched_at
     model.last_callback_at = job.last_callback_at
+    model.dispatch_claim_token = job.dispatch_claim_token
+    model.dispatch_claim_expires_at = job.dispatch_claim_expires_at
     model.created_by = job.created_by
     model.created_at = job.created_at
     model.updated_at = job.updated_at
@@ -60,6 +62,8 @@ def content_job_model_to_domain(model: ContentIngestionJobModel) -> ContentInges
         external_task_id=model.external_task_id,
         last_dispatched_at=model.last_dispatched_at,
         last_callback_at=model.last_callback_at,
+        dispatch_claim_token=model.dispatch_claim_token,
+        dispatch_claim_expires_at=model.dispatch_claim_expires_at,
         created_by=model.created_by,
         created_at=model.created_at,
         updated_at=model.updated_at,

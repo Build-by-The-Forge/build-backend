@@ -148,6 +148,8 @@ class ContentIngestionJobModel(Base):
     external_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_callback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dispatch_claim_token: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    dispatch_claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -177,6 +179,13 @@ class ContentIngestionJobModel(Base):
             "next_retry_at",
             "created_at",
             postgresql_where=text("status IN ('queued', 'failed', 'processing', 'extracted', 'chunked', 'indexed')"),
+        ),
+        Index(
+            "ix_content_ingestion_jobs_dispatch_claim",
+            "status",
+            "dispatch_claim_expires_at",
+            "created_at",
+            postgresql_where=text("status = 'queued'"),
         ),
     )
 

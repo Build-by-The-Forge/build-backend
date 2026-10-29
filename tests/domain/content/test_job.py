@@ -108,6 +108,51 @@ def test_dispatch_requires_a_task_id():
         job.record_dispatch("  ")
 
 
+def test_dispatch_claim_blocks_manual_dispatch_and_expires_for_reclaim():
+    job = new_job()
+    job.queue()
+    now = datetime.now(timezone.utc)
+    job.dispatch_claim_token = "worker-a"
+    job.dispatch_claim_expires_at = now + timedelta(seconds=30)
+
+    with pytest.raises(InvalidJobTransition, match="active dispatch claim"):
+        job.ensure_dispatchable(now=now)
+    with pytest.raises(InvalidJobTransition, match="no longer owned"):
+        job.ensure_dispatchable(now=now, claim_token="worker-b")
+
+    job.ensure_dispatchable(now=now + timedelta(seconds=31))
+    with pytest.raises(InvalidJobTransition, match="no longer owned"):
+        job.ensure_dispatchable(now=now + timedelta(seconds=31), claim_token="worker-a")
+    job.dispatch_claim_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    job.record_dispatch("task-1")
+    assert job.dispatch_claim_token is None
+    assert job.dispatch_claim_expires_at is None
+
+
+@pytest.mark.parametrize("claim_age_seconds", [-1, 30])
+def test_callback_adopts_a_task_while_dispatch_claim_exists(claim_age_seconds):
+    job = new_job()
+    job.queue()
+    job.dispatch_claim_token = "worker-a"
+    job.dispatch_claim_expires_at = datetime.now(timezone.utc) + timedelta(seconds=claim_age_seconds)
+
+    result = job.apply_callback(
+        event_type="stage_progress",
+        stage="extracted",
+        run_number=job.run_number,
+        attempt_count=job.attempt_count,
+        external_task_id="task-accepted-before-response",
+        metrics=EXTRACTED,
+    )
+
+    assert result is CallbackOutcome.APPLIED
+    assert job.status is IngestionStatus.EXTRACTED
+    assert job.external_task_id == "task-accepted-before-response"
+    assert job.last_dispatched_at is not None
+    assert job.dispatch_claim_token is None
+    assert job.dispatch_claim_expires_at is None
+
+
 def test_uncertain_dispatch_defers_on_the_same_attempt_and_fails_at_the_bound():
     job = new_job()
     job.queue()

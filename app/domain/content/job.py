@@ -129,6 +129,8 @@ class ContentIngestionJob:
     external_task_id: str | None = None
     last_dispatched_at: datetime | None = None
     last_callback_at: datetime | None = None
+    dispatch_claim_token: str | None = None
+    dispatch_claim_expires_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
@@ -207,7 +209,13 @@ class ContentIngestionJob:
             )
         )
 
-    def ensure_dispatchable(self, now: datetime | None = None) -> None:
+    def ensure_dispatchable(
+        self,
+        now: datetime | None = None,
+        *,
+        claim_token: str | None = None,
+        allow_expired_claim: bool = False,
+    ) -> None:
         """A job is dispatched only while queued and, after a retry, only once
         its retry delay has elapsed."""
         if self.status != IngestionStatus.QUEUED:
@@ -218,11 +226,23 @@ class ContentIngestionJob:
             retry_at = retry_at.replace(tzinfo=timezone.utc)  # stored as UTC
         if retry_at is not None and now < retry_at:
             raise RetryNotDue(f"Retry attempt {self.attempt_count} may not be dispatched before {retry_at.isoformat()}")
+        if self.dispatch_claim_token is not None:
+            claim_expires_at = self.dispatch_claim_expires_at
+            if claim_expires_at is not None and claim_expires_at.tzinfo is None:
+                claim_expires_at = claim_expires_at.replace(tzinfo=timezone.utc)
+            claim_is_live = claim_expires_at is not None and now < claim_expires_at
+            if claim_token is None:
+                if claim_is_live:
+                    raise InvalidJobTransition("Job is already owned by an active dispatch claim.")
+            elif claim_token != self.dispatch_claim_token or (not claim_is_live and not allow_expired_claim):
+                raise InvalidJobTransition("Dispatch claim is no longer owned by this worker.")
+        elif claim_token is not None:
+            raise InvalidJobTransition("Dispatch claim is no longer owned by this worker.")
 
-    def record_dispatch(self, external_task_id: str) -> None:
+    def record_dispatch(self, external_task_id: str, *, claim_token: str | None = None) -> None:
         """queued -> processing: AI-service accepted the dispatch. The task id
         identifies this attempt from now on."""
-        self.ensure_dispatchable()
+        self.ensure_dispatchable(claim_token=claim_token, allow_expired_claim=claim_token is not None)
         task_id = external_task_id.strip()
         if not task_id:
             raise InvalidJobTransition("An accepted dispatch must carry a task id.")
@@ -234,6 +254,7 @@ class ContentIngestionJob:
         if self.last_dispatched_at is None:
             self.last_dispatched_at = now
         self.next_retry_at = None
+        self._clear_dispatch_claim()
         if self.started_at is None:
             self.started_at = now
         self.touch()
@@ -255,6 +276,8 @@ class ContentIngestionJob:
         error_code: str,
         error_message: str,
         max_uncertain_dispatches: int = MAX_UNCERTAIN_DISPATCHES,
+        *,
+        claim_token: str | None = None,
     ) -> bool:
         """Keep an uncertain dispatch on this queued attempt and key.
 
@@ -262,7 +285,7 @@ class ContentIngestionJob:
         records one retryable failure when the configured uncertainty bound
         is reached.
         """
-        self.ensure_dispatchable()
+        self.ensure_dispatchable(claim_token=claim_token, allow_expired_claim=claim_token is not None)
         if max_uncertain_dispatches < 1:
             raise ValueError("max_uncertain_dispatches must be at least 1")
 
@@ -277,9 +300,10 @@ class ContentIngestionJob:
         self.metrics["uncertain_dispatch_count"] = count
 
         if count >= max_uncertain_dispatches:
-            self.fail_dispatch(error_code, error_message, is_retryable=True)
+            self.fail_dispatch(error_code, error_message, is_retryable=True, claim_token=claim_token)
             return False
 
+        self._clear_dispatch_claim()
         delay_seconds = min(2 ** (count - 1), MAX_UNCERTAIN_DISPATCH_BACKOFF_SECONDS)
         self.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
         self.current_stage = "dispatch_outcome_uncertain"
@@ -354,11 +378,14 @@ class ContentIngestionJob:
             )
         )
 
-    def fail_dispatch(self, error_code: str, error_message: str, is_retryable: bool) -> None:
+    def fail_dispatch(
+        self, error_code: str, error_message: str, is_retryable: bool, *, claim_token: str | None = None
+    ) -> None:
         """queued -> failed: the dispatch itself failed (backend business
         operation)."""
         if self.status != IngestionStatus.QUEUED:
             raise InvalidJobTransition(f"A dispatch failure applies to a QUEUED job, not '{self.status.value}'.")
+        self.ensure_dispatchable(claim_token=claim_token, allow_expired_claim=claim_token is not None)
         self._record_failure(error_code, error_message, is_retryable, {})
 
     def fail_processing(
@@ -383,6 +410,7 @@ class ContentIngestionJob:
     ) -> None:
         now = datetime.now(timezone.utc)
         self.status = IngestionStatus.FAILED
+        self._clear_dispatch_claim()
         self.error_code = error_code.strip()
         self.error_message = error_message.strip()
         self.is_retryable = is_retryable
@@ -483,12 +511,16 @@ class ContentIngestionJob:
                 or run_number != self.run_number
                 or attempt_count != self.attempt_count
                 or not external_task_id.strip()
-                or self.metrics.get("uncertain_dispatch_attempt") != self.attempt_count
+                or (
+                    self.dispatch_claim_token is None
+                    and self.metrics.get("uncertain_dispatch_attempt") != self.attempt_count
+                )
             ):
                 return CallbackOutcome.STALE
-            uncertain_count = self.metrics.get("uncertain_dispatch_count")
-            if type(uncertain_count) is not int or uncertain_count < 1:
-                return CallbackOutcome.STALE
+            if self.dispatch_claim_token is None:
+                uncertain_count = self.metrics.get("uncertain_dispatch_count")
+                if type(uncertain_count) is not int or uncertain_count < 1:
+                    return CallbackOutcome.STALE
             if event_type == "stage_progress":
                 if stage != "extracted":
                     return CallbackOutcome.NOT_ALLOWED
@@ -549,6 +581,7 @@ class ContentIngestionJob:
         if self.last_dispatched_at is None:
             self.last_dispatched_at = now
         self.next_retry_at = None
+        self._clear_dispatch_claim()
         if self.started_at is None:
             self.started_at = now
         self.touch()
@@ -564,6 +597,10 @@ class ContentIngestionJob:
                 },
             )
         )
+
+    def _clear_dispatch_claim(self) -> None:
+        self.dispatch_claim_token = None
+        self.dispatch_claim_expires_at = None
 
     def create_reprocess_run(self, created_by: str, correlation_id: str | None = None) -> ContentIngestionJob:
         if self.status not in (IngestionStatus.READY, IngestionStatus.FAILED):
