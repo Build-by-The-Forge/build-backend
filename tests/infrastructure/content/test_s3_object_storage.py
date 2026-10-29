@@ -6,6 +6,7 @@ import base64
 import hashlib
 import io
 import logging
+from datetime import datetime, timezone
 
 import boto3
 import pytest
@@ -208,6 +209,46 @@ async def test_delete_deletes_the_key(stubbed):
     stubber.add_response("delete_object", {}, expected_params={"Bucket": BUCKET, "Key": KEY})
 
     await storage.delete(KEY)
+
+
+async def test_list_page_uses_continuation_token_and_returns_modified_times(stubbed):
+    storage, stubber, _ = stubbed
+    modified = datetime(2026, 10, 1, tzinfo=timezone.utc)
+    stubber.add_response(
+        "list_objects_v2",
+        {
+            "IsTruncated": True,
+            "NextContinuationToken": "next-page",
+            "Contents": [{"Key": KEY, "LastModified": modified}],
+        },
+        expected_params={"Bucket": BUCKET, "Prefix": "tenants/", "MaxKeys": 1000},
+    )
+    stubber.add_response(
+        "list_objects_v2",
+        {"IsTruncated": False, "Contents": []},
+        expected_params={
+            "Bucket": BUCKET,
+            "Prefix": "tenants/",
+            "MaxKeys": 1000,
+            "ContinuationToken": "next-page",
+        },
+    )
+
+    first = await storage.list_page(prefix="tenants/")
+    second = await storage.list_page(prefix="tenants/", continuation_token=first.continuation_token)
+
+    assert first.objects[0].key == KEY
+    assert first.objects[0].last_modified == modified
+    assert first.continuation_token == "next-page"
+    assert second.objects == ()
+    assert second.continuation_token is None
+
+
+@pytest.mark.parametrize("max_keys", [0, 1001])
+async def test_list_page_rejects_invalid_page_size_without_requesting_storage(stubbed, max_keys):
+    storage, _, _ = stubbed
+    with pytest.raises(ValueError, match="max_keys"):
+        await storage.list_page(prefix="tenants/", max_keys=max_keys)
 
 
 # --- error mapping --------------------------------------------------------------------------

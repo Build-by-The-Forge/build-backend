@@ -21,6 +21,7 @@ import hashlib
 import io
 import logging
 import re
+from datetime import datetime
 from typing import Any, BinaryIO, Callable
 
 import boto3
@@ -48,9 +49,11 @@ from app.domain.content.storage import (
     ObjectStorageAccessDeniedError,
     ObjectStorageConfigurationError,
     ObjectStorageError,
+    ObjectStoragePage,
     ObjectStorageUnavailableError,
     ObjectTooLargeError,
     StoredObject,
+    StoredObjectSummary,
 )
 
 logger = logging.getLogger(__name__)
@@ -253,6 +256,33 @@ class S3ObjectStorage:
             content_type=response.get("ContentType"),
             sha256=reported if reported and _SHA256_HEX.fullmatch(reported) else None,
         )
+
+    async def list_page(
+        self,
+        *,
+        prefix: str,
+        continuation_token: str | None = None,
+        max_keys: int = 1000,
+    ) -> ObjectStoragePage:
+        if not prefix or prefix.startswith("/") or "\\" in prefix or any(ord(ch) < 0x20 for ch in prefix):
+            raise InvalidObjectKeyError("object prefix is malformed")
+        if not 1 <= max_keys <= 1000:
+            raise ValueError("max_keys must be between 1 and 1000")
+        params: dict[str, Any] = {"Bucket": self._bucket, "Prefix": prefix, "MaxKeys": max_keys}
+        if continuation_token is not None:
+            params["ContinuationToken"] = continuation_token
+        response = await self._call("list", self._client.list_objects_v2, **params)
+        objects = []
+        for item in response.get("Contents", []):
+            key = item.get("Key")
+            last_modified = item.get("LastModified")
+            if not isinstance(key, str) or not isinstance(last_modified, datetime):
+                raise ObjectStorageError("object storage returned an incomplete listing entry")
+            objects.append(StoredObjectSummary(key=key, last_modified=last_modified))
+        token = response.get("NextContinuationToken")
+        if token is not None and not isinstance(token, str):
+            raise ObjectStorageError("object storage returned an invalid continuation token")
+        return ObjectStoragePage(objects=tuple(objects), continuation_token=token)
 
     async def delete(self, key: str) -> None:
         validate_object_key(key)

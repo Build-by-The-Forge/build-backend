@@ -49,7 +49,7 @@ def test_worker_health_requires_each_loop_to_finish_within_three_intervals(tmp_p
     monkeypatch.setattr(settings, "worker_dispatch_interval_seconds", 2)
     monkeypatch.setattr(settings, "worker_retry_interval_seconds", 10)
     path = tmp_path / "health.json"
-    write_health_state({"dispatch": 95, "retry": 71}, path)
+    write_health_state({"dispatch": 95, "retry": 71, "orphan_sweep": 95}, path)
 
     check_worker_health(now=100, path=path)
     with pytest.raises(RuntimeError, match="dispatch"):
@@ -75,7 +75,8 @@ def test_worker_settings_defaults_match_the_design():
         settings.worker_retry_base_seconds,
         settings.worker_retry_cap_seconds,
         settings.worker_shutdown_grace_seconds,
-    ) == (2, 20, 120, 10, 50, 30, 900, 25)
+        settings.worker_orphan_sweep_interval_seconds,
+    ) == (2, 20, 120, 10, 50, 30, 900, 25, 3600)
 
 
 @pytest.mark.parametrize(

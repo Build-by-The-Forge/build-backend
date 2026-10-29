@@ -18,6 +18,7 @@ stay ``ObjectStorageError``; they are never reported as "not found".
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import BinaryIO, Protocol
 
 
@@ -36,6 +37,18 @@ class ObjectInfo:
     content_type: str | None
     # From the store's object metadata: informational, not proof.
     sha256: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class StoredObjectSummary:
+    key: str
+    last_modified: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectStoragePage:
+    objects: tuple[StoredObjectSummary, ...]
+    continuation_token: str | None
 
 
 class ObjectStorageError(Exception):
@@ -106,6 +119,15 @@ class ObjectStorage(Protocol):
         raise NotImplementedError
 
     async def head(self, key: str) -> ObjectInfo:
+        raise NotImplementedError
+
+    async def list_page(
+        self,
+        *,
+        prefix: str,
+        continuation_token: str | None = None,
+        max_keys: int = 1000,
+    ) -> ObjectStoragePage:
         raise NotImplementedError
 
     async def delete(self, key: str) -> None:
