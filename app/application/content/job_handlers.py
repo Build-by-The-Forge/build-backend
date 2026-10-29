@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.application.common.uow import ContentUnitOfWorkPort
 from app.application.content.job_commands import (
@@ -25,6 +25,7 @@ from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import (
     AIServiceIngestionGateway,
+    AIServiceStatusResult,
     IngestionDispatchActor,
     JobTenantMissing,
     SystemDispatchActor,
@@ -560,6 +561,52 @@ class ReconcileMismatchError(Exception):
     status_code = 502
 
 
+async def apply_ai_status_events(
+    uow: ContentUnitOfWorkPort,
+    job: ContentIngestionJob,
+    status: AIServiceStatusResult,
+    *,
+    event_bus: EventBus | None = None,
+    security_events: SecurityEventRecorder | None = None,
+) -> list[tuple[str, str]]:
+    callbacks = HandleAICallbackHandler(uow, event_bus, security_events)
+    outcomes: list[tuple[str, str]] = []
+    for body in status.events:
+        event_id = str(body.get("event_id", ""))
+        if body.get("job_id") != job.id:
+            outcomes.append((event_id, "rejected"))
+            continue
+        try:
+            callback = HandleAICallbackCommand(
+                job_id=job.id,
+                tenant_id=job.tenant_id or "",
+                event_id=event_id,
+                event_type=str(body["event_type"]),
+                external_task_id=str(body["external_task_id"]),
+                run_number=int(body["run_number"]),
+                attempt_count=int(body["attempt_count"]),
+                stage=body.get("stage"),
+                metrics=dict(body.get("metrics") or {}),
+                error_code=body.get("error_code"),
+                error_message=body.get("error_message"),
+                is_retryable=bool(body.get("is_retryable", False)),
+                details=dict(body.get("details") or {}),
+            )
+        except (KeyError, TypeError, ValueError):
+            outcomes.append((event_id, "rejected"))
+            continue
+        if not event_id:
+            outcomes.append((event_id, "rejected"))
+            continue
+        try:
+            _, outcome = await callbacks.handle(callback)
+        except InvalidStageEvidence:
+            outcomes.append((event_id, "rejected"))
+            continue
+        outcomes.append((event_id, outcome.value if outcome else "rejected"))
+    return outcomes
+
+
 @dataclass(frozen=True, slots=True)
 class ReconcileResult:
     job: ContentIngestionJob
@@ -607,41 +654,127 @@ class ReconcileIngestionJobHandler:
         ):
             raise ReconcileMismatchError("AI-service reported on a task that is not this job's active attempt")
 
-        callbacks = HandleAICallbackHandler(self._uow, self._event_bus, self._security_events)
-        outcomes: list[tuple[str, str]] = []
-        for body in status.events:
-            event_id = str(body.get("event_id", ""))
-            if body.get("job_id") != job.id:
-                outcomes.append((event_id, "rejected"))
-                continue
-            try:
-                callback = HandleAICallbackCommand(
-                    job_id=job.id,
-                    tenant_id=job.tenant_id or cmd.tenant_id,
-                    event_id=event_id,
-                    event_type=str(body["event_type"]),
-                    external_task_id=str(body["external_task_id"]),
-                    run_number=int(body["run_number"]),
-                    attempt_count=int(body["attempt_count"]),
-                    stage=body.get("stage"),
-                    metrics=dict(body.get("metrics") or {}),
-                    error_code=body.get("error_code"),
-                    error_message=body.get("error_message"),
-                    is_retryable=bool(body.get("is_retryable", False)),
-                    details=dict(body.get("details") or {}),
-                )
-            except (KeyError, TypeError, ValueError):
-                outcomes.append((event_id, "rejected"))
-                continue
-            if not event_id:
-                outcomes.append((event_id, "rejected"))
-                continue
-            try:
-                _, outcome = await callbacks.handle(callback)
-            except InvalidStageEvidence:
-                outcomes.append((event_id, "rejected"))
-                continue
-            outcomes.append((event_id, outcome.value if outcome else "rejected"))
+        outcomes = await apply_ai_status_events(
+            self._uow,
+            job,
+            status,
+            event_bus=self._event_bus,
+            security_events=self._security_events,
+        )
 
         refreshed = await self._uow.jobs.get_job_by_id(job.id)
         return ReconcileResult(job=refreshed or job, outcomes=outcomes)
+
+
+@dataclass(frozen=True, slots=True)
+class RecoverResult:
+    job: ContentIngestionJob
+    action: str
+    callback_outcomes: list[tuple[str, str]]
+
+
+class RecoverIngestionJobHandler:
+    """Reconcile a stale job before deciding whether its AI task is still live."""
+
+    def __init__(
+        self,
+        uow: ContentUnitOfWorkPort,
+        gateway: AIServiceIngestionGateway,
+        event_bus: EventBus | None = None,
+    ) -> None:
+        self._uow = uow
+        self._gateway = gateway
+        self._event_bus = event_bus
+
+    async def handle(
+        self,
+        job: ContentIngestionJob,
+        *,
+        max_in_flight_seconds: int,
+        now: datetime | None = None,
+    ) -> RecoverResult:
+        if max_in_flight_seconds < 1:
+            raise ValueError("max_in_flight_seconds must be at least 1")
+        status: AIServiceStatusResult | None = None
+        callbacks: list[tuple[str, str]] = []
+        if job.external_task_id and job.tenant_id:
+            try:
+                status = await self._gateway.fetch_job_status(
+                    job.external_task_id,
+                    job.tenant_id,
+                    job.correlation_id or job.id,
+                )
+            except Exception as exc:
+                if getattr(exc, "error_code", None) == "AI_TASK_NOT_FOUND":
+                    status = None
+                elif getattr(exc, "is_retryable", False):
+                    return RecoverResult(job=job, action="unreachable", callback_outcomes=[])
+                else:
+                    raise
+
+            if status is not None and (
+                status.external_task_id != job.external_task_id
+                or status.job_id != job.id
+                or status.run_number != job.run_number
+                or status.attempt_count != job.attempt_count
+            ):
+                status = None
+
+        if status is not None:
+            callbacks = await apply_ai_status_events(
+                self._uow,
+                job,
+                status,
+                event_bus=self._event_bus,
+            )
+
+        current = await self._uow.jobs.get_job_for_update(job.id)
+        if current is None:
+            raise RuntimeError(f"Ingestion job {job.id} disappeared during recovery.")
+        if current.status not in ACTIVE_STATUSES:
+            return RecoverResult(job=current, action="events_applied", callback_outcomes=callbacks)
+
+        dispatched_at = current.last_dispatched_at
+        if dispatched_at is not None and dispatched_at.tzinfo is None:
+            dispatched_at = dispatched_at.replace(tzinfo=timezone.utc)
+        recovery_time = now or datetime.now(timezone.utc)
+        if dispatched_at is not None and recovery_time >= dispatched_at + timedelta(seconds=max_in_flight_seconds):
+            current.fail_processing(
+                error_code="AI_TASK_TIMEOUT",
+                error_message="AI task exceeded the maximum in-flight duration",
+                is_retryable=True,
+            )
+            return await self._record_recovery_failure(current, "timeout", callbacks)
+
+        if status is not None and status.state == "running":
+            current.touch()
+            saved = await self._uow.jobs.save_job(current)
+            return RecoverResult(job=saved, action="alive", callback_outcomes=callbacks)
+
+        current.fail_processing(
+            error_code="AI_TASK_LOST",
+            error_message="AI task is stalled, failed, or unknown",
+            is_retryable=True,
+        )
+        return await self._record_recovery_failure(current, "lost", callbacks)
+
+    async def _record_recovery_failure(
+        self,
+        job: ContentIngestionJob,
+        action: str,
+        callbacks: list[tuple[str, str]],
+    ) -> RecoverResult:
+        events = job.pull_events()
+        saved = await self._uow.jobs.save_job(job)
+        asset = await self._uow.assets.get_asset_by_id(job.asset_id)
+        if asset is not None:
+            asset.update_ingestion_status(
+                IngestionStatus.FAILED,
+                error_code=job.error_code,
+                error_message=job.error_message,
+            )
+            await self._uow.assets.save_asset(asset)
+            events.extend(asset.pull_events())
+        if self._event_bus and events:
+            self._event_bus.publish_all(events)
+        return RecoverResult(job=saved, action=action, callback_outcomes=callbacks)
