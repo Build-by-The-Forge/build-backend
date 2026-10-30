@@ -28,8 +28,6 @@ def documents(backend, tenant_a, tenant_b) -> dict[str, str]:
     for tenant in (tenant_a, tenant_b):
         marker = uuid.uuid4().hex
         job = create_job_for(backend, tenant, create_asset(backend, tenant, pdf_document(marker)))
-        dispatched = backend.post(f"/content/jobs/{job['id']}/dispatch", headers=tenant.h("lecturer"))
-        assert dispatched.status_code == 200, dispatched.text
         final = wait_for_status(backend, tenant, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)
         assert final["status"] == "ready", final
         markers[tenant.tenant_id] = marker
@@ -73,7 +71,9 @@ def memories(tenant_a, tenant_b):
 
 def test_c27_chat_flows_through_both_services(backend, tenant_a, tenant_b, documents):
     own, other = documents[tenant_a.tenant_id], documents[tenant_b.tenant_id]
-    response = backend.post("/ai/chat", json={"message": f"What does reference {own} say about charge?"}, headers=tenant_a.h("student"))
+    response = backend.post(
+        "/ai/chat", json={"message": f"What does reference {own} say about charge?"}, headers=tenant_a.h("student")
+    )
     assert response.status_code == 200, response.text
     data = response.json()["data"]
     assert data["answer"].startswith("[deterministic model]")

@@ -42,11 +42,9 @@ def retrieve_as(ai, tenant, role: str, question: str) -> list[dict]:
     return response.json()["data"]
 
 
-def test_c22_a_question_retrieves_the_expected_passage_of_the_uploaded_document(ai, backend, tenant_a, tenant_b):
+def test_c22_automatic_worker_ingestion_is_retrievable_only_by_the_right_tenant(ai, backend, tenant_a, tenant_b):
     asset = create_asset(backend, tenant_a, pdf_document(uuid.uuid4().hex, BODY))
     job = create_job_for(backend, tenant_a, asset)
-    dispatched = backend.post(f"/content/jobs/{job['id']}/dispatch", headers=tenant_a.h("lecturer"))
-    assert dispatched.status_code == 200, dispatched.text
     final = wait_for_status(backend, tenant_a, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)
     assert final["status"] == "ready", final
 

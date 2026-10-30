@@ -28,6 +28,14 @@ class ContentIngestionJobRepository(Protocol):
     async def list_pending_jobs(self, tenant_id: str | None = None, limit: int = 50) -> list[ContentIngestionJob]:
         raise NotImplementedError
 
+    async def claim_next_due_dispatch(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
+        """Lock and return exactly one oldest due queued job, skipping locks."""
+        raise NotImplementedError
+
+    async def claim_next_retryable_failure(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
+        """Lock and return exactly one oldest retryable failure below its cap."""
+        raise NotImplementedError
+
     async def list_jobs(
         self,
         tenant_id: str | None = None,

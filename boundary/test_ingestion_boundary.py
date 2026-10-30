@@ -33,12 +33,9 @@ TERMINAL = {"failed", "ready"}
 
 @pytest.fixture(scope="module")
 def dispatched(backend, tenant_a):
-    """A tenant-A job dispatched through the backend to the real AI-service and
-    processed by the real worker, whose signed callback reached the backend."""
+    """A tenant-A job queued for the automatic backend worker and completed
+    by the real AI-service, whose signed callback reached the backend."""
     job = create_job(backend, tenant_a)
-    response = backend.post(f"/content/jobs/{job['id']}/dispatch", headers=tenant_a.h("lecturer"))
-    assert response.status_code == 200, response.text
-    assert response.json()["data"]["status"] == "processing"
     return wait_for_status(backend, tenant_a, job["id"], TERMINAL)
 
 
@@ -77,12 +74,9 @@ def assert_terminal_unmoved(response, backend, tenant, job: dict) -> None:
 
 
 def processing_job(backend, tenant):
-    """A job in `processing` with an external task id, without the worker
-    racing the test: dispatched for real, then reconciled state is ignored."""
+    """A real task for reconciling its final AI-service state."""
     job = create_job(backend, tenant)
-    dispatched = backend.post(f"/content/jobs/{job['id']}/dispatch", headers=tenant.h("lecturer"))
-    assert dispatched.status_code == 200, dispatched.text
-    return dispatched.json()["data"]
+    return wait_for_status(backend, tenant, job["id"], TERMINAL)
 
 
 # --- C22 (re-scoped) and C18: the full signed path ------------------------------------------

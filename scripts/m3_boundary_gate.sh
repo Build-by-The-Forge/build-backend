@@ -83,7 +83,7 @@ cleanup() {
 trap cleanup EXIT
 
 "${COMPOSE[@]}" --profile gate down -v --remove-orphans >/dev/null 2>&1 || true
-"${COMPOSE[@]}" up -d --build --wait backend ai-service ai-worker
+"${COMPOSE[@]}" up -d --build --wait --scale backend-worker=2 backend backend-worker ai-service ai-worker
 # The test image: `up --build` skips profile services and `compose run`
 # reuses an existing image, so build it from this checkout explicitly.
 "${COMPOSE[@]}" --profile gate build boundary-tests
@@ -119,6 +119,8 @@ scripts/check_storage_secrets.sh || status=$?
 # retryable and never reach the AI-service. Before C11: after a Redis outage
 # the auth throttle keeps refusing logins for a while, and these cases log
 # in. The store keeps its data on tmpfs; nothing after this needs it.
+echo "P3-1: stopping backend workers before the storage-down cases"
+"${COMPOSE[@]}" stop backend-worker
 echo "P3-1: stopping object storage"
 "${COMPOSE[@]}" stop object-storage
 "${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m storage_down || status=$?
