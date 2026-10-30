@@ -1,6 +1,6 @@
 # P3-6 — backend ingestion worker: design (revision 2.5)
 
-**Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
+**Status:** approved 2026-10-27 and implemented. Where the code differs from this text, see `docs/phase3-release-record.md`, "Differences from the design". This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
 
 **Revision 2.5 (2026-10-27)** answers the review of 2.4 on #38.
 
