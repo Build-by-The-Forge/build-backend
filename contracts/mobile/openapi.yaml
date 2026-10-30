@@ -663,7 +663,8 @@ paths:
       operationId: deleteMyDocument
       summary: Delete one of this student's documents
       description: >
-        Once this succeeds, the document can't be listed, opened, retrieved or newly cited.
+        Once this succeeds, the document can't be listed, opened, retrieved or newly cited,
+        and its derived data leaves active retrieval.
         Repeating it after success returns RESOURCE_NOT_FOUND.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
@@ -736,6 +737,7 @@ paths:
       tags: [content]
       operationId: listSourceDocuments
       summary: Ready documents in a shared source
+      description: Only material whose rights and audience have been verified for students.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
         - name: source_id
@@ -898,6 +900,7 @@ paths:
       tags: [assessment]
       operationId: startAttempt
       summary: Start an attempt, or return the one in progress
+      description: Follows the assessment's attempt_policy. The server enforces it.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
         - $ref: '#/components/parameters/AssessmentId'
@@ -908,6 +911,11 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: ATTEMPT_LIMIT_REACHED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
 
@@ -1087,6 +1095,7 @@ paths:
       tags: [assessment]
       operationId: getAttemptResult
       summary: The graded result of a submitted attempt
+      description: Visibility and per-question feedback follow the assessment's attempt_policy.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
         - $ref: '#/components/parameters/AttemptId'
@@ -1105,7 +1114,7 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: ATTEMPT_NOT_SUBMITTED
+          description: ATTEMPT_NOT_SUBMITTED or RESULT_NOT_RELEASED
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -1223,8 +1232,9 @@ paths:
       operationId: sendMessage
       summary: Ask a question in a conversation
       description: >
-        Answers come only from documents this student may read whose latest ingestion is
-        ready. The turn is stored only after the AI step succeeds. The same key returns the
+        Every question enforces ownership and eligibility: answers come only from this
+        student's personal knowledge and institutional knowledge they're eligible for, and
+        only from documents whose latest ingestion is ready. The turn is stored only after the AI step succeeds. The same key returns the
         stored turn without asking again. Each turn is answered on its own: the question
         doesn't see earlier turns in this contract version.
       parameters:
@@ -1526,6 +1536,8 @@ components:
         - ATTEMPT_ALREADY_SUBMITTED
         - ATTEMPT_EXPIRED
         - ATTEMPT_NOT_SUBMITTED
+        - ATTEMPT_LIMIT_REACHED
+        - RESULT_NOT_RELEASED
         - UPLOAD_TOO_LARGE
         - UNSUPPORTED_MEDIA_TYPE
         - RANGE_NOT_SATISFIABLE
@@ -1723,7 +1735,7 @@ components:
         source_url: { type: [string, 'null'] }
     Document:
       type: object
-      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, ingestion, created_at, updated_at]
+      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, knowledge_scope, ingestion, created_at, updated_at]
       properties:
         id: { type: string }
         source_id: { type: string }
@@ -1738,6 +1750,13 @@ components:
         ownership:
           type: string
           enum: [personal, shared]
+          description: Who may view and manage the original document.
+        knowledge_scope:
+          type: string
+          enum: [personal, institutional]
+          description: >
+            Whose answers its extracted content may support. Separate from ownership: being
+            indexed never makes a personal document available to anyone else.
         ingestion: { $ref: '#/components/schemas/Ingestion' }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
@@ -1759,7 +1778,7 @@ components:
 
     Assessment:
       type: object
-      required: [id, course_id, title, instructions, duration_minutes, passing_score, question_count]
+      required: [id, course_id, title, instructions, duration_minutes, passing_score, question_count, attempt_policy, attempts_used]
       properties:
         id: { type: string }
         course_id: { type: string }
@@ -1768,6 +1787,32 @@ components:
         duration_minutes: { type: integer, minimum: 1 }
         passing_score: { type: integer }
         question_count: { type: integer, minimum: 0 }
+        attempt_policy: { $ref: '#/components/schemas/AttemptPolicy' }
+        attempts_used:
+          type: integer
+          minimum: 0
+          description: The caller's attempts so far.
+    AttemptPolicy:
+      type: object
+      required: [kind, max_attempts, retake_after_submission, result_visibility, feedback_timing, scoring_policy]
+      properties:
+        kind:
+          type: string
+          enum: [practice, formal]
+        max_attempts:
+          type: [integer, 'null']
+          minimum: 1
+          description: Null means no limit.
+        retake_after_submission: { type: boolean }
+        result_visibility:
+          type: string
+          enum: [immediate, after_release]
+        feedback_timing:
+          type: string
+          enum: [immediate, after_final_attempt, after_release, never]
+        scoring_policy:
+          type: string
+          enum: [best, latest, first]
     Attempt:
       type: object
       required: [id, assessment_id, status, started_at, expires_at, submitted_at]
@@ -1850,13 +1895,17 @@ components:
       properties:
         assessment_question_id: { type: string }
         selected_option_index: { type: [integer, 'null'] }
-        awarded_marks: { type: integer }
+        awarded_marks:
+          type: [integer, 'null']
+          description: Null while feedback_timing withholds per-question feedback.
         max_marks: { type: integer }
-        is_correct: { type: boolean }
+        is_correct:
+          type: [boolean, 'null']
+          description: Null while feedback_timing withholds per-question feedback.
 
     Conversation:
       type: object
-      required: [id, title, created_at, updated_at]
+      required: [id, title, created_at, updated_at, expires_at]
       properties:
         id: { type: string }
         title:
@@ -1864,6 +1913,10 @@ components:
           description: Set by the server from the first question. Null until then.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+        expires_at:
+          type: [string, 'null']
+          format: date-time
+          description: When an institutional retention policy removes it. Null means it stays until the student deletes it.
     SendMessageRequest:
       type: object
       required: [message]

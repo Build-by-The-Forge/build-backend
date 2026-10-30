@@ -14,7 +14,34 @@ M0 left these to M1.
 |---|---|---|
 | G-13 reopening a document | **`GET /content/assets/{asset_id}/content`: the backend streams the bytes, with Range support** | Authorization runs on every request, a revoked document stops at once, and no reusable URL or storage address reaches the client. The cost is backend bandwidth, bounded by the upload limit |
 | G-19 limiting a question to one course or document | **Not in this version** | Adding it later is additive. It depends on the M4 filter, so it's better designed after that |
-| G-16 result policy | **Results and per-question `is_correct` are available straight after submission, without the correct answers** | This is what happens today, with the answer key withheld. **Needs a product answer: can an assessment be retaken?** Today a new attempt looks possible after submitting, so a student could use `is_correct` to improve on a retake |
+| G-16 result policy | **Each assessment states an `attempt_policy`**: kind, maximum attempts, retakes, result visibility, feedback timing and scoring. Correct answers are never returned | Proposed product ruling below. Practice defaults to immediate results; formal assessments are configurable |
+
+## Proposed product rulings
+
+These came from the product side on 2026-10-30 as recommendations for the reviewer. They describe intent. **Neither the implementation nor the legal permissions have been verified.**
+
+**Guiding principle: BUILD should learn from academic content without confusing access to that content with permission to share it.** Uploads feed the intelligence layer, and that doesn't weaken document authorization. Being indexed never makes a private document available to another student.
+
+### Knowledge scopes
+
+| Scope | Holds | Who it serves | Conditions |
+|---|---|---|---|
+| Personal | A student's uploads, by default | That student only | Leaves active retrieval when deleted, revoked or superseded |
+| Institutional | Authorized staff material and explicitly approved student contributions | Eligible students in that institution | Needs provenance, ownership or licensing information, and academic validation |
+| Platform intelligence and evaluation | Aggregated quality signals, retrieval evaluations and feedback | Improving retrieval, ranking, generation and reliability | Must not expose source documents or identifiable students across institutions |
+
+The contract carries the first two as `Document.knowledge_scope`, separate from `ownership`, which governs the original file. The third is never student-facing, so it isn't in this API. There's no route for contributing a student document to institutional knowledge in this version.
+
+**Using content for retrieval isn't training a model on it.** Uploads aren't to be treated as permission for model training, or for training by an external provider. This belongs in the ingestion and data-governance architecture, and M4 must carry the scope into its eligibility check.
+
+### Other rulings
+
+| Question | Ruling | In this contract |
+|---|---|---|
+| Can students retake assessments? | Yes, by assessment-specific policy. Lecturers or the institution control it for formal examinations | `Assessment.attempt_policy`, `attempts_used`, `ATTEMPT_LIMIT_REACHED`, `RESULT_NOT_RELEASED`; `is_correct` and `awarded_marks` can be null |
+| How long are conversations kept? | Until the student deletes them or an institutional policy expires them, with no short arbitrary expiry. **The default period must be agreed before M3-F and student launch**, with clear disclosure | `Conversation.expires_at`, `deleteConversation`; no conversation text in analytics or ordinary logs |
+| How does a student find their institution? | FUTA is configured for the first release. The app mustn't assume every student belongs to FUTA permanently | No route: the slug is app configuration, and `X-Tenant-Slug` and memberships already allow more tenants |
+| Can staff-uploaded documents be shown to students? | Yes, once the institution has verified the rights. Staff uploading a document doesn't establish permission to redistribute it. Unverified material stays out of the shared corpus | `listSourceDocuments` returns verified material only |
 
 ## Where this differs from the plan
 
@@ -43,11 +70,35 @@ These continue the [M0 inventory](../../docs/mobile-m0-inventory.md) and move in
 
 | ID | Kind | Severity | Gap | Evidence | Closes in |
 |---|---|---|---|---|---|
-| G-26 | Implementation | Medium | **A student has no way to discover a tenant slug.** This contract has none either. For a FUTA-only first release the slug can be app configuration, which needs confirming | No listing route; `tenants` routes take a known slug | Product decision, then M6 |
+| G-26 | Implementation | Low | A student has no way to discover a tenant slug. Accepted for now: FUTA is app configuration in the first release, and institution selection comes later | No listing route; `tenants` routes take a known slug | M6 |
 | G-27 | Implementation | **High** | **Assessment time limits appear not to be enforced.** `duration_minutes` is stored, but nothing in the attempt code reads it | `app/application/assessment/attempt*.py`, `app/domain/assessment/attempt.py` | M3-E. M2 confirms it first |
 | G-28 | Contract | Low | No record of a student's programme or department, so course lists filter by a parameter rather than "my courses" | `app/api/catalogue/courses.py` | Later phase |
+| G-29 | Implementation | Medium | Assessments have no attempt policy, and starting an attempt checks only for one in progress | `app/application/assessment/attempt_handlers.py` | M3-E, needs a migration |
+| G-30 | Implementation | **High** | Content sources record no rights basis, intended audience or redistribution limits, so nothing can stop unverified material reaching students | `app/infrastructure/db/models/content.py` | M3-D, needs a migration |
+| G-31 | Implementation | **High** | Knowledge scope isn't modelled, so retrieval can't apply it | ai-service `retrieval.py`; backend content models | M3-D, M4 |
+| G-32 | Implementation | Medium | What happens to derived data on deletion isn't defined, and neither is whether stored bytes are erased | No delete route today | M3-D |
+| G-33 | Implementation | **High** | Retrieved passages go to the configured model provider. Whether that provider may train on them hasn't been checked, and no provider is chosen for production | `MODEL_PROVIDER` setting; provider terms not reviewed | Before student launch |
 
 ## Still open
 
-- **Conversation retention**, a product decision that must be settled before conversations reach students.
-- **Licensing of shared documents.** Opening staff-uploaded material in the app distributes it to students, so shared sources need permission to do that. The contract allows it; it doesn't establish the right.
+- **The default conversation retention period**, before M3-F and student launch.
+- **The process for verifying rights on staff material**, including who confirms them. The contract requires the outcome, and doesn't establish any right.
+- **How a student contribution gets approved** into institutional knowledge. No route exists in this version.
+
+## Assessment findings, reproduced
+
+Both priority findings are **confirmed**, by a probe at `0ef0ba8` sending HTTP requests through the real routes as a student. It ran on the integration suite's setup, with SQLite and a test client, not PostgreSQL or a deployed service. The probe isn't committed; M2 turns these into tests.
+
+| Finding | Request | Result |
+|---|---|---|
+| G-03: draft exposure | `GET /assessment/assessments` | 200, including the draft, its prompt and its options |
+| | `GET /assessment/assessments/{id}` by direct ID | 200, `status: draft`, with prompt and options. No `is_correct` or answer key |
+| | `POST .../attempts` on the draft | 409, so attempts are correctly refused |
+| G-27: time limit | `duration_minutes` of 1, attempt moved back to 2 hours ago, then read questions, save an answer and submit | All 200. The late answer was graded: 1 of 1, passed. Attempts have no deadline field |
+
+Also seen, and settling two earlier gaps:
+
+- **G-15:** a repeated submit answers 409. The contract requires a safe repeat, so this is a contract gap.
+- **G-29:** a new attempt starts straight after submitting, with no limit.
+
+G-03 and G-27 stay open until M3-E fixes them. Both must be fixed before the affected assessment functionality is released.

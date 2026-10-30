@@ -152,9 +152,7 @@ def test_lists_are_paginated_or_named_as_exceptions(spec):
 def test_retried_creations_require_an_idempotency_key(spec):
     required = {"uploadMyDocument", "createConversation", "sendMessage"}
     seen = {
-        operation["operationId"]
-        for _, _, operation in operations(spec)
-        if "Idempotency-Key" in parameter_names(spec, operation)
+        operation["operationId"] for _, _, operation in operations(spec) if "Idempotency-Key" in parameter_names(spec, operation)
     }
     assert seen == required
 
@@ -167,16 +165,27 @@ def test_internals_never_appear_in_a_schema(spec):
 
 
 def test_grading_appears_only_in_a_submitted_result(spec):
-    holders = [
-        name
-        for name, schema in spec["components"]["schemas"].items()
-        if "is_correct" in schema.get("properties", {})
-    ]
+    holders = [name for name, schema in spec["components"]["schemas"].items() if "is_correct" in schema.get("properties", {})]
     assert holders == ["QuestionResult"]
 
 
 def test_an_assessment_carries_no_questions(spec):
     assert "questions" not in spec["components"]["schemas"]["Assessment"]["properties"]
+
+
+def test_an_assessment_states_its_attempt_policy(spec):
+    assert "attempt_policy" in spec["components"]["schemas"]["Assessment"]["required"]
+
+
+def test_feedback_can_be_withheld_from_a_result(spec):
+    properties = spec["components"]["schemas"]["QuestionResult"]["properties"]
+    assert "null" in properties["is_correct"]["type"]
+    assert "null" in properties["awarded_marks"]["type"]
+
+
+def test_access_and_knowledge_scope_are_separate_fields(spec):
+    document = spec["components"]["schemas"]["Document"]
+    assert {"ownership", "knowledge_scope"} <= set(document["required"])
 
 
 def test_a_citation_has_exactly_the_approved_fields(spec):
@@ -199,9 +208,7 @@ def test_every_error_code_named_in_a_description_is_registered(spec):
     responses += list(spec["components"]["responses"].values())
     for response in responses:
         described |= {
-            word.strip(".,:")
-            for word in response["description"].split()
-            if word.strip(".,:").isupper() and "_" in word
+            word.strip(".,:") for word in response["description"].split() if word.strip(".,:").isupper() and "_" in word
         }
     assert described
     assert described <= registered
