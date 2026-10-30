@@ -9,9 +9,13 @@ passage that answers the question. Another tenant asking the same
 question gets nothing from it.
 """
 
+import asyncio
 import uuid
 
+import asyncpg
+
 from boundary.conftest import (
+    AI_APP_DSN,
     create_asset,
     create_job_for,
     jbytes,
@@ -47,6 +51,32 @@ def test_c22_automatic_worker_ingestion_is_retrievable_only_by_the_right_tenant(
     job = create_job_for(backend, tenant_a, asset)
     final = wait_for_status(backend, tenant_a, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)
     assert final["status"] == "ready", final
+
+    # Ready only after the deciding attempt's durable index commit: the
+    # asset's chunks all belong to the job's own run and attempt, and the
+    # fence names that attempt.
+    async def index_state():
+        connection = await asyncpg.connect(AI_APP_DSN)
+        try:
+            chunks = await connection.fetch(
+                "SELECT run_number, attempt, count(*) AS n FROM document_chunks"
+                " WHERE tenant_id = $1 AND asset_id = $2 GROUP BY run_number, attempt",
+                tenant_a.tenant_id,
+                asset["id"],
+            )
+            fenced = await connection.fetchrow(
+                "SELECT run_number, attempt FROM ingestion_fences WHERE tenant_id = $1 AND asset_id = $2",
+                tenant_a.tenant_id,
+                asset["id"],
+            )
+        finally:
+            await connection.close()
+        return {(r["run_number"], r["attempt"]): r["n"] for r in chunks}, fenced
+
+    chunks, fenced = asyncio.run(index_state())
+    attempt = (final["run_number"], final["attempt_count"])
+    assert set(chunks) == {attempt} and chunks[attempt] == final["metrics"]["indexed_chunks"], (chunks, final)
+    assert fenced is not None and (fenced["run_number"], fenced["attempt"]) == attempt, (fenced, final)
 
     results = retrieve_as(ai, tenant_a, "student", QUESTION)[:5]
 
