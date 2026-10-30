@@ -49,7 +49,6 @@ from app.domain.content.job import (
     InvalidJobTransition,
     InvalidStageEvidence,
 )
-from app.domain.content.source import ContentSource
 from app.domain.content.storage import (
     ObjectNotFoundError,
     ObjectStorage,
@@ -93,15 +92,6 @@ def require_managed_storage(asset: ContentAsset, bucket: str) -> str:
 
 # Dispatch refusals about the asset itself; they are not AI-service errors.
 ASSET_DISPATCH_REFUSALS = frozenset({"ASSET_NOT_IN_MANAGED_STORAGE", "ASSET_OBJECT_MISSING", "ASSET_OBJECT_MISMATCH"})
-
-
-@dataclass(frozen=True, slots=True)
-class DispatchAttemptOutcome:
-    external_task_id: str | None = None
-    error_code: str | None = None
-    error_message: str | None = None
-    retryable: bool = False
-    uncertain: bool = False
 
 
 def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> ContentAsset:
@@ -286,25 +276,18 @@ class DispatchIngestionJobHandler:
         if source is None:
             raise ValueError(f"ContentSource with id '{job.source_id}' does not exist")
 
-        outcome = await self.attempt_dispatch(job, asset, source, actor)
-        return await self.record_dispatch_outcome(job, asset, outcome)
+        # No callback URL is sent: AI-service reports only to its configured
+        # BACKEND_CALLBACK_URL.
 
-    async def attempt_dispatch(
-        self,
-        job: ContentIngestionJob,
-        asset: ContentAsset,
-        source: ContentSource,
-        actor: IngestionDispatchActor | SystemDispatchActor,
-        *,
-        claim_token: str | None = None,
-    ) -> DispatchAttemptOutcome:
-        """Perform remote checks and dispatch without reading or writing through the UOW."""
-        job.ensure_dispatchable(claim_token=claim_token)
+        # Only a queued job whose retry delay has elapsed is sent; anything
+        # else is refused before AI-service is contacted.
+        job.ensure_dispatchable()
+
+        # Only a managed, existing, matching object reaches the AI-service.
         refusal = await self._object_refusal(asset)
         if refusal is not None:
             code, message, retryable = refusal
-            return DispatchAttemptOutcome(error_code=code, error_message=message, retryable=retryable)
-        job.ensure_dispatchable(claim_token=claim_token)
+            return await self._record_dispatch_failure(job, asset, code, message, retryable)
 
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
@@ -313,75 +296,44 @@ class DispatchIngestionJobHandler:
                 source=source,
                 actor=actor,
             )
-        except Exception as exc:
-            return DispatchAttemptOutcome(
-                error_code=getattr(exc, "error_code", "AI_DISPATCH_FAILED"),
-                error_message=str(exc),
-                retryable=getattr(exc, "is_retryable", True),
-                uncertain=getattr(exc, "outcome_uncertain", False) is True,
-            )
-        return DispatchAttemptOutcome(external_task_id=dispatch_res.external_task_id)
-
-    async def record_dispatch_outcome(
-        self,
-        job: ContentIngestionJob,
-        asset: ContentAsset | None,
-        outcome: DispatchAttemptOutcome,
-        *,
-        claim_token: str | None = None,
-    ) -> ContentIngestionJob:
-        if outcome.external_task_id is not None:
-            if asset is None:
-                raise ValueError("An accepted dispatch cannot be recorded without its asset.")
-            job.record_dispatch(outcome.external_task_id, claim_token=claim_token)
+            job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
             content_jobs_dispatched_total.inc()
             logger.info(
                 "content_job_dispatched",
                 job_id=job.id,
-                task_id=outcome.external_task_id,
+                task_id=dispatch_res.external_task_id,
                 run_number=job.run_number,
                 attempt=job.attempt_count,
                 status=job.status.value,
             )
-            return await self._save_dispatch_state(job, asset)
-        if outcome.uncertain:
-            return await self._record_uncertain_dispatch(job, asset, outcome, claim_token=claim_token)
-        return await self._record_dispatch_failure(
-            job,
-            asset,
-            outcome.error_code or "AI_DISPATCH_FAILED",
-            outcome.error_message or "AI-service dispatch failed",
-            outcome.retryable,
-            claim_token=claim_token,
-        )
+        except Exception as exc:
+            if getattr(exc, "outcome_uncertain", False) is True:
+                return await self._record_uncertain_dispatch(job, asset, exc)
+            return await self._record_dispatch_failure(
+                job,
+                asset,
+                getattr(exc, "error_code", "AI_DISPATCH_FAILED"),
+                str(exc),
+                getattr(exc, "is_retryable", True),
+            )
 
-    async def _save_dispatch_state(self, job: ContentIngestionJob, asset: ContentAsset) -> ContentIngestionJob:
         job_events = job.pull_events()
         asset_events = asset.pull_events()
+
         saved_job = await self._uow.jobs.save_job(job)
         await self._uow.assets.save_asset(asset)
+
         all_events = job_events + asset_events
         if self._event_bus and all_events:
             self._event_bus.publish_all(all_events)
+
         return saved_job
 
     async def _record_dispatch_failure(
-        self,
-        job: ContentIngestionJob,
-        asset: ContentAsset | None,
-        error_code: str,
-        message: str,
-        retryable: bool,
-        *,
-        claim_token: str | None = None,
+        self, job: ContentIngestionJob, asset: ContentAsset, error_code: str, message: str, retryable: bool
     ) -> ContentIngestionJob:
-        job.fail_dispatch(
-            error_code=error_code,
-            error_message=message,
-            is_retryable=retryable,
-            claim_token=claim_token,
-        )
+        job.fail_dispatch(error_code=error_code, error_message=message, is_retryable=retryable)
         content_dispatch_failures_total.labels(error_code=_metric_error_code(error_code)).inc()
         if not retryable:
             content_terminal_failures_total.labels(error_code=_metric_error_code(error_code)).inc()
@@ -394,15 +346,13 @@ class DispatchIngestionJobHandler:
             error_code=_metric_error_code(error_code),
             retryable=retryable,
         )
-        if asset is not None:
-            asset.update_ingestion_status(IngestionStatus.FAILED, error_code=error_code, error_message=message)
+        asset.update_ingestion_status(IngestionStatus.FAILED, error_code=error_code, error_message=message)
         # queued -> failed is a recorded business outcome, not an error to
         # roll back: return normally so the unit of work commits it, and
         # let the caller report the failure from the job's state.
         saved_failed = await self._uow.jobs.save_job(job)
-        if asset is not None:
-            await self._uow.assets.save_asset(asset)
-        failure_events = job.pull_events() + (asset.pull_events() if asset is not None else [])
+        await self._uow.assets.save_asset(asset)
+        failure_events = job.pull_events() + asset.pull_events()
         if self._event_bus and failure_events:
             self._event_bus.publish_all(failure_events)
         return saved_failed
@@ -410,10 +360,8 @@ class DispatchIngestionJobHandler:
     async def _record_uncertain_dispatch(
         self,
         job: ContentIngestionJob,
-        asset: ContentAsset | None,
-        outcome: DispatchAttemptOutcome,
-        *,
-        claim_token: str | None = None,
+        asset: ContentAsset,
+        error: Exception,
     ) -> ContentIngestionJob:
         content_uncertain_dispatches_total.inc()
         logger.warning(
@@ -422,24 +370,22 @@ class DispatchIngestionJobHandler:
             task_id=job.external_task_id,
             run_number=job.run_number,
             attempt=job.attempt_count,
-            error_code=_metric_error_code(outcome.error_code or "AI_DISPATCH_UNCERTAIN"),
+            error_code=_metric_error_code(getattr(error, "error_code", None) or "AI_DISPATCH_UNCERTAIN"),
             uncertain_attempt=int(job.metrics.get("uncertain_dispatch_count", 0)) + 1,
         )
         retry_same_attempt = job.defer_uncertain_dispatch(
-            error_code=outcome.error_code or "AI_DISPATCH_UNCERTAIN",
-            error_message=outcome.error_message or "AI-service dispatch outcome is uncertain",
-            claim_token=claim_token,
+            error_code=getattr(error, "error_code", "AI_DISPATCH_UNCERTAIN"),
+            error_message=str(error),
         )
         events = job.pull_events()
         if not retry_same_attempt:
-            if asset is not None:
-                asset.update_ingestion_status(
-                    IngestionStatus.FAILED,
-                    error_code=job.error_code,
-                    error_message=job.error_message,
-                )
-                await self._uow.assets.save_asset(asset)
-                events.extend(asset.pull_events())
+            asset.update_ingestion_status(
+                IngestionStatus.FAILED,
+                error_code=job.error_code,
+                error_message=job.error_message,
+            )
+            await self._uow.assets.save_asset(asset)
+            events.extend(asset.pull_events())
         saved_job = await self._uow.jobs.save_job(job)
         if self._event_bus and events:
             self._event_bus.publish_all(events)

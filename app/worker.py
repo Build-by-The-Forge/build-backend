@@ -17,7 +17,6 @@ from prometheus_client import start_http_server
 from sqlalchemy import func, or_, select
 
 from app.application.content.job_handlers import (
-    DispatchAttemptOutcome,
     DispatchIngestionJobHandler,
     RecoverIngestionJobHandler,
 )
@@ -33,7 +32,6 @@ from app.core.metrics import (
 from app.db.session import SessionLocal, engine
 from app.db.timeouts import set_transaction_timeouts
 from app.domain.content.enums import IngestionStatus
-from app.domain.content.gateway import JobTenantMissing, SystemDispatchActor
 from app.events.event_bus import EventBus
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
 from app.infrastructure.content.orphan_sweeper import sweep_orphaned_objects
@@ -44,6 +42,10 @@ from app.infrastructure.db.models.content import ContentIngestionJobModel
 logger = structlog.get_logger(__name__)
 HEALTH_PATH = Path(os.getenv("WORKER_HEALTH_PATH", "/tmp/build-backend-worker-health.json"))
 WORKER_METRICS_PORT = 9101
+# The storage check that precedes a dispatch also runs under the job's row
+# lock (design §4), so it gets short bounds of its own.
+DISPATCH_STORAGE_CONNECT_SECONDS = 2.0
+DISPATCH_STORAGE_READ_SECONDS = 3.0
 
 
 def retry_delay_seconds(attempt: int, base: int, cap: int, random_value: float | None = None) -> int:
@@ -65,11 +67,6 @@ async def update_dispatch_queue_metrics() -> None:
     stmt = select(func.count(), func.min(ContentIngestionJobModel.created_at)).where(
         ContentIngestionJobModel.status == IngestionStatus.QUEUED.value,
         or_(
-            ContentIngestionJobModel.dispatch_claim_token.is_(None),
-            ContentIngestionJobModel.dispatch_claim_expires_at.is_(None),
-            ContentIngestionJobModel.dispatch_claim_expires_at <= now,
-        ),
-        or_(
             ContentIngestionJobModel.next_retry_at.is_(None),
             ContentIngestionJobModel.next_retry_at <= now,
         ),
@@ -87,91 +84,56 @@ async def _dispatch_and_measure(stop: asyncio.Event) -> None:
     await update_dispatch_queue_metrics()
 
 
+def _dispatch_gateway() -> HttpAIServiceIngestionGateway:
+    return HttpAIServiceIngestionGateway(timeout_seconds=settings.worker_dispatch_timeout_seconds)
+
+
+def _dispatch_storage() -> S3ObjectStorage:
+    return S3ObjectStorage.from_settings(
+        settings.model_copy(
+            update={
+                "object_storage_connect_timeout_seconds": DISPATCH_STORAGE_CONNECT_SECONDS,
+                "object_storage_read_timeout_seconds": DISPATCH_STORAGE_READ_SECONDS,
+            }
+        )
+    )
+
+
+def dispatch_lock_bound_seconds() -> float:
+    """The longest the dispatch step may hold the job's row lock: the
+    storage check plus the AI call. Past it, the step is cancelled and its
+    transaction rolls back; the job stays queued on the same attempt and
+    key, so the next pass gets the original task back as DUPLICATE."""
+    return DISPATCH_STORAGE_CONNECT_SECONDS + DISPATCH_STORAGE_READ_SECONDS + settings.worker_dispatch_timeout_seconds
+
+
 async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
-    job = None
     async with SessionLocal() as session:
         async with ContentUnitOfWork(session) as uow:
             await set_transaction_timeouts(session)
-            job = await uow.jobs.claim_next_due_dispatch(
-                excluded_ids,
-                claim_seconds=settings.worker_dispatch_claim_seconds,
+            job = await uow.jobs.claim_next_due_dispatch(excluded_ids)
+            if job is None:
+                return False
+            claimed_ids.append(job.id)
+            # Design §4: this transaction locks exactly this row, across one
+            # bounded storage check and one bounded AI call, never AI work.
+            await asyncio.wait_for(
+                DispatchIngestionJobHandler(
+                    uow,
+                    _dispatch_gateway(),
+                    EventBus(),
+                    storage=_dispatch_storage,
+                    bucket=settings.object_storage_bucket,
+                ).handle_system(job),
+                timeout=dispatch_lock_bound_seconds(),
             )
-            if job is not None:
-                claimed_ids.append(job.id)
-    if job is None:
-        return False
-
-    async with SessionLocal() as session:
-        async with ContentUnitOfWork(session) as uow:
-            await set_transaction_timeouts(session)
-            asset = await uow.assets.get_asset_by_id(job.asset_id)
-            source = await uow.sources.get_source_by_id(job.source_id)
-            dispatcher = DispatchIngestionJobHandler(
-                uow,
-                HttpAIServiceIngestionGateway(),
-                EventBus(),
-                storage=S3ObjectStorage.from_settings,
-                bucket=settings.object_storage_bucket,
-            )
-
-    claim_token = job.dispatch_claim_token
-    if claim_token is None:
-        raise RuntimeError(f"Claimed job {job.id} has no dispatch claim token.")
-    if asset is None:
-        outcome = DispatchAttemptOutcome(
-            error_code="ASSET_NOT_FOUND",
-            error_message=f"ContentAsset with id '{job.asset_id}' does not exist",
-        )
-    elif source is None:
-        outcome = DispatchAttemptOutcome(
-            error_code="CONTENT_SOURCE_NOT_FOUND",
-            error_message=f"ContentSource with id '{job.source_id}' does not exist",
-        )
-    else:
-        try:
-            actor = SystemDispatchActor.for_job(job)
-        except JobTenantMissing as exc:
-            outcome = DispatchAttemptOutcome(error_code=exc.error_code, error_message=str(exc))
-        else:
-            outcome = await dispatcher.attempt_dispatch(
-                job,
-                asset,
-                source,
-                actor,
-                claim_token=claim_token,
-            )
-
-    async with SessionLocal() as session:
-        async with ContentUnitOfWork(session) as uow:
-            await set_transaction_timeouts(session)
-            current = await uow.jobs.get_job_for_update(job.id)
-            if (
-                current is None
-                or current.status != IngestionStatus.QUEUED
-                or current.attempt_count != job.attempt_count
-                or current.run_number != job.run_number
-                or current.dispatch_claim_token != claim_token
-            ):
-                logger.info(
-                    "content_job_dispatch_result_superseded",
-                    job_id=job.id,
-                    task_id=outcome.external_task_id,
-                    run_number=job.run_number,
-                    attempt=job.attempt_count,
-                )
-                return True
-            current_asset = await uow.assets.get_asset_by_id(current.asset_id)
-            await DispatchIngestionJobHandler(
-                uow,
-                HttpAIServiceIngestionGateway(),
-                EventBus(),
-                storage=S3ObjectStorage.from_settings,
-                bucket=settings.object_storage_bucket,
-            ).record_dispatch_outcome(
-                current,
-                current_asset,
-                outcome,
-                claim_token=claim_token,
+            logger.info(
+                "content_job_dispatch_pass",
+                job_id=job.id,
+                task_id=job.external_task_id,
+                run_number=job.run_number,
+                attempt=job.attempt_count,
+                status=job.status.value,
             )
             return True
 

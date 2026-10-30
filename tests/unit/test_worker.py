@@ -9,7 +9,6 @@ from sqlalchemy.dialects import postgresql
 from app.core.config import Settings
 from app.core.metrics import content_jobs_due, content_oldest_due_job_age_seconds
 from app.infrastructure.content.job_repositories import SqlAlchemyContentIngestionJobRepository
-from app.infrastructure.db.models.content import ContentIngestionJobModel
 from app.worker import (
     _run_loop,
     check_worker_health,
@@ -73,7 +72,6 @@ def test_worker_settings_defaults_match_the_design():
     assert (
         settings.worker_dispatch_interval_seconds,
         settings.worker_dispatch_batch,
-        settings.worker_dispatch_claim_seconds,
         settings.worker_retry_interval_seconds,
         settings.worker_retry_batch,
         settings.worker_retry_base_seconds,
@@ -82,7 +80,7 @@ def test_worker_settings_defaults_match_the_design():
         settings.worker_recoverer_batch,
         settings.worker_shutdown_grace_seconds,
         settings.worker_orphan_sweep_interval_seconds,
-    ) == (2, 20, 120, 10, 50, 30, 900, 60, 20, 25, 3600)
+    ) == (2, 20, 10, 50, 30, 900, 60, 20, 25, 3600)
 
 
 @pytest.mark.parametrize(
@@ -90,8 +88,6 @@ def test_worker_settings_defaults_match_the_design():
     [
         {"worker_dispatch_interval_seconds": 0},
         {"worker_dispatch_batch": 0},
-        {"worker_dispatch_claim_seconds": 119},
-        {"worker_dispatch_claim_seconds": 601},
         {"worker_retry_base_seconds": 0},
         {"worker_retry_cap_seconds": 0},
         {"worker_recoverer_interval_seconds": 0},
@@ -127,8 +123,6 @@ async def test_dispatch_claim_selects_exactly_one_oldest_due_row_with_skip_locke
     assert "for update skip locked" in sql
     assert "order by content_ingestion_jobs.created_at asc" in sql
     assert "content_ingestion_jobs.id not in" in sql
-    assert "dispatch_claim_token is null" in sql
-    assert "dispatch_claim_expires_at" in sql
 
 
 @pytest.mark.asyncio
@@ -149,7 +143,7 @@ async def test_recoverer_claim_selects_one_overdue_active_job_with_skip_locked()
 
 
 @pytest.mark.asyncio
-async def test_dispatch_queue_gauges_use_due_unclaimed_jobs(monkeypatch):
+async def test_dispatch_queue_gauges_use_due_jobs(monkeypatch):
     import app.worker as worker
 
     now = datetime.now(timezone.utc)
@@ -176,148 +170,12 @@ async def test_dispatch_queue_gauges_use_due_unclaimed_jobs(monkeypatch):
 
     sql = str(query["stmt"].compile(dialect=postgresql.dialect())).lower()
     assert "content_ingestion_jobs.status =" in sql
-    assert "dispatch_claim_expires_at" in sql
+    assert "dispatch_claim" not in sql
     assert "next_retry_at" in sql
     assert content_jobs_due._value.get() == 7
     assert 41 <= content_oldest_due_job_age_seconds._value.get() <= 43
 
 
-@pytest.mark.asyncio
-async def test_dispatch_claim_persists_a_unique_token_and_expiry():
-    now = datetime.now(timezone.utc)
-    model = ContentIngestionJobModel(
-        id="job-1",
-        asset_id="asset-1",
-        source_id="source-1",
-        tenant_id="tenant-1",
-        run_number=1,
-        status="queued",
-        attempt_count=1,
-        max_attempts=3,
-        error_details={},
-        is_retryable=False,
-        metrics={},
-        attempt_history=[],
-        created_by="usr-1",
-        created_at=now,
-        updated_at=now,
-    )
-    result = MagicMock()
-    result.scalar_one_or_none.return_value = model
-    session = MagicMock()
-    session.execute = AsyncMock(return_value=result)
-    session.flush = AsyncMock()
-
-    claimed = await SqlAlchemyContentIngestionJobRepository(session).claim_next_due_dispatch(set(), claim_seconds=120)
-
-    assert claimed is not None
-    assert claimed.dispatch_claim_token
-    assert claimed.dispatch_claim_expires_at is not None
-    assert now + timedelta(seconds=119) < claimed.dispatch_claim_expires_at <= now + timedelta(seconds=121)
-    session.flush.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("callback_wins", [False, True])
-async def test_worker_commits_claim_before_dispatch_and_ignores_response_after_callback(monkeypatch, callback_wins):
-    import app.worker as worker
-    from app.application.content.job_handlers import DispatchAttemptOutcome
-    from app.domain.content.job import ContentIngestionJob
-
-    job = ContentIngestionJob.create(
-        asset_id="asset-1",
-        source_id="source-1",
-        tenant_id="tenant-1",
-        created_by="usr-1",
-    )
-    job.queue()
-    job.dispatch_claim_token = "worker-token"
-    job.dispatch_claim_expires_at = datetime.now(timezone.utc) + timedelta(seconds=120)
-    state = {"open_transactions": 0, "claim_committed": False, "uow_count": 0}
-    asset = object()
-    source = object()
-
-    class FakeUnitOfWork:
-        def __init__(self, _session):
-            state["uow_count"] += 1
-            self.index = state["uow_count"]
-            self.jobs = self
-            self.assets = self
-            self.sources = self
-
-        async def __aenter__(self):
-            state["open_transactions"] += 1
-            return self
-
-        async def __aexit__(self, *_args):
-            state["open_transactions"] -= 1
-            if self.index == 1:
-                state["claim_committed"] = True
-
-        async def claim_next_due_dispatch(self, _excluded, claim_seconds):
-            assert claim_seconds == 120
-            return job
-
-        async def get_asset_by_id(self, _asset_id):
-            return asset
-
-        async def get_source_by_id(self, _source_id):
-            return source
-
-        async def get_job_for_update(self, _job_id):
-            return job
-
-    class FakeSessionContext:
-        async def __aenter__(self):
-            return object()
-
-        async def __aexit__(self, *_args):
-            return None
-
-    class FakeDispatcher:
-        def __init__(self, *_args, **_kwargs):
-            pass
-
-        async def attempt_dispatch(self, _job, _asset, _source, _actor, *, claim_token):
-            assert claim_token == "worker-token"
-            assert state["claim_committed"] is True
-            assert state["open_transactions"] == 0
-            if callback_wins:
-                job.apply_callback(
-                    event_type="stage_progress",
-                    stage="extracted",
-                    run_number=job.run_number,
-                    attempt_count=job.attempt_count,
-                    external_task_id="task-1",
-                    metrics={"characters": 10, "pages": 1, "method": "native_text"},
-                )
-            return DispatchAttemptOutcome(external_task_id="task-1")
-
-        async def record_dispatch_outcome(self, current, _asset, outcome, *, claim_token):
-            assert not callback_wins
-            assert state["open_transactions"] == 1
-            current.record_dispatch(outcome.external_task_id, claim_token=claim_token)
-            return current
-
-    monkeypatch.setattr(worker, "SessionLocal", FakeSessionContext)
-    monkeypatch.setattr(worker, "ContentUnitOfWork", FakeUnitOfWork)
-    monkeypatch.setattr(worker, "DispatchIngestionJobHandler", FakeDispatcher)
-    monkeypatch.setattr(worker, "HttpAIServiceIngestionGateway", lambda: object())
-    monkeypatch.setattr(worker, "EventBus", lambda: object())
-    monkeypatch.setattr(worker, "set_transaction_timeouts", AsyncMock())
-
-    claimed: list[str] = []
-    assert await worker._dispatch_one(set(), claimed) is True
-    assert claimed == [job.id]
-    if callback_wins:
-        assert job.status.value == "extracted"
-        assert job.dispatch_claim_token is None
-    else:
-        assert job.external_task_id == "task-1"
-    assert state["open_transactions"] == 0
-
-
-@pytest.mark.asyncio
 async def test_retrier_claim_skips_permanent_failures_and_attempts_at_the_cap():
     session = MagicMock()
     result = MagicMock()

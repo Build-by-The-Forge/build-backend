@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -100,22 +99,14 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         models = (await self._session.execute(stmt)).scalars().all()
         return [content_job_model_to_domain(m) for m in models]
 
-    async def claim_next_due_dispatch(self, excluded_ids: set[str], claim_seconds: int = 120) -> ContentIngestionJob | None:
-        if claim_seconds < 1:
-            raise ValueError("claim_seconds must be at least 1")
-        now = datetime.now(timezone.utc)
+    async def claim_next_due_dispatch(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
         stmt = (
             select(ContentIngestionJobModel)
             .where(
                 ContentIngestionJobModel.status == IngestionStatus.QUEUED.value,
                 or_(
-                    ContentIngestionJobModel.dispatch_claim_token.is_(None),
-                    ContentIngestionJobModel.dispatch_claim_expires_at.is_(None),
-                    ContentIngestionJobModel.dispatch_claim_expires_at <= now,
-                ),
-                or_(
                     ContentIngestionJobModel.next_retry_at.is_(None),
-                    ContentIngestionJobModel.next_retry_at <= now,
+                    ContentIngestionJobModel.next_retry_at <= func.now(),
                 ),
             )
             .order_by(ContentIngestionJobModel.created_at.asc(), ContentIngestionJobModel.id.asc())
@@ -125,12 +116,7 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         if excluded_ids:
             stmt = stmt.where(ContentIngestionJobModel.id.not_in(excluded_ids))
         model = (await self._session.execute(stmt)).scalar_one_or_none()
-        if model is None:
-            return None
-        model.dispatch_claim_token = str(uuid4())
-        model.dispatch_claim_expires_at = now + timedelta(seconds=claim_seconds)
-        await self._session.flush()
-        return content_job_model_to_domain(model)
+        return content_job_model_to_domain(model) if model else None
 
     async def claim_next_retryable_failure(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
         stmt = (
