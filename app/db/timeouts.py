@@ -3,7 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 DB_LOCK_TIMEOUT = "2s"
 DB_STATEMENT_TIMEOUT = "15s"
-DB_IDLE_TRANSACTION_TIMEOUT = "15s"
+# Above the worker's bounded dispatch step (design §4), which holds a
+# transaction open across one storage check and one AI call.
+DB_IDLE_TRANSACTION_TIMEOUT = "30s"
 
 
 async def set_transaction_timeouts(session: AsyncSession) -> None:
