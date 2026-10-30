@@ -1,4 +1,4 @@
-# P3-6 — backend ingestion worker: design (revision 2.6)
+# P3-6 — backend ingestion worker: design (revision 2.5)
 
 **Status:** proposed, for approval before implementation. This is plan decision D5: "a durable backend worker; its execution and recovery semantics are designed in P3-6". P3-1 PR 5, the prerequisite, has landed.
 
@@ -10,8 +10,6 @@
   - Whichever lands first decides: an honest `ready`, with N's chunks committed first, or a retryable failure that refuses N's later callbacks.
   - No superseded attempt can write, chunks never mix, and the in-process stop is an optimisation, not the guarantee (§7.1).
 - **New test:** a fault-injection test pauses an effect after its local check, deletes the record, and forces both orderings against recovery (§14).
-
-**Revision 2.6 (2026-10-29)** corrects the backend dispatch transaction boundary after review. Dispatch commits a durable expiring claim before remote work, performs remote calls without a database transaction, and records the outcome in a second short transaction. This preserves same-attempt idempotency after uncertain outcomes without holding a row lock across the AI-service call.
 
 **Revision 2.4 (2026-10-27)** answers the review of 2.3 on #38.
 
@@ -45,9 +43,9 @@
    - A dead worker's stream entries are reclaimed and fenced.
    - A boundary test kills the worker and proves the job is retried to `ready`.
 2. **Transaction and row-lock boundaries are explicit** (§4).
-   - Dispatch claims one row in a short transaction, commits before external calls, then records the result in a separate transaction.
-   - No database transaction or row lock is held across object-storage or AI-service calls.
-3. **The review's recommended decisions are adopted** (§16): the system actor, explicit tenant checks, and the defaults.
+   - Each job is claimed, processed and committed in its own transaction, which locks exactly that one row.
+   - No transaction holds a batch of locks across external calls. A lock is held for at most one bounded external call.
+3. **The review's recommended decisions are adopted** (§16): the system actor, explicit tenant checks, the defaults, and no backend lease.
 
 ## 1. Goal
 
@@ -108,40 +106,34 @@ There are four loops, each with its own interval and a bounded number of jobs pe
 - An idle tick is one indexed query.
 - A tick that reaches its limit runs again at once instead of sleeping.
 
-## 4. Claiming work: short transactions around remote calls
+## 4. Claiming work: one transaction per job
 
-Every loop handles jobs **one at a time**. Dispatch commits a durable claim before remote work, then records the result in a separate transaction:
+Every loop handles jobs **one at a time, one transaction each**. No transaction selects or locks a batch:
 
 ```text
+repeat up to the loop's per-tick limit:
     BEGIN
       SELECT … FROM content_ingestion_jobs
-      WHERE status='queued' AND due
-        AND (claim is absent or expired)
+      WHERE <the loop's condition>           -- e.g. status='queued' AND due
       ORDER BY created_at
       LIMIT 1
       FOR UPDATE SKIP LOCKED                 -- locks exactly this one row
-      write a random claim token and expires_at
-    COMMIT                                    -- durable claim; releases the row lock
-
-    read the asset and source in a short transaction; COMMIT
-    check storage and dispatch to the AI-service with no open transaction
-
-    BEGIN
-      SELECT the job FOR UPDATE
-      if status, run, attempt or claim token changed: ignore this response
-      otherwise record acceptance, uncertainty or definite failure
-    COMMIT
+      (no row → COMMIT and end the tick)
+      re-check the state through the domain   -- e.g. ensure_dispatchable
+      at most one external call, bounded      -- dispatch / task status (10 s)
+      record the outcome on the job
+    COMMIT                                    -- releases the row lock
 ```
 
-**Claim lease:** `WORKER_DISPATCH_CLAIM_SECONDS` defaults to 120 s and is range-checked (120–600 s). A crash or shutdown during dispatch leaves the job queued with the same attempt and idempotency key. After expiry, the next worker claims it and the AI-service returns the original task as `DUPLICATE`. A response from a worker whose token was replaced is ignored. This is not an AI-task lease and does not change `last_dispatched_at`.
+**Locks held:** one row, for at most one external call. The gateway's total timeout is 10 s, with connect and read timeouts inside it. `lock_timeout` and `statement_timeout` are set on the worker's sessions, so a transaction can never be held longer than the call bound plus query time. No connection is held across a sleep.
 
-**Callbacks during a dispatch:** no dispatch transaction holds the job row lock during the AI call. A verified callback for the queued attempt can adopt the task and clear the claim. If it commits before the dispatch response, the response sees a changed token or status and is ignored; the callback's progress remains authoritative.
+**Callbacks during a dispatch:** the AI-service may call back about a job whose dispatch transaction is still open. That callback waits at most until the commit (≤ 10 s) because it takes the same row lock. If the backend answers it 503 instead, the AI-service's delivery retries it. A queued job's first callback can only follow its dispatch, so there is nothing to apply until then.
 
-**Several workers:** `SKIP LOCKED` serializes claim creation. The committed, unexpired token excludes other workers and manual dispatch; expired claims can be replaced. If a call overlaps expiry and reclaim, the idempotency key prevents a second AI task and only the current claim owner can record its response.
+**Several workers:** `SKIP LOCKED` gives each job to at most one transaction at a time. The others skip it and take the next due job.
 
-**Database failure:** if claiming fails, no external call is made. If recording the response fails, the claim eventually expires and the same attempt/key is dispatched again.
+**Crash in the middle:** the transaction rolls back and the job is unchanged, for example still `queued`. The next tick repeats the same step with the **same idempotency key**, so the AI-service answers `DUPLICATE` with the original task. Nothing is lost and nothing runs twice.
 
-Manual dispatch follows the same claim check: it cannot take over a live worker claim. Liveness of the *AI task* remains a separate signal (§7).
+**No backend lease columns:** the row lock covers the claim and the idempotency key covers the external effect. A `claimed_by` / `claimed_until` lease would add a migration and an expiry rule for no extra guarantee. Liveness of the *AI task* is a separate signal (§7).
 
 ## 5. Retry and backoff
 
@@ -280,7 +272,7 @@ The worker signs a **system** context (`ServiceContext.for_system`) naming the j
 
 ## 11. Data and indexes
 
-- **Backend:** dispatch adds `dispatch_claim_token` and `dispatch_claim_expires_at` to `content_ingestion_jobs`, plus a partial index for queued claim expiry. Migration 0024 retains the due-work selection index.
+- **Backend:** no new tables or columns. One migration adds a partial index for the loops' selections: `(status, next_retry_at, created_at)` on `content_ingestion_jobs`. It is reviewed by `scripts/review_migration.py` and checked by the schema-drift gate.
 - **AI-service:** the task record gains `worker_id`, `lease_until` and `heartbeat_at` fields. It is a Redis hash with a TTL, so no schema migration is needed.
 - **AI-service, the index fence (§7.5):** one migration adds:
   - `document_chunks.attempt` (integer, not null, default 1, so existing rows are attempt 1);
@@ -294,7 +286,6 @@ The worker signs a **system** context (`ServiceContext.for_system`) naming the j
 
 - `WORKER_DISPATCH_INTERVAL_SECONDS`
 - `WORKER_DISPATCH_BATCH`
-- `WORKER_DISPATCH_CLAIM_SECONDS` (default 120; range 120–600)
 - `WORKER_RETRY_BASE_SECONDS`
 - `WORKER_RETRY_CAP_SECONDS`
 - `WORKER_RECOVERER_INTERVAL_SECONDS` (default 60)
@@ -344,9 +335,9 @@ All take the defaults above and are validated by range.
 **PostgreSQL (`pg_smoke`):**
 
 - two workers ticking concurrently over 50 queued jobs dispatch each **exactly once**;
-- a claim transaction locks and updates exactly one row, commits before dispatch, and a separate transaction records the outcome;
-- a worker killed mid-dispatch leaves the job queued; after claim expiry the next pass reuses the same key;
-- a callback arriving during dispatch can adopt the accepted task, and the later response cannot overwrite callback progress.
+- **a transaction holds exactly one row lock.** While a dispatch call is in progress, another session can lock every other due job;
+- a transaction killed mid-dispatch leaves the job queued, and the next tick dispatches it with the same key;
+- a callback arriving during a dispatch transaction is applied after its commit.
 - recoverer claims and callbacks serialize on the same job-row lock in both orderings; concurrent recoverers skip a locked row.
 
 **AI-service (Redis):**
@@ -405,7 +396,7 @@ All take the defaults above and are validated by range.
 
    Plus the coordinated backend M6 ownership-test update.
 3. **Backend:** the jobs index migration, and the system-actor dispatch path through the gateway.
-4. **Backend:** the worker process (dispatcher and retrier, durable dispatch claims, short transactions, shutdown, liveness), with the `pg_smoke` concurrency and claim tests.
+4. **Backend:** the worker process (dispatcher and retrier, per-job transactions, shutdown, liveness), with the `pg_smoke` concurrency and lock tests.
 5. **Backend:** the recoverer (lease-aware, with the in-flight cap anchored on `last_dispatched_at`).
 6. **Backend:** the orphan sweeper.
 7. **Compose and the boundary topology** run the worker, with C22 (no manual call) and C23 (worker killed and recovered) automated.
@@ -421,4 +412,4 @@ These are the review's recommendations, adopted in this revision:
 | Retry policy | 3 attempts; exponential backoff from 30 s to a 15 min cap, with ±20% jitter |
 | Stuck-job deadlines | 10 min for `processing`, 30 min for later stages; extended only by a live AI lease; hard cap 1 h |
 | Orphan cleanup | 24 h grace (minimum 1 h); unknown key formats never deleted |
-| Dispatch claim versus row lock | A short transaction writes a 120 s expiring backend claim; remote dispatch runs outside transactions, and a second locked transaction records the result (§4). AI-task liveness remains the AI-service lease (§7). |
+| Row locks versus leases | No backend lease: one transaction per job, locking one row (§4). Task liveness comes from the AI-service lease (§7). |
