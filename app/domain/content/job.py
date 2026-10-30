@@ -73,6 +73,8 @@ ACTIVE_STATUSES = frozenset(
     }
 )
 _EXTRACTION_METHODS = frozenset({"native_text", "ocr"})
+MAX_UNCERTAIN_DISPATCHES = 5
+MAX_UNCERTAIN_DISPATCH_BACKOFF_SECONDS = 8
 
 
 def _count(metrics: dict[str, Any], key: str, minimum: int) -> int:
@@ -229,7 +231,8 @@ class ContentIngestionJob:
         self.status = IngestionStatus.PROCESSING
         self.current_stage = "dispatched_to_ai"
         self.external_task_id = task_id
-        self.last_dispatched_at = now
+        if self.last_dispatched_at is None:
+            self.last_dispatched_at = now
         self.next_retry_at = None
         if self.started_at is None:
             self.started_at = now
@@ -246,6 +249,53 @@ class ContentIngestionJob:
                 },
             )
         )
+
+    def defer_uncertain_dispatch(
+        self,
+        error_code: str,
+        error_message: str,
+        max_uncertain_dispatches: int = MAX_UNCERTAIN_DISPATCHES,
+    ) -> bool:
+        """Keep an uncertain dispatch on this queued attempt and key.
+
+        Returns True while another same-attempt dispatch is permitted, and
+        records one retryable failure when the configured uncertainty bound
+        is reached.
+        """
+        self.ensure_dispatchable()
+        if max_uncertain_dispatches < 1:
+            raise ValueError("max_uncertain_dispatches must be at least 1")
+
+        counter_attempt = self.metrics.get("uncertain_dispatch_attempt")
+        count = self.metrics.get("uncertain_dispatch_count", 0)
+        if counter_attempt != self.attempt_count:
+            count = 0
+        if type(count) is not int or count < 0:
+            raise InvalidJobTransition("uncertain dispatch counter is invalid")
+        count += 1
+        self.metrics["uncertain_dispatch_attempt"] = self.attempt_count
+        self.metrics["uncertain_dispatch_count"] = count
+
+        if count >= max_uncertain_dispatches:
+            self.fail_dispatch(error_code, error_message, is_retryable=True)
+            return False
+
+        delay_seconds = min(2 ** (count - 1), MAX_UNCERTAIN_DISPATCH_BACKOFF_SECONDS)
+        self.next_retry_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+        self.current_stage = "dispatch_outcome_uncertain"
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="content.ingestion_job_dispatch_deferred",
+                payload={
+                    "job_id": self.id,
+                    "attempt_count": self.attempt_count,
+                    "uncertain_dispatch_count": count,
+                    "next_retry_at": self.next_retry_at.isoformat(),
+                },
+            )
+        )
+        return True
 
     def _advance(self, to: IngestionStatus, stage: str, metrics: dict[str, Any]) -> None:
         self.status = to
@@ -374,6 +424,9 @@ class ContentIngestionJob:
             raise InvalidJobTransition(f"Maximum attempts ({self.max_attempts}) exceeded. Terminal failure.")
 
         self.attempt_count += 1
+        self.metrics["uncertain_dispatch_attempt"] = self.attempt_count
+        self.metrics["uncertain_dispatch_count"] = 0
+        self.last_dispatched_at = None
         now = datetime.now(timezone.utc)
         self.next_retry_at = now + timedelta(seconds=delay_seconds)
         self.status = IngestionStatus.QUEUED
@@ -425,7 +478,27 @@ class ContentIngestionJob:
         when a stage lacks its required evidence.
         """
         if not self.is_active_attempt(run_number, attempt_count, external_task_id):
-            return CallbackOutcome.STALE
+            if (
+                self.status != IngestionStatus.QUEUED
+                or run_number != self.run_number
+                or attempt_count != self.attempt_count
+                or not external_task_id.strip()
+                or self.metrics.get("uncertain_dispatch_attempt") != self.attempt_count
+            ):
+                return CallbackOutcome.STALE
+            uncertain_count = self.metrics.get("uncertain_dispatch_count")
+            if type(uncertain_count) is not int or uncertain_count < 1:
+                return CallbackOutcome.STALE
+            if event_type == "stage_progress":
+                if stage != "extracted":
+                    return CallbackOutcome.NOT_ALLOWED
+                validate_stage_evidence("extracted", metrics or {}, self.metrics)
+            elif event_type != "job_failed":
+                if event_type == "job_completed":
+                    return CallbackOutcome.NOT_ALLOWED
+                raise InvalidStageEvidence(f"unknown event type {event_type!r}")
+
+            self._adopt_callback_task(external_task_id)
         metrics = metrics or {}
         progress = _PROGRESS.get(self.status)
 
@@ -466,6 +539,31 @@ class ContentIngestionJob:
 
         self.last_callback_at = datetime.now(timezone.utc)
         return CallbackOutcome.APPLIED
+
+    def _adopt_callback_task(self, external_task_id: str) -> None:
+        """A signed callback proves a task was accepted after dispatch timed out."""
+        now = datetime.now(timezone.utc)
+        self.status = IngestionStatus.PROCESSING
+        self.current_stage = "dispatched_to_ai"
+        self.external_task_id = external_task_id
+        if self.last_dispatched_at is None:
+            self.last_dispatched_at = now
+        self.next_retry_at = None
+        if self.started_at is None:
+            self.started_at = now
+        self.touch()
+        self._events.append(
+            DomainEvent(
+                event_type="content.ingestion_job_dispatch_adopted_from_callback",
+                payload={
+                    "job_id": self.id,
+                    "asset_id": self.asset_id,
+                    "external_task_id": external_task_id,
+                    "attempt_count": self.attempt_count,
+                    "run_number": self.run_number,
+                },
+            )
+        )
 
     def create_reprocess_run(self, created_by: str, correlation_id: str | None = None) -> ContentIngestionJob:
         if self.status not in (IngestionStatus.READY, IngestionStatus.FAILED):

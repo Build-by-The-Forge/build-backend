@@ -108,6 +108,41 @@ def test_dispatch_requires_a_task_id():
         job.record_dispatch("  ")
 
 
+def test_uncertain_dispatch_defers_on_the_same_attempt_and_fails_at_the_bound():
+    job = new_job()
+    job.queue()
+    job_id = (job.run_number, job.attempt_count)
+
+    for count in range(1, 6):
+        if job.next_retry_at is not None:
+            job.next_retry_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        can_retry_same_attempt = job.defer_uncertain_dispatch("AI_SERVICE_UNAVAILABLE", "uncertain")
+        assert (job.run_number, job.attempt_count) == job_id
+        assert job.metrics["uncertain_dispatch_count"] == count
+        if count < 5:
+            assert can_retry_same_attempt is True
+            assert job.status == IngestionStatus.QUEUED
+            assert job.next_retry_at is not None and job.next_retry_at > datetime.now(timezone.utc)
+            assert job.last_dispatched_at is None
+        else:
+            assert can_retry_same_attempt is False
+            assert job.status == IngestionStatus.FAILED
+            assert job.is_retryable is True
+            assert len(job.attempt_history) == 1
+
+
+def test_new_retry_attempt_resets_only_its_uncertain_dispatch_counter():
+    job = new_job()
+    job.queue()
+    job.defer_uncertain_dispatch("AI_SERVICE_UNAVAILABLE", "uncertain", max_uncertain_dispatches=1)
+    job.schedule_retry(delay_seconds=0)
+
+    assert job.attempt_count == 2
+    assert job.metrics["uncertain_dispatch_attempt"] == 2
+    assert job.metrics["uncertain_dispatch_count"] == 0
+    assert job.last_dispatched_at is None
+
+
 def test_dispatch_failure_is_only_from_queued():
     job = new_job()
     job.queue()
