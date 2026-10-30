@@ -14,7 +14,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-COMPOSE=(docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml)
+# compose.p36-gate.yml: gate-only worker timings and the fault-injection AI
+# worker (P3-6 7b); the development topology never uses it.
+COMPOSE=(docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml -f deploy/compose.p36-gate.yml)
 
 # The revisions under test, recorded once per run: compose labels every image
 # with them (org.opencontainers.image.revision). "-dirty" marks uncommitted
@@ -70,19 +72,19 @@ cleanup() {
   # On failure, the services' own logs before they are removed: the
   # workflow's failure step runs after this, when nothing is left to read.
   if [[ $rc -ne 0 ]]; then
-    for service in ai-worker ai-service backend; do
+    for service in ai-worker ai-worker-faults ai-service backend backend-worker; do
       echo "::group::$service logs (last 150 lines)"
       "${COMPOSE[@]}" logs --no-color --tail 150 "$service" 2>&1 || true
       echo "::endgroup::"
     done
   fi
   if [[ -z "${KEEP_STACK:-}" ]]; then
-    "${COMPOSE[@]}" --profile gate down -v --remove-orphans >/dev/null 2>&1 || true
+    "${COMPOSE[@]}" --profile gate --profile faults down -v --remove-orphans >/dev/null 2>&1 || true
   fi
 }
 trap cleanup EXIT
 
-"${COMPOSE[@]}" --profile gate down -v --remove-orphans >/dev/null 2>&1 || true
+"${COMPOSE[@]}" --profile gate --profile faults down -v --remove-orphans >/dev/null 2>&1 || true
 "${COMPOSE[@]}" up -d --build --wait --scale backend-worker=2 backend backend-worker ai-service ai-worker
 # The test image: `up --build` skips profile services and `compose run`
 # reuses an existing image, so build it from this checkout explicitly.
@@ -109,11 +111,38 @@ status=0
 # The production image holds what production runs and nothing else.
 scripts/check_backend_image.sh build-m3-backend || status=$?
 
-"${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down and not storage_down" || status=$?
+"${COMPOSE[@]}" run --rm boundary-tests "$@" -q \
+  -m "not redis_down and not storage_down and not fault_injection and not c23_prepare and not c23_verify" || status=$?
 
 # Storage secret keys: in no image layer or configuration, and in no log
 # written by the run so far.
 scripts/check_storage_secrets.sh || status=$?
+
+# P3-6 7b: ingestion through worker death, record loss and the ownership-
+# check / recovery race, against ai-worker-faults (the AI worker with the
+# test-only pause points, APP_ENVIRONMENT=testing). ai-worker stops first, so
+# every task reaches the fault worker; it is restored afterwards.
+echo "P3-6: switching to the fault-injection AI worker"
+"${COMPOSE[@]}" stop ai-worker
+"${COMPOSE[@]}" --profile faults up -d ai-worker-faults
+"${COMPOSE[@]}" run --rm boundary-tests -q -m fault_injection || status=$?
+
+# C23: attempt 1 is held mid-ingestion, the AI worker is SIGKILLed, the pause
+# point is disarmed and the worker restarted; recovery must reach ready on
+# attempt 2 with only attempt 2's chunks.
+echo "C23: holding a job mid-ingestion"
+if "${COMPOSE[@]}" run --rm boundary-tests -q -m c23_prepare; then
+  echo "C23: killing the AI worker"
+  "${COMPOSE[@]}" --profile faults kill ai-worker-faults || status=$?
+  "${COMPOSE[@]}" run --rm --no-deps --entrypoint rm boundary-tests -f /faults/before_index_write.pause || status=$?
+  echo "C23: restarting the AI worker"
+  "${COMPOSE[@]}" --profile faults up -d ai-worker-faults || status=$?
+  "${COMPOSE[@]}" run --rm boundary-tests -q -m c23_verify || status=$?
+else
+  status=1
+fi
+"${COMPOSE[@]}" --profile faults stop ai-worker-faults || status=$?
+"${COMPOSE[@]}" up -d ai-worker || status=$?
 
 # P3-1: object storage stopped. Uploads and dispatches must fail as
 # retryable and never reach the AI-service. Before C11: after a Redis outage

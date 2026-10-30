@@ -43,6 +43,9 @@ if not (BACKEND_URL and AI_URL and B2A and A2B):
 def pytest_configure(config):
     config.addinivalue_line("markers", "redis_down: C11, run only while Redis is stopped")
     config.addinivalue_line("markers", "storage_down: P3-1, run only while object storage is stopped")
+    config.addinivalue_line("markers", "fault_injection: P3-6 7b, run only against ai-worker-faults")
+    config.addinivalue_line("markers", "c23_prepare: P3-6 C23, before the gate kills ai-worker-faults")
+    config.addinivalue_line("markers", "c23_verify: P3-6 C23, after the gate restarts ai-worker-faults")
 
 
 BACKEND_ID = "build-backend"
