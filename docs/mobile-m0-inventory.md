@@ -25,7 +25,7 @@
 | Verify email | `POST /identity/verify-email`, `/resend-verification` | None | G-14 |
 | Recover password | `POST /identity/forgot-password`, `/reset-password` | None | G-14 |
 | Change password | `POST /identity/change-password` | Signed in | G-14 |
-| Join a tenant (Decision C) | `POST /tenants/{slug}/join`, `GET /tenants/{slug}/join-policy`, `POST /invitations/accept` | Verified user | |
+| Join a tenant (Decision C) | `POST /tenants/{slug}/join`, `POST /invitations/accept` | Verified user | |
 
 ### Academic reads
 
