@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     worker_retry_batch: int = Field(default=50, ge=1, le=1000)
     worker_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
     worker_retry_cap_seconds: int = Field(default=900, ge=1, le=86400)
+    worker_recoverer_interval_seconds: int = Field(default=60, ge=1, le=3600)
+    worker_recoverer_batch: int = Field(default=20, ge=1, le=1000)
     worker_stuck_processing_seconds: int = Field(default=600, ge=1, le=86400)
     worker_stuck_stage_seconds: int = Field(default=1800, ge=1, le=604800)
     worker_max_in_flight_seconds: int = Field(default=3600, ge=1, le=604800)

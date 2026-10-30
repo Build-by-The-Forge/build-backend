@@ -288,6 +288,8 @@ The worker signs a **system** context (`ServiceContext.for_system`) naming the j
 - `WORKER_DISPATCH_BATCH`
 - `WORKER_RETRY_BASE_SECONDS`
 - `WORKER_RETRY_CAP_SECONDS`
+- `WORKER_RECOVERER_INTERVAL_SECONDS` (default 60)
+- `WORKER_RECOVERER_BATCH` (default 20)
 - `WORKER_STUCK_PROCESSING_SECONDS`
 - `WORKER_STUCK_STAGE_SECONDS`
 - `WORKER_MAX_IN_FLIGHT_SECONDS`
@@ -324,7 +326,7 @@ All take the defaults above and are validated by range.
 - the backoff formula and its bounds;
 - deadline selection;
 - `running` with an expired lease is reported `stalled`;
-- the recoverer touches only on a live lease, and fails on `stalled`;
+- the recoverer applies undelivered events before deciding, touches only on a live lease, fails stalled/failed/unknown tasks as retryable `AI_TASK_LOST`, and makes no changes when the AI service is unreachable;
 - **the hard cap is measured from `last_dispatched_at`:** a job whose lease keeps renewing past `WORKER_MAX_IN_FLIGHT_SECONDS` is failed `AI_TASK_TIMEOUT`, though every recoverer pass before that touched it (so `updated_at` stayed fresh);
 - `last_dispatched_at` is unchanged by `touch`, stage callbacks and recoverer passes, and is set once by a dispatch that commits;
 - key parsing (orphan sweep);
@@ -336,6 +338,7 @@ All take the defaults above and are validated by range.
 - **a transaction holds exactly one row lock.** While a dispatch call is in progress, another session can lock every other due job;
 - a transaction killed mid-dispatch leaves the job queued, and the next tick dispatches it with the same key;
 - a callback arriving during a dispatch transaction is applied after its commit.
+- recoverer claims and callbacks serialize on the same job-row lock in both orderings; concurrent recoverers skip a locked row.
 
 **AI-service (Redis):**
 

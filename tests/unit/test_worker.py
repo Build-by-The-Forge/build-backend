@@ -12,6 +12,7 @@ from app.worker import (
     check_worker_health,
     retry_delay_seconds,
     run_dispatch_pass,
+    run_recoverer_pass,
     run_retry_pass,
     write_health_state,
 )
@@ -46,8 +47,9 @@ def test_worker_health_requires_each_loop_to_finish_within_three_intervals(tmp_p
 
     monkeypatch.setattr(settings, "worker_dispatch_interval_seconds", 2)
     monkeypatch.setattr(settings, "worker_retry_interval_seconds", 10)
+    monkeypatch.setattr(settings, "worker_recoverer_interval_seconds", 60)
     path = tmp_path / "health.json"
-    write_health_state({"dispatch": 95, "retry": 71}, path)
+    write_health_state({"dispatch": 95, "retry": 71, "recoverer": 99}, path)
 
     check_worker_health(now=100, path=path)
     with pytest.raises(RuntimeError, match="dispatch"):
@@ -71,8 +73,10 @@ def test_worker_settings_defaults_match_the_design():
         settings.worker_retry_batch,
         settings.worker_retry_base_seconds,
         settings.worker_retry_cap_seconds,
+        settings.worker_recoverer_interval_seconds,
+        settings.worker_recoverer_batch,
         settings.worker_shutdown_grace_seconds,
-    ) == (2, 20, 10, 50, 30, 900, 25)
+    ) == (2, 20, 10, 50, 30, 900, 60, 20, 25)
 
 
 @pytest.mark.parametrize(
@@ -82,6 +86,8 @@ def test_worker_settings_defaults_match_the_design():
         {"worker_dispatch_batch": 0},
         {"worker_retry_base_seconds": 0},
         {"worker_retry_cap_seconds": 0},
+        {"worker_recoverer_interval_seconds": 0},
+        {"worker_recoverer_batch": 0},
         {"worker_retry_base_seconds": 901},
         {"worker_retry_cap_seconds": 86401},
         {"worker_retry_base_seconds": 30, "worker_retry_cap_seconds": 29},
@@ -113,6 +119,23 @@ async def test_dispatch_claim_selects_exactly_one_oldest_due_row_with_skip_locke
     assert "for update skip locked" in sql
     assert "order by content_ingestion_jobs.created_at asc" in sql
     assert "content_ingestion_jobs.id not in" in sql
+
+
+@pytest.mark.asyncio
+async def test_recoverer_claim_selects_one_overdue_active_job_with_skip_locked():
+    session = MagicMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    session.execute = AsyncMock(return_value=result)
+
+    await SqlAlchemyContentIngestionJobRepository(session).claim_next_overdue_job(set(), 600, 1800, 3600)
+
+    stmt = session.execute.await_args.args[0]
+    sql = str(stmt.compile(dialect=postgresql.dialect())).lower()
+    assert "limit" in sql and "for update skip locked" in sql
+    assert "content_ingestion_jobs.status in" in sql
+    assert "content_ingestion_jobs.updated_at" in sql
+    assert "content_ingestion_jobs.last_dispatched_at" in sql
 
 
 @pytest.mark.asyncio
@@ -177,6 +200,28 @@ async def test_failing_claim_is_excluded_for_the_rest_of_the_retry_tick(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_failing_claim_is_excluded_for_the_rest_of_the_recovery_tick(monkeypatch):
+    import app.worker as worker
+
+    monkeypatch.setattr(worker.settings, "worker_recoverer_batch", 5)
+    seen: list[set[str]] = []
+
+    async def recover(excluded: set[str], claimed: list[str]) -> bool:
+        seen.append(set(excluded))
+        if "bad-job" not in excluded:
+            claimed.append("bad-job")
+            raise RuntimeError("expected test failure")
+        if "good-job" not in excluded:
+            claimed.append("good-job")
+            return True
+        return False
+
+    monkeypatch.setattr(worker, "_recover_one", recover)
+    await run_recoverer_pass()
+    assert seen == [set(), {"bad-job"}, {"bad-job", "good-job"}]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_pass_does_not_claim_after_shutdown_is_requested(monkeypatch):
     import app.worker as worker
 
@@ -192,6 +237,24 @@ async def test_dispatch_pass_does_not_claim_after_shutdown_is_requested(monkeypa
 
     await run_dispatch_pass(stop)
 
+    assert claimed == []
+
+
+@pytest.mark.asyncio
+async def test_recovery_pass_does_not_claim_after_shutdown_is_requested(monkeypatch):
+    import app.worker as worker
+
+    claimed: list[str] = []
+
+    async def recover(excluded: set[str], claimed_ids: list[str]) -> bool:
+        claimed.append("unexpected")
+        return False
+
+    monkeypatch.setattr(worker, "_recover_one", recover)
+    stop = asyncio.Event()
+    stop.set()
+
+    await run_recoverer_pass(stop)
     assert claimed == []
 
 
