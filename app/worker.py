@@ -12,8 +12,6 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import structlog
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.application.content.job_handlers import (
     DispatchIngestionJobHandler,
@@ -21,17 +19,16 @@ from app.application.content.job_handlers import (
 )
 from app.core.config import settings
 from app.db.session import SessionLocal, engine
+from app.db.timeouts import set_transaction_timeouts
 from app.domain.content.enums import IngestionStatus
 from app.events.event_bus import EventBus
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
+from app.infrastructure.content.orphan_sweeper import sweep_orphaned_objects
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
 from app.infrastructure.content.unit_of_work import ContentUnitOfWork
 
 logger = structlog.get_logger(__name__)
 HEALTH_PATH = Path(os.getenv("WORKER_HEALTH_PATH", "/tmp/build-backend-worker-health.json"))
-DB_LOCK_TIMEOUT = "2s"
-DB_STATEMENT_TIMEOUT = "15s"
-DB_IDLE_TRANSACTION_TIMEOUT = "30s"
 # The storage check that precedes a dispatch also runs under the job's row
 # lock (design §4), so it gets short bounds of its own.
 DISPATCH_STORAGE_CONNECT_SECONDS = 2.0
@@ -50,15 +47,6 @@ def retry_delay_seconds(attempt: int, base: int, cap: int, random_value: float |
     if not 0 <= sample <= 1:
         raise ValueError("random_value must be between zero and one")
     return max(1, round(bounded * (0.8 + 0.4 * sample)))
-
-
-async def set_transaction_timeouts(session: AsyncSession) -> None:
-    await session.execute(text("SELECT set_config('lock_timeout', :value, true)"), {"value": DB_LOCK_TIMEOUT})
-    await session.execute(text("SELECT set_config('statement_timeout', :value, true)"), {"value": DB_STATEMENT_TIMEOUT})
-    await session.execute(
-        text("SELECT set_config('idle_in_transaction_session_timeout', :value, true)"),
-        {"value": DB_IDLE_TRANSACTION_TIMEOUT},
-    )
 
 
 def _dispatch_gateway() -> HttpAIServiceIngestionGateway:
@@ -225,6 +213,12 @@ async def run_retry_pass(stop: asyncio.Event | None = None) -> None:
         processed += 1
 
 
+async def run_orphan_sweep_pass(stop: asyncio.Event | None = None) -> None:
+    if stop is not None and stop.is_set():
+        return
+    await sweep_orphaned_objects(S3ObjectStorage.from_settings(), bucket=settings.object_storage_bucket)
+
+
 async def run_recoverer_pass(stop: asyncio.Event | None = None) -> None:
     excluded_ids: set[str] = set()
     processed = 0
@@ -273,6 +267,7 @@ def check_worker_health(now: float | None = None, path: Path = HEALTH_PATH) -> N
     intervals = {
         "dispatch": settings.worker_dispatch_interval_seconds,
         "retry": settings.worker_retry_interval_seconds,
+        "orphan_sweep": settings.worker_orphan_sweep_interval_seconds,
         "recoverer": settings.worker_recoverer_interval_seconds,
     }
     unhealthy = [name for name, interval in intervals.items() if name not in state or current - state[name] > 3 * interval]
@@ -333,6 +328,15 @@ async def serve() -> None:
                 "retry",
                 settings.worker_retry_interval_seconds,
                 run_retry_pass,
+                stop,
+                completed_at,
+            )
+        ),
+        asyncio.create_task(
+            _run_loop(
+                "orphan_sweep",
+                settings.worker_orphan_sweep_interval_seconds,
+                run_orphan_sweep_pass,
                 stop,
                 completed_at,
             )

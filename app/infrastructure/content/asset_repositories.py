@@ -59,6 +59,13 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         model = res.scalar_one_or_none()
         return content_asset_model_to_domain(model) if model else None
 
+    async def get_assets_by_ids(self, asset_ids: set[str]) -> list[ContentAsset]:
+        if not asset_ids:
+            return []
+        stmt = select(ContentAssetModel).where(ContentAssetModel.id.in_(asset_ids))
+        models = (await self._session.execute(stmt)).scalars().all()
+        return [content_asset_model_to_domain(model) for model in models]
+
     async def get_asset_by_hash(self, content_sha256: str, tenant_id: str | None = None) -> ContentAsset | None:
         clean_sha = content_sha256.strip().lower()
         if tenant_id is None:

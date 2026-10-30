@@ -26,6 +26,9 @@ class ContentAssetRepository(Protocol):
     async def get_asset_by_id(self, asset_id: str) -> ContentAsset | None:
         raise NotImplementedError
 
+    async def get_assets_by_ids(self, asset_ids: set[str]) -> list[ContentAsset]:
+        raise NotImplementedError
+
     async def get_asset_by_hash(self, content_sha256: str, tenant_id: str | None = None) -> ContentAsset | None:
         raise NotImplementedError
 
