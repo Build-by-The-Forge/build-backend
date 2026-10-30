@@ -1,0 +1,1919 @@
+openapi: 3.1.0
+info:
+  title: BUILD Mobile API
+  version: 0.1.0
+  description: >
+    The intended student API for the first mobile release. It describes what the
+    system must guarantee, not what the backend does today: accepting this contract
+    doesn't mean an operation is implemented. Differences from today's backend are
+    tracked in docs/mobile-m0-inventory.md and, from M2, in the machine-readable gap
+    allowlist. Rules are in docs/mobile-api-conventions.md.
+
+    Every response carries X-Request-ID. A client may send X-Request-ID matching
+    [A-Za-z0-9._:-]{1,128}; any other value is replaced. Clients must ignore response
+    fields they don't know, and must treat an unknown error code like INTERNAL_ERROR.
+tags:
+  - name: identity
+  - name: tenants
+  - name: catalogue
+  - name: content
+  - name: assessment
+  - name: ai
+security:
+  - bearerAuth: []
+
+paths:
+  /identity/users:
+    post:
+      tags: [identity]
+      operationId: registerUser
+      summary: Register a student account
+      description: >
+        The response is the same whether or not the email already has an account, so
+        registration can't be used to discover accounts. A verification email follows
+        for a new account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/Empty' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/authenticate:
+    post:
+      tags: [identity]
+      operationId: authenticate
+      summary: Sign in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthenticateRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionIssued' }
+        '401':
+          description: AUTH_INVALID_CREDENTIALS, with the same response for an unknown account and a wrong password
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: ACCOUNT_NOT_ACTIVE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/refresh:
+    post:
+      tags: [identity]
+      operationId: refreshSession
+      summary: Rotate the refresh token
+      description: >
+        Clients allow one refresh at a time per session, and save the new refresh token
+        before using the new access token. Reusing a rotated token revokes the session.
+        After AUTH_REFRESH_INVALID the client signs out and never retries that token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionIssued' }
+        '401':
+          description: AUTH_REFRESH_INVALID. Expired, revoked and reused tokens look the same
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/logout:
+    post:
+      tags: [identity]
+      operationId: logout
+      summary: Revoke this session
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/logout-all:
+    post:
+      tags: [identity]
+      operationId: logoutAll
+      summary: Revoke every session of this user
+      responses:
+        '200': { $ref: '#/components/responses/RevokedSessions' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/me:
+    get:
+      tags: [identity]
+      operationId: getCurrentUser
+      summary: The signed-in user
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/memberships:
+    get:
+      tags: [identity]
+      operationId: listMemberships
+      summary: Tenants this user can select
+      description: Small by nature, so unpaginated. An unverified user sees memberships but can't use them yet.
+      x-unpaginated: true
+      responses:
+        '200':
+          description: Memberships
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Membership' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/verify-email:
+    post:
+      tags: [identity]
+      operationId: verifyEmail
+      summary: Confirm an email address with the emailed token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '400':
+          description: TOKEN_INVALID. Expired, used and unknown tokens look the same
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/resend-verification:
+    post:
+      tags: [identity]
+      operationId: resendVerification
+      summary: Send the verification email again
+      description: The response doesn't reveal whether the account exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/forgot-password:
+    post:
+      tags: [identity]
+      operationId: forgotPassword
+      summary: Request a password reset email
+      description: The response doesn't reveal whether the account exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EmailRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/reset-password:
+    post:
+      tags: [identity]
+      operationId: resetPassword
+      summary: Set a new password with the emailed token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '400':
+          description: TOKEN_INVALID. Expired, used and unknown tokens look the same
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /identity/change-password:
+    post:
+      tags: [identity]
+      operationId: changePassword
+      summary: Change the password of the signed-in user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/RevokedSessions' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /tenants/{slug}/join:
+    post:
+      tags: [tenants]
+      operationId: joinTenant
+      summary: Join a tenant under its join policy
+      description: >
+        Requires a verified email. Repeating it returns the existing membership. An
+        unknown tenant and a refused join give the same TENANT_ACCESS_DENIED.
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/MembershipResult' }
+        '201': { $ref: '#/components/responses/MembershipResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: EMAIL_VERIFICATION_REQUIRED or TENANT_ACCESS_DENIED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /invitations/accept:
+    post:
+      tags: [tenants]
+      operationId: acceptInvitation
+      summary: Accept a tenant invitation with its emailed token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/MembershipResult' }
+        '400':
+          description: TOKEN_INVALID. Expired, used, unknown and other users' tokens look the same
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: EMAIL_VERIFICATION_REQUIRED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/faculties:
+    get:
+      tags: [catalogue]
+      operationId: listFaculties
+      summary: Active faculties of the tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Faculties, ordered by name then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Faculty' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/departments:
+    get:
+      tags: [catalogue]
+      operationId: listDepartments
+      summary: Active departments of the tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: faculty_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Departments, ordered by name then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Department' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/programmes:
+    get:
+      tags: [catalogue]
+      operationId: listProgrammes
+      summary: Active programmes of the tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: department_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Programmes, ordered by name then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Programme' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/courses:
+    get:
+      tags: [catalogue]
+      operationId: listCourses
+      summary: Published courses of the tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: department_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Courses, ordered by code then id. Unpublished courses never appear
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Course' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/courses/{course_id}:
+    get:
+      tags: [catalogue]
+      operationId: getCourse
+      summary: One published course
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/CourseId'
+      responses:
+        '200':
+          description: The course
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/Course' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/courses/{course_id}/topics:
+    get:
+      tags: [catalogue]
+      operationId: listTopics
+      summary: Active topics of a course
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/CourseId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Topics, ordered by sequence then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Topic' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/topics/{topic_id}/learning-outcomes:
+    get:
+      tags: [catalogue]
+      operationId: listLearningOutcomes
+      summary: Active learning outcomes of a topic
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/TopicId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Learning outcomes, ordered by sequence then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/LearningOutcome' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /catalogue/topics/{topic_id}/reference-materials:
+    get:
+      tags: [catalogue]
+      operationId: listReferenceMaterials
+      summary: Active reference materials of a topic
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/TopicId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Reference materials, ordered by title then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ReferenceMaterial' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/my-documents:
+    get:
+      tags: [content]
+      operationId: listMyDocuments
+      summary: Documents this student uploaded in this tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Documents, newest first, then by id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [content]
+      operationId: uploadMyDocument
+      summary: Upload a private document and queue it for ingestion
+      description: >
+        The raw document is the request body. The document is private to this student.
+        Storing it and queuing its ingestion succeed or fail together. Type, size and
+        SHA-256 come from the bytes; the Content-Type header decides nothing. The same
+        key and bytes return the original document with 200. Nothing in any response
+        shows whether another student holds the same file.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: file_name
+          in: query
+          description: Display name only, percent-encoded
+          schema: { type: string, maxLength: 255 }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '201': { $ref: '#/components/responses/DocumentResult' }
+        '400':
+          description: TENANT_REQUIRED or EMPTY_UPLOAD
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '408':
+          description: UPLOAD_READ_TIMEOUT. Retry with the same key
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: >
+            IDEMPOTENCY_KEY_REUSED, or DUPLICATE_CONTENT when this student already holds
+            these bytes. existing_asset_id only ever names the caller's own document
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413':
+          description: UPLOAD_TOO_LARGE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '415':
+          description: UNSUPPORTED_MEDIA_TYPE. PDF, PNG and JPEG are accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /content/my-documents/{asset_id}:
+    get:
+      tags: [content]
+      operationId: getMyDocument
+      summary: One of this student's documents, including its ingestion state
+      description: Poll this with bounded backoff to follow ingestion.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [content]
+      operationId: deleteMyDocument
+      summary: Delete one of this student's documents
+      description: >
+        Once this succeeds, the document can't be listed, opened, retrieved or newly cited.
+        Repeating it after success returns RESOURCE_NOT_FOUND.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/my-documents/{asset_id}/retry:
+    post:
+      tags: [content]
+      operationId: retryMyDocument
+      summary: Retry ingestion of a failed document
+      description: >
+        Only when ingestion.retry_available is true. A repeat while the retry is in
+        progress returns the document's current state and starts nothing new.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: INGESTION_NOT_RETRYABLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/sources:
+    get:
+      tags: [content]
+      operationId: listSources
+      summary: Shared sources this student may read
+      description: Never includes another student's personal source.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Sources, ordered by name then id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Source' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/sources/{source_id}/assets:
+    get:
+      tags: [content]
+      operationId: listSourceDocuments
+      summary: Ready documents in a shared source
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: source_id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Documents, newest first, then by id. Superseded and revoked versions never appear
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Document' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/assets/{asset_id}:
+    get:
+      tags: [content]
+      operationId: getDocument
+      summary: One document this student may read
+      description: Another student's private document gives the same RESOURCE_NOT_FOUND as one that doesn't exist.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/assets/{asset_id}/content:
+    get:
+      tags: [content]
+      operationId: getDocumentContent
+      summary: The document's bytes, for opening it in the app
+      description: >
+        Streamed by the backend, which authorizes every request, so there is no reusable
+        URL and no storage address reaches the client. Supports Range requests. A failure
+        uses the JSON error envelope.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+        - name: Range
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: The whole document
+          headers:
+            ETag: { schema: { type: string } }
+            Accept-Ranges: { schema: { type: string } }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '206':
+          description: The requested range
+          headers:
+            ETag: { schema: { type: string } }
+            Content-Range: { schema: { type: string } }
+          content:
+            application/pdf:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '416':
+          description: RANGE_NOT_SATISFIABLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /assessment/assessments:
+    get:
+      tags: [assessment]
+      operationId: listAssessments
+      summary: Published assessments of the tenant
+      description: Drafts never appear. Questions are available only through an attempt.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: course_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Assessments, newest first, then by id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Assessment' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/assessments/{assessment_id}:
+    get:
+      tags: [assessment]
+      operationId: getAssessment
+      summary: One published assessment
+      description: A draft gives the same RESOURCE_NOT_FOUND as an assessment that doesn't exist.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssessmentId'
+      responses:
+        '200':
+          description: The assessment, without its questions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/Assessment' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/assessments/{assessment_id}/attempts:
+    post:
+      tags: [assessment]
+      operationId: startAttempt
+      summary: Start an attempt, or return the one in progress
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssessmentId'
+      responses:
+        '200': { $ref: '#/components/responses/AttemptResult' }
+        '201': { $ref: '#/components/responses/AttemptResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts:
+    get:
+      tags: [assessment]
+      operationId: listAttempts
+      summary: This student's attempts in this tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Attempts, newest first, then by id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Attempt' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts/{attempt_id}:
+    get:
+      tags: [assessment]
+      operationId: getAttempt
+      summary: One of this student's attempts
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200': { $ref: '#/components/responses/AttemptResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts/{attempt_id}/questions:
+    get:
+      tags: [assessment]
+      operationId: getAttemptQuestions
+      summary: The attempt's immutable question snapshot
+      description: Never contains answer keys or explanations.
+      x-unpaginated: true
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200':
+          description: Questions, in sequence
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AttemptQuestions' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts/{attempt_id}/answers:
+    get:
+      tags: [assessment]
+      operationId: getAttemptAnswers
+      summary: Answers saved so far
+      x-unpaginated: true
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200':
+          description: Saved answers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AttemptAnswers' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts/{attempt_id}/answers/{assessment_question_id}:
+    put:
+      tags: [assessment]
+      operationId: saveAnswer
+      summary: Save the answer to one question
+      description: A repeat leaves one answer.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+        - $ref: '#/components/parameters/AssessmentQuestionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveAnswerRequest' }
+      responses:
+        '200':
+          description: The saved answer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AttemptAnswer' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AttemptClosed' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [assessment]
+      operationId: deleteAnswer
+      summary: Remove the answer to one question
+      description: A repeat succeeds and leaves no answer.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+        - $ref: '#/components/parameters/AssessmentQuestionId'
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/AttemptClosed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts/{attempt_id}/submit:
+    post:
+      tags: [assessment]
+      operationId: submitAttempt
+      summary: Submit the attempt
+      description: >
+        Grades the saved answers once. A repeat returns the submitted attempt and never
+        grades again, so a client that lost the response can safely retry. Submitting
+        after expires_at succeeds and grades what was saved in time.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200': { $ref: '#/components/responses/AttemptResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /assessment/attempts/{attempt_id}/result:
+    get:
+      tags: [assessment]
+      operationId: getAttemptResult
+      summary: The graded result of a submitted attempt
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AttemptId'
+      responses:
+        '200':
+          description: The result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AttemptResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: ATTEMPT_NOT_SUBMITTED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /ai/conversations:
+    get:
+      tags: [ai]
+      operationId: listConversations
+      summary: This student's conversations in this tenant
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Conversations, most recently updated first, then by id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Conversation' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [ai]
+      operationId: createConversation
+      summary: Start an empty conversation
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200': { $ref: '#/components/responses/ConversationResult' }
+        '201': { $ref: '#/components/responses/ConversationResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /ai/conversations/{conversation_id}:
+    get:
+      tags: [ai]
+      operationId: getConversation
+      summary: One of this student's conversations
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200': { $ref: '#/components/responses/ConversationResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [ai]
+      operationId: deleteConversation
+      summary: Delete one of this student's conversations
+      description: Repeating it after success returns RESOURCE_NOT_FOUND.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/ConversationId'
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /ai/conversations/{conversation_id}/messages:
+    get:
+      tags: [ai]
+      operationId: listMessages
+      summary: Messages of a conversation
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/ConversationId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Messages, oldest first, then by id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ConversationMessage' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [ai]
+      operationId: sendMessage
+      summary: Ask a question in a conversation
+      description: >
+        Answers come only from documents this student may read whose latest ingestion is
+        ready. The turn is stored only after the AI step succeeds. The same key returns the
+        stored turn without asking again. Each turn is answered on its own: the question
+        doesn't see earlier turns in this contract version.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/ConversationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '200':
+          description: The answer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/ChatAnswer' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: IDEMPOTENCY_KEY_REUSED with a different message
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: AI_UPSTREAM_ERROR. No answer is stored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Access token from authenticate or refresh. Use expires_in, not an assumed lifetime.
+
+  parameters:
+    TenantSlug:
+      name: X-Tenant-Slug
+      in: header
+      required: true
+      description: The selected tenant. Context, not proof; membership is checked on every request.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    CourseId:
+      name: course_id
+      in: path
+      required: true
+      schema: { type: string }
+    TopicId:
+      name: topic_id
+      in: path
+      required: true
+      schema: { type: string }
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema: { type: string }
+    AssessmentId:
+      name: assessment_id
+      in: path
+      required: true
+      schema: { type: string }
+    AttemptId:
+      name: attempt_id
+      in: path
+      required: true
+      schema: { type: string }
+    AssessmentQuestionId:
+      name: assessment_question_id
+      in: path
+      required: true
+      schema: { type: string }
+    ConversationId:
+      name: conversation_id
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    EmptySuccess:
+      description: Done
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Empty' }
+    SessionIssued:
+      description: A new session or rotated tokens
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/AuthSession' }
+    RevokedSessions:
+      description: How many sessions were revoked
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/RevokedSessions' }
+    MembershipResult:
+      description: The membership. 201 if new, 200 if it already existed
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Membership' }
+    DocumentResult:
+      description: The document. On upload, 201 if new and 200 on a replay
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Document' }
+    AttemptResult:
+      description: The attempt. On start, 201 if new and 200 if one was in progress
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Attempt' }
+    ConversationResult:
+      description: The conversation. On create, 201 if new and 200 on a replay
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - properties:
+                  data: { $ref: '#/components/schemas/Conversation' }
+    TenantRequired:
+      description: TENANT_REQUIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: AUTH_TOKEN_INVALID. Refresh once, then retry the request once
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: >
+        EMAIL_VERIFICATION_REQUIRED, PERMISSION_DENIED or TENANT_ACCESS_DENIED. An unknown
+        tenant and a tenant the user doesn't belong to look the same
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: >
+        RESOURCE_NOT_FOUND. Also used for another tenant's resources, another student's
+        private resources and unpublished resources, with an identical response
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    AttemptClosed:
+      description: ATTEMPT_ALREADY_SUBMITTED or ATTEMPT_EXPIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationFailed:
+      description: VALIDATION_FAILED, with field errors. Submitted values are never echoed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    RateLimited:
+      description: RATE_LIMITED. The response doesn't reveal which limit fired
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InternalError:
+      description: INTERNAL_ERROR. Never contains exception text
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unavailable:
+      description: AI_UNAVAILABLE or OBJECT_STORAGE_UNAVAILABLE
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
+  schemas:
+    Empty:
+      type: object
+      additionalProperties: false
+    Meta:
+      type: object
+      required: [request_id]
+      properties:
+        request_id: { type: string }
+    PageMeta:
+      allOf:
+        - $ref: '#/components/schemas/Meta'
+        - type: object
+          required: [pagination]
+          properties:
+            pagination:
+              type: object
+              required: [total, limit, offset]
+              properties:
+                total: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 100 }
+                offset: { type: integer, minimum: 0 }
+    SuccessEnvelope:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success: { const: true }
+        data: {}
+        error: { type: 'null' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    PageEnvelope:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success: { const: true }
+        data: { type: array }
+        error: { type: 'null' }
+        meta: { $ref: '#/components/schemas/PageMeta' }
+    ErrorEnvelope:
+      type: object
+      required: [success, data, error, meta]
+      properties:
+        success: { const: false }
+        data: { type: 'null' }
+        error: { $ref: '#/components/schemas/Error' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Error:
+      type: object
+      required: [code, message, details]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message:
+          type: string
+          description: Safe to show, and may change. Branch on code.
+        details:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ValidationDetails'
+            - $ref: '#/components/schemas/DuplicateDetails'
+    ErrorCode:
+      type: string
+      enum:
+        - TENANT_REQUIRED
+        - TOKEN_INVALID
+        - EMPTY_UPLOAD
+        - AUTH_INVALID_CREDENTIALS
+        - AUTH_TOKEN_INVALID
+        - AUTH_REFRESH_INVALID
+        - ACCOUNT_NOT_ACTIVE
+        - EMAIL_VERIFICATION_REQUIRED
+        - TENANT_ACCESS_DENIED
+        - PERMISSION_DENIED
+        - RESOURCE_NOT_FOUND
+        - UPLOAD_READ_TIMEOUT
+        - IDEMPOTENCY_KEY_REUSED
+        - DUPLICATE_CONTENT
+        - INGESTION_NOT_RETRYABLE
+        - ATTEMPT_ALREADY_SUBMITTED
+        - ATTEMPT_EXPIRED
+        - ATTEMPT_NOT_SUBMITTED
+        - UPLOAD_TOO_LARGE
+        - UNSUPPORTED_MEDIA_TYPE
+        - RANGE_NOT_SATISFIABLE
+        - VALIDATION_FAILED
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+        - AI_UPSTREAM_ERROR
+        - AI_UNAVAILABLE
+        - OBJECT_STORAGE_UNAVAILABLE
+    ValidationDetails:
+      type: object
+      required: [fields]
+      additionalProperties: false
+      properties:
+        fields:
+          type: array
+          items:
+            type: object
+            required: [field, code, message]
+            additionalProperties: false
+            properties:
+              field: { type: string }
+              code: { type: string }
+              message: { type: string }
+    DuplicateDetails:
+      type: object
+      required: [existing_asset_id]
+      additionalProperties: false
+      properties:
+        existing_asset_id:
+          type: string
+          description: Always one of the caller's own documents.
+
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, writeOnly: true }
+    AuthenticateRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, writeOnly: true }
+        device_id: { type: string }
+        user_agent: { type: string }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      additionalProperties: false
+      properties:
+        refresh_token: { type: string, writeOnly: true }
+    TokenRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token: { type: string, writeOnly: true }
+    EmailRequest:
+      type: object
+      required: [email]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email }
+    ResetPasswordRequest:
+      type: object
+      required: [token, password]
+      additionalProperties: false
+      properties:
+        token: { type: string, writeOnly: true }
+        password: { type: string, writeOnly: true }
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      additionalProperties: false
+      properties:
+        current_password: { type: string, writeOnly: true }
+        new_password: { type: string, writeOnly: true }
+        revoke_other_sessions: { type: boolean, default: true }
+    AuthSession:
+      type: object
+      required: [user_id, session_id, access_token, token_type, expires_in, refresh_token]
+      properties:
+        user_id: { type: string }
+        session_id: { type: string }
+        device_id: { type: [string, 'null'] }
+        access_token: { type: string }
+        token_type: { const: Bearer }
+        expires_in: { type: integer, minimum: 1 }
+        refresh_token: { type: string }
+    RevokedSessions:
+      type: object
+      required: [revoked_sessions]
+      properties:
+        revoked_sessions: { type: integer, minimum: 0 }
+    User:
+      type: object
+      required: [id, email, status, email_verified]
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        status: { type: string }
+        email_verified: { type: boolean }
+    Membership:
+      type: object
+      required: [tenant_slug, tenant_name, membership_id, role]
+      properties:
+        tenant_slug: { type: string }
+        tenant_name: { type: string }
+        membership_id: { type: string }
+        role: { type: string }
+
+    Faculty:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+    Department:
+      type: object
+      required: [id, faculty_id, name, slug]
+      properties:
+        id: { type: string }
+        faculty_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+    Programme:
+      type: object
+      required: [id, faculty_id, department_id, name, slug, code, duration_years]
+      properties:
+        id: { type: string }
+        faculty_id: { type: string }
+        department_id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        code: { type: string }
+        duration_years: { type: integer, minimum: 1 }
+    Course:
+      type: object
+      required: [id, department_id, code, title, slug, credit_units, level, semester]
+      properties:
+        id: { type: string }
+        department_id: { type: string }
+        code: { type: string }
+        title: { type: string }
+        slug: { type: string }
+        credit_units: { type: integer }
+        level: { type: integer }
+        semester: { type: integer }
+        description: { type: [string, 'null'] }
+    Topic:
+      type: object
+      required: [id, course_id, title, slug, sequence]
+      properties:
+        id: { type: string }
+        course_id: { type: string }
+        title: { type: string }
+        slug: { type: string }
+        description: { type: [string, 'null'] }
+        sequence: { type: integer }
+    LearningOutcome:
+      type: object
+      required: [id, topic_id, sequence, description]
+      properties:
+        id: { type: string }
+        topic_id: { type: string }
+        sequence: { type: integer }
+        description: { type: string }
+    ReferenceMaterial:
+      type: object
+      required: [id, course_id, title, material_type]
+      properties:
+        id: { type: string }
+        course_id: { type: string }
+        title: { type: string }
+        material_type: { type: string }
+        url: { type: [string, 'null'] }
+
+    Source:
+      type: object
+      required: [id, name, source_type, authority_level]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        source_type: { type: string }
+        authority_level: { type: string }
+        description: { type: [string, 'null'] }
+        author_name: { type: [string, 'null'] }
+        publisher: { type: [string, 'null'] }
+        isbn_or_doi: { type: [string, 'null'] }
+        source_url: { type: [string, 'null'] }
+    Document:
+      type: object
+      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, ingestion, created_at, updated_at]
+      properties:
+        id: { type: string }
+        source_id: { type: string }
+        title: { type: string, description: The file's display name }
+        mime_type:
+          type: string
+          enum: [application/pdf, image/png, image/jpeg]
+        size_bytes: { type: integer, minimum: 1 }
+        content_sha256:
+          type: string
+          description: Compare with the client's own hash to confirm the bytes arrived.
+        ownership:
+          type: string
+          enum: [personal, shared]
+        ingestion: { $ref: '#/components/schemas/Ingestion' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Ingestion:
+      type: object
+      required: [status, retry_available, failure_code, failure_message]
+      properties:
+        status:
+          type: string
+          enum: [uploaded, queued, processing, extracted, chunked, indexed, ready, failed]
+          description: Only ready means the document can be used in answers.
+        retry_available:
+          type: boolean
+          description: The student can call retry now.
+        failure_code: { type: [string, 'null'] }
+        failure_message:
+          type: [string, 'null']
+          description: Safe to show. Never contains internal details.
+
+    Assessment:
+      type: object
+      required: [id, course_id, title, instructions, duration_minutes, passing_score, question_count]
+      properties:
+        id: { type: string }
+        course_id: { type: string }
+        title: { type: string }
+        instructions: { type: string }
+        duration_minutes: { type: integer, minimum: 1 }
+        passing_score: { type: integer }
+        question_count: { type: integer, minimum: 0 }
+    Attempt:
+      type: object
+      required: [id, assessment_id, status, started_at, expires_at, submitted_at]
+      properties:
+        id: { type: string }
+        assessment_id: { type: string }
+        status:
+          type: string
+          enum: [in_progress, submitted]
+        started_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          description: Set by the server. Answers are refused after it. Clients show time from this value.
+        submitted_at: { type: [string, 'null'], format: date-time }
+    AttemptQuestions:
+      type: object
+      required: [attempt_id, assessment_id, questions]
+      properties:
+        attempt_id: { type: string }
+        assessment_id: { type: string }
+        questions:
+          type: array
+          items: { $ref: '#/components/schemas/AttemptQuestion' }
+    AttemptQuestion:
+      type: object
+      required: [assessment_question_id, sequence, prompt, marks, options]
+      properties:
+        assessment_question_id: { type: string }
+        sequence: { type: integer }
+        prompt: { type: string }
+        marks: { type: integer }
+        options:
+          type: array
+          items:
+            type: object
+            required: [position, text]
+            properties:
+              position: { type: integer, minimum: 0 }
+              text: { type: string }
+    SaveAnswerRequest:
+      type: object
+      required: [selected_option_index]
+      additionalProperties: false
+      properties:
+        selected_option_index: { type: integer, minimum: 0 }
+    AttemptAnswer:
+      type: object
+      required: [attempt_id, assessment_question_id, selected_option_index, updated_at]
+      properties:
+        attempt_id: { type: string }
+        assessment_question_id: { type: string }
+        selected_option_index: { type: integer, minimum: 0 }
+        updated_at: { type: string, format: date-time }
+    AttemptAnswers:
+      type: object
+      required: [attempt_id, answers]
+      properties:
+        attempt_id: { type: string }
+        answers:
+          type: array
+          items: { $ref: '#/components/schemas/AttemptAnswer' }
+    AttemptResult:
+      type: object
+      required: [attempt_id, assessment_id, total_score, max_score, percentage, passed, graded_at, breakdown]
+      properties:
+        attempt_id: { type: string }
+        assessment_id: { type: string }
+        total_score: { type: integer }
+        max_score: { type: integer }
+        percentage: { type: number }
+        passed: { type: boolean }
+        graded_at: { type: string, format: date-time }
+        breakdown:
+          type: array
+          items: { $ref: '#/components/schemas/QuestionResult' }
+    QuestionResult:
+      type: object
+      required: [assessment_question_id, selected_option_index, awarded_marks, max_marks, is_correct]
+      properties:
+        assessment_question_id: { type: string }
+        selected_option_index: { type: [integer, 'null'] }
+        awarded_marks: { type: integer }
+        max_marks: { type: integer }
+        is_correct: { type: boolean }
+
+    Conversation:
+      type: object
+      required: [id, title, created_at, updated_at]
+      properties:
+        id: { type: string }
+        title:
+          type: [string, 'null']
+          description: Set by the server from the first question. Null until then.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SendMessageRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+    ConversationMessage:
+      type: object
+      required: [id, role, content, grounded, citations, created_at]
+      properties:
+        id: { type: string }
+        role:
+          type: string
+          enum: [student, assistant]
+        content: { type: string }
+        grounded:
+          type: [boolean, 'null']
+          description: Null for a student's message.
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/Citation' }
+        created_at: { type: string, format: date-time }
+    ChatAnswer:
+      type: object
+      required: [answer, grounded, citations, conversation_id, request_id]
+      properties:
+        answer: { type: string }
+        grounded:
+          type: boolean
+          description: False means the fixed "not covered" reply, with no citations.
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/Citation' }
+        conversation_id: { type: string }
+        request_id: { type: string }
+    Citation:
+      type: object
+      required: [number, source_id, asset_id, title, page_start, page_end, excerpt]
+      additionalProperties: false
+      properties:
+        number:
+          type: integer
+          minimum: 1
+          description: Matches the [n] in the answer text.
+        source_id: { type: string }
+        asset_id: { type: string }
+        title: { type: string }
+        page_start: { type: [integer, 'null'] }
+        page_end: { type: [integer, 'null'] }
+        excerpt:
+          type: string
+          maxLength: 500
+          description: From the cited passage. Never generated.
