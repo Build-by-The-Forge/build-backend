@@ -2,9 +2,9 @@
 
 **Audited on 2026-10-30, at build-backend `807895e` and ai-service `208ea52`.**
 
-**Release decision: not yet recorded.** See [Decision](#decision). The product owner records it after reading the limitations below.
+**Release decision: accepted with limitations.** See [Decision](#decision). This is not production-readiness approval.
 
-**Summary:** every exit criterion has evidence. The correctness guarantees held under real worker death, record loss and racing attempts. Two limits matter most for the decision: no production deployment is defined yet, so the forced-shutdown requirement below is unverified; and retrieval quality on real documents has been compared, not certified.
+**Summary:** every exit criterion has evidence. The correctness guarantees held under real worker death, record loss and racing attempts. Two limits matter most: no production deployment is defined yet, so the forced-shutdown requirement below is unverified; and retrieval quality on real documents has been compared, not certified.
 
 ## Exit criteria
 
@@ -37,7 +37,7 @@ Tested backend `807895e` and ai-service `208ea52`:
 
 The seven required checks are green on the final merge of each repository.
 
-## Accepted limitations, pending the decision
+## Accepted limitations
 
 | Limitation | Impact | Follow-up |
 |---|---|---|
@@ -97,12 +97,15 @@ The other P3-6 PRs merged on their own gates under the agreed rule: ai-service #
 
 ## Decision
 
-To be completed by the product owner:
+**Phase 3 is accepted with limitations.** Recorded 2026-10-30: the reviewer's decision, relayed and adopted by the product owner, Olamide Fadahunsi.
 
-- [ ] **Accept** the limitations above for Phase 3, with the deployment requirement carried into the first deployment.
-- [ ] **Hold** until: ______
+This acceptance means:
 
-Decided by: ______ Date: ______
+1. The exit criteria are satisfied by the evidence in this record.
+2. The known limitations are accepted, not treated as resolved.
+3. SIGTERM, a finite timeout, SIGKILL and automatic restart are mandatory for the first production deployment.
+4. It is **not** production-readiness approval, and it does not certify retrieval quality for real student use.
+5. Chunks being searchable before `ready` remains an acknowledged limitation that needs retrieval or readiness controls.
 
 ## Next
 
