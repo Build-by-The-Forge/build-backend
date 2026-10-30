@@ -202,6 +202,7 @@ def attempt_to_model(
     model.user_id = attempt.user_id
     model.status = attempt.status.value
     model.started_at = attempt.started_at
+    model.expires_at = attempt.expires_at
     model.submitted_at = attempt.submitted_at
     model.created_at = attempt.created_at
     model.updated_at = attempt.updated_at
@@ -216,6 +217,7 @@ def attempt_model_to_domain(model: AssessmentAttemptModel) -> AssessmentAttempt:
         status=AttemptStatus(model.status),
         attempt_id=model.id,
         started_at=model.started_at,
+        expires_at=model.expires_at,
         submitted_at=model.submitted_at,
         created_at=model.created_at,
         updated_at=model.updated_at,

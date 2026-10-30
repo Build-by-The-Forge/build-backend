@@ -7,6 +7,15 @@ class AttemptRepository(Protocol):
     async def save(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         raise NotImplementedError
 
+    async def get_by_id_for_update(
+        self,
+        attempt_id: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> AssessmentAttempt | None:
+        """As get_by_id, holding the row until the transaction ends."""
+        ...
+
     async def get_by_id(
         self,
         attempt_id: str,

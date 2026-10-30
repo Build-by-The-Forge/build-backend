@@ -106,6 +106,7 @@ class AttemptResponse(BaseModel):
     user_id: str
     status: str
     started_at: str
+    expires_at: str
     submitted_at: str | None = None
     created_at: str
     updated_at: str

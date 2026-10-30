@@ -41,6 +41,7 @@ class StartAttemptHandler:
             tenant_id=command.tenant_id,
             assessment_id=command.assessment_id,
             user_id=command.user_id,
+            duration_minutes=assessment.duration_minutes,
         )
         return await self.attempts.save(attempt, tenant_id=command.tenant_id)
 
@@ -79,13 +80,18 @@ class SubmitAttemptHandler:
         self.results = results
 
     async def handle(self, command: SubmitAttemptCommand) -> AssessmentAttempt | None:
-        attempt = await self.repository.get_by_id(
+        # The lock makes concurrent submits take turns: one grades, the rest
+        # find it submitted and return it unchanged.
+        attempt = await self.repository.get_by_id_for_update(
             command.attempt_id,
             tenant_id=command.tenant_id,
             user_id=command.user_id,
         )
         if attempt is None:
             return None
+        if attempt.status == AttemptStatus.SUBMITTED:
+            attempt.newly_submitted = False
+            return attempt
         attempt.submit()
 
         if self.assessments is not None and self.answers is not None and self.results is not None:

@@ -203,11 +203,32 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         tenant_id: str | None = None,
         user_id: str | None = None,
     ) -> AssessmentAttempt | None:
+        return await self._get(attempt_id, tenant_id, user_id)
+
+    async def get_by_id_for_update(
+        self,
+        attempt_id: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> AssessmentAttempt | None:
+        return await self._get(attempt_id, tenant_id, user_id, for_update=True)
+
+    async def _get(
+        self,
+        attempt_id: str,
+        tenant_id: str | None,
+        user_id: str | None,
+        *,
+        for_update: bool = False,
+    ) -> AssessmentAttempt | None:
         statement = select(AssessmentAttemptModel).where(AssessmentAttemptModel.id == attempt_id)
         if tenant_id is not None:
             statement = statement.where(AssessmentAttemptModel.tenant_id == tenant_id)
         if user_id is not None:
             statement = statement.where(AssessmentAttemptModel.user_id == user_id)
+        if for_update:
+            # A repeated flush must read the committed row, not the session's copy.
+            statement = statement.with_for_update().execution_options(populate_existing=True)
         result = await self._session.scalars(statement)
         model = result.first()
         return attempt_model_to_domain(model) if model is not None else None
