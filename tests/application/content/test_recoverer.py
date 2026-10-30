@@ -108,7 +108,7 @@ async def test_hard_cap_fails_even_when_the_ai_lease_is_live():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("state", ["stalled", "failed", "completed"])
+@pytest.mark.parametrize("state", ["stalled", "lost", "failed", "succeeded", "completed"])
 async def test_non_live_task_fails_retryably_as_lost(state):
     uow, job, asset = await setup_active_job()
 
@@ -181,3 +181,91 @@ async def test_undelivered_events_are_applied_before_a_stalled_task_is_failed():
     assert result.job.attempt_history[-1]["stage_at_failure"] == "extraction_completed"
     assert asset.ingestion_status is IngestionStatus.FAILED
     assert "event-extracted" in uow.ingestion_events.records
+
+
+# --- a queued AI task waits; only the hard cap ends the wait (design §6 clarification) ---
+
+
+@pytest.mark.asyncio
+async def test_a_queued_task_survives_repeated_soft_deadlines_then_starts_and_completes():
+    uow, job, asset = await setup_active_job()
+    dispatched_at = job.last_dispatched_at
+    start = datetime.now(timezone.utc)
+    handler = RecoverIngestionJobHandler
+
+    # Three recoverer passes, each after the soft deadline, while the task is queued.
+    for minutes in (11, 22, 33):
+        job.updated_at = start + timedelta(minutes=minutes) - timedelta(seconds=700)
+        result = await handler(uow, StatusGateway(task_status(job, state="accepted"))).handle(
+            job, max_in_flight_seconds=3600, now=start + timedelta(minutes=minutes)
+        )
+        assert result.action == "queued"
+        assert (result.job.status, result.job.attempt_count) == (IngestionStatus.PROCESSING, 1)
+        assert result.job.last_dispatched_at == dispatched_at  # the cap's anchor never moves
+        job = result.job
+
+    # It starts, then finishes; its events arrive through the status record.
+    def event(event_id, event_type, stage=None, metrics=None):
+        return {
+            "event_id": event_id,
+            "job_id": job.id,
+            "external_task_id": job.external_task_id,
+            "run_number": job.run_number,
+            "attempt_count": job.attempt_count,
+            "event_type": event_type,
+            **({"stage": stage} if stage else {}),
+            "metrics": metrics or {},
+        }
+
+    events = [
+        event("e-extracted", "stage_progress", "extracted", EXTRACTED),
+        event("e-chunked", "stage_progress", "chunked", {"chunks": 4}),
+        event("e-indexed", "stage_progress", "indexed", {"indexed_chunks": 4, "index": "document_chunks"}),
+        event("e-completed", "job_completed"),
+    ]
+    result = await handler(uow, StatusGateway(task_status(job, state="succeeded", events=events))).handle(
+        job, max_in_flight_seconds=3600, now=start + timedelta(minutes=40)
+    )
+    assert result.action == "events_applied"
+    assert (result.job.status, result.job.attempt_count) == (IngestionStatus.READY, 1)
+    assert [outcome for _, outcome in result.callback_outcomes] == ["applied"] * 4
+
+
+@pytest.mark.asyncio
+async def test_a_task_that_never_leaves_the_queue_times_out_at_the_hard_cap():
+    uow, job, asset = await setup_active_job()
+    now = datetime.now(timezone.utc)
+    job.last_dispatched_at = now - timedelta(seconds=3601)
+
+    result = await RecoverIngestionJobHandler(uow, StatusGateway(task_status(job, state="accepted"))).handle(
+        job, max_in_flight_seconds=3600, now=now
+    )
+
+    assert result.action == "timeout"
+    assert (result.job.status, result.job.error_code, result.job.is_retryable) == (
+        IngestionStatus.FAILED,
+        "AI_TASK_TIMEOUT",
+        True,
+    )
+    assert result.job.last_dispatched_at == now - timedelta(seconds=3601)
+    assert asset.ingestion_status is IngestionStatus.FAILED
+
+
+@pytest.mark.asyncio
+async def test_a_queued_task_never_causes_another_attempt():
+    """No retry is scheduled while the task waits: the job stays on its attempt."""
+    uow, job, _ = await setup_active_job()
+    now = datetime.now(timezone.utc)
+    job.updated_at = now - timedelta(hours=1) + timedelta(seconds=1)
+
+    result = await RecoverIngestionJobHandler(uow, StatusGateway(task_status(job, state="accepted"))).handle(
+        job, max_in_flight_seconds=3600, now=now
+    )
+
+    assert result.action == "queued"
+    assert (result.job.status, result.job.is_retryable, result.job.attempt_count) == (
+        IngestionStatus.PROCESSING,
+        False,
+        1,
+    )
+    assert result.job.attempt_history == []

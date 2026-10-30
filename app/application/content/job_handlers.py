@@ -753,10 +753,17 @@ class RecoverIngestionJobHandler:
             )
             return await self._record_recovery_failure(current, "timeout", callbacks)
 
-        if status is not None and status.state == "running":
+        # Below the hard cap, a task that is alive extends the soft deadline:
+        # running under a live lease (the AI reports "running" only then), or
+        # still queued at the AI ("accepted"). A queued task is waiting, not
+        # stalled: failing it would put the work back at the end of a backlog
+        # as a new attempt. Neither moves last_dispatched_at, so the hard cap
+        # above still bounds both.
+        if status is not None and status.state in ("running", "accepted"):
             current.touch()
             saved = await self._uow.jobs.save_job(current)
-            return RecoverResult(job=saved, action="alive", callback_outcomes=callbacks)
+            action = "alive" if status.state == "running" else "queued"
+            return RecoverResult(job=saved, action=action, callback_outcomes=callbacks)
 
         current.fail_processing(
             error_code="AI_TASK_LOST",
