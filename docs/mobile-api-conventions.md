@@ -1,6 +1,6 @@
 # Mobile API conventions (M0)
 
-**Status: proposed, awaiting reviewer approval. No M1 work starts until then.**
+**Status: design approved by the reviewer on 2026-10-30. M1 starts after this document merges.**
 
 These are the rules the mobile contract (`contracts/mobile/openapi.yaml`, M1) must follow, and the decisions that must be settled first. They describe the intended API. Where today's backend differs, the difference is listed in the [inventory](mobile-m0-inventory.md) and closed in M3. Accepting these rules doesn't mean any endpoint already complies.
 
@@ -11,16 +11,16 @@ Companion documents:
 
 The product specification is the [master PRD](https://github.com/Build-by-The-Forge/Build-UI./blob/main/mobile-app-main/docs/BUILD_FRONTEND_MASTER_PRD.md) in the mobile repository.
 
-## Decisions for the reviewer
+## Decisions
 
-Four decisions need a ruling. The first two were requested; the last two came out of the survey.
+The reviewer approved all four as proposed, with the conditions recorded in each section below. This is the reviewer's design ruling, not a formal GitHub approval.
 
-| # | Decision | Recommendation |
+| # | Decision | Ruling |
 |---|---|---|
-| A | Who owns conversations | The backend: server-issued IDs and persisted history |
-| B | Who can see an uploaded document | The uploading student only, in the first release |
-| C | How students get into a tenant | Add the existing join and invitation routes to the first release |
-| D | Upload read timeout | Raise it for mobile, after measuring |
+| A | Who owns conversations | The backend: server-issued IDs and persisted history. Retention is still open |
+| B | Who can see an uploaded document | The uploading student only, in the first release. If that can't be made safe, no student uploads |
+| C | How students get into a tenant | The existing join and invitation routes are in the first release |
+| D | Upload read timeout | Raise it, to a value measured and documented in M3-D |
 
 Details are under [Decision A](#decision-a-conversation-ownership), [Decision B](#decision-b-uploaded-document-visibility), [Decision C](#decision-c-tenant-entry) and [Decision D](#decision-d-upload-read-timeout).
 
@@ -59,7 +59,7 @@ All lifetimes are configuration. The contract documents the defaults, and client
 2. Save the new refresh token before it uses the new access token.
 3. Sign the user out on `AUTH_REFRESH_INVALID`, and never retry that token.
 
-**Known cost:** if a refresh response is lost in transit, the client still holds the rotated token, so its retry revokes the session and the student signs in again. This fails safe, and flaky mobile networks will make it more common than it is on web. M7 measures nothing about its frequency. If it proves disruptive, changing the rule is a separate security decision.
+**Accepted cost:** if a refresh response is lost in transit, the client still holds the rotated token, so its retry revokes the session and the student signs in again. This fails safe, and flaky mobile networks will make it more common than it is on web. The reviewer kept the strict policy for now and accepted this cost. Device tests in M6 must exercise it. M7 measures nothing about its frequency. If it proves disruptive, changing the rule is a separate security decision.
 
 ## Tenant context
 
@@ -200,7 +200,7 @@ Polling is bounded and backs off (PRD §96). No percentage is shown, since the b
 
 ## Decision A: conversation ownership
 
-**Recommendation: backend-owned conversations.**
+**Approved: backend-owned conversations.** The backend issues the IDs and owns persistence, authorization, retention and deletion.
 
 Today nothing is persisted: `app/api/ai.py` says so, and neither repository has a conversation table. The AI service takes one `message`, with no history. PRD §113 requires persistence "through the approved API", so stateless-only would conflict with the PRD.
 
@@ -211,19 +211,19 @@ Today nothing is persisted: `app/api/ai.py` says so, and neither repository has 
 | Student data held | Yes, so retention and deletion are needed | None |
 | Cost | Tables and routes in M3-F | Nothing now, but a later migration |
 
-If approved:
+Requirements:
 
 - The backend issues `conversation_id`. It belongs to one user in one tenant; anyone else gets `RESOURCE_NOT_FOUND`.
 - A turn is stored only after the AI step succeeds, together with its citations. A failed call stores no answer.
 - A student can delete their own conversation. Conversation text never goes to analytics (PRD §231).
-- **Limit:** each turn is still answered on its own at first, because the AI service takes no history. So history is for reading and returning to, and follow-up questions won't understand earlier turns. Passing bounded history to the AI service is a separate AI contract change, not assumed here.
-- **Needs an owner decision before launch:** how long conversations are retained.
+- **Accepted limit:** each turn is still answered on its own at first, because the AI service takes no history. So history is for reading and returning to, and follow-up questions won't understand earlier turns. Passing bounded history to the AI service is a separate AI contract change, not assumed here.
+- **Open product decision:** how long conversations are retained. It must be settled before conversations are released to students.
 
 M0 needs no migration. M3-F will.
 
 ## Decision B: uploaded document visibility
 
-**Recommendation: private to the uploading student in the first release.** Shared tenant material stays staff-uploaded and read-only for students.
+**Approved: private to the uploading student in the first release.** Shared tenant material stays staff-uploaded and read-only for students.
 
 Reasons: student files may be personal or copyrighted, sharing needs moderation that doesn't exist, and a leak between students is much harder to undo than adding sharing later. ADR `docs/decisions/001-source-of-truth.md` already says student content doesn't define curriculum.
 
@@ -238,23 +238,30 @@ Either choice needs work, because **today's backend supports neither for student
 | Duplicates | One asset per (tenant, SHA-256), and the 409 names the existing asset | Duplicates scoped per owner, or one student learns another uploaded the same file |
 | Retrieval | Filtered by tenant only | Filtered by what this user may read ([M4](mobile-m0-boundary.md#m4-retrieval-readiness)) |
 
-The duplicate rule is the sharpest of these. The existing unique constraint would otherwise tell a student that a classmate holds an identical file, and give them its ID.
+Safeguards the reviewer requires:
 
-If this is more than the first release should carry, the fallback is **no student upload in the first release**: students read and ask about staff-provided material only. That is a real scope cut, so it's named here rather than assumed.
+- The backend enforces private ownership, not the mobile UI.
+- Asset, job, retrieval and citation access all enforce ownership.
+- Cross-student access returns the same non-disclosing response as a nonexistent resource.
+- Duplicate detection doesn't reveal another student's asset or its ID.
+
+**The duplicate rule is a security requirement.** The existing unique constraint would otherwise tell a student that a classmate holds an identical file, and give them its ID. M3-D resolves this at both the database and API levels: no response may let a student establish whether another student has uploaded a particular document.
+
+If this can't be implemented safely within the first release, **student uploads are disabled** rather than shared visibility being introduced early: students then read and ask about staff-provided material only.
 
 M0 needs no migration. M3-D will, and that migration needs the usual review.
 
 ## Decision C: tenant entry
 
-**Recommendation: add these existing routes to the first release:** `POST /tenants/{slug}/join`, `GET /tenants/{slug}/join-policy`, `POST /invitations/accept`.
+**Approved: these existing routes are in the first release:** `POST /tenants/{slug}/join`, `GET /tenants/{slug}/join-policy`, `POST /invitations/accept`.
 
-The approved scope lists registration and memberships but no way to join. Without these, a newly registered student has no tenant and can't reach any tenant-scoped screen. All three already exist, and joining already requires a verified email.
+The approved scope lists registration and memberships but no way to join. Without these, a newly registered student has no tenant and can't reach any tenant-scoped screen. All three already exist, and joining already requires a verified email. Membership stays subject to verified identity, an invitation or the join policy, and backend authorization.
 
 ## Decision D: upload read timeout
 
-**Recommendation: raise `upload_read_timeout_seconds` for the mobile contract, to a value set by measurement in M3-D.**
+**Approved: raise `upload_read_timeout_seconds` for the mobile contract, to a value set by measurement in M3-D.**
 
-The whole body must arrive within 60 seconds, so a full 25 MiB file needs a sustained 3.5 Mbit/s. Students on slower mobile connections would hit `UPLOAD_READ_TIMEOUT` repeatedly, with nothing resumable. The setting allows up to 600 seconds. A longer timeout holds a connection and worker capacity for longer, so the value should come from measuring realistic networks and concurrent uploads, not from this document.
+The whole body must arrive within 60 seconds, so a full 25 MiB file needs a sustained 3.5 Mbit/s. Students on slower mobile connections would hit `UPLOAD_READ_TIMEOUT` repeatedly, with nothing resumable. The setting allows up to 600 seconds. A longer timeout holds a connection and worker capacity for longer. M3-D measures realistic upload speeds, concurrent uploads, worker capacity and timeout rates, then selects and documents a defensible value. The configuration maximum isn't a reason to choose 600 seconds.
 
 ## Where the PRD and this plan differ
 
@@ -264,7 +271,7 @@ PRD §7 requires conflicts to be identified.
 |---|---|---|
 | Repository `build-frontend`; mobile as a distinct surface (§21) | The PRD governs the Expo app in Build-UI | Product owner's instruction; noted in the PRD file |
 | Roadmap Phases 0 to 11 include maps, offline and question generation | First release is a student subset | The PRD asks for phased delivery (§330); the rest stays on its roadmap |
-| Journey C reopens a document; Journey D navigates to the source (§257) | No route returns a document's content to a student | Gap G-13; a decision for M1 |
+| Journey C reopens a document; Journey D navigates to the source (§257) | No route returns a document's content to a student | Gap G-13; M1 must make a concrete decision. A document journey isn't complete if the product requires access to the document and students can only ask about it |
 | Journey E generates practice questions (§257) | Out of the first release; students lack the permission | Later phase |
 | Citation `page` in the reviewer's illustrative shape | `page_start` and `page_end`, since chunks span pages | [Citation schema](mobile-m0-boundary.md#citation-schema) |
 

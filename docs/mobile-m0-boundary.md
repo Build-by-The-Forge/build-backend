@@ -1,6 +1,6 @@
 # Mobile boundary requirements (M0)
 
-**Status: proposed, awaiting reviewer approval.** Covers the M4 retrieval guarantee, the citation schema, and the M7 release gate. Conventions are in [mobile-api-conventions.md](mobile-api-conventions.md).
+**Status: design approved by the reviewer on 2026-10-30.** Covers the M4 retrieval guarantee, the citation schema, and the M7 release gate. Conventions are in [mobile-api-conventions.md](mobile-api-conventions.md).
 
 ## M4: retrieval readiness
 
@@ -23,9 +23,9 @@ The rule must cover **every path to retrieved text**, not just chat: `retriever.
 | Performance | No extra lookup, and scales with chunks only | One backend query per request, and the payload grows with eligible documents |
 | New failure mode | Silent drift, in the unsafe direction if a revocation is lost | Oversized payload, which fails visibly |
 
-### Recommendation: (b), confirmed by measurement in M4
+### Initial design: (b), confirmed by measurement in M4
 
-Option (b) keeps authorization with its owner and fails safely, and the first release has few documents per student. Its cost is the payload, so M4 measures before committing:
+The reviewer supports (b) as the initial design, provided M4 measures payload and recall at the scales below and missing eligibility information fails closed. Option (b) keeps authorization with its owner and fails safely, and the first release has few documents per student. Its cost is the payload, so M4 measures before committing:
 
 - Latency and payload size at 100, 1,000 and 10,000 eligible documents.
 - Search quality with the filter applied. A selective filter on an approximate vector index can return fewer results than asked for, so recall@5 must be compared with and without it, on the existing evaluation set.
@@ -105,7 +105,7 @@ Rules:
 - **No invented metadata.** A value that can't be established is null, or the citation fails.
 - **No internals:** no `chunk_id`, storage paths, or tenant IDs.
 - **Uncited passages aren't returned.** Today's `context` field doesn't carry into the mobile contract.
-- **The backend checks every citation after generation**, because a document can stop being eligible while the answer is generated. If any citation fails, the backend doesn't drop it alone, since that would leave a dangling `[n]` in the text. It returns the fixed "not covered" reply with `grounded: false`, and logs the event without any content.
+- **Attribution is preserved from the AI service to the app, and the backend never blindly forwards model output.** It validates every citation's authorization after generation, because a document can stop being eligible while the answer is generated. If any citation fails, the backend doesn't drop it alone, since that would leave a dangling `[n]` in the text. It returns the fixed "not covered" reply with `grounded: false`, and logs the event without any content.
 - Generated text stays visibly separate from source text in the UI (PRD §291).
 
 ## M7: release-blocking gate

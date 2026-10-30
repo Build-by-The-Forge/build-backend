@@ -4,6 +4,8 @@
 
 **This comes from reading the code. No route was called for it.** Each gap is a finding to confirm: M2 turns this list into the machine-readable allowlist and CI drift gate, and a test there settles anything this reading got wrong. Rules referred to here are in the [conventions](mobile-api-conventions.md).
 
+**Two findings are security priorities (reviewer, 2026-10-30): G-03 draft assessments and G-25 duplicate disclosure.**
+
 **Summary:** most student reads exist. Three things block the planned journeys: students can't upload, students can apparently see unpublished assessments, and chat returns no citations.
 
 ## Student capabilities
@@ -77,7 +79,7 @@ The attempt's question payload has a prompt, marks and option text, and no answe
 |---|---|---|---|---|---|
 | G-01 | Implementation | Blocker | Students can't upload or start ingestion | `app/core/authorization.py`, `student` role | M3-D, Decision B |
 | G-02 | Implementation | Blocker | Upload needs a source, and students can't create one | `POST /content/sources` needs `content.source.manage` | M3-D, Decision B |
-| G-03 | Implementation | **High** | Assessment list and detail apply no status filter, so a student appears able to read draft assessments, including question prompts and options | `list_all`, `list_by_course` in `app/infrastructure/assessment/repositories.py`; `ListAssessmentsHandler` | M3-E. **Confirm first** |
+| G-03 | Implementation | **High** | Assessment list and detail apply no status filter, so a student appears able to read draft assessments, including question prompts and options | `list_all`, `list_by_course` in `app/infrastructure/assessment/repositories.py`; `ListAssessmentsHandler` | **Reproduce in M2 with real API requests.** If confirmed, M3-E restricts list and detail by role and publication status, tests direct access by ID, and verifies prompts and options are inaccessible before publication. Must be fixed before the affected assessment functionality is released |
 | G-04 | Implementation | **High** | Chat answers carry no citations: the backend gateway keeps `answer` and context text, and drops `citations` and `grounded`, which the AI service already returns | `app/infrastructure/ai/assistant_gateway.py` | M3-F, M4 |
 | G-05 | Implementation | **High** | Retrieval isn't limited to `ready` documents, or to what this user may read. Known limitation from the Phase 3 record | ai-service `retrieval.py`, `tenanted_retriever.py` | M4 |
 | G-06 | Contract | **High** | Student-readable responses expose internals: `storage_uri`, `created_by_email`, `external_task_id`, `attempt_history`, `error_details`, `metrics` | `asset_schemas.py`, `job_schemas.py` | M3-D |
@@ -87,7 +89,7 @@ The attempt's question payload has a prompt, marks and option text, and no answe
 | G-10 | Contract | Medium | Courses, topics, outcomes, assessments and attempts aren't paginated. Whether students can see draft courses needs the same check as G-03 | `courses.py`, `attempts.py` | M3-C, M3-E |
 | G-11 | Implementation | Medium | The 60-second read limit makes large uploads fail on slower connections | Decision D | M3-D |
 | G-12 | Implementation | Medium | "Retry available" has no student action | `content.job.manage` required | M3-D |
-| G-13 | Implementation | Medium | No route returns a document to a student, so PRD Journeys C and D can't finish | `app/api/content/` | Decide in M1 |
+| G-13 | Implementation | Medium | No route returns a document to a student, so PRD Journeys C and D can't finish | `app/api/content/` | **Concrete decision required in M1** |
 | G-14 | Contract | Medium | Identity bodies are untyped `dict[str, str]`, so the contract can't describe them and a missing field becomes a business error instead of a validation error | `app/api/identity.py` | M3-B |
 | G-15 | Contract | Medium | What a repeated submit returns isn't defined | `attempt_handlers.py` | M3-E |
 | G-16 | Contract | Medium | Results, including each question's `is_correct`, are returned straight after submission. The policy needs stating, especially if an assessment can be retaken | `attempts.py`, `get_attempt_result` | M1 |
@@ -99,6 +101,7 @@ The attempt's question payload has a prompt, marks and option text, and no answe
 | G-22 | Contract | Low | `X-Request-ID` is accepted with no format or length check | `app/core/middleware.py:22` | M3-A |
 | G-23 | Contract | Low | Asset ordering has no unique tie-breaker | `asset_repositories.py:91` | M3-D |
 | G-24 | Implementation | Low | OpenAPI is generated only when `api_docs_enabled` is on, so M2 needs a build-time export | `app/core/config.py` | M2 |
+| G-25 | Implementation | **High** | Under private uploads, the tenant-wide unique rule and the 409 naming the existing asset would let one student learn what another uploaded | `uq_content_assets_tenant_hash`; `_receive_upload` in `assets.py` | M3-D, at both the database and API levels |
 
 ## Already sound
 
