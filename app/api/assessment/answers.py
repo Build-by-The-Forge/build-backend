@@ -12,7 +12,7 @@ from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.assessment.attempt_answer import AttemptAnswer
-from app.domain.assessment.errors import AttemptAlreadySubmittedError
+from app.domain.assessment.errors import AttemptAlreadySubmittedError, AttemptExpiredError
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
 service = build_container().get(AttemptAnswerService)
@@ -39,7 +39,7 @@ async def save_answer(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except AttemptAlreadySubmittedError as exc:
+    except (AttemptAlreadySubmittedError, AttemptExpiredError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -95,7 +95,7 @@ async def delete_answer(
             context.tenant_id,
             context.user_id,
         )
-    except AttemptAlreadySubmittedError as exc:
+    except (AttemptAlreadySubmittedError, AttemptExpiredError) as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if deleted is None:
         raise HTTPException(status_code=404, detail="attempt not found")

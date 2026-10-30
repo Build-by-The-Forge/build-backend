@@ -2,6 +2,10 @@ class QuestionAlreadyArchivedError(Exception):
     pass
 
 
+class AttemptExpiredError(Exception):
+    pass
+
+
 class AttemptAlreadySubmittedError(Exception):
     pass
 

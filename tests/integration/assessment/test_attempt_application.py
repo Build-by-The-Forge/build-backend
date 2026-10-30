@@ -26,6 +26,14 @@ class InMemoryAttemptRepository:
         self.items[attempt.id] = attempt
         return attempt
 
+    async def get_by_id_for_update(
+        self,
+        attempt_id: str,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> AssessmentAttempt | None:
+        return await self.get_by_id(attempt_id, tenant_id, user_id)
+
     async def get_by_id(
         self,
         attempt_id: str,

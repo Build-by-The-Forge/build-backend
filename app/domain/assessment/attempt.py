@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from uuid import uuid4
 
-from app.domain.assessment.errors import AttemptAlreadySubmittedError
+from app.domain.assessment.errors import AttemptAlreadySubmittedError, AttemptExpiredError
 from app.events.base import DomainEvent
+
+
+def _as_utc(value: datetime) -> datetime:
+    # SQLite returns naive datetimes; every stored value is UTC.
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
 
 class AttemptStatus(StrEnum):
@@ -19,12 +24,16 @@ class AssessmentAttempt:
     tenant_id: str
     assessment_id: str
     user_id: str
+    # Fixed when the attempt starts, so editing the assessment can't move it.
+    expires_at: datetime
     status: AttemptStatus = AttemptStatus.IN_PROGRESS
     attempt_id: str = field(default_factory=lambda: f"attempt-{uuid4()}", repr=False)
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     submitted_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    # True only on the call that submitted it, not on a repeat. Not stored.
+    newly_submitted: bool = field(default=False, repr=False)
     _events: list[DomainEvent] = field(default_factory=list, repr=False)
 
     def __post_init__(self) -> None:
@@ -44,11 +53,15 @@ class AssessmentAttempt:
         tenant_id: str,
         assessment_id: str,
         user_id: str,
+        duration_minutes: int,
     ) -> AssessmentAttempt:
+        started_at = datetime.now(timezone.utc)
         attempt = cls(
             tenant_id=tenant_id,
             assessment_id=assessment_id,
             user_id=user_id,
+            started_at=started_at,
+            expires_at=started_at + timedelta(minutes=duration_minutes),
         )
         attempt._events.append(
             DomainEvent(
@@ -71,6 +84,7 @@ class AssessmentAttempt:
         if self.status == AttemptStatus.SUBMITTED:
             raise AttemptAlreadySubmittedError("attempt already submitted")
         self.status = AttemptStatus.SUBMITTED
+        self.newly_submitted = True
         self.submitted_at = datetime.now(timezone.utc)
         self.updated_at = self.submitted_at
         self._events.append(
@@ -85,9 +99,15 @@ class AssessmentAttempt:
             )
         )
 
-    def ensure_answer_mutation_allowed(self) -> None:
+    def is_expired(self, now: datetime | None = None) -> bool:
+        """Expired from the deadline itself onwards: the exact instant is late."""
+        return (now or datetime.now(timezone.utc)) >= _as_utc(self.expires_at)
+
+    def ensure_answer_mutation_allowed(self, now: datetime | None = None) -> None:
         if self.status == AttemptStatus.SUBMITTED:
             raise AttemptAlreadySubmittedError("attempt already submitted")
+        if self.is_expired(now):
+            raise AttemptExpiredError("attempt expired")
 
     def pull_events(self) -> list[DomainEvent]:
         events = list(self._events)

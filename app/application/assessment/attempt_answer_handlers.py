@@ -21,7 +21,7 @@ class SaveAttemptAnswerHandler:
         self.answers = answers
 
     async def handle(self, command: SaveAttemptAnswerCommand) -> AttemptAnswer:
-        attempt = await self.attempts.get_by_id(
+        attempt = await self.attempts.get_by_id_for_update(
             command.attempt_id,
             tenant_id=command.tenant_id,
             user_id=command.user_id,
@@ -79,7 +79,7 @@ class DeleteAttemptAnswerHandler:
         self.answers = answers
 
     async def handle(self, command: DeleteAttemptAnswerCommand) -> bool | None:
-        attempt = await self.attempts.get_by_id(
+        attempt = await self.attempts.get_by_id_for_update(
             command.attempt_id,
             tenant_id=command.tenant_id,
             user_id=command.user_id,

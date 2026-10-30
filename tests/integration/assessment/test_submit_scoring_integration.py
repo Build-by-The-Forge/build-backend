@@ -8,7 +8,6 @@ from app.application.assessment.attempt_service import AttemptService
 from app.domain.assessment.assessment import Assessment
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.attempt_answer import AttemptAnswer
-from app.domain.assessment.errors import AttemptAlreadySubmittedError
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.value_objects import (
     QuestionDisplayOrder,
@@ -91,6 +90,7 @@ async def test_submit_attempt_calculates_and_persists_result_with_events(
         tenant_id="tenant-123",
         assessment_id=assessment.id,
         user_id="user-123",
+        duration_minutes=30,
     )
     await attempt_repo.save(attempt, tenant_id="tenant-123")
 
@@ -142,6 +142,9 @@ async def test_submit_attempt_calculates_and_persists_result_with_events(
     assert emitted_events[1].event_type == "attempt.graded"
     assert emitted_events[1].payload["total_score"] == 5
 
-    # 9. Test double submit raises error
-    with pytest.raises(AttemptAlreadySubmittedError):
-        await service.submit_attempt(attempt.id, "tenant-123", "user-123")
+    # 9. A repeated submit returns the attempt, without grading or events
+    repeat = await service.submit_attempt(attempt.id, "tenant-123", "user-123")
+    assert repeat is not None
+    assert repeat.status == AttemptStatus.SUBMITTED
+    assert repeat.newly_submitted is False
+    assert len(emitted_events) == 2
