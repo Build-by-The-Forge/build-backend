@@ -1,4 +1,4 @@
-from prometheus_client import CollectorRegistry, Counter, generate_latest
+from prometheus_client import CollectorRegistry, Counter, Gauge, generate_latest
 
 registry = CollectorRegistry(auto_describe=True)
 requests_total = Counter(
@@ -20,6 +20,66 @@ content_upload_orphaned_objects_total = Counter(
     "build_backend_content_upload_orphaned_objects_total",
     "Uploaded objects left without an asset row because compensation failed",
     ["reason"],
+    registry=registry,
+)
+content_jobs_dispatched_total = Counter(
+    "build_backend_content_jobs_dispatched_total",
+    "Ingestion attempts accepted by the AI service",
+    registry=registry,
+)
+content_dispatch_failures_total = Counter(
+    "build_backend_content_dispatch_failures_total",
+    "Definite ingestion dispatch failures",
+    ["error_code"],
+    registry=registry,
+)
+content_uncertain_dispatches_total = Counter(
+    "build_backend_content_uncertain_dispatches_total",
+    "Ingestion dispatches whose remote outcome is uncertain",
+    registry=registry,
+)
+content_retries_scheduled_total = Counter(
+    "build_backend_content_retries_scheduled_total",
+    "Retryable ingestion failures scheduled for another attempt",
+    registry=registry,
+)
+content_terminal_failures_total = Counter(
+    "build_backend_content_terminal_failures_total",
+    "Ingestion jobs failed permanently",
+    ["error_code"],
+    registry=registry,
+)
+content_recoveries_total = Counter(
+    "build_backend_content_recoveries_total",
+    "Recoverer decisions for overdue ingestion jobs",
+    ["outcome"],
+    registry=registry,
+)
+content_in_flight_cap_hits_total = Counter(
+    "build_backend_content_in_flight_cap_hits_total",
+    "AI tasks failed after reaching the maximum in-flight duration",
+    registry=registry,
+)
+content_orphan_objects_deleted_total = Counter(
+    "build_backend_content_orphan_objects_deleted_total",
+    "Stored objects deleted by the orphan sweeper",
+    ["reason"],
+    registry=registry,
+)
+content_orphan_objects_kept_total = Counter(
+    "build_backend_content_orphan_objects_kept_total",
+    "Stored objects kept by the orphan sweeper",
+    ["reason"],
+    registry=registry,
+)
+content_jobs_due = Gauge(
+    "build_backend_content_jobs_due",
+    "Queued ingestion jobs currently eligible for dispatch",
+    registry=registry,
+)
+content_oldest_due_job_age_seconds = Gauge(
+    "build_backend_content_oldest_due_job_age_seconds",
+    "Age of the oldest queued ingestion job eligible for dispatch",
     registry=registry,
 )
 

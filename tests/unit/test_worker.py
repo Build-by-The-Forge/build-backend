@@ -1,11 +1,13 @@
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.dialects import postgresql
 
 from app.core.config import Settings
+from app.core.metrics import content_jobs_due, content_oldest_due_job_age_seconds
 from app.infrastructure.content.job_repositories import SqlAlchemyContentIngestionJobRepository
 from app.worker import (
     _run_loop,
@@ -14,6 +16,7 @@ from app.worker import (
     run_dispatch_pass,
     run_recoverer_pass,
     run_retry_pass,
+    update_dispatch_queue_metrics,
     write_health_state,
 )
 
@@ -140,6 +143,39 @@ async def test_recoverer_claim_selects_one_overdue_active_job_with_skip_locked()
 
 
 @pytest.mark.asyncio
+async def test_dispatch_queue_gauges_use_due_jobs(monkeypatch):
+    import app.worker as worker
+
+    now = datetime.now(timezone.utc)
+    oldest = now - timedelta(seconds=42)
+    query = {}
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def execute(self, stmt):
+            query["stmt"] = stmt
+            result = MagicMock()
+            result.one.return_value = (7, oldest)
+            return result
+
+    monkeypatch.setattr(worker, "SessionLocal", FakeSession)
+    monkeypatch.setattr(worker, "set_transaction_timeouts", AsyncMock())
+
+    await update_dispatch_queue_metrics()
+
+    sql = str(query["stmt"].compile(dialect=postgresql.dialect())).lower()
+    assert "content_ingestion_jobs.status =" in sql
+    assert "dispatch_claim" not in sql
+    assert "next_retry_at" in sql
+    assert content_jobs_due._value.get() == 7
+    assert 41 <= content_oldest_due_job_age_seconds._value.get() <= 43
+
+
 async def test_retrier_claim_skips_permanent_failures_and_attempts_at_the_cap():
     session = MagicMock()
     result = MagicMock()

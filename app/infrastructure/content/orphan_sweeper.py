@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.application.content.upload import managed_storage_key
 from app.core.config import settings
+from app.core.metrics import content_orphan_objects_deleted_total, content_orphan_objects_kept_total
 from app.db.session import SessionLocal, engine
 from app.db.timeouts import set_transaction_timeouts
 from app.domain.content.asset import ContentAsset
@@ -76,6 +77,7 @@ async def sweep_object_pages(
             if parsed_key is None:
                 summary.unparseable += 1
                 summary.kept += 1
+                content_orphan_objects_kept_total.labels(reason="unparseable_key").inc()
                 logger.warning("orphan_object_kept", reason="unparseable_key")
                 continue
 
@@ -83,18 +85,21 @@ async def sweep_object_pages(
             asset = assets.get(asset_id)
             if asset is not None and asset.tenant_id == tenant_id and managed_storage_key(asset, bucket) == item.key:
                 summary.kept += 1
+                content_orphan_objects_kept_total.labels(reason="asset_referenced").inc()
                 continue
 
             if item.last_modified.tzinfo is None or item.last_modified.utcoffset() is None:
                 raise ValueError("object storage returned a timezone-naive LastModified value")
             if item.last_modified >= cutoff:
                 summary.kept += 1
+                content_orphan_objects_kept_total.labels(reason="within_grace_period").inc()
                 logger.info("orphan_object_kept", reason="within_grace_period")
                 continue
 
             await storage.delete(item.key)
             summary.deleted += 1
             reason = "asset_missing" if asset is None else "asset_reference_mismatch"
+            content_orphan_objects_deleted_total.labels(reason=reason).inc()
             logger.info("orphan_object_deleted", reason=reason)
 
         next_token = page.continuation_token

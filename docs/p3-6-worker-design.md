@@ -305,6 +305,7 @@ All take the defaults above and are validated by range.
 
 ## 13. Observability
 
+- **Metrics endpoints:** the API exposes `/metrics`; the separate backend worker exposes `/metrics` on its internal port `9101`. Metrics use bounded outcome/error-code labels and never job/task identifiers.
 - **Counters:**
   - jobs dispatched;
   - dispatch failures, by code;
@@ -314,6 +315,7 @@ All take the defaults above and are validated by range.
   - in-flight cap hits;
   - stream entries reclaimed;
   - orphans deleted and kept.
+- **Gauges:** due queued jobs and oldest due age are refreshed after each dispatch pass. The AI worker exposes its task-transition, callback-delivery and stream-reclaim metrics at internal port `9102`; its expired-lease gauge reports candidates resolved by the latest reclaim pass.
 - **Gauges:**
   - queued jobs due, and the oldest one's age;
   - tasks with an expired lease.

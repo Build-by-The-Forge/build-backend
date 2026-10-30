@@ -77,3 +77,21 @@ async def test_http_exception_preserves_request_id_and_records_metric():
     assert response.status_code == 404
     assert response.body.find(b"request-test-123") >= 0
     assert b"build_backend_errors_total" in metrics_payload()
+
+
+def test_p3_6_worker_metrics_are_exposed():
+    payload = metrics_payload()
+
+    for metric in (
+        b"build_backend_content_jobs_dispatched_total",
+        b"build_backend_content_dispatch_failures_total",
+        b"build_backend_content_retries_scheduled_total",
+        b"build_backend_content_terminal_failures_total",
+        b"build_backend_content_recoveries_total",
+        b"build_backend_content_in_flight_cap_hits_total",
+        b"build_backend_content_orphan_objects_deleted_total",
+        b"build_backend_content_orphan_objects_kept_total",
+        b"build_backend_content_jobs_due",
+        b"build_backend_content_oldest_due_job_age_seconds",
+    ):
+        assert metric in payload
