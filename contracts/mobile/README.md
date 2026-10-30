@@ -39,9 +39,14 @@ The contract carries the first two as `Document.knowledge_scope`, separate from 
 | Question | Ruling | In this contract |
 |---|---|---|
 | Can students retake assessments? | Yes, by assessment-specific policy. Lecturers or the institution control it for formal examinations | `Assessment.attempt_policy`, `attempts_used`, `ATTEMPT_LIMIT_REACHED`, `RESULT_NOT_RELEASED`; `is_correct` and `awarded_marks` can be null |
-| How long are conversations kept? | Until the student deletes them or an institutional policy expires them, with no short arbitrary expiry. **The default period must be agreed before M3-F and student launch**, with clear disclosure | `Conversation.expires_at`, `deleteConversation`; no conversation text in analytics or ordinary logs |
+| How long are conversations kept? | **Proposed default: 12 months after last activity**, unless an approved institutional policy sets a shorter or justified alternative. Students can delete earlier. A backend process enforces expiry, and deletion covers messages, attachments and derived personal retrieval records. Disclosed clearly before release | `Conversation.expires_at`, `deleteConversation`; no conversation text in analytics or ordinary logs |
 | How does a student find their institution? | FUTA is configured for the first release. The app mustn't assume every student belongs to FUTA permanently | No route: the slug is app configuration, and `X-Tenant-Slug` and memberships already allow more tenants |
-| Can staff-uploaded documents be shown to students? | Yes, once the institution has verified the rights. Staff uploading a document doesn't establish permission to redistribute it. Unverified material stays out of the shared corpus | `listSourceDocuments` returns verified material only |
+| Can staff-uploaded documents be shown to students? | Yes, once an institution-designated content administrator has approved the rights basis, audience and conditions. The uploader declares provenance, and the department or course owner confirms relevance and audience. BUILD enforces the recorded decision, and never infers permission from a document's contents or the uploader's role. Until approved, a document is available only to its uploader or owner | `listSourceDocuments` returns verified material only |
+
+### Release-blocking governance
+
+- **G-33, model providers.** No production provider receives student or institutional passages until BUILD has verified and recorded: training use of prompts, passages and outputs; provider retention and its exceptions; data-processing terms, subprocessors and locations; logging and abuse-monitoring retention; and how deletion applies. **The required default is that no provider may use BUILD's content for training or model improvement.** A provider that can't meet this doesn't receive protected content. Inference isn't training, but it is still a disclosure to an external processor.
+- **G-30, rights.** Unverified material stays out of shared lists and shared retrieval.
 
 ## Where this differs from the plan
 
@@ -77,12 +82,14 @@ These continue the [M0 inventory](../../docs/mobile-m0-inventory.md) and move in
 | G-30 | Implementation | **High** | Content sources record no rights basis, intended audience or redistribution limits, so nothing can stop unverified material reaching students | `app/infrastructure/db/models/content.py` | M3-D, needs a migration |
 | G-31 | Implementation | **High** | Knowledge scope isn't modelled, so retrieval can't apply it | ai-service `retrieval.py`; backend content models | M3-D, M4 |
 | G-32 | Implementation | Medium | What happens to derived data on deletion isn't defined, and neither is whether stored bytes are erased | No delete route today | M3-D |
-| G-33 | Implementation | **High** | Retrieved passages go to the configured model provider. Whether that provider may train on them hasn't been checked, and no provider is chosen for production | `MODEL_PROVIDER` setting; provider terms not reviewed | Before student launch |
+| G-33 | Implementation | **High, release gate** | Retrieved passages go to the configured model provider. Whether that provider may train on them hasn't been checked, and no provider is chosen for production | `MODEL_PROVIDER` setting; provider terms not reviewed | Before any production provider receives content |
+| G-34 | Implementation | Medium | The OCR evaluation documents have no rights or provenance record. Their public source status is a separate decision and stays as it is. Their evaluation use continues, and they stay out of shared retrieval until each is reviewed | ai-service evaluation corpus | Before they enter shared retrieval |
+| G-35 | Implementation | **High, fixed in #53** | The answer key was readable by students mid-attempt through `GET /assessment/questions/{id}` | Test got 200 before the fix | Merged |
 
 ## Still open
 
-- **The default conversation retention period**, before M3-F and student launch.
-- **The process for verifying rights on staff material**, including who confirms them. The contract requires the outcome, and doesn't establish any right.
+- **Agreeing the 12-month default**, before M3-F and student launch. M3-F also defines how it's applied, since a null `expires_at` must not mean kept forever.
+- **Who the content administrator is at FUTA.** FUTA must designate the role or person; this document doesn't assume an office, or that every lecturer has redistribution authority.
 - **How a student contribution gets approved** into institutional knowledge. No route exists in this version.
 
 ## Assessment findings, reproduced
@@ -101,4 +108,12 @@ Also seen, and settling two earlier gaps:
 - **G-15:** a repeated submit answers 409. The contract requires a safe repeat, so this is a contract gap.
 - **G-29:** a new attempt starts straight after submitting, with no limit.
 
-G-03 and G-27 stay open until M3-E fixes them. Both must be fixed before the affected assessment functionality is released.
+### Status of the fixes
+
+The product side asked for these to be fixed now, separately from this contract. M3-E still verifies final behaviour against it.
+
+| Gap | Status |
+|---|---|
+| G-03 draft exposure, G-35 answer key | Fixed and merged in #53, which also removes questions from students' assessment responses |
+| G-27 time limit, G-15 repeat submit | In #54, with the deadline policy this contract states |
+| G-29 retakes | Not started. It needs `attempt_policy` reviewed here first |

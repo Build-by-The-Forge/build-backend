@@ -1916,7 +1916,7 @@ components:
         expires_at:
           type: [string, 'null']
           format: date-time
-          description: When an institutional retention policy removes it. Null means it stays until the student deletes it.
+          description: When an institution-specific policy removes it. Null means no such policy applies, not that it's kept forever; the default retention period still applies.
     SendMessageRequest:
       type: object
       required: [message]
