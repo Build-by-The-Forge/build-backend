@@ -1,0 +1,85 @@
+# Gate-only overlay for scripts/m3_boundary_gate.sh (P3-6 7b): applied on top
+# of compose.m3.yml by the gate script, never by itself and never by the
+# development topology (docker-compose.yml).
+#
+# - Accelerated worker timings, so recovery (lease expiry, the recoverer's
+#   deadlines, retry backoff) happens within a test's patience. Production
+#   and development keep the defaults in app/core/config.py.
+# - ai-worker-faults (profile "faults"): the AI worker with the test-only
+#   fault-injection pause points (ai-service app/services/tasks/
+#   fault_points.py). APP_ENVIRONMENT=testing is required for them; the
+#   AI-service refuses INGESTION_FAULT_DIR anywhere else. It uses the same
+#   gate-generated secrets as ai-worker (deploy/m3.env): no other
+#   credentials exist in this topology. Only the gate's fault phase starts
+#   it, after stopping ai-worker.
+
+services:
+  backend-worker:
+    environment:
+      WORKER_DISPATCH_INTERVAL_SECONDS: "1"
+      WORKER_RETRY_INTERVAL_SECONDS: "1"
+      WORKER_RETRY_BASE_SECONDS: "1"
+      WORKER_RETRY_CAP_SECONDS: "2"
+      WORKER_RECOVERER_INTERVAL_SECONDS: "2"
+      WORKER_STUCK_PROCESSING_SECONDS: "5"
+      WORKER_STUCK_STAGE_SECONDS: "5"
+
+  ai-worker:
+    environment:
+      TASK_LEASE_SECONDS: "15"
+
+  # The fault directory is shared by the AI worker (root) and the test image
+  # (uid 10001); a fresh volume is root-owned, so open it once.
+  faults-init:
+    profiles: ["faults", "gate"]
+    image: build-m3-ai-service
+    user: "0:0"
+    entrypoint: ["sh", "-c", "chmod 1777 /faults"]
+    volumes:
+      - faults:/faults
+    networks: [internal]
+
+  ai-worker-faults:
+    profiles: ["faults"]
+    image: build-m3-ai-service
+    depends_on:
+      ai-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      object-storage-init:
+        condition: service_completed_successfully
+      faults-init:
+        condition: service_completed_successfully
+    environment:
+      APP_ENVIRONMENT: testing
+      INGESTION_FAULT_DIR: /faults
+      TASK_LEASE_SECONDS: "15"
+      REDIS_URL: redis://redis:6379/1
+      BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET:?set in deploy/m3.env}
+      AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET:?set in deploy/m3.env}
+      BACKEND_CALLBACK_URL: http://backend:8000/content/ingestion/callbacks
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-deterministic}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOG_LEVEL: INFO
+      OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333
+      OBJECT_STORAGE_BUCKET: build-documents
+      OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_AI_ACCESS_KEY:?set in deploy/m3.env}
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_AI_SECRET_KEY:?set in deploy/m3.env}
+      DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+    entrypoint: ["python", "-m", "app.worker"]
+    volumes:
+      - faults:/faults
+    networks: [internal]
+
+  boundary-tests:
+    depends_on:
+      faults-init:
+        condition: service_completed_successfully
+    environment:
+      BOUNDARY_FAULT_DIR: /faults
+    volumes:
+      - faults:/faults
+
+volumes:
+  faults: {}
