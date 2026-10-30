@@ -152,10 +152,13 @@ A job is past its deadline when it is in `processing`, `extracted`, `chunked` or
 |---|---|
 | Events not yet delivered | Applied through the ledger, exactly as callbacks are |
 | `running` **with a live lease** (`lease_until` in the future) | The task is alive and making progress: `touch`, so the deadline restarts |
-| `stalled` (lease expired), `failed`, or task unknown | `fail_processing("AI_TASK_LOST", retryable=True)`; the retrier takes over with a new attempt, and so a new idempotency key |
+| `accepted` (queued at the AI-service, not yet started) | The task is waiting, not stalled: `touch`, so the deadline restarts. No new attempt is created; under a backlog one would only re-queue the work behind itself. *(Clarified 2026-10-30, see below.)* |
+| `stalled` (lease expired), `lost`, `failed`, or task unknown | `fail_processing("AI_TASK_LOST", retryable=True)`; the retrier takes over with a new attempt, and so a new idempotency key |
 | AI-service unreachable | Nothing changes. Retried next tick, and counted. |
 
-**`running` alone never extends a deadline.** Only a lease the AI worker renewed recently does (§7). A dead worker stops renewing, so its lease expires within `TASK_LEASE_SECONDS`, and the next recoverer pass fails and retries the job.
+**Clarification (2026-10-30, reviewer decision on build-backend #45).** The table originally listed only `running` with a live lease as alive, so a task still queued at the AI-service (`accepted`) was failed as lost once the soft deadline passed. That turned a backlog into churn. A queued task now extends the soft deadline like a live lease. The hard cap below is unchanged: it is still measured from `last_dispatched_at` and checked first, so neither queue waiting nor lease renewal can extend it.
+
+**A lapsed lease never extends a deadline.** A running task extends it only while the AI worker keeps renewing its lease (§7); a queued task extends it only while it is still queued, and only up to the hard cap. A dead worker stops renewing, so its lease expires within `TASK_LEASE_SECONDS`, and the next recoverer pass fails and retries the job.
 
 **Hard cap, measured from a fixed anchor.** A job whose current attempt has been in flight longer than `WORKER_MAX_IN_FLIGHT_SECONDS` is failed `AI_TASK_TIMEOUT` (retryable), even if its lease is live. The default is 3600 s, above the AI-service's own extraction deadline of 1800 s. This catches a worker that renews its lease but never finishes.
 
