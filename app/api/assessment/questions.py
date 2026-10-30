@@ -84,7 +84,8 @@ async def create_question(
 async def get_question(
     question_id: str,
     request: Request,
-    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
+    # The answer key and explanation: authors only, never assessment.read.
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_QUESTION_UPDATE)),
 ) -> JSONResponse:
     question = await service.get_question(question_id, tenant_id=context.tenant_id)
     if question is None:
