@@ -140,8 +140,10 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
     unavailable = client.get(f"/assessment/attempts/{attempt_id}/questions", headers=student_headers)
     assert unavailable.status_code == 404
 
+    # A repeat is safe: test_attempt_deadline.py checks it grades only once.
     duplicate = client.post(f"/assessment/attempts/{attempt_id}/submit", headers=student_headers)
-    assert duplicate.status_code == 409
+    assert duplicate.status_code == 200
+    assert duplicate.json()["data"]["status"] == "submitted"
 
 
 @pytest.mark.asyncio

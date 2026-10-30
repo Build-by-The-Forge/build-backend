@@ -33,6 +33,7 @@ def test_scorer_perfect_score() -> None:
         tenant_id="tenant-1",
         assessment_id=assessment.id,
         user_id="user-1",
+        duration_minutes=30,
     )
     attempt.submit()
 
@@ -98,6 +99,7 @@ def test_scorer_all_incorrect_and_passing_threshold() -> None:
         tenant_id="tenant-1",
         assessment_id=assessment.id,
         user_id="user-1",
+        duration_minutes=30,
     )
 
     # All answers wrong
@@ -162,6 +164,7 @@ def test_scorer_unanswered_questions_and_exact_pass() -> None:
         tenant_id="tenant-1",
         assessment_id=assessment.id,
         user_id="user-1",
+        duration_minutes=30,
     )
 
     # Only q1 is answered correctly, q2 is completely unanswered

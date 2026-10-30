@@ -49,6 +49,7 @@ def test_attempt_prevents_answer_mutation_after_submission() -> None:
         tenant_id="tenant-123",
         assessment_id="assessment-123",
         user_id="user-123",
+        duration_minutes=30,
     )
     attempt.submit()
 

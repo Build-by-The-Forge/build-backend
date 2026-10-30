@@ -11,6 +11,7 @@ async def test_attempt_round_trip(session: AsyncSession) -> None:
         tenant_id="tenant-123",
         assessment_id="assessment-123",
         user_id="user-123",
+        duration_minutes=30,
     )
     attempt.pull_events()
 
@@ -31,6 +32,7 @@ async def test_attempt_lookup_enforces_tenant_and_user_scope(
         tenant_id="tenant-123",
         assessment_id="assessment-123",
         user_id="user-123",
+        duration_minutes=30,
     )
     attempt.pull_events()
     repository = SqlAlchemyAttemptRepository(session)
@@ -48,6 +50,7 @@ async def test_active_attempt_lookup_and_submitted_history(
         tenant_id="tenant-123",
         assessment_id="assessment-123",
         user_id="user-123",
+        duration_minutes=30,
     )
     active.pull_events()
     repository = SqlAlchemyAttemptRepository(session)
