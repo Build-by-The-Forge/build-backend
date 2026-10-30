@@ -43,6 +43,24 @@ The contract carries the first two as `Document.knowledge_scope`, separate from 
 | How does a student find their institution? | FUTA is configured for the first release. The app mustn't assume every student belongs to FUTA permanently | No route: the slug is app configuration, and `X-Tenant-Slug` and memberships already allow more tenants |
 | Can staff-uploaded documents be shown to students? | Yes, once an institution-designated content administrator has approved the rights basis, audience and conditions. The uploader declares provenance, and the department or course owner confirms relevance and audience. BUILD enforces the recorded decision, and never infers permission from a document's contents or the uploader's role. Until approved, a document is available only to its uploader or owner | `listSourceDocuments` returns verified material only |
 
+### Assessment lifecycle
+
+Three separate events, all enforced by the backend. Hiding fields in the app isn't enough.
+
+| Event | Meaning | Governed by |
+|---|---|---|
+| Submission | Records and grades the attempt | The student, or automatic finalization at the deadline |
+| Result availability | When the student can see their score | `result_visibility` |
+| Feedback availability | When correctness indicators can be seen | `feedback_timing` |
+
+- **Feedback is a security boundary.** On a two-option question, `is_correct` reveals the answer. It stays unavailable until the configured stage, even once grading is done. Today's backend returns it straight after submission (gap G-36).
+- **Unanswered questions score zero.** This is a documented invariant, not a setting, because there's no alternative to choose yet. A field can be added when a real one exists.
+- **One immutable terminal outcome per attempt.** Student submission and automatic expiry can't both grade an attempt: whichever wins the database transition finalizes it. A retry returns the same stored result, and learning-memory reporting is keyed to the finalized attempt.
+- **The server finalizes expired attempts,** so a result never depends on the app being open. The database decides eligibility; a queue message or schedule is only a trigger to look. A student requesting an expired attempt before the worker reaches it gets it finalized first.
+- **A retake needs both** a terminal previous attempt and a policy that allows another.
+
+This is built after this contract is approved, together with retakes.
+
 ### Release-blocking governance
 
 - **G-33, model providers.** No production provider receives student or institutional passages until BUILD has verified and recorded: training use of prompts, passages and outputs; provider retention and its exceptions; data-processing terms, subprocessors and locations; logging and abuse-monitoring retention; and how deletion applies. **The required default is that no provider may use BUILD's content for training or model improvement.** A provider that can't meet this doesn't receive protected content. Inference isn't training, but it is still a disclosure to an external processor.
@@ -84,6 +102,8 @@ These continue the [M0 inventory](../../docs/mobile-m0-inventory.md) and move in
 | G-32 | Implementation | Medium | What happens to derived data on deletion isn't defined, and neither is whether stored bytes are erased | No delete route today | M3-D |
 | G-33 | Implementation | **High, release gate** | Retrieved passages go to the configured model provider. Whether that provider may train on them hasn't been checked, and no provider is chosen for production | `MODEL_PROVIDER` setting; provider terms not reviewed | Before any production provider receives content |
 | G-34 | Implementation | Medium | The OCR evaluation documents have no rights or provenance record. Their public source status is a separate decision and stays as it is. Their evaluation use continues, and they stay out of shared retrieval until each is reviewed | ai-service evaluation corpus | Before they enter shared retrieval |
+| G-36 | Implementation | **High** | `is_correct` and `awarded_marks` are returned as soon as an attempt is submitted, with no feedback stage | `get_attempt_result` in `app/api/assessment/attempts.py` | With retakes, after this contract |
+| G-37 | Implementation | **High** | Expired attempts wait for the student to submit, so the result depends on the app | #54 limit | With retakes, after this contract |
 | G-35 | Implementation | **High, fixed in #53** | The answer key was readable by students mid-attempt through `GET /assessment/questions/{id}` | Test got 200 before the fix | Merged |
 
 ## Still open
