@@ -109,7 +109,11 @@ status=0
 # The production image holds what production runs and nothing else.
 scripts/check_backend_image.sh build-m3-backend || status=$?
 
-"${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down and not storage_down" || status=$?
+"${COMPOSE[@]}" run --rm boundary-tests "$@" -q -m "not redis_down and not storage_down and not worker_kill" || status=$?
+
+# Kill the real AI worker during an uncommitted index write, restart it, and
+# verify the backend recovers and completes only attempt 2.
+bash scripts/p3_6_worker_kill_gate.sh || status=$?
 
 # Storage secret keys: in no image layer or configuration, and in no log
 # written by the run so far.

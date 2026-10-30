@@ -51,3 +51,6 @@ testpaths = ["tests"]
 env = [
     "APP_ENVIRONMENT=testing",
 ]
+markers = [
+    "worker_kill: P3-6, run while the gate kills and restarts the AI worker",
+]

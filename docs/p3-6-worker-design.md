@@ -370,9 +370,10 @@ All take the defaults above and are validated by range.
 **Boundary (C22/C23):**
 
 - upload → `ready` with no manual call;
-- **the AI worker is killed mid-job** (`docker kill` while the job is in `processing`), then started again.
+- **the AI worker is killed mid-index transaction** by the boundary gate while a real PostgreSQL trigger pauses its chunk insert, then started again.
   - The lease expires, the recoverer fails the job `AI_TASK_LOST`, and the retrier dispatches attempt 2.
   - The job reaches `ready` with `attempt_count == 2`, and only attempt 2's events are applied.
+  - The committed index contains only attempt 2's chunks, and a late callback from attempt 1 is stale.
   - It is not merely touched: the test asserts the attempt changed.
 - the killed attempt's late callbacks, replayed, are stale;
 - **a delayed old-attempt index write cannot corrupt the current index** (AI-service integration test, real PostgreSQL):

@@ -1,0 +1,19 @@
+# Short timings apply only while the worker-kill boundary test is running.
+services:
+  backend-worker:
+    environment:
+      WORKER_DISPATCH_INTERVAL_SECONDS: 1
+      WORKER_RETRY_INTERVAL_SECONDS: 1
+      WORKER_RETRY_BASE_SECONDS: 1
+      WORKER_RETRY_CAP_SECONDS: 1
+      WORKER_RECOVERER_INTERVAL_SECONDS: 1
+      WORKER_STUCK_PROCESSING_SECONDS: 1
+      WORKER_STUCK_STAGE_SECONDS: 1
+
+  ai-service:
+    environment:
+      TASK_LEASE_SECONDS: 15
+
+  ai-worker:
+    environment:
+      TASK_LEASE_SECONDS: 15
