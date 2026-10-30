@@ -28,7 +28,11 @@ logger = structlog.get_logger(__name__)
 HEALTH_PATH = Path(os.getenv("WORKER_HEALTH_PATH", "/tmp/build-backend-worker-health.json"))
 DB_LOCK_TIMEOUT = "2s"
 DB_STATEMENT_TIMEOUT = "15s"
-DB_IDLE_TRANSACTION_TIMEOUT = "15s"
+DB_IDLE_TRANSACTION_TIMEOUT = "30s"
+# The storage check that precedes a dispatch also runs under the job's row
+# lock (design §4), so it gets short bounds of its own.
+DISPATCH_STORAGE_CONNECT_SECONDS = 2.0
+DISPATCH_STORAGE_READ_SECONDS = 3.0
 
 
 def retry_delay_seconds(attempt: int, base: int, cap: int, random_value: float | None = None) -> int:
@@ -54,6 +58,29 @@ async def set_transaction_timeouts(session: AsyncSession) -> None:
     )
 
 
+def _dispatch_gateway() -> HttpAIServiceIngestionGateway:
+    return HttpAIServiceIngestionGateway(timeout_seconds=settings.worker_dispatch_timeout_seconds)
+
+
+def _dispatch_storage() -> S3ObjectStorage:
+    return S3ObjectStorage.from_settings(
+        settings.model_copy(
+            update={
+                "object_storage_connect_timeout_seconds": DISPATCH_STORAGE_CONNECT_SECONDS,
+                "object_storage_read_timeout_seconds": DISPATCH_STORAGE_READ_SECONDS,
+            }
+        )
+    )
+
+
+def dispatch_lock_bound_seconds() -> float:
+    """The longest the dispatch step may hold the job's row lock: the
+    storage check plus the AI call. Past it, the step is cancelled and its
+    transaction rolls back; the job stays queued on the same attempt and
+    key, so the next pass gets the original task back as DUPLICATE."""
+    return DISPATCH_STORAGE_CONNECT_SECONDS + DISPATCH_STORAGE_READ_SECONDS + settings.worker_dispatch_timeout_seconds
+
+
 async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
     async with SessionLocal() as session:
         async with ContentUnitOfWork(session) as uow:
@@ -62,13 +89,18 @@ async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
             if job is None:
                 return False
             claimed_ids.append(job.id)
-            await DispatchIngestionJobHandler(
-                uow,
-                HttpAIServiceIngestionGateway(),
-                EventBus(),
-                storage=S3ObjectStorage.from_settings,
-                bucket=settings.object_storage_bucket,
-            ).handle_system(job)
+            # Design §4: this transaction locks exactly this row, across one
+            # bounded storage check and one bounded AI call, never AI work.
+            await asyncio.wait_for(
+                DispatchIngestionJobHandler(
+                    uow,
+                    _dispatch_gateway(),
+                    EventBus(),
+                    storage=_dispatch_storage,
+                    bucket=settings.object_storage_bucket,
+                ).handle_system(job),
+                timeout=dispatch_lock_bound_seconds(),
+            )
             logger.info(
                 "content_job_dispatch_pass",
                 job_id=job.id,

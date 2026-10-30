@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     # these limits guard the database row lock and process shutdown as well.
     worker_dispatch_interval_seconds: int = Field(default=2, ge=1, le=300)
     worker_dispatch_batch: int = Field(default=20, ge=1, le=1000)
+    # Design §4: the job's row lock is held across one bounded dispatch call.
+    worker_dispatch_timeout_seconds: int = Field(default=10, ge=1, le=30)
     worker_retry_interval_seconds: int = Field(default=10, ge=1, le=3600)
     worker_retry_batch: int = Field(default=50, ge=1, le=1000)
     worker_retry_base_seconds: int = Field(default=30, ge=1, le=3600)
