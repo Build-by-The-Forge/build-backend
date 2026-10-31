@@ -12,7 +12,7 @@
 | 2 | Can a policy change after publication? | No. It locks at publish, so nobody's attempts are judged by rules changed midway |
 | 3 | Where does best, latest or first show up? | On the staff results route as a `stands` flag. The student contract has no outcome route, and adding one is a contract change |
 | 4 | Learning-memory delivery | A transactional outbox, plus idempotency in the AI service |
-| 5 | Which clock decides the deadline? | The application server's, as #54 does. Clock differences between servers are a recorded limit |
+| 5 | Which clock decides the deadline? | **PostgreSQL's**, for every deadline decision, as the reviewer prefers. This changes #54, and removes the clock-difference limit. See [Deadline clock](#deadline-clock) |
 | 6 | Learning-memory production gate | Memory reads and writes both stay off in production until the gate below is met, enforced in `MemoryService`. Approve the architecture independently of the final retention period |
 
 ## The three kinds of guarantee
@@ -84,7 +84,18 @@ Invalid, and refused or impossible:
 
 ### Attempt limits
 
-In one transaction, a start finalizes any expired active attempt, counts this student's attempts for the assessment, and checks the policy. Two simultaneous starts can't exceed a limit, because at most one attempt can be in progress: the loser hits `uq_assessment_attempts_active`, and gets the winner's attempt back.
+A start runs in one transaction, in this order:
+
+1. **Take a transaction-scoped advisory lock** on the tenant, assessment and student.
+2. Finalize any expired active attempt.
+3. Count this student's attempts for the assessment, and check the policy.
+4. Insert with `INSERT ... ON CONFLICT DO NOTHING` on the `uq_assessment_attempts_active` partial index. If no row comes back, read the active attempt with a fresh query.
+
+**The lock is what protects the limit, and the unique index alone wouldn't.** Without it, a slow request can count attempts, then wait while a faster one starts and submits. Nothing is in progress any more, so the slow one's insert succeeds on its stale count, and the student exceeds the limit.
+
+`ON CONFLICT` stays as a defence, because a uniqueness violation would leave the PostgreSQL transaction failed, and nothing further could run in it. It also covers any path that inserts without the lock.
+
+SQLite has no advisory locks and no real concurrency, so the lock applies only on PostgreSQL, and only the PostgreSQL gate can prove this.
 
 A retake needs all earlier attempts finalized and `attempts_used` below `max_attempts`. Abandoned attempts count, since starting consumes an attempt. Nothing about a failed or incomplete attempt reduces the count.
 
@@ -130,7 +141,36 @@ The two questions have different answers.
 
 **Until the AI PR is merged, this is at-least-once with possible duplicates, and must be described that way.** The existing best-effort background task stays until then, so nothing is lost or newly duplicated in the meantime.
 
-**Context retained:** the event holds only tenant, user, membership, role, attempt ID and delivery state. It holds no answers, prompts, documents or request data. Observations are computed from the stored result at delivery, as they are today. The worker makes the signed call with the retained membership and role, since it has no student request.
+**Context retained:** the event holds only tenant, user, attempt ID, membership ID for correlation, and delivery state. It holds no role, answers, prompts, documents or request data. Observations are computed from the stored result at delivery, as they are today.
+
+**A stored event is not an authorization.** The AI service trusts the backend's signed context, so it can't catch a stale one. The backend must decide afresh on every delivery attempt, including every retry:
+
+1. Load the user and the membership, by tenant and user, from the database.
+2. Deliver only if the account can authenticate and the membership is active. The signed call uses the **current** role and membership, and the current role must still hold the permission.
+3. Otherwise, **cancel the event**: a terminal state, with a reason and no content. It's never retried.
+
+| Situation | Result |
+|---|---|
+| Membership revoked before delivery | Cancelled, not delivered. Retrying can't bypass this |
+| Revoked after a failed delivery, before the retry | Cancelled at the retry |
+| Role changed | Delivered with the current role, if it still holds the permission. Otherwise cancelled |
+| Account deleted | Attempts and their events are removed by the existing cascade. If an event remains, it's cancelled |
+| Membership later reinstated | The event stays cancelled. Reinstating doesn't send old activity |
+| Finalized after revocation | The attempt is still graded, since the result is the authoritative record. The event is created and then cancelled at dispatch |
+
+**Accepted limit:** one request already in flight can't be recalled, so a revocation committed between the check and the send can let that single delivery through. Holding a lock across an HTTP call isn't worth closing that. No retry follows it, because every retry checks again.
+
+Memory already delivered before a revocation stays under the memory retention policy, which isn't changed by this.
+
+### Deadline clock
+
+Every deadline decision uses **one** source: PostgreSQL. Worker time, request-server time and database time are never mixed.
+
+- Starting sets `started_at` and `expires_at` from the database.
+- Saves, deletes, finalization and the worker's query compare against the database time **read after taking the row lock**, using `clock_timestamp()`. `now()` is wrong here: it's the transaction's start, so a request that waited on the lock would see a time before the wait, and could pass a deadline that had already gone by.
+- The domain's `is_expired(now)` already takes the time as an argument, so the rule itself doesn't change, and the exact instant stays late.
+
+This is a change to #54, made in L3. SQLite tests supply the time from Python, so **only the PostgreSQL gate proves the database clock is used**.
 
 ### Recovery
 
@@ -142,6 +182,7 @@ The two questions have different answers.
 | Student and worker at once | The row lock decides. The loser sees `submitted` and returns it |
 | AI service unavailable | The event stays pending, with bounded backoff. Finalization isn't affected |
 | Acknowledgement lost | Delivered again, and deduplicated once the AI PR is in |
+| Membership revoked while pending | Cancelled at the next delivery attempt, as above |
 
 **The database is the source of truth.** The worker loop only triggers a query for `in_progress` attempts past `expires_at`, using a new partial index. It uses the existing worker process and shutdown behaviour.
 
@@ -198,6 +239,8 @@ Three kinds of record have three separate lifetimes. Deleting one never deletes 
 - **A constant in the source records the gate as closed. While it is, staging and production refuse to start with the setting on.** So an environment or configuration mistake can't open it: opening it takes a reviewed code change, once the gate's conditions are met.
 - Development and testing may turn the setting on for tests. Nothing about that carries to production, since the check looks only at the running environment and the constant.
 
+Inside chat, a closed gate is an expected condition with its own handling, not a generic exception, so it can't fail the chat request.
+
 Acceptance:
 
 1. Production starts with both capabilities off.
@@ -249,7 +292,9 @@ Then M3-A. L0-A and L0-B merge and are verified before any memory integration is
 | Result and feedback | Every combination of `result_visibility` and `feedback_timing`, before and after release, against the precedence table | HTTP |
 | Authorization and isolation | Another student, another tenant, and staff separately | HTTP |
 | Duplicates and retries | Repeat submit, repeat release, repeat delivery | HTTP, AI service |
-| Concurrency | Submit against finalize, simultaneous starts at a limit, save against finalize, two workers | **PostgreSQL gate** |
+| Concurrency | Submit against finalize, save against finalize, two workers. Simultaneous starts get the same attempt, with one row. **A slow start against a fast start-and-submit can't exceed the limit** | **PostgreSQL gate** |
+| Stale authorization | Revocation between event creation and delivery, and between a failed delivery and its retry; role change; account deletion; reinstatement doesn't resend | PostgreSQL gate |
+| Deadline clock | Every deadline path uses the database time, read after the lock | **PostgreSQL gate** |
 | Limits can't be bypassed | Abandoned, expired and failed attempts all count | HTTP |
 | No unauthorized fields | Every student assessment route, at every stage, has no correct answer or explanation | HTTP, drift gate |
 | Recovery | Crash before commit and after commit; AI service down; lost acknowledgement | PostgreSQL gate, boundary gate |
@@ -261,7 +306,7 @@ SQLite can't exercise locks, so concurrency evidence comes only from PostgreSQL.
 
 ## Recorded limits
 
-- **Server clocks:** deadlines use application server time, so differences between servers shift them slightly.
+- **In-flight delivery:** a revocation can't recall a memory delivery already being sent, as above.
 - **Worker delay:** an expired attempt is finalized when the worker reaches it or someone reads it, not at the instant it expires. Its answers are already frozen at the deadline.
 - **Result timing:** a worker outage delays results, but can't change them.
 - **Score leakage**, as above.
