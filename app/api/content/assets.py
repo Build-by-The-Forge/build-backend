@@ -9,6 +9,7 @@ from app.api.content.asset_schemas import (
     ContentAssetResponse,
     ContentAssetRevokeRequest,
 )
+from app.api.content.reader_view import asset_view
 from app.api.content.upload_body import received_upload
 from app.application.content.access import ContentAccessError
 from app.application.content.asset_service import ContentAssetService
@@ -153,7 +154,7 @@ async def get_asset(
             },
         )
 
-    resp_data = ContentAssetResponse.from_domain(asset).model_dump(mode="json")
+    resp_data = asset_view(ContentAssetResponse.from_domain(asset).model_dump(mode="json"), context)
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
 
 
@@ -170,7 +171,7 @@ async def list_source_assets(
         limit=limit,
         offset=offset,
     )
-    items = [ContentAssetResponse.from_domain(a).model_dump(mode="json") for a in assets]
+    items = [asset_view(ContentAssetResponse.from_domain(a).model_dump(mode="json"), context) for a in assets]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -198,7 +199,7 @@ async def list_all_assets(
         limit=limit,
         offset=offset,
     )
-    items = [ContentAssetResponse.from_domain(a).model_dump(mode="json") for a in assets]
+    items = [asset_view(ContentAssetResponse.from_domain(a).model_dump(mode="json"), context) for a in assets]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
