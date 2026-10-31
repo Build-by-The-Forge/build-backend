@@ -141,13 +141,25 @@ The two questions have different answers.
 
 **Until the AI PR is merged, this is at-least-once with possible duplicates, and must be described that way.** The existing best-effort background task stays until then, so nothing is lost or newly duplicated in the meantime.
 
-**Context retained:** the event holds only tenant, user, attempt ID, membership ID for correlation, and delivery state. It holds no role, answers, prompts, documents or request data. Observations are computed from the stored result at delivery, as they are today.
+**Context retained:** the event holds only tenant, user, attempt ID, membership ID and generation, and delivery state. It holds no role, answers, prompts, documents or request data. Observations are computed from the stored result at delivery, as they are today.
 
 **A stored event is not an authorization.** The AI service trusts the backend's signed context, so it can't catch a stale one. The backend must decide afresh on every delivery attempt, including every retry:
 
 1. Load the user and the membership, by tenant and user, from the database.
-2. Deliver only if the account can authenticate and the membership is active. The signed call uses the **current** role and membership, and the current role must still hold the permission.
+2. Deliver only if **all** of these hold:
+   - The event isn't cancelled.
+   - The account can authenticate.
+   - The membership is active.
+   - **The membership's generation equals the one on the event.**
+   - The current role still holds the permission. The signed call uses that current role.
 3. Otherwise, **cancel the event**: a terminal state, with a reason and no content. It's never retried.
+
+Checking only that a membership is active today can't see that it was revoked in between. So revocation leaves two durable marks:
+
+- **A generation.** `memberships.generation` goes up each time a membership is revoked, inside the domain's revoke method, so every path gets it. Reinstating doesn't change it. The event records the generation when it's created.
+- **Cancellation in the same transaction.** Revoking a membership also cancels that membership's pending events, so nothing waits to be noticed. The generation is the backstop for anything this misses.
+
+**An event created while the membership isn't active is created already cancelled.** Otherwise it would record the post-revocation generation, and reinstating would make it match.
 
 | Situation | Result |
 |---|---|
@@ -155,8 +167,10 @@ The two questions have different answers.
 | Revoked after a failed delivery, before the retry | Cancelled at the retry |
 | Role changed | Delivered with the current role, if it still holds the permission. Otherwise cancelled |
 | Account deleted | Attempts and their events are removed by the existing cascade. If an event remains, it's cancelled |
-| Membership later reinstated | The event stays cancelled. Reinstating doesn't send old activity |
-| Finalized after revocation | The attempt is still graded, since the result is the authoritative record. The event is created and then cancelled at dispatch |
+| Account made ineligible | Cancelled at the next delivery. No route suspends and restores an account today. If one is added, it needs the same generation treatment, and L4 records this |
+| Revoked, then reinstated before the dispatcher runs | Cancelled in the revoking transaction. No request reaches the AI service |
+| Reinstated after cancellation | The event stays cancelled. Reinstating doesn't send old activity |
+| Finalized after revocation | The attempt is still graded, since the result is the authoritative record. The event is created already cancelled, so a later reinstatement can't deliver it |
 
 **Accepted limit:** one request already in flight can't be recalled, so a revocation committed between the check and the send can let that single delivery through. Holding a lock across an HTTP call isn't worth closing that. No retry follows it, because every retry checks again.
 
@@ -236,8 +250,21 @@ Three kinds of record have three separate lifetimes. Deleting one never deletes 
 **How the gate is opened:**
 
 - A setting, off by default, in each service. A malformed value fails startup.
-- **A constant in the source records the gate as closed. While it is, staging and production refuse to start with the setting on.** So an environment or configuration mistake can't open it: opening it takes a reviewed code change, once the gate's conditions are met.
-- Development and testing may turn the setting on for tests. Nothing about that carries to production, since the check looks only at the running environment and the constant.
+- **A constant in the source records the gate as closed.** Opening it takes a reviewed code change, once the gate's conditions are met.
+- **A marker baked into the production image.** The Dockerfile's `production` stage writes it at build time, so no runtime configuration can remove it.
+
+The rule, where `requested` is the setting:
+
+```text
+allowed = requested AND (gate constant open
+                         OR (no production marker AND APP_ENVIRONMENT in development, testing))
+```
+
+If `requested` is on and `allowed` is false, startup fails. No runtime endpoint can change any of this.
+
+`APP_ENVIRONMENT` is an ordinary variable, so it can't be the only thing separating test from production: **a production image misconfigured as `development` still refuses**, because of the marker. Tests and local runs have no marker, so they can exercise the enabled behaviour.
+
+**What this doesn't do:** it's a release control, not a replacement for deployment access. Someone who deploys an image built from a non-production stage, or runs the source directly, has no marker. The first deployment must use the `production` stage, and the release record names the image.
 
 Inside chat, a closed gate is an expected condition with its own handling, not a generic exception, so it can't fail the chat request.
 
@@ -245,14 +272,15 @@ Acceptance:
 
 1. Production starts with both capabilities off.
 2. A test sets the setting on in production mode with the gate closed, and startup fails. In both services.
+   **Also run against the built production image with `APP_ENVIRONMENT=development` and the setting on: it must refuse to start.** This belongs in the production-image gate, since only a real image has the marker.
 3. Chat retrieval is blocked independently of reporting: a test with stored memories asserts they're absent from the prompt sent to the model and from `memory_used`.
 4. Stored memories stay unreachable on every path in the table, and on `MemoryService` directly.
 5. Missing or malformed configuration fails closed.
-6. Non-production settings can't establish production authorization.
+6. Non-production settings can't establish production authorization, and no runtime endpoint can override the gate.
 7. A one-time startup log line and a counter show the gate's state. Tests assert no memory content reaches logs.
 8. Assessment submission still succeeds and is graded with the gate closed.
 
-The boundary gate needs updating, since it exercises memory today: it runs in a non-production mode with the setting on, so that coverage stays. The production-startup phase asserts the refusal.
+The boundary gate needs updating, since it exercises memory today. Where it builds the `production` stage, the marker now refuses memory. L0-A must therefore give its memory checks a stage without the marker, without lowering what the rest of the gate tests on the production image. If that can't be done cleanly, L0-A reports it before changing the gate.
 
 **The current memory shape can't meet this gate.** `learning_memory` holds one aggregated row per tenant, user and topic: a running `mastery_score`, `attempts`, and `last_interaction`, stored as a string.
 
@@ -293,7 +321,7 @@ Then M3-A. L0-A and L0-B merge and are verified before any memory integration is
 | Authorization and isolation | Another student, another tenant, and staff separately | HTTP |
 | Duplicates and retries | Repeat submit, repeat release, repeat delivery | HTTP, AI service |
 | Concurrency | Submit against finalize, save against finalize, two workers. Simultaneous starts get the same attempt, with one row. **A slow start against a fast start-and-submit can't exceed the limit** | **PostgreSQL gate** |
-| Stale authorization | Revocation between event creation and delivery, and between a failed delivery and its retry; role change; account deletion; reinstatement doesn't resend | PostgreSQL gate |
+| Stale authorization | Revocation between event creation and delivery, and between a failed delivery and its retry; role change; account deletion. **Event created, membership revoked, reinstated, dispatcher runs: the event stays cancelled and no AI-service request is sent.** The same with the cancellation step removed, so the generation is proven on its own. An attempt finalized during revocation, then reinstated: never delivered | PostgreSQL gate |
 | Deadline clock | Every deadline path uses the database time, read after the lock | **PostgreSQL gate** |
 | Limits can't be bypassed | Abandoned, expired and failed attempts all count | HTTP |
 | No unauthorized fields | Every student assessment route, at every stage, has no correct answer or explanation | HTTP, drift gate |
