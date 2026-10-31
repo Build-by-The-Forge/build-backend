@@ -6,12 +6,17 @@ gap means moving it to `closed` with a test that proves it.
 
 import copy
 import hashlib
+from uuid import uuid4
 
 import pytest
 import yaml
 from sqlalchemy import select
 
+from app.bootstrap.container import sqlalchemy_content_uow
 from app.db.session import SessionLocal
+from app.domain.content.asset import ContentAsset
+from app.domain.content.enums import AuthorityLevel, ContentSourceType, VisibilityScope
+from app.domain.content.source import ContentSource
 from app.infrastructure.db.models.catalogue import TopicModel
 from tests.integration.assessment.test_assessment_visibility import assessment_with_question
 from tests.integration.mobile_contract_audit import (
@@ -76,6 +81,37 @@ def proof_exists(proof: str) -> bool:
     return file.is_file() and f"def {name}(" in file.read_text(encoding="utf-8")
 
 
+async def seeded_content(tenant_id: str) -> tuple[str, str]:
+    """A source and asset of the student's tenant, so what the content routes
+    expose doesn't depend on what other tests left behind."""
+    tag = uuid4().hex[:8]
+    source = ContentSource.create(
+        code=f"DRIFT_{tag.upper()}",
+        name="Drift notes",
+        source_type=ContentSourceType.LECTURER_UPLOAD,
+        authority_level=AuthorityLevel.INSTITUTIONAL,
+        visibility=VisibilityScope.TENANT,
+        created_by="usr-drift",
+        created_by_email="usr-drift@build.internal",
+        tenant_id=tenant_id,
+    )
+    asset = ContentAsset.create(
+        source_id=source.id,
+        tenant_id=tenant_id,
+        file_name="notes.pdf",
+        mime_type="application/pdf",
+        file_size_bytes=1,
+        content_sha256=tag * 8,
+        storage_uri="s3://drift/notes.pdf",
+        created_by="usr-drift",
+        created_by_email="usr-drift@build.internal",
+    )
+    async with sqlalchemy_content_uow() as uow:
+        await uow.sources.save_source(source)
+        await uow.assets.insert_asset(asset)
+    return source.id, asset.id
+
+
 def load_gaps() -> dict:
     return yaml.safe_load(GAPS_PATH.read_text(encoding="utf-8"))
 
@@ -89,8 +125,13 @@ async def test_observed_behaviour_matches_the_gap_allowlist(client):
     questions = client.get(f"/assessment/attempts/{attempt_id}/questions", headers=student).json()["data"]["questions"]
     async with SessionLocal() as session:
         topic_id = await session.scalar(select(TopicModel.id).where(TopicModel.course_id == assessment["course_id"]))
+    tenant_id = client.get("/identity/tenant-context", headers=student).json()["data"]["tenant_id"]
+    source_id, asset_id = await seeded_content(tenant_id)
+    assert client.get(f"/content/assets/{asset_id}", headers=student).status_code == 200
     values = {
         "ids": {
+            "source_id": source_id,
+            "asset_id": asset_id,
             "assessment_id": assessment_id,
             "attempt_id": attempt_id,
             "assessment_question_id": questions[0]["assessment_question_id"],

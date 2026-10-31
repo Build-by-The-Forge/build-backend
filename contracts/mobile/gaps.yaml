@@ -8,7 +8,16 @@ contract_gaps:
   severity: High
   summary: Student-readable content responses expose internals such as storage_uri and created_by_email
   closes_in: M3-D
-  evidence: 'Read from asset_schemas.py and job_schemas.py. Not probed: the audit has no uploaded asset yet.'
+  findings:
+  - exposes_field GET /content/assets/{asset_id} created_by_email
+  - exposes_field GET /content/assets/{asset_id} storage_uri
+  - exposes_field GET /content/assets/{asset_id} tenant_id
+  - exposes_field GET /content/sources created_by_email
+  - exposes_field GET /content/sources tenant_id
+  - exposes_field GET /content/sources trust_policy
+  - exposes_field GET /content/sources/{source_id}/assets created_by_email
+  - exposes_field GET /content/sources/{source_id}/assets storage_uri
+  - exposes_field GET /content/sources/{source_id}/assets tenant_id
 - id: G-07
   severity: Medium
   summary: Clients can set max_attempts and correlation_id when creating a job
@@ -109,6 +118,7 @@ contract_gaps:
   - success_envelope GET /catalogue/courses/{course_id}/topics keys
   - success_envelope GET /catalogue/topics/{topic_id}/learning-outcomes keys
   - success_envelope GET /catalogue/topics/{topic_id}/reference-materials keys
+  - success_envelope GET /content/assets/{asset_id} keys
   - success_envelope GET /content/sources keys
   - success_envelope GET /content/sources/{source_id}/assets keys
   - success_envelope GET /identity/me keys

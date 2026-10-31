@@ -23,7 +23,7 @@
 
 - **Gaps with only `evidence`** aren't machine-checked. They come from reading code or from a decision, and the gate only ensures they stay listed. Each one should gain a finding or a closing test as its work happens.
 - **Response fields in general.** It looks for named internal fields and the envelope. It doesn't validate each response against its schema. That belongs in M3 as routes conform.
-- **Content with real data.** It has no uploaded document yet, so `G-06` isn't observed. Lists come back empty.
+- **Real uploads.** It seeds one source and asset directly, without object storage, so it sees what content reads expose but never exercises upload.
 - **The AI service, PostgreSQL, and real devices.** It uses the test suite's SQLite setup with the AI service absent. M4 and M7 cover the boundaries.
 
 ## M1 decisions
