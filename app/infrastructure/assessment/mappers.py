@@ -8,7 +8,7 @@ from app.domain.assessment.assessment import (
     AssessmentQuestion,
     AssessmentStatus,
 )
-from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
+from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus, FinalizedBy
 from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.attempt_policy import (
     AttemptKind,
@@ -226,6 +226,7 @@ def attempt_to_model(
     model.started_at = attempt.started_at
     model.expires_at = attempt.expires_at
     model.submitted_at = attempt.submitted_at
+    model.finalized_by = attempt.finalized_by.value if attempt.finalized_by else None
     model.created_at = attempt.created_at
     model.updated_at = attempt.updated_at
     return model
@@ -241,6 +242,7 @@ def attempt_model_to_domain(model: AssessmentAttemptModel) -> AssessmentAttempt:
         started_at=model.started_at,
         expires_at=model.expires_at,
         submitted_at=model.submitted_at,
+        finalized_by=FinalizedBy(model.finalized_by) if model.finalized_by else None,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )

@@ -1,4 +1,6 @@
-from sqlalchemy import func, select
+from datetime import datetime, timezone
+
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -267,10 +269,38 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         model = result.first()
         return attempt_model_to_domain(model) if model is not None else None
 
+    def _on_postgresql(self) -> bool:
+        return self._session.get_bind().dialect.name == "postgresql"
+
+    async def database_now(self) -> datetime:
+        # clock_timestamp, not now(): now() is the transaction's start, so a
+        # request that waited on a lock could pass a deadline already gone by.
+        # SQLite tests have one process, so its time is the only clock.
+        if not self._on_postgresql():
+            return datetime.now(timezone.utc)
+        return (await self._session.execute(select(func.clock_timestamp()))).scalar_one()
+
+    async def claim_next_expired(self, excluded_ids: set[str]) -> AssessmentAttempt | None:
+        """The next attempt past its deadline, locked. SKIP LOCKED lets several
+        workers run, and leaves one that a student is finalizing right now."""
+        now = func.clock_timestamp() if self._on_postgresql() else datetime.now(timezone.utc)
+        statement = (
+            select(AssessmentAttemptModel)
+            .where(AssessmentAttemptModel.status == AttemptStatus.IN_PROGRESS.value, AssessmentAttemptModel.expires_at <= now)
+            .order_by(AssessmentAttemptModel.expires_at.asc(), AssessmentAttemptModel.id.asc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+            .execution_options(populate_existing=True)
+        )
+        if excluded_ids:
+            statement = statement.where(AssessmentAttemptModel.id.not_in(excluded_ids))
+        model = (await self._session.scalars(statement)).first()
+        return attempt_model_to_domain(model) if model is not None else None
+
     async def lock_starts(self, assessment_id: str, user_id: str, tenant_id: str) -> None:
         # Until the transaction ends. SQLite has no advisory locks and no real
         # concurrency, so only the PostgreSQL gate can prove what this protects.
-        if self._session.get_bind().dialect.name != "postgresql":
+        if not self._on_postgresql():
             return
         key = f"assessment-start:{tenant_id}:{assessment_id}:{user_id}"
         await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
@@ -302,7 +332,10 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
             .values({column.name: getattr(model, column.name) for column in AssessmentAttemptModel.__table__.columns})
             .on_conflict_do_nothing(
                 index_elements=["tenant_id", "assessment_id", "user_id"],
-                index_where=AssessmentAttemptModel.status == AttemptStatus.IN_PROGRESS.value,
+                # A literal, not a bound parameter: once a pooled connection moves
+                # to a generic plan, PostgreSQL can't match a parameter to the
+                # partial index, and the insert fails.
+                index_where=text("status = 'in_progress'"),
             )
             .returning(AssessmentAttemptModel.id)
         )

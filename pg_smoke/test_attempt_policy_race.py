@@ -21,6 +21,7 @@ from app.application.assessment.attempt_handlers import StartAttemptHandler, Sub
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.db.session import SessionLocal
+from app.domain.assessment.attempt import AssessmentAttempt
 from app.domain.assessment.attempt_policy import AttemptPolicy
 from app.domain.assessment.errors import AttemptPolicyLockedError
 from app.infrastructure.assessment.repositories import SqlAlchemyAssessmentRepository, SqlAlchemyAttemptRepository
@@ -199,6 +200,25 @@ async def test_without_the_lock_on_conflict_still_gives_one_attempt_and_no_error
 
     assert await _attempt_count(assessment_id) == 1
     assert all(attempt is not None for attempt in attempts)
+
+
+async def test_repeated_starts_on_one_connection_keep_working(client):
+    # PostgreSQL moves a prepared statement to a generic plan after five runs,
+    # and a bound partial-index predicate can't be matched there. Pooled
+    # connections reuse statements, so this failed only after some traffic.
+    user_id = await _student(client)
+    tenant_id, assessment_id = await _assessment()
+    async with SessionLocal() as session:
+        attempts = SqlAlchemyAttemptRepository(session)
+        outcomes = [
+            await attempts.insert_unless_active(
+                AssessmentAttempt.start(tenant_id=tenant_id, assessment_id=assessment_id, user_id=user_id, duration_minutes=30)
+            )
+            for _ in range(12)
+        ]
+        await session.commit()
+    assert outcomes == [True] + [False] * 11
+    assert await _attempt_count(assessment_id) == 1
 
 
 @pytest.mark.parametrize(

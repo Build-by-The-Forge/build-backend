@@ -243,11 +243,6 @@ implementation_gaps:
   summary: The OCR evaluation documents have no rights record, and stay out of shared retrieval
   closes_in: Before they enter shared retrieval
   evidence: Reviewer decision at 976c88a.
-- id: G-37
-  severity: High
-  summary: Expired attempts wait for the student to submit
-  closes_in: Assessment lifecycle
-  evidence: 'Accepted interim limitation, recorded on #54.'
 - id: G-38
   severity: High
   summary: Upload creates no job, so durable queuing doesn't exist yet
@@ -266,6 +261,9 @@ closed:
 - id: G-36
   summary: is_correct and awarded_marks were returned as soon as an attempt was submitted
   proof: tests/integration/assessment/test_result_release_api.py::test_feedback_stays_null_until_its_stage
+- id: G-37
+  summary: Expired attempts waited for the student to submit
+  proof: tests/integration/assessment/test_attempt_finalization.py::test_the_worker_finalizes_an_expired_attempt_with_no_client
 - id: G-24
   summary: OpenAPI was only generated with docs on. The gate reads app.openapi(), which doesn't need them
   proof: tests/integration/test_mobile_contract_drift.py::test_observed_behaviour_matches_the_gap_allowlist

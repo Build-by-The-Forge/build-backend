@@ -71,6 +71,8 @@ class Settings(BaseSettings):
     worker_max_in_flight_seconds: int = Field(default=3600, ge=1, le=604800)
     worker_orphan_grace_seconds: int = Field(default=86400, ge=3600, le=31536000)
     worker_orphan_sweep_interval_seconds: int = Field(default=3600, ge=60, le=604800)
+    worker_attempt_finalizer_interval_seconds: int = Field(default=30, ge=1, le=3600)
+    worker_attempt_finalizer_batch: int = Field(default=100, ge=1, le=1000)
     worker_shutdown_grace_seconds: int = Field(default=25, ge=1, le=120)
 
     # Access-token signing (HS256). The current key signs; the previous key,

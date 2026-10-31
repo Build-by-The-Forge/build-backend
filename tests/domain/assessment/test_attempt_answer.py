@@ -54,4 +54,4 @@ def test_attempt_prevents_answer_mutation_after_submission() -> None:
     attempt.submit()
 
     with pytest.raises(AttemptAlreadySubmittedError, match="already submitted"):
-        attempt.ensure_answer_mutation_allowed()
+        attempt.ensure_answer_mutation_allowed(attempt.started_at)

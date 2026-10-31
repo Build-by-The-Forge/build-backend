@@ -19,6 +19,11 @@ class AttemptStatus(StrEnum):
     SUBMITTED = "submitted"
 
 
+class FinalizedBy(StrEnum):
+    STUDENT = "student"
+    DEADLINE = "deadline"
+
+
 @dataclass(slots=True)
 class AssessmentAttempt:
     tenant_id: str
@@ -30,6 +35,7 @@ class AssessmentAttempt:
     attempt_id: str = field(default_factory=lambda: f"attempt-{uuid4()}", repr=False)
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     submitted_at: datetime | None = None
+    finalized_by: FinalizedBy | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     # True only on the call that submitted it, not on a repeat. Not stored.
@@ -54,8 +60,9 @@ class AssessmentAttempt:
         assessment_id: str,
         user_id: str,
         duration_minutes: int,
+        now: datetime | None = None,
     ) -> AssessmentAttempt:
-        started_at = datetime.now(timezone.utc)
+        started_at = now or datetime.now(timezone.utc)
         attempt = cls(
             tenant_id=tenant_id,
             assessment_id=assessment_id,
@@ -80,12 +87,13 @@ class AssessmentAttempt:
     def id(self) -> str:
         return self.attempt_id
 
-    def submit(self) -> None:
+    def submit(self, now: datetime | None = None, finalized_by: FinalizedBy = FinalizedBy.STUDENT) -> None:
         if self.status == AttemptStatus.SUBMITTED:
             raise AttemptAlreadySubmittedError("attempt already submitted")
         self.status = AttemptStatus.SUBMITTED
         self.newly_submitted = True
-        self.submitted_at = datetime.now(timezone.utc)
+        self.submitted_at = now or datetime.now(timezone.utc)
+        self.finalized_by = finalized_by
         self.updated_at = self.submitted_at
         self._events.append(
             DomainEvent(
@@ -99,11 +107,13 @@ class AssessmentAttempt:
             )
         )
 
-    def is_expired(self, now: datetime | None = None) -> bool:
-        """Expired from the deadline itself onwards: the exact instant is late."""
-        return (now or datetime.now(timezone.utc)) >= _as_utc(self.expires_at)
+    def is_expired(self, now: datetime) -> bool:
+        """Expired from the deadline itself onwards: the exact instant is late.
+        The time is required, so one clock decides: the database's, read after
+        the row lock (AttemptRepository.database_now)."""
+        return _as_utc(now) >= _as_utc(self.expires_at)
 
-    def ensure_answer_mutation_allowed(self, now: datetime | None = None) -> None:
+    def ensure_answer_mutation_allowed(self, now: datetime) -> None:
         if self.status == AttemptStatus.SUBMITTED:
             raise AttemptAlreadySubmittedError("attempt already submitted")
         if self.is_expired(now):

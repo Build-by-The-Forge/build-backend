@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 
 from app.domain.assessment.attempt import AssessmentAttempt
@@ -30,6 +31,13 @@ class AttemptRepository(Protocol):
         user_id: str,
         tenant_id: str,
     ) -> AssessmentAttempt | None:
+        raise NotImplementedError
+
+    async def database_now(self) -> datetime:
+        """The one clock for deadlines. Read it after taking the row lock."""
+        raise NotImplementedError
+
+    async def claim_next_expired(self, excluded_ids: set[str]) -> AssessmentAttempt | None:
         raise NotImplementedError
 
     async def lock_starts(self, assessment_id: str, user_id: str, tenant_id: str) -> None:
