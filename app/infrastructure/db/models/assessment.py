@@ -263,6 +263,17 @@ class AttemptAnswerModel(Base):
     )
 
 
+class AssessmentResultReleaseModel(Base):
+    __tablename__ = "assessment_result_releases"
+
+    assessment_id: Mapped[str] = mapped_column(String(255), ForeignKey("assessments.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(255), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    released_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    released_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("ix_assessment_result_releases_tenant_id", "tenant_id"),)
+
+
 class AssessmentAttemptResultModel(Base):
     __tablename__ = "assessment_attempt_results"
 

@@ -44,6 +44,13 @@ class PublishAssessmentCommand:
 
 
 @dataclass(slots=True)
+class ReleaseResultsCommand:
+    assessment_id: str
+    tenant_id: str
+    released_by: str
+
+
+@dataclass(slots=True)
 class AddQuestionToAssessmentCommand:
     assessment_id: str
     question_id: str

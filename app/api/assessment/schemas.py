@@ -204,9 +204,9 @@ class AttemptAnswersResponse(BaseModel):
 class QuestionResultResponse(BaseModel):
     assessment_question_id: str
     selected_option_index: int | None
-    awarded_marks: int
+    awarded_marks: int | None
     max_marks: int
-    is_correct: bool
+    is_correct: bool | None
 
 
 class AttemptResultResponse(BaseModel):
@@ -231,6 +231,7 @@ class AssessmentAttemptResultSummaryResponse(BaseModel):
     percentage: float
     passed: bool
     graded_at: str
+    stands: bool
 
 
 class AssessmentResultsResponse(BaseModel):

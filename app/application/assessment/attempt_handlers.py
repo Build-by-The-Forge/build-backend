@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from app.application.assessment.attempt_commands import (
     AttemptQuestionSnapshot,
     GetAttemptCommand,
@@ -9,13 +11,21 @@ from app.application.assessment.attempt_commands import (
 )
 from app.domain.assessment.assessment import AssessmentStatus
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
+from app.domain.assessment.errors import ResultNotReleasedError
 from app.domain.assessment.result import AttemptResult
+from app.domain.assessment.result_disclosure import disclose
 from app.domain.assessment.scoring import AssessmentScorer
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
-from app.domain.repositories.attempt_result import AttemptResultRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository, ResultReleaseRepository
 from app.events.base import DomainEvent
+
+
+@dataclass(frozen=True, slots=True)
+class ReadableResult:
+    result: AttemptResult
+    feedback_shown: bool
 
 
 async def finalize_attempt(
@@ -203,11 +213,15 @@ class GetAttemptResultHandler:
         self,
         attempts: AttemptRepository,
         results: AttemptResultRepository,
+        assessments: AssessmentRepository,
+        releases: ResultReleaseRepository,
     ) -> None:
         self.attempts = attempts
         self.results = results
+        self.assessments = assessments
+        self.releases = releases
 
-    async def handle(self, command: GetAttemptResultCommand) -> AttemptResult | None:
+    async def handle(self, command: GetAttemptResultCommand) -> ReadableResult | None:
         attempt = await self.attempts.get_by_id(
             command.attempt_id,
             tenant_id=command.tenant_id,
@@ -217,4 +231,26 @@ class GetAttemptResultHandler:
             return None
         if attempt.status != AttemptStatus.SUBMITTED:
             raise ValueError("attempt is not submitted")
-        return await self.results.get_by_attempt_id(command.attempt_id, tenant_id=command.tenant_id)
+
+        result = await self.results.get_by_attempt_id(command.attempt_id, tenant_id=command.tenant_id)
+        if result is None:
+            return None
+        if command.is_staff:
+            return ReadableResult(result, feedback_shown=True)
+
+        assessment = await self.assessments.get_by_id(attempt.assessment_id, tenant_id=command.tenant_id)
+        if assessment is None:
+            return None
+        released = await self.releases.get(attempt.assessment_id, command.tenant_id)
+        used = await self.attempts.count_for_user(attempt.assessment_id, attempt.user_id, command.tenant_id)
+        active = await self.attempts.get_active_for_user(attempt.assessment_id, attempt.user_id, command.tenant_id)
+        disclosure = disclose(
+            assessment.attempt_policy,
+            finalized=True,
+            released=released is not None,
+            attempts_used=used,
+            all_finalized=active is None,
+        )
+        if not disclosure.result_visible:
+            raise ResultNotReleasedError("RESULT_NOT_RELEASED")
+        return ReadableResult(result, feedback_shown=disclosure.feedback_shown)

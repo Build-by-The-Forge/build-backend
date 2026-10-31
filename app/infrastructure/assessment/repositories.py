@@ -9,10 +9,12 @@ from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.question import Question
 from app.domain.assessment.result import AttemptResult
+from app.domain.assessment.result_disclosure import AttemptOutcome
+from app.domain.assessment.result_release import ResultRelease
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
-from app.domain.repositories.attempt_result import AttemptResultRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository, ResultReleaseRepository
 from app.domain.repositories.question import QuestionRepository
 from app.infrastructure.assessment.mappers import (
     assessment_model_to_domain,
@@ -32,6 +34,7 @@ from app.infrastructure.db.models.assessment import (
     AssessmentAttemptResultModel,
     AssessmentModel,
     AssessmentQuestionModel,
+    AssessmentResultReleaseModel,
     AttemptAnswerModel,
     QuestionModel,
 )
@@ -384,9 +387,60 @@ class SqlAlchemyAttemptAnswerRepository(AttemptAnswerRepository):
             await self._session.flush()
 
 
+class SqlAlchemyResultReleaseRepository(ResultReleaseRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def get(self, assessment_id: str, tenant_id: str) -> ResultRelease | None:
+        statement = (
+            select(AssessmentResultReleaseModel)
+            .where(
+                AssessmentResultReleaseModel.assessment_id == assessment_id, AssessmentResultReleaseModel.tenant_id == tenant_id
+            )
+            .execution_options(populate_existing=True)
+        )
+        model = (await self._session.scalars(statement)).first()
+        if model is None:
+            return None
+        return ResultRelease(model.assessment_id, model.tenant_id, model.released_by, model.released_at)
+
+    async def insert_if_absent(self, release: ResultRelease) -> bool:
+        insert = postgresql_insert if self._session.get_bind().dialect.name == "postgresql" else sqlite_insert
+        statement = (
+            insert(AssessmentResultReleaseModel)
+            .values(
+                assessment_id=release.assessment_id,
+                tenant_id=release.tenant_id,
+                released_by=release.released_by,
+                released_at=release.released_at,
+            )
+            .on_conflict_do_nothing(index_elements=["assessment_id"])
+            .returning(AssessmentResultReleaseModel.assessment_id)
+        )
+        return (await self._session.execute(statement)).first() is not None
+
+
 class SqlAlchemyAttemptResultRepository(AttemptResultRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def list_outcomes(self, assessment_id: str, tenant_id: str) -> list[AttemptOutcome]:
+        statement = (
+            select(
+                AssessmentAttemptModel.id,
+                AssessmentAttemptModel.user_id,
+                AssessmentAttemptResultModel.total_score,
+                AssessmentAttemptModel.started_at,
+                AssessmentAttemptModel.submitted_at,
+            )
+            .join(AssessmentAttemptResultModel, AssessmentAttemptResultModel.attempt_id == AssessmentAttemptModel.id)
+            .where(
+                AssessmentAttemptModel.assessment_id == assessment_id,
+                AssessmentAttemptModel.tenant_id == tenant_id,
+                AssessmentAttemptModel.status == AttemptStatus.SUBMITTED.value,
+            )
+        )
+        return [AttemptOutcome(*row) for row in (await self._session.execute(statement)).all()]
 
     async def get_by_attempt_id(self, attempt_id: str, tenant_id: str) -> AttemptResult | None:
         statement = select(AssessmentAttemptResultModel).where(
