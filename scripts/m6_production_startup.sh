@@ -26,6 +26,7 @@ BACKEND_PROD=(
   -e BACKEND_TO_AI_SECRET="$B2A"
   -e AI_TO_BACKEND_SECRET="$A2B"
   -e AUTH_RATE_LIMIT_FAILURE_MODE=closed
+  -e LEARNING_MEMORY_ENABLED=false
 )
 AI_PROD=(
   -e APP_ENVIRONMENT=production
@@ -127,6 +128,8 @@ main() {
     "${BACKEND_PROD[@]}" -e BACKEND_TO_AI_SECRET="$KNOWN_DEV_SECRET"
   check_refusal "backend: wildcard CORS" backend "CORS_ALLOWED_ORIGINS must list exact origins" \
     "${BACKEND_PROD[@]}" -e CORS_ALLOWED_ORIGINS='*'
+  check_refusal "backend: learning memory requested" backend "LEARNING_MEMORY_ENABLED is refused" \
+    "${BACKEND_PROD[@]}" -e LEARNING_MEMORY_ENABLED=true
   # Absent, not empty: ai-service treats an empty value as present (and short).
   check_refusal "ai-service: missing secret" ai-service "BACKEND_TO_AI_SECRET is required" \
     --unset BACKEND_TO_AI_SECRET "${AI_PROD[@]}"
@@ -136,6 +139,8 @@ main() {
     "${AI_PROD[@]}" -e BACKEND_CALLBACK_URL=http://backend:8000/content/ingestion/callbacks
   check_refusal "ai-service: deterministic model" ai-service "MODEL_PROVIDER=deterministic is refused" \
     "${AI_PROD[@]}" -e MODEL_PROVIDER=deterministic
+  check_refusal "ai-service: learning memory requested" ai-service "LEARNING_MEMORY_ENABLED is refused" \
+    "${AI_PROD[@]}" -e LEARNING_MEMORY_ENABLED=true
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

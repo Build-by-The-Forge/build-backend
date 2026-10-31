@@ -20,6 +20,16 @@ def pytest_configure(config):
 
 
 @pytest.fixture(autouse=True)
+def learning_memory_enabled(monkeypatch):
+    """Tests run with memory on, as development can; tests of the closed gate
+    turn it off themselves. On the settings object, not the environment, so a
+    test building its own Settings still starts from the default (off)."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "learning_memory_enabled", True)
+
+
+@pytest.fixture(autouse=True)
 def reset_auth_rate_limits():
     """Each test starts with fresh auth rate-limit counters."""
     from app.api import identity as identity_api

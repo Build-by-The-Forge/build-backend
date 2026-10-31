@@ -21,8 +21,10 @@ name: build-m3
 x-backend-image: &backend-build
   context: ..
   dockerfile: Dockerfile
-  # Runtime only: no test tooling, tests or development files.
-  target: production
+  # Runtime only: no test tooling, tests or development files. The stage
+  # without the production marker, so this development topology can exercise
+  # learning memory. The Production image CI job checks the real stage.
+  target: runtime
   # The source revision, recorded by scripts/m3_boundary_gate.sh; the gate
   # refuses to test an image whose label differs from its checkout.
   labels:
@@ -238,6 +240,7 @@ services:
       AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
       AUTH_RATE_LIMIT_FAILURE_MODE: closed
       EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
+      LEARNING_MEMORY_ENABLED: "true"
       # The backend's storage identity (read, write, list on the bucket).
       # Configured now; the upload endpoint (P3-1 PR 2) is its first user.
       OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333

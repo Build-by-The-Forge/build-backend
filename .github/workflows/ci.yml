@@ -158,6 +158,10 @@ jobs:
           docker build --target production
           --label org.opencontainers.image.revision=${{ github.sha }}
           -t build-backend:ci .
+      - name: Build the runtime stage
+        run: docker build --target runtime -t build-backend-runtime:ci .
+      - name: Learning-memory gate (scripts/check_memory_gate_image.sh)
+        run: scripts/check_memory_gate_image.sh build-backend:ci build-backend-runtime:ci
       - name: Contents and user (scripts/check_backend_image.sh)
         run: scripts/check_backend_image.sh build-backend:ci
       - name: Python packages in the image

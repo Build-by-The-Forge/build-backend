@@ -135,6 +135,7 @@ async def my_memory(
         raise AppError("invalid topic", status_code=422)
     await throttle.ai_request(context.user_id)
     try:
+        # A closed gate raises here, before anything is sent: 503.
         items = await gateway.query_memory(_actor(request, context, Permission.AI_USE), topic)
     except AIAssistantError as exc:
         raise _failed(exc) from exc

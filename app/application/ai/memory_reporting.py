@@ -12,6 +12,8 @@ import logging
 from typing import Protocol
 
 from app.core.authorization import Permission
+from app.core.config import settings
+from app.core.metrics import learning_memory_refusals_total
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIActor, AIAssistantError, AIAssistantGateway, MemoryObservation
 
@@ -36,6 +38,11 @@ class LearningMemoryReporter:
         correlation_id: str,
     ) -> int:
         """Send the attempt's observations; returns how many were reported."""
+        # Before reading the outcomes: with the gate closed, nothing is prepared
+        # or sent, and the committed submission is unaffected.
+        if not settings.learning_memory_allowed:
+            learning_memory_refusals_total.labels(operation="write").inc()
+            return 0
         try:
             observations = await self._outcomes.outcomes(context.tenant_id, attempt_id, context.user_id)
             if not observations:

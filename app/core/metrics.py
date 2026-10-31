@@ -16,6 +16,18 @@ errors_total = Counter(
 # An uploaded object whose compensating delete failed after its asset row
 # could not be committed (P3-1 PR 2, docs/p3-1-pr2-upload-design.md, section
 # 6). Each one is an orphan until P3-6's reconciliation removes it.
+learning_memory_enabled = Gauge(
+    "build_backend_learning_memory_enabled",
+    "1 when learning memory is enabled in this process, 0 when the gate keeps it off",
+    registry=registry,
+)
+learning_memory_refusals_total = Counter(
+    "build_backend_learning_memory_refusals_total",
+    "Learning-memory reads and writes the production gate stopped before sending",
+    ["operation"],
+    registry=registry,
+)
+
 content_upload_orphaned_objects_total = Counter(
     "build_backend_content_upload_orphaned_objects_total",
     "Uploaded objects left without an asset row because compensation failed",

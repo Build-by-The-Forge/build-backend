@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 from pydantic import Field, SecretStr, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.learning_memory_gate import memory_allowed
+
 # Environments where a missing or weak signing key must stop startup.
 STRICT_ENVIRONMENTS = frozenset({"staging", "production"})
 MIN_JWT_SECRET_BYTES = 32
@@ -93,6 +95,10 @@ class Settings(BaseSettings):
     # Development only: also append outgoing email (with its one-time codes)
     # to this JSONL file. Ignored in staging/production.
     email_outbox_path: str | None = Field(default=None)
+    # Learning memory, reads and writes (app/core/learning_memory_gate.py).
+    # Refused at startup while the production gate is closed, except in
+    # development and testing outside the production image.
+    learning_memory_enabled: bool = Field(default=False)
     # Largest request body any route accepts (413 above it). JSON only today:
     # asset bytes never pass through the API.
     max_request_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=100 * 1024 * 1024)
@@ -187,6 +193,15 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def validate_learning_memory(self) -> "Settings":
+        if self.learning_memory_enabled and not self.learning_memory_allowed:
+            raise ValueError(
+                "LEARNING_MEMORY_ENABLED is refused while the learning-memory production "
+                f"gate is closed (app_environment is {self.app_environment!r})"
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_service_boundary(self) -> "Settings":
         strict = self.app_environment in STRICT_ENVIRONMENTS
         if not self.ai_service_url:
@@ -264,6 +279,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def learning_memory_allowed(self) -> bool:
+        return memory_allowed(self.learning_memory_enabled, self.app_environment)
 
     @property
     def docs_enabled(self) -> bool:

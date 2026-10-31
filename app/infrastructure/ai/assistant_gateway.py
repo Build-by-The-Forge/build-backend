@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+from app.core.metrics import learning_memory_refusals_total
 from app.domain.ai.assistant import (
     AIActor,
     AIAssistantError,
@@ -96,10 +97,12 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         return GeneratedQuestions(questions=accepted, discarded=discarded)
 
     async def query_memory(self, actor: AIActor, topics: list[str] | None = None) -> list[MemoryItem]:
+        _require_gate_open("read")
         payload: dict[str, Any] = {} if topics is None else {"topics": topics}
         return _memory_items(await self._post("/v1/ai/memory/query", payload, actor))
 
     async def record_memory(self, actor: AIActor, observations: list[MemoryObservation]) -> list[MemoryItem]:
+        _require_gate_open("write")
         payload = {"observations": [{"topic": o.topic, "correct": o.correct} for o in observations]}
         return _memory_items(await self._post("/v1/ai/memory/upsert", payload, actor))
 
@@ -169,6 +172,17 @@ def _bad_response(operation: str) -> AIAssistantError:
         f"AI-service returned an unreadable {operation} response",
         error_code="AI_SERVICE_BAD_RESPONSE",
     )
+
+
+def _require_gate_open(operation: str) -> None:
+    # The last point before a request leaves: every memory call passes here.
+    if not settings.learning_memory_allowed:
+        learning_memory_refusals_total.labels(operation=operation).inc()
+        raise AIAssistantError(
+            "learning memory is disabled by the production gate",
+            error_code="LEARNING_MEMORY_DISABLED",
+            unavailable=True,
+        )
 
 
 def _memory_items(data: dict[str, Any]) -> list[MemoryItem]:
