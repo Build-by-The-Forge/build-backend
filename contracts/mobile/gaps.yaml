@@ -1,0 +1,296 @@
+# Differences between contracts/mobile/openapi.yaml and the backend, enforced by
+# tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
+# running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
+# move it to `closed` with a test that proves it. See contracts/mobile/README.md.
+contract_sha256: 0ad04cac02ac70f5511ba09b0808ff9549371e893533772f2dad374fee46eae5
+contract_gaps:
+- id: G-06
+  severity: High
+  summary: Student-readable content responses expose internals such as storage_uri and created_by_email
+  closes_in: M3-D
+  evidence: 'Read from asset_schemas.py and job_schemas.py. Not probed: the audit has no uploaded asset yet.'
+- id: G-07
+  severity: Medium
+  summary: Clients can set max_attempts and correlation_id when creating a job
+  closes_in: M3-D
+  evidence: Read from job_schemas.py.
+- id: G-10
+  severity: Medium
+  summary: Catalogue, assessment and attempt lists aren't paginated, and the course list needs a trailing slash
+  closes_in: M3-C, M3-E
+  findings:
+  - missing_query_parameter GET /assessment/assessments limit
+  - missing_query_parameter GET /assessment/assessments offset
+  - missing_query_parameter GET /assessment/attempts limit
+  - missing_query_parameter GET /assessment/attempts offset
+  - missing_query_parameter GET /catalogue/courses limit
+  - missing_query_parameter GET /catalogue/courses offset
+  - missing_query_parameter GET /catalogue/courses/{course_id}/topics limit
+  - missing_query_parameter GET /catalogue/courses/{course_id}/topics offset
+  - missing_query_parameter GET /catalogue/topics/{topic_id}/learning-outcomes limit
+  - missing_query_parameter GET /catalogue/topics/{topic_id}/learning-outcomes offset
+  - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials limit
+  - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials offset
+  - trailing_slash GET /catalogue/courses
+- id: G-14
+  severity: Medium
+  summary: Identity bodies are untyped, so the contract can't describe them
+  closes_in: M3-B
+  findings:
+  - untyped_body POST /identity/authenticate
+  - untyped_body POST /identity/change-password
+  - untyped_body POST /identity/forgot-password
+  - untyped_body POST /identity/refresh
+  - untyped_body POST /identity/resend-verification
+  - untyped_body POST /identity/reset-password
+  - untyped_body POST /identity/users
+  - untyped_body POST /identity/verify-email
+  - untyped_body POST /invitations/accept
+- id: G-16
+  severity: Medium
+  summary: Result policy is defined by the contract and not yet served; enforced with G-36
+  closes_in: Assessment lifecycle
+  evidence: Contract decision. Behaviour tracked by G-36.
+- id: G-18
+  severity: Medium
+  summary: Chat returns raw context passages, including uncited ones
+  closes_in: M3-F
+  evidence: 'Read from app/api/ai.py. Not probed: the mobile contract has no such route.'
+- id: G-19
+  severity: Low
+  summary: No way to limit a question to one document. Deferred by the reviewer
+  closes_in: Deferred
+  evidence: Reviewer decision at 976c88a.
+- id: G-20
+  severity: High
+  summary: Mobile routes don't return the contract's envelopes or stable error codes
+  closes_in: M3-A
+  findings:
+  - error_envelope DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
+  - error_envelope GET /assessment/assessments keys
+  - error_envelope GET /assessment/assessments/{assessment_id} keys
+  - error_envelope GET /assessment/attempts keys
+  - error_envelope GET /assessment/attempts/{attempt_id} keys
+  - error_envelope GET /assessment/attempts/{attempt_id}/answers keys
+  - error_envelope GET /assessment/attempts/{attempt_id}/questions keys
+  - error_envelope GET /assessment/attempts/{attempt_id}/result keys
+  - error_envelope GET /catalogue/courses keys
+  - error_envelope GET /catalogue/courses/{course_id} keys
+  - error_envelope GET /catalogue/courses/{course_id}/topics keys
+  - error_envelope GET /catalogue/topics/{topic_id}/learning-outcomes keys
+  - error_envelope GET /catalogue/topics/{topic_id}/reference-materials keys
+  - error_envelope GET /content/assets/{asset_id} keys
+  - error_envelope GET /content/sources keys
+  - error_envelope GET /content/sources/{source_id}/assets keys
+  - error_envelope GET /identity/me keys
+  - error_envelope GET /identity/memberships keys
+  - error_envelope POST /assessment/assessments/{assessment_id}/attempts keys
+  - error_envelope POST /assessment/attempts/{attempt_id}/submit keys
+  - error_envelope POST /identity/authenticate keys
+  - error_envelope POST /identity/forgot-password keys
+  - error_envelope POST /identity/refresh keys
+  - error_envelope POST /identity/resend-verification keys
+  - error_envelope POST /identity/reset-password keys
+  - error_envelope POST /identity/users keys
+  - error_envelope POST /identity/verify-email keys
+  - error_envelope POST /invitations/accept keys
+  - error_envelope POST /tenants/{slug}/join keys
+  - error_envelope PUT /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
+  - success_envelope DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
+  - success_envelope GET /assessment/assessments keys
+  - success_envelope GET /assessment/assessments/{assessment_id} keys
+  - success_envelope GET /assessment/attempts keys
+  - success_envelope GET /assessment/attempts/{attempt_id} keys
+  - success_envelope GET /assessment/attempts/{attempt_id}/answers keys
+  - success_envelope GET /assessment/attempts/{attempt_id}/questions keys
+  - success_envelope GET /assessment/attempts/{attempt_id}/result keys
+  - success_envelope GET /catalogue/courses keys
+  - success_envelope GET /catalogue/courses/{course_id} keys
+  - success_envelope GET /catalogue/courses/{course_id}/topics keys
+  - success_envelope GET /catalogue/topics/{topic_id}/learning-outcomes keys
+  - success_envelope GET /catalogue/topics/{topic_id}/reference-materials keys
+  - success_envelope GET /content/sources keys
+  - success_envelope GET /content/sources/{source_id}/assets keys
+  - success_envelope GET /identity/me keys
+  - success_envelope GET /identity/memberships keys
+  - success_envelope POST /assessment/assessments/{assessment_id}/attempts keys
+  - success_envelope POST /assessment/attempts/{attempt_id}/submit keys
+  - success_envelope PUT /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
+- id: G-21
+  severity: Medium
+  summary: Validation errors echo the submitted value
+  closes_in: M3-A
+  findings:
+  - echoes_input POST /identity/users
+- id: G-22
+  severity: Low
+  summary: X-Request-ID is accepted with no format or length check
+  closes_in: M3-A
+  findings:
+  - request_id_unvalidated GET /health/live
+- id: G-23
+  severity: Low
+  summary: Asset ordering has no unique tie-breaker
+  closes_in: M3-D
+  evidence: Read from asset_repositories.py.
+- id: G-28
+  severity: Low
+  summary: No record of a student's programme or department
+  closes_in: Later phase
+  evidence: Read from app/api/catalogue/courses.py.
+- id: G-39
+  severity: Low
+  summary: Responses carry tenant_id and user_id that the contract doesn't
+  closes_in: M3-E, M3-B
+  findings:
+  - exposes_field GET /assessment/assessments tenant_id
+  - exposes_field GET /assessment/assessments/{assessment_id} tenant_id
+  - exposes_field GET /assessment/attempts tenant_id
+  - exposes_field GET /assessment/attempts user_id
+  - exposes_field GET /assessment/attempts/{attempt_id} tenant_id
+  - exposes_field GET /assessment/attempts/{attempt_id} user_id
+  - exposes_field GET /assessment/attempts/{attempt_id}/result tenant_id
+  - exposes_field GET /assessment/attempts/{attempt_id}/result user_id
+  - exposes_field GET /identity/memberships tenant_id
+  - exposes_field POST /assessment/assessments/{assessment_id}/attempts tenant_id
+  - exposes_field POST /assessment/assessments/{assessment_id}/attempts user_id
+  - exposes_field POST /assessment/attempts/{attempt_id}/submit tenant_id
+  - exposes_field POST /assessment/attempts/{attempt_id}/submit user_id
+implementation_gaps:
+- id: G-01
+  severity: Blocker
+  summary: Students can't upload or start ingestion
+  closes_in: M3-D
+  findings:
+  - missing_route GET /content/my-documents
+  - missing_route GET /content/my-documents/{asset_id}
+  - missing_route POST /content/my-documents
+- id: G-02
+  severity: Blocker
+  summary: Upload needs a source, and students can't create one
+  closes_in: M3-D
+  evidence: Read from app/core/authorization.py and content routes. Replaced by the personal source behind POST
+    /content/my-documents.
+- id: G-04
+  severity: High
+  summary: Chat drops the citations and grounded flag the AI service returns
+  closes_in: M3-F, M4
+  evidence: Read from assistant_gateway.py. Needs the AI service to probe.
+- id: G-05
+  severity: High
+  summary: Retrieval isn't limited to ready documents or to what this user may read
+  closes_in: M4
+  evidence: Phase 3 release record; ai-service retrieval.py.
+- id: G-08
+  severity: Medium
+  summary: The course list catches every exception and returns its text
+  closes_in: M3-A
+  evidence: Read from app/api/catalogue/courses.py.
+- id: G-09
+  severity: Medium
+  summary: No read routes for faculties, departments or programmes
+  closes_in: M3-C
+  findings:
+  - missing_route GET /catalogue/departments
+  - missing_route GET /catalogue/faculties
+  - missing_route GET /catalogue/programmes
+- id: G-11
+  severity: Medium
+  summary: The 60-second read limit makes large uploads fail on slower connections
+  closes_in: M3-D
+  evidence: 'Calculated: 25 MiB in 60 s needs 3.5 Mbit/s. Measured in M3-D.'
+- id: G-12
+  severity: Medium
+  summary: Retry available has no student action
+  closes_in: M3-D
+  findings:
+  - missing_route POST /content/my-documents/{asset_id}/retry
+- id: G-13
+  severity: Medium
+  summary: No route returns a document to a student
+  closes_in: M3-D
+  findings:
+  - missing_route GET /content/assets/{asset_id}/content
+- id: G-17
+  severity: Medium
+  summary: No conversations
+  closes_in: M3-F
+  findings:
+  - missing_route DELETE /ai/conversations/{conversation_id}
+  - missing_route GET /ai/conversations
+  - missing_route GET /ai/conversations/{conversation_id}
+  - missing_route GET /ai/conversations/{conversation_id}/messages
+  - missing_route POST /ai/conversations
+  - missing_route POST /ai/conversations/{conversation_id}/messages
+- id: G-25
+  severity: High
+  summary: Tenant-wide duplicate detection would disclose another student's upload
+  closes_in: M3-D
+  evidence: Read from uq_content_assets_tenant_hash and _receive_upload.
+- id: G-26
+  severity: Low
+  summary: 'No way to discover a tenant slug. Accepted: FUTA is app configuration'
+  closes_in: M6
+  evidence: Reviewer decision at 976c88a.
+- id: G-29
+  severity: Medium
+  summary: Assessments have no attempt policy, and a new attempt can start straight after submitting
+  closes_in: Assessment lifecycle
+  evidence: Reproduced over HTTP at 0ef0ba8. Not a machine check until the policy exists.
+- id: G-30
+  severity: High
+  summary: Content sources record no rights basis, audience or redistribution limits
+  closes_in: M3-D
+  evidence: Read from app/infrastructure/db/models/content.py.
+- id: G-31
+  severity: High
+  summary: Knowledge scope isn't modelled
+  closes_in: M3-D, M4
+  evidence: Read from content models and ai-service retrieval.py.
+- id: G-32
+  severity: Medium
+  summary: Students can't delete a document, and handling of derived data isn't defined
+  closes_in: M3-D
+  findings:
+  - missing_route DELETE /content/my-documents/{asset_id}
+- id: G-33
+  severity: High, release gate
+  summary: Whether a model provider may train on retrieved passages hasn't been checked
+  closes_in: Before any production provider receives content
+  evidence: Governance. Provider terms not reviewed.
+- id: G-34
+  severity: Medium
+  summary: The OCR evaluation documents have no rights record, and stay out of shared retrieval
+  closes_in: Before they enter shared retrieval
+  evidence: Reviewer decision at 976c88a.
+- id: G-36
+  severity: High
+  summary: is_correct and awarded_marks are returned as soon as an attempt is submitted
+  closes_in: Assessment lifecycle
+  evidence: Accepted interim limitation. Read from get_attempt_result.
+- id: G-37
+  severity: High
+  summary: Expired attempts wait for the student to submit
+  closes_in: Assessment lifecycle
+  evidence: 'Accepted interim limitation, recorded on #54.'
+- id: G-38
+  severity: High
+  summary: Upload creates no job, so durable queuing doesn't exist yet
+  closes_in: M3-D
+  evidence: Read from app/application/content/upload.py.
+closed:
+- id: G-03
+  summary: Students could read draft assessments
+  proof: tests/integration/assessment/test_assessment_visibility.py::test_a_draft_by_direct_id_looks_like_it_does_not_exist
+- id: G-15
+  summary: A repeated submit answered 409
+  proof: tests/integration/assessment/test_attempt_deadline.py::test_a_repeated_submit_returns_the_submitted_attempt_and_never_grades_again
+- id: G-24
+  summary: OpenAPI was only generated with docs on. The gate reads app.openapi(), which doesn't need them
+  proof: tests/integration/test_mobile_contract_drift.py::test_observed_behaviour_matches_the_gap_allowlist
+- id: G-27
+  summary: Assessment time limits weren't enforced
+  proof: tests/integration/assessment/test_attempt_deadline.py::test_after_the_deadline_an_answer_cannot_be_saved_or_removed
+- id: G-35
+  summary: Students could read the answer key during an attempt
+  proof: tests/integration/assessment/test_assessment_visibility.py::test_a_student_cannot_read_the_answer_key_during_an_attempt
