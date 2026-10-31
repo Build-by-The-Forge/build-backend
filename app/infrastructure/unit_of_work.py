@@ -4,6 +4,7 @@ from types import TracebackType
 from typing import Self
 
 import structlog
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
@@ -24,6 +25,10 @@ class UnitOfWork:
     ) -> None:
         if exc_type is not None:
             status_code = getattr(exc_value, "status_code", None)
+            if isinstance(exc_value, RequestValidationError):
+                # It reaches here when a body fails after a dependency opened
+                # this unit of work. Its text holds the refused value.
+                status_code = 422
             if isinstance(status_code, int) and status_code < 500:
                 # An expected client error (bad credentials, not found, ...):
                 # routine, so not an ERROR, and its message is not logged.

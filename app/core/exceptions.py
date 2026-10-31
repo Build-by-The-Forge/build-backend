@@ -56,6 +56,11 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
     )
 
 
+def _safe_details(exc: RequestValidationError) -> list[dict[str, object]]:
+    """Where and why, never the refused value: it may be a password."""
+    return [{"type": e["type"], "loc": e["loc"], "msg": e["msg"]} for e in exc.errors()]
+
+
 async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, RequestValidationError):
         raise TypeError("expected RequestValidationError")
@@ -71,7 +76,7 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
         content={
             "success": False,
             "data": {},
-            "meta": {"error": "validation failed", "details": exc.errors()},
+            "meta": {"error": "validation failed", "details": _safe_details(exc)},
             **({"request_id": request_id} if request_id is not None else {}),
         },
     )
