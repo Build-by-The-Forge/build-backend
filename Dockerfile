@@ -59,5 +59,16 @@ COPY boundary ./boundary
 USER 10001:10001
 
 
-# The default (last) stage: a plain `docker build .` gives the runtime image.
+# The default (last) stage, and what production runs: the runtime image plus a
+# marker that makes the service refuse learning memory while the production
+# gate is closed, whatever APP_ENVIRONMENT says (app/core/learning_memory_gate.py).
+# A file, since an ENV could be overridden at runtime. Only the boundary gate's
+# development topology builds --target runtime, to exercise memory.
 FROM runtime AS production
+
+USER root
+
+RUN install -d -m 0755 /opt/build-backend && touch /opt/build-backend/production-image \
+    && chmod 0444 /opt/build-backend/production-image
+
+USER 10001:10001
