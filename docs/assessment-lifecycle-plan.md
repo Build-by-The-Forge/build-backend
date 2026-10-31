@@ -1,6 +1,6 @@
 # Assessment lifecycle plan
 
-**Status: proposed, for reviewer approval before implementation.** It implements the merged mobile contract (#52). Nothing here is built yet.
+**Status: architecture approved on #59; implementation not yet completed.** It implements the merged mobile contract (#52). `docs/milestone-register.md` records what's built.
 
 **Summary:** the backend can make finalization, attempt limits, release and feedback rules transactional and durable. Learning-memory delivery is different: **today's AI service would count a repeated delivery twice, so exactly-once processing isn't available.** The plan fixes that with an idempotency key in the AI service, in its own PR.
 
@@ -254,6 +254,8 @@ Three kinds of record have three separate lifetimes. Deleting one never deletes 
 6. Purpose limitation: memory serves that student's personalization, and isn't used to train a model.
 7. Tenant isolation on every read and change of memory.
 8. A memory failure can't affect an authoritative assessment result. That already holds, and stays tested.
+9. A defined retention and deletion lifecycle for memory events and contributions, including how expired contributions affect a recompute. They outlive the 30-day outbox, since a repeat must stay recognisable and the aggregate is rebuilt from them.
+10. A decision for rows marked `history_complete = false`: they can't be recomputed until rebuilt from valid source events, and history is never manufactured.
 
 **The gate covers both directions, as separate capabilities.** Not writing new memories and not disclosing existing ones are different things.
 
@@ -340,7 +342,7 @@ Each is its own PR with its own gates. The first three depend on each other in t
 | AI-1 | ai-service: idempotent memory upsert with a per-event record | ai-service |
 | L4 | Memory outbox and dispatcher, `memberships.generation`, the shared membership lock on revocation, reinstatement and event creation, removing the background task | Yes |
 
-Then M3-A. L0-A and L0-B merge and are verified before any memory integration is enabled. The rest of the memory gate (expiry, deletion, student controls) is separate reviewed work, which doesn't block L1 to L4 because both capabilities stay off until it's done.
+**Order changed by the reviewer on #66:** M3-A goes before L4. L4 must still complete before any memory reporting is enabled or any production memory event is dispatched, and it removes #65's temporary table allowance. L0-A and L0-B merge and are verified before any memory integration is enabled. The rest of the memory gate (expiry, deletion, student controls) is separate reviewed work, which doesn't block L1 to L4 because both capabilities stay off until it's done.
 
 ## Test plan
 
