@@ -13,7 +13,7 @@
 | 3 | Where does best, latest or first show up? | On the staff results route as a `stands` flag. The student contract has no outcome route, and adding one is a contract change |
 | 4 | Learning-memory delivery | A transactional outbox, plus idempotency in the AI service |
 | 5 | Which clock decides the deadline? | The application server's, as #54 does. Clock differences between servers are a recorded limit |
-| 6 | Learning-memory production gate | Reporting stays off in production until the gate below is met. Approve the architecture independently of the final retention period |
+| 6 | Learning-memory production gate | Memory reads and writes both stay off in production until the gate below is met, enforced in `MemoryService`. Approve the architecture independently of the final retention period |
 
 ## The three kinds of guarantee
 
@@ -168,15 +168,58 @@ Three kinds of record have three separate lifetimes. Deleting one never deletes 
 7. Tenant isolation on every read and change of memory.
 8. A memory failure can't affect an authoritative assessment result. That already holds, and stays tested.
 
-**Today's code doesn't honour this.** `submit_attempt` reports memory after every submission, with no off switch. Nothing is deployed, so nothing has been sent in production. But a policy alone wouldn't hold, so **PR L0 comes first**: a setting that keeps reporting off by default in production, and a startup check that refuses to run with it on while the gate is unmet is recorded as open.
+**The gate covers both directions, as separate capabilities.** Not writing new memories and not disclosing existing ones are different things.
 
-The same gate covers reads: chat already places a student's memory in the prompt it sends to the model provider, which also falls under G-33.
+| Capability | While the gate is closed |
+|---|---|
+| Reporting | No assessment submission creates or dispatches a student-memory event |
+| Retrieval | No stored memory is read into a chat context, returned, or sent to a model provider |
+
+**Today's code honours neither.** Nothing is deployed, so nothing has been sent in production, but a policy alone wouldn't hold:
+
+| Direction | Path today | Service |
+|---|---|---|
+| Write | `submit_attempt`, through `LearningMemoryReporter`, to `/v1/ai/memory/upsert` | Backend, then AI |
+| Read | `AIOrchestrator.chat` puts memory in the prompt and returns it as `memory_used` | AI |
+| Read | `AdaptiveEngine` | AI |
+| Read | `/v1/ai/memory/query`, reached from the backend's `GET /ai/memory` | AI |
+
+**A backend switch alone wouldn't close this**, since chat reads memory inside the AI service. Every path goes through `MemoryService`, so that is the enforcement point.
+
+### L0: the default-deny boundary
+
+**L0-A, ai-service, first.** `MemoryService` refuses every read and write while the gate is closed. Chat then runs with no memory in its prompt, and the memory routes answer 503.
+
+**L0-B, backend.** The reporter creates and sends nothing while the gate is closed, and `GET /ai/memory` answers 503.
+
+**How the gate is opened:**
+
+- A setting, off by default, in each service. A malformed value fails startup.
+- **A constant in the source records the gate as closed. While it is, staging and production refuse to start with the setting on.** So an environment or configuration mistake can't open it: opening it takes a reviewed code change, once the gate's conditions are met.
+- Development and testing may turn the setting on for tests. Nothing about that carries to production, since the check looks only at the running environment and the constant.
+
+Acceptance:
+
+1. Production starts with both capabilities off.
+2. A test sets the setting on in production mode with the gate closed, and startup fails. In both services.
+3. Chat retrieval is blocked independently of reporting: a test with stored memories asserts they're absent from the prompt sent to the model and from `memory_used`.
+4. Stored memories stay unreachable on every path in the table, and on `MemoryService` directly.
+5. Missing or malformed configuration fails closed.
+6. Non-production settings can't establish production authorization.
+7. A one-time startup log line and a counter show the gate's state. Tests assert no memory content reaches logs.
+8. Assessment submission still succeeds and is graded with the gate closed.
+
+The boundary gate needs updating, since it exercises memory today: it runs in a non-production mode with the setting on, so that coverage stays. The production-startup phase asserts the refusal.
 
 **The current memory shape can't meet this gate.** `learning_memory` holds one aggregated row per tenant, user and topic: a running `mastery_score`, `attempts`, and `last_interaction`, stored as a string.
 
-- **No provenance.** A running average can't have one source's contribution removed. Provenance-aware invalidation needs a per-event record that the aggregate can be recomputed from, so deleting one source doesn't wipe a student's whole memory. AI-1's event table is the natural place, holding only IDs, topic and outcome, with no answers or documents.
+- **No provenance.** A running average can't have one source's contribution removed. Provenance-aware invalidation needs a per-event record that the aggregate can be recomputed from, so deleting one source doesn't wipe a student's whole memory. AI-1's event table is the natural place, holding only IDs, topic and outcome, with no answers or documents. Its source reference is generic (a kind and an ID), so document sources can be added later without a redesign. None are built now.
+- **Required tests for AI-1:** deleting one contribution leaves the others, recomputing is deterministic, and reprocessing or correcting never creates a duplicate contribution. A processed event can still be revised later.
 - **No expiry and no delete path exist** in the memory service.
-- **Student controls aren't in the #52 contract**, which left `/ai/memory` out of scope. Adding them is a contract change for review.
+- **Student controls aren't in the #52 contract**, which left `/ai/memory` out of scope. They need their own contract decision, as three separate capabilities:
+  - **Inspect:** the student's own memory, with topics and update information.
+  - **Correct:** changes the derived learning representation only. It never rewrites an assessment result or the historical source event.
+  - **Delete:** invalidates the contribution or memory, with authorization and audit.
 
 Assessment-derived memory traces back to attempts and topics rather than documents, so document revocation mainly matters once memory draws on documents. Attempt and account deletion matter from the start.
 
@@ -186,14 +229,15 @@ Each is its own PR with its own gates. The first three depend on each other in t
 
 | PR | Contents | Migration |
 |---|---|---|
-| L0 | Reporting off by default in production, with the startup check | No |
+| L0-A | ai-service: `MemoryService` default-deny, startup refusal | No |
+| L0-B | Backend: reporter and `GET /ai/memory` default-deny, startup refusal | No |
 | L1 | `attempt_policy`, domain invariants, policy lock, staff routes, attempt limits and retakes | Yes |
 | L2 | Release table and route, feedback function, `getAttemptResult`, `stands` flag | Yes |
 | L3 | One finalization path, worker loop, read-time fallback | Index |
 | AI-1 | ai-service: idempotent memory upsert with a per-event record | ai-service |
 | L4 | Memory outbox and dispatcher, removing the background task | Yes |
 
-Then M3-A. The rest of the memory gate (expiry, deletion, student controls) is separate work, which doesn't block L1 to L4 because reporting stays off until it's done.
+Then M3-A. L0-A and L0-B merge and are verified before any memory integration is enabled. The rest of the memory gate (expiry, deletion, student controls) is separate reviewed work, which doesn't block L1 to L4 because both capabilities stay off until it's done.
 
 ## Test plan
 
