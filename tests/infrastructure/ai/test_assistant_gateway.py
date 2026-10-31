@@ -4,6 +4,7 @@ from dataclasses import replace
 import httpx
 import pytest
 
+from app.core.config import settings
 from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
 from app.infrastructure.security.service_context import ServiceContext
@@ -254,3 +255,26 @@ async def test_malformed_memory_answers_are_bad_responses(items):
     with pytest.raises(AIAssistantError) as exc:
         await gateway(handler).query_memory(ACTOR)
     assert exc.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda g: g.query_memory(ACTOR, ["algebra"]),
+        lambda g: g.record_memory(ACTOR, [MemoryObservation("algebra", True)]),
+    ],
+    ids=["query", "record"],
+)
+async def test_a_closed_gate_sends_no_memory_request(monkeypatch, call):
+    monkeypatch.setattr(settings, "learning_memory_enabled", False)
+    sent = []
+
+    def handler(request):
+        sent.append(request)
+        return ok({"items": []})
+
+    with pytest.raises(AIAssistantError) as refused:
+        await call(gateway(handler))
+    assert refused.value.error_code == "LEARNING_MEMORY_DISABLED"
+    assert refused.value.unavailable is True
+    assert sent == []

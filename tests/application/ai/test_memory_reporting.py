@@ -3,6 +3,7 @@
 import pytest
 
 from app.application.ai.memory_reporting import MAX_OBSERVATIONS, LearningMemoryReporter
+from app.core.config import settings
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIAssistantError, MemoryObservation
 
@@ -37,6 +38,15 @@ class Gateway:
 async def report(outcomes, gateway):
     reporter = LearningMemoryReporter(outcomes)
     return await reporter.report_submitted_attempt(gateway, CONTEXT, "a-1", "corr-1")
+
+
+async def test_a_closed_gate_reads_no_outcomes_and_sends_nothing(monkeypatch):
+    monkeypatch.setattr(settings, "learning_memory_enabled", False)
+    outcomes, gateway = Outcomes([MemoryObservation("Queues", True)]), Gateway()
+
+    assert await report(outcomes, gateway) == 0
+    assert outcomes.asked == []
+    assert gateway.calls == []
 
 
 async def test_reports_the_attempts_outcomes_as_the_submitting_member():

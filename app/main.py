@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -20,7 +21,7 @@ from app.core.exceptions import (
     validation_exception_handler,
 )
 from app.core.logging import configure_logging
-from app.core.metrics import metrics_payload, requests_total
+from app.core.metrics import learning_memory_enabled, metrics_payload, requests_total
 from app.core.middleware import RequestContextMiddleware
 from app.core.responses import ApiResponse
 from app.core.security import SecurityHeadersMiddleware
@@ -51,6 +52,9 @@ def _is_callback_path(path: str) -> bool:
     return path == INGESTION_CALLBACK_PATH or path.startswith(INGESTION_CALLBACK_PATH + "/")
 
 
+logger = logging.getLogger(__name__)
+
+
 async def initialize_database() -> None:
     if settings.effective_postgres_url.startswith("sqlite"):
         async with engine.begin() as connection:
@@ -60,6 +64,9 @@ async def initialize_database() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await initialize_database()
+    enabled = settings.learning_memory_allowed
+    learning_memory_enabled.set(1 if enabled else 0)
+    logger.info(f"Learning memory: {'enabled' if enabled else 'disabled by the production gate'}")
     yield
 
 
