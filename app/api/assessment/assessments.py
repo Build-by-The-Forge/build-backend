@@ -7,18 +7,22 @@ from app.api.assessment.schemas import (
     AssessmentQuestionResponse,
     AssessmentResponse,
     AssessmentResultsResponse,
+    AttemptPolicyBody,
     CreateAssessmentRequest,
     UpdateAssessmentRequest,
 )
 from app.application.assessment.assessment_service import AssessmentService
+from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
+from app.domain.assessment.errors import AttemptPolicyLockedError
 
 router = APIRouter(prefix="/assessment/assessments", tags=["assessment"])
 service = build_container().get(AssessmentService)
+attempt_service = build_container().get(AttemptService)
 
 
 def _is_staff(context: TenantContext) -> bool:
@@ -40,6 +44,7 @@ async def create_assessment(
         instructions=payload.instructions,
         duration_minutes=payload.duration_minutes,
         passing_score=payload.passing_score,
+        attempt_policy=payload.attempt_policy.to_domain() if payload.attempt_policy else None,
     )
     return _response(
         request,
@@ -56,12 +61,13 @@ async def list_assessments(
 ) -> JSONResponse:
     assessments = await service.list_assessments(tenant_id=context.tenant_id or "", course_id=course_id)
     staff = _is_staff(context)
+    used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
             "data": [
-                _assessment_payload(item, with_questions=staff)
+                _assessment_payload(item, with_questions=staff, attempts_used=used.get(item.id, 0))
                 for item in assessments
                 if staff or item.status == AssessmentStatus.PUBLISHED
             ],
@@ -81,7 +87,8 @@ async def get_assessment(
     staff = _is_staff(context)
     if assessment is None or not (staff or assessment.status == AssessmentStatus.PUBLISHED):
         raise HTTPException(status_code=404, detail="assessment not found")
-    return _response(request, assessment, with_questions=staff)
+    used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
+    return _response(request, assessment, with_questions=staff, attempts_used=used.get(assessment.id, 0))
 
 
 @router.patch("/{assessment_id}", status_code=status.HTTP_200_OK)
@@ -91,14 +98,18 @@ async def update_assessment(
     payload: UpdateAssessmentRequest,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_UPDATE)),
 ) -> JSONResponse:
-    assessment = await service.update_assessment(
-        assessment_id,
-        context.tenant_id or "",
-        title=payload.title,
-        instructions=payload.instructions,
-        duration_minutes=payload.duration_minutes,
-        passing_score=payload.passing_score,
-    )
+    try:
+        assessment = await service.update_assessment(
+            assessment_id,
+            context.tenant_id or "",
+            title=payload.title,
+            instructions=payload.instructions,
+            duration_minutes=payload.duration_minutes,
+            passing_score=payload.passing_score,
+            attempt_policy=payload.attempt_policy.to_domain() if payload.attempt_policy else None,
+        )
+    except AttemptPolicyLockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if assessment is None:
         raise HTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
@@ -192,7 +203,7 @@ async def get_assessment_results(
     )
 
 
-def _assessment_payload(assessment: Assessment, *, with_questions: bool = True) -> dict[str, object]:
+def _assessment_payload(assessment: Assessment, *, with_questions: bool = True, attempts_used: int = 0) -> dict[str, object]:
     return AssessmentResponse(
         id=assessment.id,
         tenant_id=assessment.tenant_id,
@@ -203,6 +214,8 @@ def _assessment_payload(assessment: Assessment, *, with_questions: bool = True) 
         passing_score=assessment.passing_score,
         status=assessment.status.value,
         question_count=assessment.question_count,
+        attempt_policy=AttemptPolicyBody.from_domain(assessment.attempt_policy),
+        attempts_used=attempts_used,
         questions=[
             AssessmentQuestionResponse(
                 assessment_question_id=item.assessment_question_id or item.question_id,
@@ -224,12 +237,13 @@ def _response(
     *,
     status_code: int = status.HTTP_200_OK,
     with_questions: bool = True,
+    attempts_used: int = 0,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={
             "success": True,
-            "data": _assessment_payload(assessment, with_questions=with_questions),
+            "data": _assessment_payload(assessment, with_questions=with_questions, attempts_used=attempts_used),
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },

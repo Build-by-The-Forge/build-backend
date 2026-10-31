@@ -10,6 +10,13 @@ from app.domain.assessment.assessment import (
 )
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
 from app.domain.assessment.attempt_answer import AttemptAnswer
+from app.domain.assessment.attempt_policy import (
+    AttemptKind,
+    AttemptPolicy,
+    FeedbackTiming,
+    ResultVisibility,
+    ScoringPolicy,
+)
 from app.domain.assessment.question import Question, QuestionOption
 from app.domain.assessment.result import AttemptResult, QuestionResult
 from app.domain.assessment.value_objects import (
@@ -144,6 +151,13 @@ def assessment_to_model(
     model.duration_minutes = assessment.duration_minutes
     model.passing_score = assessment.passing_score
     model.status = assessment.status.value
+    policy = assessment.attempt_policy
+    model.attempt_kind = policy.kind.value
+    model.max_attempts = policy.max_attempts
+    model.retake_after_submission = policy.retake_after_submission
+    model.result_visibility = policy.result_visibility.value
+    model.feedback_timing = policy.feedback_timing.value
+    model.scoring_policy = policy.scoring_policy.value
     model.created_at = assessment.created_at
     model.updated_at = assessment.updated_at
 
@@ -183,6 +197,14 @@ def assessment_model_to_domain(model: AssessmentModel) -> Assessment:
         passing_score=model.passing_score,
         assessment_id=model.id,
         status=AssessmentStatus(model.status),
+        attempt_policy=AttemptPolicy(
+            kind=AttemptKind(model.attempt_kind),
+            max_attempts=model.max_attempts,
+            retake_after_submission=model.retake_after_submission,
+            result_visibility=ResultVisibility(model.result_visibility),
+            feedback_timing=FeedbackTiming(model.feedback_timing),
+            scoring_policy=ScoringPolicy(model.scoring_policy),
+        ),
         questions=[assessment_question_model_to_domain(item) for item in (model.questions or [])],
         created_at=model.created_at,
         updated_at=model.updated_at,

@@ -7,6 +7,10 @@ class AssessmentRepository(Protocol):
     async def save(self, assessment: Assessment, tenant_id: str | None = None) -> Assessment:
         raise NotImplementedError
 
+    async def lock_for_change(self, assessment_id: str, tenant_id: str) -> None:
+        """Hold the row until the transaction ends. Read the assessment after this."""
+        raise NotImplementedError
+
     async def get_by_id(self, assessment_id: str, tenant_id: str | None = None) -> Assessment | None:
         raise NotImplementedError
 

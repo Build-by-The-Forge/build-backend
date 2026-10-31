@@ -1,4 +1,14 @@
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, model_validator
+
+from app.domain.assessment.attempt_policy import (
+    AttemptKind,
+    AttemptPolicy,
+    FeedbackTiming,
+    ResultVisibility,
+    ScoringPolicy,
+)
 
 
 class QuestionOptionInput(BaseModel):
@@ -51,6 +61,43 @@ class QuestionResponse(BaseModel):
     options: list[QuestionOptionResponse]
 
 
+class AttemptPolicyBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["practice", "formal"]
+    max_attempts: int | None
+    retake_after_submission: bool
+    result_visibility: Literal["immediate", "after_release"]
+    feedback_timing: Literal["immediate", "after_final_attempt", "after_release", "never"]
+    scoring_policy: Literal["best", "latest", "first"]
+
+    @model_validator(mode="after")
+    def _valid_combination(self) -> "AttemptPolicyBody":
+        self.to_domain()
+        return self
+
+    def to_domain(self) -> AttemptPolicy:
+        return AttemptPolicy(
+            kind=AttemptKind(self.kind),
+            max_attempts=self.max_attempts,
+            retake_after_submission=self.retake_after_submission,
+            result_visibility=ResultVisibility(self.result_visibility),
+            feedback_timing=FeedbackTiming(self.feedback_timing),
+            scoring_policy=ScoringPolicy(self.scoring_policy),
+        )
+
+    @classmethod
+    def from_domain(cls, policy: AttemptPolicy) -> "AttemptPolicyBody":
+        return cls(
+            kind=policy.kind.value,
+            max_attempts=policy.max_attempts,
+            retake_after_submission=policy.retake_after_submission,
+            result_visibility=policy.result_visibility.value,
+            feedback_timing=policy.feedback_timing.value,
+            scoring_policy=policy.scoring_policy.value,
+        )
+
+
 class CreateAssessmentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -59,6 +106,7 @@ class CreateAssessmentRequest(BaseModel):
     instructions: str
     duration_minutes: int
     passing_score: int = 0
+    attempt_policy: AttemptPolicyBody | None = None
 
 
 class UpdateAssessmentRequest(BaseModel):
@@ -68,6 +116,7 @@ class UpdateAssessmentRequest(BaseModel):
     instructions: str | None = None
     duration_minutes: int | None = None
     passing_score: int | None = None
+    attempt_policy: AttemptPolicyBody | None = None
 
 
 class AssessmentQuestionResponse(BaseModel):
@@ -88,6 +137,8 @@ class AssessmentResponse(BaseModel):
     passing_score: int
     status: str
     question_count: int
+    attempt_policy: AttemptPolicyBody
+    attempts_used: int
     questions: list[AssessmentQuestionResponse]
     created_at: str
     updated_at: str

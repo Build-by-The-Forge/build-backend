@@ -32,6 +32,19 @@ class AttemptRepository(Protocol):
     ) -> AssessmentAttempt | None:
         raise NotImplementedError
 
+    async def lock_starts(self, assessment_id: str, user_id: str, tenant_id: str) -> None:
+        """One start at a time for this student and assessment, until the transaction ends."""
+        raise NotImplementedError
+
+    async def count_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> int:
+        raise NotImplementedError
+
+    async def counts_by_assessment(self, user_id: str, tenant_id: str) -> dict[str, int]:
+        raise NotImplementedError
+
+    async def insert_unless_active(self, attempt: AssessmentAttempt) -> bool:
+        raise NotImplementedError
+
     async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
         raise NotImplementedError
 

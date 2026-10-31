@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from app.domain.assessment.attempt_policy import AttemptPolicy
+
 
 @dataclass(slots=True)
 class CreateAssessmentCommand:
@@ -9,6 +11,7 @@ class CreateAssessmentCommand:
     instructions: str
     duration_minutes: int
     passing_score: int = 0
+    attempt_policy: AttemptPolicy | None = None
 
 
 @dataclass(slots=True)
@@ -31,6 +34,7 @@ class UpdateAssessmentCommand:
     instructions: str | None = None
     duration_minutes: int | None = None
     passing_score: int | None = None
+    attempt_policy: AttemptPolicy | None = None
 
 
 @dataclass(slots=True)

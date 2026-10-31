@@ -222,11 +222,6 @@ implementation_gaps:
   summary: 'No way to discover a tenant slug. Accepted: FUTA is app configuration'
   closes_in: M6
   evidence: Reviewer decision at 976c88a.
-- id: G-29
-  severity: Medium
-  summary: Assessments have no attempt policy, and a new attempt can start straight after submitting
-  closes_in: Assessment lifecycle
-  evidence: Reproduced over HTTP at 0ef0ba8. Not a machine check until the policy exists.
 - id: G-30
   severity: High
   summary: Content sources record no rights basis, audience or redistribution limits
@@ -281,6 +276,9 @@ closed:
 - id: G-27
   summary: Assessment time limits weren't enforced
   proof: tests/integration/assessment/test_attempt_deadline.py::test_after_the_deadline_an_answer_cannot_be_saved_or_removed
+- id: G-29
+  summary: Assessments had no attempt policy, and a new attempt could start straight after submitting
+  proof: tests/integration/assessment/test_attempt_policy_api.py::test_one_attempt_means_one
 - id: G-35
   summary: Students could read the answer key during an attempt
   proof: tests/integration/assessment/test_assessment_visibility.py::test_a_student_cannot_read_the_answer_key_during_an_attempt

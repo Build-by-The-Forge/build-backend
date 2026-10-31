@@ -17,6 +17,7 @@ from app.application.assessment.attempt_handlers import (
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.attempt import AssessmentAttempt
+from app.domain.assessment.errors import AttemptLimitReachedError
 from app.domain.assessment.result import AttemptResult
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
@@ -44,13 +45,23 @@ class AttemptService:
         command = StartAttemptCommand(assessment_id, tenant_id, user_id)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                attempt = await StartAttemptHandler(uow.attempts, uow.assessments).handle(command)
-                events = attempt.pull_events()
-            self._publish_events(events)
-            return attempt
-        attempt = await StartAttemptHandler(self._required_repository(), self._required_assessment_repository()).handle(command)
-        self._publish_events(attempt.pull_events())
+                handler = StartAttemptHandler(uow.attempts, uow.assessments, uow.attempt_answers, uow.attempt_results)
+                attempt = await handler.handle(command)
+        else:
+            handler = StartAttemptHandler(self._required_repository(), self._required_assessment_repository())
+            attempt = await handler.handle(command)
+        # Raised only now: an expired attempt finalized above stays finalized.
+        self._publish_events(handler.finalized_events + (attempt.pull_events() if attempt is not None else []))
+        if attempt is None:
+            raise AttemptLimitReachedError("ATTEMPT_LIMIT_REACHED")
         return attempt
+
+    async def attempts_used(self, tenant_id: str, user_id: str) -> dict[str, int]:
+        """The attempts this user has started, by assessment, finalized or not."""
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.attempts.counts_by_assessment(user_id, tenant_id)
+        return await self._required_repository().counts_by_assessment(user_id, tenant_id)
 
     async def get_attempt(self, attempt_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt | None:
         command = GetAttemptCommand(attempt_id, tenant_id, user_id)

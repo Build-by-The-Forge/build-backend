@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    true,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -90,6 +92,12 @@ class AssessmentModel(Base):
     duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     passing_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    attempt_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="practice", server_default="practice")
+    max_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    retake_after_submission: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    result_visibility: Mapped[str] = mapped_column(String(20), nullable=False, default="immediate", server_default="immediate")
+    feedback_timing: Mapped[str] = mapped_column(String(20), nullable=False, default="immediate", server_default="immediate")
+    scoring_policy: Mapped[str] = mapped_column(String(20), nullable=False, default="best", server_default="best")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -112,6 +120,22 @@ class AssessmentModel(Base):
     __table_args__ = (
         Index("ix_assessments_tenant_id", "tenant_id"),
         Index("ix_assessments_course_id", "course_id"),
+        CheckConstraint("attempt_kind IN ('practice', 'formal')", name="ck_assessments_attempt_kind"),
+        CheckConstraint("result_visibility IN ('immediate', 'after_release')", name="ck_assessments_result_visibility"),
+        CheckConstraint(
+            "feedback_timing IN ('immediate', 'after_final_attempt', 'after_release', 'never')",
+            name="ck_assessments_feedback_timing",
+        ),
+        CheckConstraint("scoring_policy IN ('best', 'latest', 'first')", name="ck_assessments_scoring_policy"),
+        CheckConstraint(
+            "(retake_after_submission AND (max_attempts IS NULL OR max_attempts > 1))"
+            " OR (NOT retake_after_submission AND COALESCE(max_attempts, 0) = 1)",
+            name="ck_assessments_attempt_limit",
+        ),
+        CheckConstraint(
+            "feedback_timing <> 'after_final_attempt' OR max_attempts IS NOT NULL",
+            name="ck_assessments_final_attempt_feedback",
+        ),
         Index("ix_assessments_status", "status"),
     )
 

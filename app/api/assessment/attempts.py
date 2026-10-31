@@ -19,6 +19,7 @@ from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIAssistantGateway
 from app.domain.assessment.attempt import AssessmentAttempt
+from app.domain.assessment.errors import AttemptLimitReachedError
 from app.infrastructure.assessment.attempt_topic_outcomes import SqlAlchemyAttemptTopicOutcomes
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
@@ -37,6 +38,8 @@ async def start_attempt(
 ) -> JSONResponse:
     try:
         attempt = await service.start_attempt(assessment_id, context.tenant_id, context.user_id)
+    except AttemptLimitReachedError as exc:
+        raise HTTPException(status_code=409, detail="ATTEMPT_LIMIT_REACHED") from exc
     except ValueError as exc:
         if str(exc) == "assessment not found":
             raise HTTPException(status_code=404, detail=str(exc)) from exc

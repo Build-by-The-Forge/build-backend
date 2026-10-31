@@ -10,6 +10,14 @@ class AttemptAlreadySubmittedError(Exception):
     pass
 
 
+class AttemptLimitReachedError(Exception):
+    pass
+
+
+class AttemptPolicyLockedError(Exception):
+    pass
+
+
 class QuestionOptionAlreadyArchivedError(Exception):
     pass
 

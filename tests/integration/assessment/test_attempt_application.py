@@ -26,6 +26,18 @@ class InMemoryAttemptRepository:
         self.items[attempt.id] = attempt
         return attempt
 
+    async def lock_starts(self, assessment_id: str, user_id: str, tenant_id: str) -> None:
+        return None
+
+    async def count_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> int:
+        return sum(
+            1 for a in self.items.values() if (a.assessment_id, a.user_id, a.tenant_id) == (assessment_id, user_id, tenant_id)
+        )
+
+    async def insert_unless_active(self, attempt: AssessmentAttempt) -> bool:
+        self.items[attempt.id] = attempt
+        return True
+
     async def get_by_id_for_update(
         self,
         attempt_id: str,
