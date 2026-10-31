@@ -112,12 +112,6 @@ contract_gaps:
   - success_envelope POST /assessment/assessments/{assessment_id}/attempts keys
   - success_envelope POST /assessment/attempts/{attempt_id}/submit keys
   - success_envelope PUT /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
-- id: G-21
-  severity: Medium
-  summary: Validation errors echo the submitted value
-  closes_in: M3-A
-  findings:
-  - echoes_input POST /identity/users
 - id: G-22
   severity: Low
   summary: X-Request-ID is accepted with no format or length check
@@ -293,3 +287,6 @@ closed:
 - id: G-06
   summary: Content read routes gave students storage locations, identities and processing internals
   proof: tests/integration/content/test_content_internal_fields.py::test_no_content_read_route_gives_a_student_an_internal_field
+- id: G-21
+  summary: Validation errors and logs repeated the refused value, which may be a password
+  proof: tests/integration/test_validation_never_echoes.py::test_a_signed_in_route_does_not_log_a_refused_value
