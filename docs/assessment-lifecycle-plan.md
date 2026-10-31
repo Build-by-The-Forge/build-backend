@@ -13,6 +13,7 @@
 | 3 | Where does best, latest or first show up? | On the staff results route as a `stands` flag. The student contract has no outcome route, and adding one is a contract change |
 | 4 | Learning-memory delivery | A transactional outbox, plus idempotency in the AI service |
 | 5 | Which clock decides the deadline? | The application server's, as #54 does. Clock differences between servers are a recorded limit |
+| 6 | Learning-memory production gate | Reporting stays off in production until the gate below is met. Approve the architecture independently of the final retention period |
 
 ## The three kinds of guarantee
 
@@ -146,8 +147,38 @@ The two questions have different answers.
 
 ### Privacy
 
-- Delivered events are deleted after 30 days. They hold no academic content, so this limits retention without losing anything useful.
-- **Open product question: how long learning memory itself is kept in the AI service.** No policy exists today, and the conversation retention decision doesn't cover it.
+Three kinds of record have three separate lifetimes. Deleting one never deletes another.
+
+| Record | Purpose | Proposed retention |
+|---|---|---|
+| Outbox event (backend) | Delivery and reconciliation | Deleted 30 days after delivery. Holds no academic content |
+| Deduplication record (AI service) | Stops a late retry applying twice | Longer than the backend's longest retry and reconciliation window, so it must outlive any retry. The value is set in AI-1 |
+| Learning memory (AI service) | Personalization | **Proposed default: expires after 12 months without meaningful activity**, by deletion or de-identification, subject to institutional policy and student controls. Kept only while its purpose and authorization stay valid. A background read doesn't reset the clock; only student activity or an authorized update does |
+
+### Learning-memory production gate
+
+**No student data goes to the learning-memory service in production until all of these are implemented and verified:**
+
+1. A formally approved retention policy.
+2. Expiry enforced by the AI service, not just documented.
+3. Deletion and revocation propagation, including on account deletion.
+4. Student controls to inspect, correct and delete their memories.
+5. Idempotency by event ID, verified.
+6. Purpose limitation: memory serves that student's personalization, and isn't used to train a model.
+7. Tenant isolation on every read and change of memory.
+8. A memory failure can't affect an authoritative assessment result. That already holds, and stays tested.
+
+**Today's code doesn't honour this.** `submit_attempt` reports memory after every submission, with no off switch. Nothing is deployed, so nothing has been sent in production. But a policy alone wouldn't hold, so **PR L0 comes first**: a setting that keeps reporting off by default in production, and a startup check that refuses to run with it on while the gate is unmet is recorded as open.
+
+The same gate covers reads: chat already places a student's memory in the prompt it sends to the model provider, which also falls under G-33.
+
+**The current memory shape can't meet this gate.** `learning_memory` holds one aggregated row per tenant, user and topic: a running `mastery_score`, `attempts`, and `last_interaction`, stored as a string.
+
+- **No provenance.** A running average can't have one source's contribution removed. Provenance-aware invalidation needs a per-event record that the aggregate can be recomputed from, so deleting one source doesn't wipe a student's whole memory. AI-1's event table is the natural place, holding only IDs, topic and outcome, with no answers or documents.
+- **No expiry and no delete path exist** in the memory service.
+- **Student controls aren't in the #52 contract**, which left `/ai/memory` out of scope. Adding them is a contract change for review.
+
+Assessment-derived memory traces back to attempts and topics rather than documents, so document revocation mainly matters once memory draws on documents. Attempt and account deletion matter from the start.
 
 ## Delivery
 
@@ -155,13 +186,14 @@ Each is its own PR with its own gates. The first three depend on each other in t
 
 | PR | Contents | Migration |
 |---|---|---|
+| L0 | Reporting off by default in production, with the startup check | No |
 | L1 | `attempt_policy`, domain invariants, policy lock, staff routes, attempt limits and retakes | Yes |
 | L2 | Release table and route, feedback function, `getAttemptResult`, `stands` flag | Yes |
 | L3 | One finalization path, worker loop, read-time fallback | Index |
-| AI-1 | ai-service: idempotent memory upsert | ai-service |
+| AI-1 | ai-service: idempotent memory upsert with a per-event record | ai-service |
 | L4 | Memory outbox and dispatcher, removing the background task | Yes |
 
-Then M3-A.
+Then M3-A. The rest of the memory gate (expiry, deletion, student controls) is separate work, which doesn't block L1 to L4 because reporting stays off until it's done.
 
 ## Test plan
 
@@ -181,7 +213,7 @@ Then M3-A.
 
 SQLite can't exercise locks, so concurrency evidence comes only from PostgreSQL. Each PR moves its gaps to `closed` in `contracts/mobile/gaps.yaml` with the test that proves them: G-29 in L1, G-16 and G-36 in L2, G-37 in L3.
 
-**Concurrency tests must be shown to fail without their lock.** #54's race test wasn't, and that gap shouldn't repeat.
+**Every important lock-based guarantee needs a test shown to fail without its lock.** #54's race test wasn't, and that gap shouldn't repeat. L3 also closes it for #54's submit lock.
 
 ## Recorded limits
 
