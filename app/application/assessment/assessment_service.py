@@ -5,6 +5,7 @@ from app.application.assessment.assessment_commands import (
     GetAssessmentResultsCommand,
     ListAssessmentsCommand,
     PublishAssessmentCommand,
+    ReleaseResultsCommand,
     UpdateAssessmentCommand,
 )
 from app.application.assessment.assessment_handlers import (
@@ -14,12 +15,14 @@ from app.application.assessment.assessment_handlers import (
     GetAssessmentResultsHandler,
     ListAssessmentsHandler,
     PublishAssessmentHandler,
+    ReleaseResultsHandler,
     UpdateAssessmentHandler,
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.assessment import Assessment
 from app.domain.assessment.attempt_policy import AttemptPolicy
 from app.domain.assessment.result import AttemptResult
+from app.domain.assessment.result_release import ResultRelease
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
 from app.domain.repositories.course import CourseRepository
@@ -167,6 +170,33 @@ class AssessmentService:
         return await GetAssessmentResultsHandler(self._required_repository(), self._required_attempt_result_repository()).handle(
             command
         )
+
+    async def release_results(self, assessment_id: str, tenant_id: str, released_by: str) -> ResultRelease | None:
+        command = ReleaseResultsCommand(assessment_id, tenant_id, released_by)
+        if self.uow_factory is None:
+            raise ValueError("releasing results needs a unit of work")
+        async with self.uow_factory() as uow:
+            outcome = await ReleaseResultsHandler(uow.assessments, uow.result_releases).handle(command)
+        if outcome is None:
+            return None
+        release, created = outcome
+        if created:
+            self._publish_events(
+                [
+                    DomainEvent(
+                        event_type="assessment.results_released",
+                        payload={"assessment_id": assessment_id, "tenant_id": tenant_id, "released_by": released_by},
+                    )
+                ]
+            )
+        return release
+
+    async def standing_attempts(self, assessment_id: str, tenant_id: str) -> set[str]:
+        command = GetAssessmentResultsCommand(assessment_id=assessment_id, tenant_id=tenant_id)
+        if self.uow_factory is None:
+            raise ValueError("reading results needs a unit of work")
+        async with self.uow_factory() as uow:
+            return await GetAssessmentResultsHandler(uow.assessments, uow.attempt_results).standing(command)
 
     def _required_repository(self) -> AssessmentRepository:
         if self.repository is None:

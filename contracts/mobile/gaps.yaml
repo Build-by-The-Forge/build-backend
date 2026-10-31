@@ -41,11 +41,6 @@ contract_gaps:
   - untyped_body POST /identity/users
   - untyped_body POST /identity/verify-email
   - untyped_body POST /invitations/accept
-- id: G-16
-  severity: Medium
-  summary: Result policy is defined by the contract and not yet served; enforced with G-36
-  closes_in: Assessment lifecycle
-  evidence: Contract decision. Behaviour tracked by G-36.
 - id: G-18
   severity: Medium
   summary: Chat returns raw context passages, including uncited ones
@@ -248,11 +243,6 @@ implementation_gaps:
   summary: The OCR evaluation documents have no rights record, and stay out of shared retrieval
   closes_in: Before they enter shared retrieval
   evidence: Reviewer decision at 976c88a.
-- id: G-36
-  severity: High
-  summary: is_correct and awarded_marks are returned as soon as an attempt is submitted
-  closes_in: Assessment lifecycle
-  evidence: Accepted interim limitation. Read from get_attempt_result.
 - id: G-37
   severity: High
   summary: Expired attempts wait for the student to submit
@@ -270,6 +260,12 @@ closed:
 - id: G-15
   summary: A repeated submit answered 409
   proof: tests/integration/assessment/test_attempt_deadline.py::test_a_repeated_submit_returns_the_submitted_attempt_and_never_grades_again
+- id: G-16
+  summary: Result policy was defined by the contract and not served
+  proof: tests/integration/assessment/test_result_release_api.py::test_feedback_stays_null_until_its_stage
+- id: G-36
+  summary: is_correct and awarded_marks were returned as soon as an attempt was submitted
+  proof: tests/integration/assessment/test_result_release_api.py::test_feedback_stays_null_until_its_stage
 - id: G-24
   summary: OpenAPI was only generated with docs on. The gate reads app.openapi(), which doesn't need them
   proof: tests/integration/test_mobile_contract_drift.py::test_observed_behaviour_matches_the_gap_allowlist

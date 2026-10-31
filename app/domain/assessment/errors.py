@@ -18,6 +18,10 @@ class AttemptPolicyLockedError(Exception):
     pass
 
 
+class ResultNotReleasedError(Exception):
+    pass
+
+
 class QuestionOptionAlreadyArchivedError(Exception):
     pass
 

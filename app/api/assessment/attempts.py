@@ -19,7 +19,7 @@ from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIAssistantGateway
 from app.domain.assessment.attempt import AssessmentAttempt
-from app.domain.assessment.errors import AttemptLimitReachedError
+from app.domain.assessment.errors import AttemptLimitReachedError, ResultNotReleasedError
 from app.infrastructure.assessment.attempt_topic_outcomes import SqlAlchemyAttemptTopicOutcomes
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
@@ -137,12 +137,14 @@ async def get_attempt_result(
 ) -> JSONResponse:
     is_staff = context.role in {"lecturer", "hod", "faculty_admin", "admin", "owner"}
     try:
-        result = await service.get_attempt_result(
+        readable = await service.get_attempt_result(
             attempt_id=attempt_id,
             tenant_id=context.tenant_id,
             user_id=context.user_id,
             is_staff=is_staff,
         )
+    except ResultNotReleasedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="RESULT_NOT_RELEASED") from exc
     except ValueError as exc:
         if str(exc) == "attempt is not submitted":
             raise HTTPException(
@@ -154,12 +156,13 @@ async def get_attempt_result(
             detail=str(exc),
         ) from exc
 
-    if result is None:
+    if readable is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="attempt result not found",
         )
 
+    result, shown = readable.result, readable.feedback_shown
     response = AttemptResultResponse(
         id=result.id,
         tenant_id=result.tenant_id,
@@ -175,9 +178,9 @@ async def get_attempt_result(
             QuestionResultResponse(
                 assessment_question_id=item.assessment_question_id,
                 selected_option_index=item.selected_option_index,
-                awarded_marks=item.awarded_marks,
+                awarded_marks=item.awarded_marks if shown else None,
                 max_marks=item.max_marks,
-                is_correct=item.is_correct,
+                is_correct=item.is_correct if shown else None,
             )
             for item in result.breakdown
         ],

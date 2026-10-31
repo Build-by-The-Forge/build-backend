@@ -144,6 +144,33 @@ async def add_question(
     return _response(request, assessment)
 
 
+@router.post("/{assessment_id}/release-results", status_code=status.HTTP_200_OK)
+async def release_results(
+    assessment_id: str,
+    request: Request,
+    context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_PUBLISH)),
+) -> JSONResponse:
+    try:
+        release = await service.release_results(assessment_id, context.tenant_id or "", context.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if release is None:
+        raise HTTPException(status_code=404, detail="assessment not found")
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": {
+                "assessment_id": release.assessment_id,
+                "released_by": release.released_by,
+                "released_at": release.released_at.isoformat(),
+            },
+            "meta": {},
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
 @router.get("/{assessment_id}/results", status_code=status.HTTP_200_OK)
 async def get_assessment_results(
     assessment_id: str,
@@ -173,6 +200,7 @@ async def get_assessment_results(
         raise HTTPException(status_code=404, detail="assessment not found")
 
     results, total = result_data
+    standing = await service.standing_attempts(assessment_id, context.tenant_id or "")
     response = AssessmentResultsResponse(
         assessment_id=assessment_id,
         results=[
@@ -184,6 +212,7 @@ async def get_assessment_results(
                 percentage=item.percentage,
                 passed=item.passed,
                 graded_at=item.graded_at.isoformat(),
+                stands=item.attempt_id in standing,
             )
             for item in results
         ],

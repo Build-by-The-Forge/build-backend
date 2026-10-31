@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.application.assessment.assessment_commands import (
     AddQuestionToAssessmentCommand,
     CreateAssessmentCommand,
@@ -5,12 +7,15 @@ from app.application.assessment.assessment_commands import (
     GetAssessmentResultsCommand,
     ListAssessmentsCommand,
     PublishAssessmentCommand,
+    ReleaseResultsCommand,
     UpdateAssessmentCommand,
 )
-from app.domain.assessment.assessment import Assessment
+from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.result import AttemptResult
+from app.domain.assessment.result_disclosure import standing_attempts
+from app.domain.assessment.result_release import ResultRelease
 from app.domain.repositories.assessment import AssessmentRepository
-from app.domain.repositories.attempt_result import AttemptResultRepository
+from app.domain.repositories.attempt_result import AttemptResultRepository, ResultReleaseRepository
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 
@@ -122,6 +127,26 @@ class AddQuestionToAssessmentHandler:
         return await self.repository.update(assessment, tenant_id=command.tenant_id)
 
 
+class ReleaseResultsHandler:
+    def __init__(self, assessments: AssessmentRepository, releases: ResultReleaseRepository) -> None:
+        self.assessments = assessments
+        self.releases = releases
+
+    async def handle(self, command: ReleaseResultsCommand) -> tuple[ResultRelease, bool] | None:
+        """The release, and whether this call made it. A repeat returns the first."""
+        assessment = await self.assessments.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
+        if assessment is None:
+            return None
+        if assessment.status == AssessmentStatus.DRAFT:
+            raise ValueError("a draft has no results to release")
+        release = ResultRelease(command.assessment_id, command.tenant_id, command.released_by, datetime.now(timezone.utc))
+        created = await self.releases.insert_if_absent(release)
+        stored = await self.releases.get(command.assessment_id, command.tenant_id)
+        if stored is None:
+            raise ValueError("assessment not found")
+        return stored, created
+
+
 class GetAssessmentResultsHandler:
     def __init__(
         self,
@@ -141,3 +166,11 @@ class GetAssessmentResultsHandler:
             limit=command.limit,
             offset=command.offset,
         )
+
+    async def standing(self, command: GetAssessmentResultsCommand) -> set[str]:
+        """The attempt that stands for each student, across every result."""
+        assessment = await self.assessment_repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
+        if assessment is None:
+            return set()
+        outcomes = await self.attempt_result_repository.list_outcomes(command.assessment_id, command.tenant_id)
+        return standing_attempts(assessment.attempt_policy.scoring_policy, outcomes)

@@ -9,6 +9,7 @@ from app.infrastructure.assessment.repositories import (
     SqlAlchemyAttemptRepository,
     SqlAlchemyAttemptResultRepository,
     SqlAlchemyQuestionRepository,
+    SqlAlchemyResultReleaseRepository,
 )
 from app.infrastructure.catalogue.repositories import SqlAlchemyCourseRepository
 from app.infrastructure.unit_of_work import UnitOfWork
@@ -21,6 +22,7 @@ class AssessmentUnitOfWork(UnitOfWork):
         self.attempts = SqlAlchemyAttemptRepository(session)
         self.attempt_answers = SqlAlchemyAttemptAnswerRepository(session)
         self.attempt_results = SqlAlchemyAttemptResultRepository(session)
+        self.result_releases = SqlAlchemyResultReleaseRepository(session)
         self.questions = SqlAlchemyQuestionRepository(session)
         self.catalogue = SqlAlchemyCourseRepository(session)
 

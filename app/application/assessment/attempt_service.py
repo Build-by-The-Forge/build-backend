@@ -12,13 +12,13 @@ from app.application.assessment.attempt_handlers import (
     GetAttemptQuestionsHandler,
     GetAttemptResultHandler,
     ListMyAttemptsHandler,
+    ReadableResult,
     StartAttemptHandler,
     SubmitAttemptHandler,
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.attempt import AssessmentAttempt
 from app.domain.assessment.errors import AttemptLimitReachedError
-from app.domain.assessment.result import AttemptResult
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
@@ -110,7 +110,7 @@ class AttemptService:
         tenant_id: str,
         user_id: str,
         is_staff: bool = False,
-    ) -> AttemptResult | None:
+    ) -> ReadableResult | None:
         command = GetAttemptResultCommand(
             attempt_id=attempt_id,
             tenant_id=tenant_id,
@@ -119,8 +119,10 @@ class AttemptService:
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await GetAttemptResultHandler(uow.attempts, uow.attempt_results).handle(command)
-        return await GetAttemptResultHandler(self._required_repository(), self._required_result_repository()).handle(command)
+                return await GetAttemptResultHandler(
+                    uow.attempts, uow.attempt_results, uow.assessments, uow.result_releases
+                ).handle(command)
+        raise ValueError("reading a result needs a unit of work")
 
     def _required_repository(self) -> AttemptRepository:
         if self.repository is None:
