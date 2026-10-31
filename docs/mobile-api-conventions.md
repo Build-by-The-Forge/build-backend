@@ -253,9 +253,9 @@ M0 needs no migration. M3-D will, and that migration needs the usual review.
 
 ## Decision C: tenant entry
 
-**Approved: these existing routes are in the first release:** `POST /tenants/{slug}/join`, `GET /tenants/{slug}/join-policy`, `POST /invitations/accept`.
+**Approved: these existing routes are in the first release:** `POST /tenants/{slug}/join`, `POST /invitations/accept`.
 
-The approved scope lists registration and memberships but no way to join. Without these, a newly registered student has no tenant and can't reach any tenant-scoped screen. All three already exist, and joining already requires a verified email. Membership stays subject to verified identity, an invitation or the join policy, and backend authorization.
+The approved scope lists registration and memberships but no way to join. Without these, a newly registered student has no tenant and can't reach any tenant-scoped screen. Both already exist, and joining already requires a verified email. Membership stays subject to verified identity, an invitation or the join policy, and backend authorization.
 
 ## Decision D: upload read timeout
 
