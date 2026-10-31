@@ -29,6 +29,9 @@ FORBIDDEN_PROPERTIES = {
     "error_details",
     "chunk_id",
     "correct_option",
+    "correct_option_index",
+    "correct_answer",
+    "answer_key",
     "explanation",
     "context",
     "trust_policy",
@@ -171,6 +174,31 @@ def test_grading_appears_only_in_a_submitted_result(spec):
 
 def test_an_assessment_carries_no_questions(spec):
     assert "questions" not in spec["components"]["schemas"]["Assessment"]["properties"]
+
+
+def test_registration_answers_202_with_no_body(spec):
+    responses = spec["paths"]["/identity/users"]["post"]["responses"]
+    assert "content" not in responses["202"]
+    assert not {"200", "201", "409"} & set(responses)
+
+
+def test_a_question_result_can_carry_only_its_approved_fields(spec):
+    result = spec["components"]["schemas"]["QuestionResult"]
+    assert result["additionalProperties"] is False
+    assert set(result["properties"]) == {
+        "assessment_question_id",
+        "selected_option_index",
+        "awarded_marks",
+        "max_marks",
+        "is_correct",
+    }
+
+
+def test_the_attempt_policy_rules_out_its_ambiguous_combinations(spec):
+    rules = spec["components"]["schemas"]["AttemptPolicy"]["allOf"]
+    assert rules[0]["then"]["properties"]["max_attempts"] == {"const": 1}
+    assert rules[0]["else"]["properties"]["max_attempts"] == {"not": {"const": 1}}
+    assert rules[1]["then"]["properties"]["feedback_timing"] == {"not": {"const": "after_final_attempt"}}
 
 
 def test_an_assessment_states_its_attempt_policy(spec):

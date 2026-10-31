@@ -29,7 +29,7 @@ paths:
       operationId: registerUser
       summary: Register a student account
       description: >
-        The response is the same whether or not the email already has an account, so
+        A bodyless 202, identical whether or not the email already has an account, so
         registration can't be used to discover accounts. A verification email follows
         for a new account.
       security: []
@@ -40,14 +40,7 @@ paths:
             schema: { $ref: '#/components/schemas/RegisterRequest' }
       responses:
         '202':
-          description: Accepted
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/SuccessEnvelope'
-                  - properties:
-                      data: { $ref: '#/components/schemas/Empty' }
+          description: Accepted, with no response body
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -588,7 +581,9 @@ paths:
       summary: Upload a private document and queue it for ingestion
       description: >
         The raw document is the request body. The document is private to this student.
-        Storing it and queuing its ingestion succeed or fail together. Type, size and
+        A success means the document and its queued ingestion job are committed together,
+        so a successful upload can't be left permanently unqueued. A failure before that
+        commit leaves no document, and any stored bytes are removed later. Type, size and
         SHA-256 come from the bytes; the Content-Type header decides nothing. The same
         key and bytes return the original document with 200. Nothing in any response
         shows whether another student holds the same file.
@@ -900,7 +895,9 @@ paths:
       tags: [assessment]
       operationId: startAttempt
       summary: Start an attempt, or return the one in progress
-      description: Follows the assessment's attempt_policy. The server enforces it.
+      description: >
+        Follows the assessment's attempt_policy, which the server enforces. A new attempt
+        needs every earlier attempt to be finalized and attempts_used below max_attempts.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
         - $ref: '#/components/parameters/AssessmentId'
@@ -1095,7 +1092,11 @@ paths:
       tags: [assessment]
       operationId: getAttemptResult
       summary: The graded result of a submitted attempt
-      description: Visibility and per-question feedback follow the assessment's attempt_policy.
+      description: >
+        Available only once result_visibility permits it, otherwise RESULT_NOT_RELEASED.
+        Per-question feedback is a separate condition: is_correct and awarded_marks stay
+        null until result and feedback are both permitted. Neither setting overrides the
+        other, and no other route returns this feedback.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
         - $ref: '#/components/parameters/AttemptId'
@@ -1791,28 +1792,57 @@ components:
         attempts_used:
           type: integer
           minimum: 0
-          description: The caller's attempts so far.
+          description: The attempts the caller has started, finalized or not.
     AttemptPolicy:
       type: object
+      description: >
+        Combinations outside these rules can't be stored. A retake needs
+        retake_after_submission true, and exactly then max_attempts is null or above 1.
+        after_final_attempt needs a limit, since it's never reached without one.
       required: [kind, max_attempts, retake_after_submission, result_visibility, feedback_timing, scoring_policy]
+      allOf:
+        - if:
+            required: [retake_after_submission]
+            properties: { retake_after_submission: { const: false } }
+          then:
+            properties: { max_attempts: { const: 1 } }
+          else:
+            properties: { max_attempts: { not: { const: 1 } } }
+        - if:
+            required: [max_attempts]
+            properties: { max_attempts: { type: 'null' } }
+          then:
+            properties: { feedback_timing: { not: { const: after_final_attempt } } }
       properties:
         kind:
           type: string
           enum: [practice, formal]
+          description: A label for how the assessment is used. It changes no enforcement.
         max_attempts:
           type: [integer, 'null']
           minimum: 1
-          description: Null means no limit.
-        retake_after_submission: { type: boolean }
+          description: The most attempts one student may start, finalized or not. Null means no limit.
+        retake_after_submission:
+          type: boolean
+          description: Whether another attempt may follow a finalized one, up to max_attempts.
         result_visibility:
           type: string
           enum: [immediate, after_release]
+          description: >
+            Whether the result can be read at all. immediate means once this attempt is
+            finalized; after_release means once it's finalized and staff have released results.
         feedback_timing:
           type: string
           enum: [immediate, after_final_attempt, after_release, never]
+          description: >
+            Whether per-question feedback can be read, as a condition separate from
+            result_visibility. Both must permit it. immediate means once this attempt is
+            finalized; after_final_attempt means once attempts_used equals max_attempts and
+            all are finalized; after_release uses the same staff release as results.
         scoring_policy:
           type: string
           enum: [best, latest, first]
+          description: Which finalized attempt stands as the student's outcome. Each attempt's own result is unchanged.
     Attempt:
       type: object
       required: [id, assessment_id, status, started_at, expires_at, submitted_at]
@@ -1891,17 +1921,22 @@ components:
           items: { $ref: '#/components/schemas/QuestionResult' }
     QuestionResult:
       type: object
+      description: >
+        Never contains the correct answer, a correct option, answer-key text or an explanation.
+        On a two-option question is_correct reveals the answer, so feedback timing is a
+        security boundary. An unanswered question scores zero.
       required: [assessment_question_id, selected_option_index, awarded_marks, max_marks, is_correct]
+      additionalProperties: false
       properties:
         assessment_question_id: { type: string }
         selected_option_index: { type: [integer, 'null'] }
         awarded_marks:
           type: [integer, 'null']
-          description: Null while feedback_timing withholds per-question feedback.
+          description: Null until result and feedback are both permitted.
         max_marks: { type: integer }
         is_correct:
           type: [boolean, 'null']
-          description: Null while feedback_timing withholds per-question feedback.
+          description: Null until result and feedback are both permitted.
 
     Conversation:
       type: object
