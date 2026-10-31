@@ -54,23 +54,33 @@ M3 is **not close to done**. The fixes merged so far closed security and lifecyc
 
 **L4 is the plan's final L-track PR.** The plan defines no L5, L6 or L7, so this register doesn't list any.
 
-## Proposed order
+## Approved order
 
-This changes one approved decision: the plan puts L4 before M3-A. **Proposal:** M3-A goes next, and L4 follows when the memory track needs it.
+Decided by the reviewer on #66. M3-A goes before L4, which changes the plan's scheduling, not L4's architecture or its existence. Two conditions hold:
 
-- **Why it's safe:** with the gate closed, nothing uses the outbox, and L0-B already stops the background task from sending anything.
-- **What it risks:** none of this affects students until memory is activated, but L4's membership changes stay undone in the meantime.
-- **Status:** awaiting the reviewer's decision.
+- L4 completes before any memory reporting is enabled or any production memory event is dispatched.
+- L4 removes #65's temporary table allowance.
 
-1. AI-1 review, then merge.
-2. M3-A, because every later slice and M5's error handling depend on it.
-3. M3-B and M3-C, then M3-D and M3-F. M3-D holds the two blockers.
-4. M4, with its boundary tests, alongside M3-D and M3-F where the interfaces are agreed.
-5. M5 scaffolding once M3-A's error shape is merged. It can run alongside M3-B to M3-F.
-6. M6 against the generated client. Screen design can start earlier.
-7. M7 on pinned SHAs. Its test design can start at any time.
+A faster order doesn't weaken any acceptance criteria. M3-D isn't done because uploads return success, and M7 isn't done because a workflow passes.
 
-L4 runs whenever the reviewer places it, and doesn't block this list.
+**Immediate work**
+
+1. AI-1: re-review and merge.
+2. This register.
+3. The boundary gate's retry-aware wait, in its own PR.
+4. M3-A.
+
+**M-track**
+
+5. M3-B and M3-C.
+6. M3-D, which holds the two blockers.
+7. M3-E and M3-F.
+8. M4.
+9. M5. Its scaffolding can start once M3-A's error shape is merged.
+10. M6, against the generated client. Screen design can start earlier.
+11. M7 on pinned SHAs. Its test design can start at any time.
+
+**L-track, independently:** AI-1, then L4 after M3-A, then memory activation under its own approval once every gate condition is implemented and verified.
 
 ## Deferred risks
 
