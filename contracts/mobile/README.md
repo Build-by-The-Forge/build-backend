@@ -1,10 +1,30 @@
 # Mobile contract
 
-**Status: M1, changes made for re-review.** The reviewer requested four changes at `976c88a` and accepted the rest at the design level. That is their technical decision, relayed by the product owner. Their integration returned 403, so GitHub holds no recorded review. Keep this unmerged until they re-review.
+**Status: M1 contract accepted and merged as #52.** The reviewer's technical re-review was satisfied at `31faad4`. That decision was relayed by the product owner; GitHub holds no recorded review, because their integration returned 403. M2 is in place.
 
 [`openapi.yaml`](openapi.yaml) is the intended student API for the first mobile release. It says what the system must guarantee, not what the backend does today, so **most of it isn't implemented yet**. M2 records each difference in a machine-readable allowlist, and M3 closes them.
 
 `tests/test_mobile_contract.py` checks the document's structure in CI. It doesn't check the backend.
+
+## The drift gate (M2)
+
+[`gaps.yaml`](gaps.yaml) lists every known difference between the contract and the backend, as `contract_gaps` and `implementation_gaps`. `tests/integration/test_mobile_contract_drift.py` runs in CI and compares it with what the running app does. It fails when:
+
+- a new difference appears;
+- a listed difference is gone but still listed, so a gap can't disappear quietly;
+- a gap ID is removed, or closed without a test that exists;
+- the contract changes without the allowlist being reviewed.
+
+**To close a gap:** fix it, then move it to `closed` with the test that proves it.
+
+**What it checks:** served routes, query parameters, headers and typed bodies, from `app.openapi()`. Then each served route over real HTTP: without a token, without a tenant header, and as a student. It looks for refusals, envelopes, internal fields and 500s.
+
+**What it doesn't check:**
+
+- **Gaps with only `evidence`** aren't machine-checked. They come from reading code or from a decision, and the gate only ensures they stay listed. Each one should gain a finding or a closing test as its work happens.
+- **Response fields in general.** It looks for named internal fields and the envelope. It doesn't validate each response against its schema. That belongs in M3 as routes conform.
+- **Content with real data.** It has no uploaded document yet, so `G-06` isn't observed. Lists come back empty.
+- **The AI service, PostgreSQL, and real devices.** It uses the test suite's SQLite setup with the AI service absent. M4 and M7 cover the boundaries.
 
 ## M1 decisions
 
@@ -78,7 +98,7 @@ Every combination is either defined or impossible. Staff can't store the impossi
 - **`after_final_attempt`** is reached when `attempts_used` equals `max_attempts` and all those attempts are finalized. It needs a limit, so `max_attempts: null` with `after_final_attempt` is **impossible**. With a limit of 1, it's reached when that attempt is finalized.
 - **`kind`** is a label and changes no enforcement.
 - **`scoring_policy`** chooses which finalized attempt stands as the student's outcome. Each attempt's own result doesn't change.
-- **`after_release`** means a staff release of the assessment's results. There's one release per assessment, shared by results and feedback. That staff action isn't in this student contract.
+- **`after_release`** means a staff release of the assessment's results. There's one release per assessment, shared by results and feedback. It must be a durable, auditable, monotonic event, so a release can't be undone or lost. That staff action isn't in this student contract.
 
 ### Result and feedback precedence
 
@@ -92,7 +112,7 @@ Every combination is either defined or impossible. Staff can't store the impossi
 
 So `result_visibility: after_release` with `feedback_timing: immediate` gives nothing until release. That result route is the only one that carries this feedback.
 
-**Known limit:** a score can reveal feedback that's being withheld. On a one-question assessment, for example, the total shows whether the answer was right. This follows from showing a score at all, and staff should choose settings with that in mind.
+**Accepted product limitation:** a score can reveal feedback that's being withheld, particularly on short assessments. On a one-question assessment, the total shows whether the answer was right. Withheld feedback isn't guaranteed to be concealed. Staff guidance and assessment configuration must account for this.
 
 ### Release-blocking governance
 
@@ -154,6 +174,7 @@ These continue the [M0 inventory](../../docs/mobile-m0-inventory.md) and move in
 | G-34 | Implementation | Medium | The OCR evaluation documents have no rights or provenance record. Their public source status is a separate decision and stays as it is. Their evaluation use continues, and they stay out of shared retrieval until each is reviewed | ai-service evaluation corpus | Before they enter shared retrieval |
 | G-36 | Implementation | **High** | `is_correct` and `awarded_marks` are returned as soon as an attempt is submitted, with no feedback stage | `get_attempt_result` in `app/api/assessment/attempts.py` | With retakes, after this contract |
 | G-37 | Implementation | **High** | Expired attempts wait for the student to submit, so the result depends on the app | #54 limit | With retakes, after this contract |
+| G-39 | Contract | Low | Assessment, attempt, result and membership responses carry `tenant_id` and `user_id`, which the contract doesn't | Found by the M2 gate | M3-E, M3-B |
 | G-38 | Implementation | **High** | Upload creates no job, so the durable queuing above doesn't exist yet | `app/application/content/upload.py` | M3-D |
 | G-35 | Implementation | **High, fixed in #53** | The answer key was readable by students mid-attempt through `GET /assessment/questions/{id}` | Test got 200 before the fix | Merged |
 
