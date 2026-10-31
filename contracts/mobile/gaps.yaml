@@ -4,20 +4,6 @@
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
 contract_sha256: 0ad04cac02ac70f5511ba09b0808ff9549371e893533772f2dad374fee46eae5
 contract_gaps:
-- id: G-06
-  severity: High
-  summary: Student-readable content responses expose internals such as storage_uri and created_by_email
-  closes_in: M3-D
-  findings:
-  - exposes_field GET /content/assets/{asset_id} created_by_email
-  - exposes_field GET /content/assets/{asset_id} storage_uri
-  - exposes_field GET /content/assets/{asset_id} tenant_id
-  - exposes_field GET /content/sources created_by_email
-  - exposes_field GET /content/sources tenant_id
-  - exposes_field GET /content/sources trust_policy
-  - exposes_field GET /content/sources/{source_id}/assets created_by_email
-  - exposes_field GET /content/sources/{source_id}/assets storage_uri
-  - exposes_field GET /content/sources/{source_id}/assets tenant_id
 - id: G-07
   severity: Medium
   summary: Clients can set max_attempts and correlation_id when creating a job
@@ -298,6 +284,9 @@ closed:
 - id: G-35
   summary: Students could read the answer key during an attempt
   proof: tests/integration/assessment/test_assessment_visibility.py::test_a_student_cannot_read_the_answer_key_during_an_attempt
+- id: G-06
+  summary: Content read routes gave students storage locations, identities and processing internals
+  proof: tests/integration/content/test_content_internal_fields.py::test_no_content_read_route_gives_a_student_an_internal_field
 - id: G-21
   summary: Validation errors and logs repeated the refused value, which may be a password
   proof: tests/integration/test_validation_never_echoes.py::test_a_signed_in_route_does_not_log_a_refused_value

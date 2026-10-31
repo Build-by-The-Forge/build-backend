@@ -14,6 +14,7 @@ from app.api.content.job_schemas import (
     IngestionJobResponse,
     IngestionJobRetryRequest,
 )
+from app.api.content.reader_view import job_view
 from app.application.content.job_handlers import (
     ASSET_DISPATCH_REFUSALS,
     ReconcileMismatchError,
@@ -97,7 +98,7 @@ async def get_ingestion_job(
             },
         )
 
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
+    resp_data = job_view(IngestionJobResponse.from_domain(job).model_dump(mode="json"), context)
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
 
 
@@ -122,7 +123,7 @@ async def get_latest_job_for_asset(
             },
         )
 
-    resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
+    resp_data = job_view(IngestionJobResponse.from_domain(job).model_dump(mode="json"), context)
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
 
 
@@ -139,7 +140,7 @@ async def list_jobs_for_asset(
         limit=limit,
         offset=offset,
     )
-    items = [IngestionJobResponse.from_domain(j).model_dump(mode="json") for j in jobs]
+    items = [job_view(IngestionJobResponse.from_domain(j).model_dump(mode="json"), context) for j in jobs]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -165,7 +166,7 @@ async def list_ingestion_jobs(
         limit=limit,
         offset=offset,
     )
-    items = [IngestionJobResponse.from_domain(j).model_dump(mode="json") for j in jobs]
+    items = [job_view(IngestionJobResponse.from_domain(j).model_dump(mode="json"), context) for j in jobs]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

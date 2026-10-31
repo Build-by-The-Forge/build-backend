@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from app.api.content.reader_view import source_view
 from app.api.content.schemas import (
     ContentSourceCreateRequest,
     ContentSourceReasonRequest,
@@ -118,7 +119,7 @@ async def list_sources(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": [_source_payload(s) for s in sources],
+            "data": [source_view(_source_payload(s), context) for s in sources],
             "meta": {"total": total, "limit": limit, "offset": offset},
             "request_id": getattr(request.state, "request_id", None),
         },
@@ -144,7 +145,7 @@ async def get_source(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": _source_payload(source),
+            "data": source_view(_source_payload(source), context),
             "meta": {},
             "request_id": getattr(request.state, "request_id", None),
         },
