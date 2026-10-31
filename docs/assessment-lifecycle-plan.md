@@ -156,10 +156,41 @@ The two questions have different answers.
 
 Checking only that a membership is active today can't see that it was revoked in between. So revocation leaves two durable marks:
 
-- **A generation.** `memberships.generation` goes up each time a membership is revoked, inside the domain's revoke method, so every path gets it. Reinstating doesn't change it. The event records the generation when it's created.
+- **A generation.** `memberships.generation` goes up each time a membership is revoked, inside `Membership.archive()`, so every path gets it. Reinstating doesn't change it. The event records the generation when it's created.
 - **Cancellation in the same transaction.** Revoking a membership also cancels that membership's pending events, so nothing waits to be noticed. The generation is the backstop for anything this misses.
 
-**An event created while the membership isn't active is created already cancelled.** Otherwise it would record the post-revocation generation, and reinstating would make it match.
+**An event created while the membership isn't active is created already cancelled.** Otherwise it would record the post-revocation generation, and reinstating would make it match. The same applies if no membership row exists.
+
+#### Event creation against revocation
+
+**The membership row lock serializes the two. No pending event can be committed that revocation didn't see.** Without it, finalization could read the membership as active, revocation could commit and cancel everything then visible, and finalization could then commit a pending event with the old generation.
+
+| Finalization, after locking the attempt | Revocation, after the existing owner lock |
+|---|---|
+| 1. `SELECT ... FOR SHARE` on the membership row | 1. `SELECT ... FOR UPDATE` on the target membership row |
+| 2. Read status and generation from that locked row | 2. Check status from that locked row |
+| 3. Insert the event, pending if active, otherwise cancelled | 3. Archive it and raise the generation |
+| 4. Commit | 4. Cancel its pending events, then commit |
+
+`FOR SHARE` lets finalizations for the same student run together while still conflicting with revocation. A foreign key alone wouldn't do this: its check takes `FOR KEY SHARE`, which doesn't conflict with a status update.
+
+| Who locks first | What happens | Result |
+|---|---|---|
+| Finalization | Revocation waits. Once finalization commits, the cancel statement takes a new snapshot and sees the event | Created pending, then cancelled by revocation |
+| Revocation | Finalization waits, then its lock returns the updated row: archived, with the new generation | Created already cancelled |
+
+Requirements for this to hold:
+
+- **Today's revocation has to change.** `MembershipService._prepare` reads a target without a row lock, and locks only active owners. Revocation needs the target locked before its status is checked.
+- **Reinstatement takes the same `FOR UPDATE` lock on every path:** `MembershipService.reactivate`, invitation acceptance and provisioning. A finalization then sees the membership either before or after reinstatement, never in between.
+- **The ORM must not hide the new row.** Locked reads use `populate_existing`, as `get_by_id_for_update` does, or a stale cached copy could replace what the lock returned.
+- **This relies on READ COMMITTED**, PostgreSQL's default, which the application doesn't override. A stricter level would make the waiting transaction fail instead, and any such change has to revisit this.
+- **Lock order is fixed:** attempt, then membership, then events. Revocation never locks an attempt, so it can't form a cycle with finalization.
+- **The dispatcher takes no membership lock and holds no row lock during the HTTP call.** It claims in a short transaction and reads the membership without locking. Recording the outcome only updates an event that isn't cancelled, so a late acknowledgement can't undo a cancellation.
+
+A revocation waits only for short transactions, since none of these makes a network call. Grading is the longest step in them.
+
+The generation check stays as a separate backstop. If a future path skipped the lock, the event would hold a stale generation and the dispatcher would still refuse it.
 
 | Situation | Result |
 |---|---|
@@ -170,6 +201,7 @@ Checking only that a membership is active today can't see that it was revoked in
 | Account made ineligible | Cancelled at the next delivery. No route suspends and restores an account today. If one is added, it needs the same generation treatment, and L4 records this |
 | Revoked, then reinstated before the dispatcher runs | Cancelled in the revoking transaction. No request reaches the AI service |
 | Reinstated after cancellation | The event stays cancelled. Reinstating doesn't send old activity |
+| Finalized while revocation is running | One waits for the other, and both orders end cancelled, as above. The attempt is still graded |
 | Finalized after revocation | The attempt is still graded, since the result is the authoritative record. The event is created already cancelled, so a later reinstatement can't deliver it |
 
 **Accepted limit:** one request already in flight can't be recalled, so a revocation committed between the check and the send can let that single delivery through. Holding a lock across an HTTP call isn't worth closing that. No retry follows it, because every retry checks again.
@@ -306,7 +338,7 @@ Each is its own PR with its own gates. The first three depend on each other in t
 | L2 | Release table and route, feedback function, `getAttemptResult`, `stands` flag | Yes |
 | L3 | One finalization path, worker loop, read-time fallback | Index |
 | AI-1 | ai-service: idempotent memory upsert with a per-event record | ai-service |
-| L4 | Memory outbox and dispatcher, removing the background task | Yes |
+| L4 | Memory outbox and dispatcher, `memberships.generation`, the shared membership lock on revocation, reinstatement and event creation, removing the background task | Yes |
 
 Then M3-A. L0-A and L0-B merge and are verified before any memory integration is enabled. The rest of the memory gate (expiry, deletion, student controls) is separate reviewed work, which doesn't block L1 to L4 because both capabilities stay off until it's done.
 
@@ -322,6 +354,7 @@ Then M3-A. L0-A and L0-B merge and are verified before any memory integration is
 | Duplicates and retries | Repeat submit, repeat release, repeat delivery | HTTP, AI service |
 | Concurrency | Submit against finalize, save against finalize, two workers. Simultaneous starts get the same attempt, with one row. **A slow start against a fast start-and-submit can't exceed the limit** | **PostgreSQL gate** |
 | Stale authorization | Revocation between event creation and delivery, and between a failed delivery and its retry; role change; account deletion. **Event created, membership revoked, reinstated, dispatcher runs: the event stays cancelled and no AI-service request is sent.** The same with the cancellation step removed, so the generation is proven on its own. An attempt finalized during revocation, then reinstated: never delivered | PostgreSQL gate |
+| Event creation against revocation | **Both orders, forced with two connections:** the first transaction holds its lock uncommitted, the test confirms through `pg_blocking_pids` that the second is waiting, then the first commits. Each order must leave the expected state above. Then, repeated unforced races. **After every run:** no pending event exists for the membership, the attempt stays graded, and after reinstatement the dispatcher sends no AI-service request. **Shown to fail without the lock:** with finalization's membership lock removed, forcing read, revocation commit, insert must leave a pending event that escaped cancellation, and this test must catch it. The dispatcher must still refuse that event on its stale generation, which proves the backstop on its own | **PostgreSQL gate** |
 | Deadline clock | Every deadline path uses the database time, read after the lock | **PostgreSQL gate** |
 | Limits can't be bypassed | Abandoned, expired and failed attempts all count | HTTP |
 | No unauthorized fields | Every student assessment route, at every stage, has no correct answer or explanation | HTTP, drift gate |
