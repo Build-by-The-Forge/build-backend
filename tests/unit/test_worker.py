@@ -52,7 +52,7 @@ def test_worker_health_requires_each_loop_to_finish_within_three_intervals(tmp_p
     monkeypatch.setattr(settings, "worker_retry_interval_seconds", 10)
     monkeypatch.setattr(settings, "worker_recoverer_interval_seconds", 60)
     path = tmp_path / "health.json"
-    write_health_state({"dispatch": 95, "retry": 71, "orphan_sweep": 95, "recoverer": 99}, path)
+    write_health_state({"dispatch": 95, "retry": 71, "orphan_sweep": 95, "recoverer": 99, "attempt_finalizer": 99}, path)
 
     check_worker_health(now=100, path=path)
     with pytest.raises(RuntimeError, match="dispatch"):

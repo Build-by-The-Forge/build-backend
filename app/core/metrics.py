@@ -16,6 +16,11 @@ errors_total = Counter(
 # An uploaded object whose compensating delete failed after its asset row
 # could not be committed (P3-1 PR 2, docs/p3-1-pr2-upload-design.md, section
 # 6). Each one is an orphan until P3-6's reconciliation removes it.
+assessment_attempts_finalized_total = Counter(
+    "build_backend_assessment_attempts_finalized_total",
+    "Expired attempts the worker finalized with no client involved",
+    registry=registry,
+)
 learning_memory_enabled = Gauge(
     "build_backend_learning_memory_enabled",
     "1 when learning memory is enabled in this process, 0 when the gate keeps it off",

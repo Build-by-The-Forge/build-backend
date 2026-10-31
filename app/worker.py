@@ -16,12 +16,14 @@ import structlog
 from prometheus_client import start_http_server
 from sqlalchemy import func, or_, select
 
+from app.application.assessment.attempt_handlers import finalize_attempt
 from app.application.content.job_handlers import (
     DispatchIngestionJobHandler,
     RecoverIngestionJobHandler,
 )
 from app.core.config import settings
 from app.core.metrics import (
+    assessment_attempts_finalized_total,
     content_in_flight_cap_hits_total,
     content_jobs_due,
     content_oldest_due_job_age_seconds,
@@ -31,8 +33,10 @@ from app.core.metrics import (
 )
 from app.db.session import SessionLocal, engine
 from app.db.timeouts import set_transaction_timeouts
+from app.domain.assessment.attempt import FinalizedBy
 from app.domain.content.enums import IngestionStatus
 from app.events.event_bus import EventBus
+from app.infrastructure.assessment.unit_of_work import AssessmentUnitOfWork
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
 from app.infrastructure.content.orphan_sweeper import sweep_orphaned_objects
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
@@ -281,6 +285,52 @@ async def run_recoverer_pass(stop: asyncio.Event | None = None) -> None:
         processed += 1
 
 
+async def _finalize_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
+    async with SessionLocal() as session:
+        async with AssessmentUnitOfWork(session) as uow:
+            await set_transaction_timeouts(session)
+            attempt = await uow.attempts.claim_next_expired(excluded_ids)
+            if attempt is None:
+                return False
+            claimed_ids.append(attempt.id)
+            await finalize_attempt(
+                uow.attempts,
+                uow.assessments,
+                uow.attempt_answers,
+                uow.attempt_results,
+                attempt_id=attempt.id,
+                tenant_id=attempt.tenant_id,
+                user_id=attempt.user_id,
+                finalized_by=FinalizedBy.DEADLINE,
+            )
+    assessment_attempts_finalized_total.inc()
+    return True
+
+
+async def run_attempt_finalizer_pass(stop: asyncio.Event | None = None) -> None:
+    excluded_ids: set[str] = set()
+    processed = 0
+    while processed < settings.worker_attempt_finalizer_batch and not (stop and stop.is_set()):
+        claimed_ids: list[str] = []
+        try:
+            found = await _finalize_one(excluded_ids, claimed_ids)
+        except Exception as exc:
+            # Rolled back, so it stays eligible for the next pass and for a read.
+            excluded_ids.update(claimed_ids)
+            logger.error(
+                "assessment_attempt_finalize_error",
+                attempt_id=claimed_ids[-1] if claimed_ids else None,
+                error_type=type(exc).__name__,
+            )
+            if not claimed_ids:
+                raise
+            continue
+        if not found:
+            return
+        excluded_ids.update(claimed_ids)
+        processed += 1
+
+
 def write_health_state(completed_at: dict[str, float], path: Path = HEALTH_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f"{path.name}.", dir=path.parent)
@@ -308,6 +358,7 @@ def check_worker_health(now: float | None = None, path: Path = HEALTH_PATH) -> N
         "retry": settings.worker_retry_interval_seconds,
         "orphan_sweep": settings.worker_orphan_sweep_interval_seconds,
         "recoverer": settings.worker_recoverer_interval_seconds,
+        "attempt_finalizer": settings.worker_attempt_finalizer_interval_seconds,
     }
     unhealthy = [name for name, interval in intervals.items() if name not in state or current - state[name] > 3 * interval]
     if unhealthy:
@@ -386,6 +437,15 @@ async def serve() -> None:
                 "recoverer",
                 settings.worker_recoverer_interval_seconds,
                 run_recoverer_pass,
+                stop,
+                completed_at,
+            )
+        ),
+        asyncio.create_task(
+            _run_loop(
+                "attempt_finalizer",
+                settings.worker_attempt_finalizer_interval_seconds,
+                run_attempt_finalizer_pass,
                 stop,
                 completed_at,
             )

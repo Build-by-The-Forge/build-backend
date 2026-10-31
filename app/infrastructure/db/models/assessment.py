@@ -195,6 +195,7 @@ class AssessmentAttemptModel(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finalized_by: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -207,6 +208,13 @@ class AssessmentAttemptModel(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("finalized_by IN ('student', 'deadline')", name="ck_assessment_attempts_finalized_by"),
+        Index(
+            "ix_assessment_attempts_expired",
+            "expires_at",
+            sqlite_where=(status == "in_progress"),
+            postgresql_where=(status == "in_progress"),
+        ),
         Index("ix_assessment_attempts_tenant_id", "tenant_id"),
         Index("ix_assessment_attempts_assessment_id", "assessment_id"),
         Index("ix_assessment_attempts_user_id", "user_id"),

@@ -28,7 +28,7 @@ class SaveAttemptAnswerHandler:
         )
         if attempt is None:
             raise LookupError("attempt not found")
-        attempt.ensure_answer_mutation_allowed()
+        attempt.ensure_answer_mutation_allowed(await self.attempts.database_now())
 
         snapshots = await self.assessments.list_question_snapshots(attempt.assessment_id, tenant_id=command.tenant_id)
         snapshot = next(
@@ -86,7 +86,7 @@ class DeleteAttemptAnswerHandler:
         )
         if attempt is None:
             return None
-        attempt.ensure_answer_mutation_allowed()
+        attempt.ensure_answer_mutation_allowed(await self.attempts.database_now())
         answer = await self.answers.get_by_attempt_and_question(
             command.attempt_id,
             command.assessment_question_id,

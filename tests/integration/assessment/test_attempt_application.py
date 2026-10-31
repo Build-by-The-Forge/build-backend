@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 
 from app.application.assessment.attempt_service import AttemptService
@@ -25,6 +27,9 @@ class InMemoryAttemptRepository:
     async def save(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         self.items[attempt.id] = attempt
         return attempt
+
+    async def database_now(self):
+        return datetime.now(timezone.utc)
 
     async def lock_starts(self, assessment_id: str, user_id: str, tenant_id: str) -> None:
         return None
