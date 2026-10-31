@@ -254,6 +254,8 @@ Three kinds of record have three separate lifetimes. Deleting one never deletes 
 6. Purpose limitation: memory serves that student's personalization, and isn't used to train a model.
 7. Tenant isolation on every read and change of memory.
 8. A memory failure can't affect an authoritative assessment result. That already holds, and stays tested.
+9. A defined retention and deletion lifecycle for memory events and contributions, including how expired contributions affect a recompute. They outlive the 30-day outbox, since a repeat must stay recognisable and the aggregate is rebuilt from them.
+10. A decision for rows marked `history_complete = false`: they can't be recomputed until rebuilt from valid source events, and history is never manufactured.
 
 **The gate covers both directions, as separate capabilities.** Not writing new memories and not disclosing existing ones are different things.
 
