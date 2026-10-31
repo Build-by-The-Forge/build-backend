@@ -29,6 +29,8 @@ from typing import Any
 import httpx
 import pytest
 
+from boundary.job_status import wait_until_settled
+
 BACKEND_URL = os.environ.get("BOUNDARY_BACKEND_URL", "")
 AI_URL = os.environ.get("BOUNDARY_AI_URL", "")
 B2A = os.environ.get("BACKEND_TO_AI_SECRET", "")
@@ -424,9 +426,4 @@ def get_job(backend: httpx.Client, tenant: Tenant, job_id: str) -> dict[str, Any
 
 
 def wait_for_status(backend, tenant, job_id, statuses: set[str], timeout: float = 60) -> dict[str, Any]:
-    deadline = time.time() + timeout
-    job = get_job(backend, tenant, job_id)
-    while job["status"] not in statuses and time.time() < deadline:
-        time.sleep(0.5)
-        job = get_job(backend, tenant, job_id)
-    return job
+    return wait_until_settled(lambda: get_job(backend, tenant, job_id), statuses, timeout)
