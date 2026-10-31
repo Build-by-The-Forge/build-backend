@@ -24,6 +24,9 @@ class InMemoryAssessmentRepository:
         self.items[assessment.id] = assessment
         return assessment
 
+    async def lock_for_change(self, assessment_id: str, tenant_id: str) -> None:
+        return None
+
     async def get_by_id(self, assessment_id: str, tenant_id: str | None = None) -> Assessment | None:
         assessment = self.items.get(assessment_id)
         if assessment is not None and tenant_id is not None and assessment.tenant_id != tenant_id:

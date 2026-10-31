@@ -35,6 +35,7 @@ class CreateAssessmentHandler:
             instructions=command.instructions,
             duration_minutes=command.duration_minutes,
             passing_score=command.passing_score,
+            attempt_policy=command.attempt_policy,
         )
         return await self.repository.save(assessment, tenant_id=command.tenant_id)
 
@@ -62,6 +63,9 @@ class UpdateAssessmentHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateAssessmentCommand) -> Assessment | None:
+        # With publish taking the same lock, an edit can't read a draft and
+        # write its policy after the assessment was published.
+        await self.repository.lock_for_change(command.assessment_id, command.tenant_id)
         assessment = await self.repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             return None
@@ -70,6 +74,7 @@ class UpdateAssessmentHandler:
             instructions=command.instructions,
             duration_minutes=command.duration_minutes,
             passing_score=command.passing_score,
+            attempt_policy=command.attempt_policy,
         )
         return await self.repository.update(assessment, tenant_id=command.tenant_id)
 
@@ -79,6 +84,7 @@ class PublishAssessmentHandler:
         self.repository = repository
 
     async def handle(self, command: PublishAssessmentCommand) -> Assessment | None:
+        await self.repository.lock_for_change(command.assessment_id, command.tenant_id)
         assessment = await self.repository.get_by_id(command.assessment_id, tenant_id=command.tenant_id)
         if assessment is None:
             return None

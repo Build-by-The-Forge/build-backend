@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
 
-from app.domain.assessment.errors import AssessmentAlreadyArchivedError
+from app.domain.assessment.attempt_policy import AttemptPolicy
+from app.domain.assessment.errors import AssessmentAlreadyArchivedError, AttemptPolicyLockedError
 from app.events.base import DomainEvent
 
 
@@ -50,6 +51,7 @@ class Assessment:
     passing_score: int = 0
     assessment_id: str = field(default_factory=lambda: f"assessment-{uuid4()}", repr=False)
     status: AssessmentStatus = AssessmentStatus.DRAFT
+    attempt_policy: AttemptPolicy = field(default_factory=AttemptPolicy.practice_default)
     questions: list[AssessmentQuestion] = field(default_factory=list, repr=False)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -79,6 +81,7 @@ class Assessment:
         instructions: str,
         duration_minutes: int,
         passing_score: int,
+        attempt_policy: AttemptPolicy | None = None,
     ) -> "Assessment":
         assessment = cls(
             tenant_id=tenant_id,
@@ -87,6 +90,7 @@ class Assessment:
             instructions=instructions,
             duration_minutes=duration_minutes,
             passing_score=passing_score,
+            attempt_policy=attempt_policy or AttemptPolicy.practice_default(),
         )
         assessment._events.append(
             DomainEvent(
@@ -155,9 +159,13 @@ class Assessment:
         instructions: str | None = None,
         duration_minutes: int | None = None,
         passing_score: int | None = None,
+        attempt_policy: AttemptPolicy | None = None,
     ) -> None:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
+        # Checked first, so a refused request changes nothing.
+        if attempt_policy is not None and self.status != AssessmentStatus.DRAFT:
+            raise AttemptPolicyLockedError("attempt policy cannot change after publication")
 
         if title is not None:
             if not title.strip():
@@ -175,6 +183,8 @@ class Assessment:
             if passing_score < 0:
                 raise ValueError("passing_score cannot be negative")
             self.passing_score = passing_score
+        if attempt_policy is not None:
+            self.attempt_policy = attempt_policy
 
         self.touch()
         self._events.append(

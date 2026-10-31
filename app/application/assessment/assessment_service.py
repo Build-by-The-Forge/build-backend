@@ -18,6 +18,7 @@ from app.application.assessment.assessment_handlers import (
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.assessment import Assessment
+from app.domain.assessment.attempt_policy import AttemptPolicy
 from app.domain.assessment.result import AttemptResult
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
@@ -52,6 +53,7 @@ class AssessmentService:
         instructions: str,
         duration_minutes: int,
         passing_score: int = 0,
+        attempt_policy: AttemptPolicy | None = None,
     ) -> Assessment:
         command = CreateAssessmentCommand(
             tenant_id=tenant_id,
@@ -60,6 +62,7 @@ class AssessmentService:
             instructions=instructions,
             duration_minutes=duration_minutes,
             passing_score=passing_score,
+            attempt_policy=attempt_policy,
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
@@ -95,6 +98,7 @@ class AssessmentService:
         instructions: str | None = None,
         duration_minutes: int | None = None,
         passing_score: int | None = None,
+        attempt_policy: AttemptPolicy | None = None,
     ) -> Assessment | None:
         command = UpdateAssessmentCommand(
             assessment_id,
@@ -103,6 +107,7 @@ class AssessmentService:
             instructions,
             duration_minutes,
             passing_score,
+            attempt_policy,
         )
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:

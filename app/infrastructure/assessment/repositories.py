@@ -1,4 +1,6 @@
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -128,6 +130,15 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         await self._session.flush()
         return assessment
 
+    async def lock_for_change(self, assessment_id: str, tenant_id: str) -> None:
+        # A column read, so no copy enters the session: the read that follows
+        # sees what the lock's holder committed.
+        await self._session.execute(
+            select(AssessmentModel.id)
+            .where(AssessmentModel.id == assessment_id, AssessmentModel.tenant_id == tenant_id)
+            .with_for_update()
+        )
+
     async def get_by_id(self, assessment_id: str, tenant_id: str | None = None) -> Assessment | None:
         statement = select(AssessmentModel).where(AssessmentModel.id == assessment_id)
         if tenant_id is not None:
@@ -239,15 +250,60 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         user_id: str,
         tenant_id: str,
     ) -> AssessmentAttempt | None:
-        statement = select(AssessmentAttemptModel).where(
-            AssessmentAttemptModel.assessment_id == assessment_id,
-            AssessmentAttemptModel.user_id == user_id,
-            AssessmentAttemptModel.tenant_id == tenant_id,
-            AssessmentAttemptModel.status == AttemptStatus.IN_PROGRESS.value,
+        statement = (
+            select(AssessmentAttemptModel)
+            .where(
+                AssessmentAttemptModel.assessment_id == assessment_id,
+                AssessmentAttemptModel.user_id == user_id,
+                AssessmentAttemptModel.tenant_id == tenant_id,
+                AssessmentAttemptModel.status == AttemptStatus.IN_PROGRESS.value,
+            )
+            .execution_options(populate_existing=True)
         )
         result = await self._session.scalars(statement)
         model = result.first()
         return attempt_model_to_domain(model) if model is not None else None
+
+    async def lock_starts(self, assessment_id: str, user_id: str, tenant_id: str) -> None:
+        # Until the transaction ends. SQLite has no advisory locks and no real
+        # concurrency, so only the PostgreSQL gate can prove what this protects.
+        if self._session.get_bind().dialect.name != "postgresql":
+            return
+        key = f"assessment-start:{tenant_id}:{assessment_id}:{user_id}"
+        await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
+
+    async def count_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> int:
+        statement = select(func.count()).where(
+            AssessmentAttemptModel.assessment_id == assessment_id,
+            AssessmentAttemptModel.user_id == user_id,
+            AssessmentAttemptModel.tenant_id == tenant_id,
+        )
+        return (await self._session.execute(statement)).scalar_one()
+
+    async def counts_by_assessment(self, user_id: str, tenant_id: str) -> dict[str, int]:
+        statement = (
+            select(AssessmentAttemptModel.assessment_id, func.count())
+            .where(AssessmentAttemptModel.user_id == user_id, AssessmentAttemptModel.tenant_id == tenant_id)
+            .group_by(AssessmentAttemptModel.assessment_id)
+        )
+        return {assessment_id: count for assessment_id, count in (await self._session.execute(statement)).all()}
+
+    async def insert_unless_active(self, attempt: AssessmentAttempt) -> bool:
+        """False if an attempt is already in progress. A uniqueness violation
+        would leave the PostgreSQL transaction failed, so nothing further
+        could run in it; ON CONFLICT lets the caller carry on."""
+        model = attempt_to_model(attempt)
+        insert = postgresql_insert if self._session.get_bind().dialect.name == "postgresql" else sqlite_insert
+        statement = (
+            insert(AssessmentAttemptModel)
+            .values({column.name: getattr(model, column.name) for column in AssessmentAttemptModel.__table__.columns})
+            .on_conflict_do_nothing(
+                index_elements=["tenant_id", "assessment_id", "user_id"],
+                index_where=AssessmentAttemptModel.status == AttemptStatus.IN_PROGRESS.value,
+            )
+            .returning(AssessmentAttemptModel.id)
+        )
+        return (await self._session.execute(statement)).first() is not None
 
     async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
         statement = select(AssessmentAttemptModel).where(
