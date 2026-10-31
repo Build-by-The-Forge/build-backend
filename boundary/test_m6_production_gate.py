@@ -206,13 +206,16 @@ def test_no_legacy_ai_tables_exist():
 def test_every_table_belongs_to_exactly_one_service():
     owners = _owners()
     ai_tables = {t for t, o in owners.items() if o == "build_ai_owner"}
-    assert ai_tables == {
+    current = {
         "document_chunks",
         "ingestion_fences",
         "learning_memory",
         "session_memory",
         "ai_service_alembic_version",
     }
+    # AI-1 adds exactly these two. Both forms are allowed only while the two
+    # repositories merge in order; L4 removes the first.
+    assert ai_tables in (current, current | {"learning_memory_events", "learning_memory_contributions"})
     assert {o for t, o in owners.items() if t not in ai_tables} == {"build_backend_owner"}
     assert owners["users"] == owners["tenants"] == owners["memberships"] == "build_backend_owner"
 
