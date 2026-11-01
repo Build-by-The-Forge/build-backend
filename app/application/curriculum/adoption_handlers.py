@@ -90,7 +90,10 @@ class AddCurriculumOverrideHandler:
             benchmark_courses = await self.benchmark_repo.list_courses(adoption.benchmark_curriculum_id)
             existing_codes = {c.code.upper() for c in benchmark_courses}
             if command.target_course_code.upper() not in existing_codes:
-                raise ClientSafeError("target course " f"does not exist in adopted benchmark {adoption.benchmark_version}")
+                raise ClientSafeError(
+                    "target course "
+                    f"does not exist in adopted benchmark {adoption.benchmark_version}"
+                )
 
         override = CurriculumOverride.create(
             adoption_id=adoption.id,

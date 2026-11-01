@@ -10,5 +10,4 @@ class EmailMessage:
 
 
 class EmailSender(Protocol):
-    async def send(self, message: EmailMessage) -> None:
-        ...
+    async def send(self, message: EmailMessage) -> None: ...

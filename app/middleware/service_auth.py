@@ -45,8 +45,7 @@ REPLAY_STORE_STATE_KEY = "service_replay_store"
 
 
 class ReplayStore(Protocol):
-    async def claim(self, receiver: str, sender: str, request_id: str) -> bool:
-        ...
+    async def claim(self, receiver: str, sender: str, request_id: str) -> bool: ...
 
 
 class _BodyTooLarge(Exception):
