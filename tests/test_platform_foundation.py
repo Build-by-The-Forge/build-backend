@@ -26,4 +26,4 @@ def test_root_response_is_enveloped() -> None:
     payload = response.json()
     assert payload["success"] is True
     assert payload["data"]["message"].startswith("BUILD backend")
-    assert payload["request_id"]
+    assert payload["meta"]["request_id"]

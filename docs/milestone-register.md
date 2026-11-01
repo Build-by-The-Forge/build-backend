@@ -16,7 +16,7 @@ There are two tracks, and neither one's progress counts for the other:
 | M0 | Conventions, inventory, boundary decisions | None | Reviewer approval of the three documents | Link check | **Merged** | `615ee48` (merge) |
 | M1 | Intended mobile API contract | M0 | The contract describes what the system should guarantee | `tests/test_mobile_contract.py` | **Merged** | `31faad4` |
 | M2 | Drift gate against the contract | M1 | Every known gap is listed, and a closed gap stays closed | `test_mobile_contract_drift.py` | **Merged** | `16a5227` (merge) |
-| M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Not started** | |
+| M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete** once its success half merges: all three gaps closed, drift gate enforcing them | #72 `1c6cb7f` (merge) |
 | M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Not started** | |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Not started** | |
 | M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Not started** | |
@@ -29,12 +29,12 @@ There are two tracks, and neither one's progress counts for the other:
 
 ### M3 position
 
-M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. No M3 slice is complete.
+M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A is the only slice whose gaps are closed. M3-B to M3-F haven't started, apart from the lifecycle work in M3-E.
 
 | | Count | IDs |
 |---|---|---|
-| Closed | 11 | G-03, G-06, G-15, G-16, G-21, G-24, G-27, G-29, G-35, G-36, G-37 |
-| Open | 28 | 10 contract, 18 implementation, listed in `contracts/mobile/gaps.yaml` |
+| Closed | 14 | G-03, G-06, G-08, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-29, G-35, G-36, G-37 |
+| Open | 25 | 8 contract, 17 implementation, listed in `contracts/mobile/gaps.yaml` |
 | Open and blocking | 2 | G-01, G-02: students can't upload or start ingestion |
 
 `contracts/mobile/gaps.yaml` stays the source of truth for individual gaps. This table is a snapshot of it. Don't reopen a closed gap without new evidence.
@@ -68,7 +68,7 @@ A faster order doesn't weaken any acceptance criteria. M3-D isn't done because u
 1. AI-1: merged (ai-service #42).
 2. This register: merged (#67).
 3. The boundary gate: fixes merged (#68, #69), and the acceptance bar below is met.
-4. M3-A, authorized to begin once this register update merges.
+4. M3-A: error half merged (#72); success half is the last step.
 
 **Boundary gate acceptance bar, before M3-A: met**
 
@@ -126,3 +126,6 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 | Registration reveals an existing email through a distinct 409 | Security review, 2026-11-01 | Unscheduled |
 | Identity routes accept raw `dict` payloads | Security review, 2026-11-01 | Unscheduled |
 | No HSTS or CSP headers | Security review, 2026-11-01 | Unscheduled |
+| The AI service's report text stays in the logs, minus what redaction catches, so log access needs protecting | #72 | First deployment |
+| `test_real_idempotency_follows_the_signed_tenant` and `test_timeout_after_real_ai_acceptance_retries_the_same_key_as_duplicate` run in no workflow and have no boundary-gate match | #72 | Separate PR, approved direction |
+| `/content/jobs` and other staff content routes keep their older response shapes, as the conventions allow | #72 | When staff clients are built |

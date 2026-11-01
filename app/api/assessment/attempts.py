@@ -83,8 +83,8 @@ async def get_attempt_questions(
         content={
             "success": True,
             "data": response.model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -100,8 +100,8 @@ async def list_attempts(
         content={
             "success": True,
             "data": [_attempt_payload(attempt) for attempt in attempts],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -188,8 +188,8 @@ async def get_attempt_result(
         content={
             "success": True,
             "data": response.model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -231,7 +231,7 @@ def _response(
         content={
             "success": True,
             "data": _attempt_payload(attempt),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )

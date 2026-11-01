@@ -78,8 +78,8 @@ async def create_source(
         content={
             "success": True,
             "data": _source_payload(source),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -121,8 +121,8 @@ async def list_sources(
         content={
             "success": True,
             "data": [source_view(_source_payload(s), context) for s in sources],
-            "meta": {"total": total, "limit": limit, "offset": offset},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"total": total, "limit": limit, "offset": offset, "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -147,8 +147,8 @@ async def get_source(
         content={
             "success": True,
             "data": source_view(_source_payload(source), context),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -188,8 +188,8 @@ async def update_source(
         content={
             "success": True,
             "data": _source_payload(updated),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -220,8 +220,8 @@ async def deprecate_source(
         content={
             "success": True,
             "data": _source_payload(updated),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -252,8 +252,8 @@ async def revoke_source(
         content={
             "success": True,
             "data": _source_payload(updated),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -280,8 +280,8 @@ async def activate_source(
         content={
             "success": True,
             "data": _source_payload(updated),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 

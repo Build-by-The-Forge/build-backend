@@ -77,12 +77,7 @@ def _actor(request: Request, context: TenantContext, permission: Permission) -> 
 
 def _envelope(request: Request, data: dict[str, object]) -> JSONResponse:
     return JSONResponse(
-        content={
-            "success": True,
-            "data": data,
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
-        }
+        content={"success": True, "data": data, "error": None, "meta": {"request_id": getattr(request.state, "request_id", None)}}
     )
 
 

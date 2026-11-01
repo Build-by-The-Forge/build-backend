@@ -51,32 +51,6 @@ contract_gaps:
   summary: No way to limit a question to one document. Deferred by the reviewer
   closes_in: Deferred
   evidence: Reviewer decision at 976c88a.
-- id: G-20
-  severity: High
-  summary: Mobile routes don't return the contract's success envelope
-  closes_in: M3-A
-  findings:
-  - success_envelope DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
-  - success_envelope GET /assessment/assessments keys
-  - success_envelope GET /assessment/assessments/{assessment_id} keys
-  - success_envelope GET /assessment/attempts keys
-  - success_envelope GET /assessment/attempts/{attempt_id} keys
-  - success_envelope GET /assessment/attempts/{attempt_id}/answers keys
-  - success_envelope GET /assessment/attempts/{attempt_id}/questions keys
-  - success_envelope GET /assessment/attempts/{attempt_id}/result keys
-  - success_envelope GET /catalogue/courses keys
-  - success_envelope GET /catalogue/courses/{course_id} keys
-  - success_envelope GET /catalogue/courses/{course_id}/topics keys
-  - success_envelope GET /catalogue/topics/{topic_id}/learning-outcomes keys
-  - success_envelope GET /catalogue/topics/{topic_id}/reference-materials keys
-  - success_envelope GET /content/assets/{asset_id} keys
-  - success_envelope GET /content/sources keys
-  - success_envelope GET /content/sources/{source_id}/assets keys
-  - success_envelope GET /identity/me keys
-  - success_envelope GET /identity/memberships keys
-  - success_envelope POST /assessment/assessments/{assessment_id}/attempts keys
-  - success_envelope POST /assessment/attempts/{attempt_id}/submit keys
-  - success_envelope PUT /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
 - id: G-23
   severity: Low
   summary: Asset ordering has no unique tie-breaker
@@ -208,6 +182,9 @@ implementation_gaps:
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
 closed:
+- id: G-20
+  summary: Mobile routes didn't return the contract's envelopes or stable error codes
+  proof: tests/integration/test_success_envelope.py::test_every_success_body_on_a_route_has_the_contracts_shape
 - id: G-08
   summary: The course list caught every exception and returned its text
   proof: tests/integration/test_error_envelope.py::test_an_unexpected_failure_on_the_course_list_reveals_nothing

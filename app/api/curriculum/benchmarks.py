@@ -109,8 +109,8 @@ async def ingest_candidate(
         content={
             "success": True,
             "data": _curriculum_summary_payload(curriculum),
-            "meta": {"created": created},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"created": created, "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -128,8 +128,8 @@ async def list_benchmarks(
         content={
             "success": True,
             "data": [_curriculum_summary_payload(c) for c in curricula],
-            "meta": {"total": len(curricula)},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"total": len(curricula), "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -154,11 +154,12 @@ async def compare_benchmarks(
         content={
             "success": True,
             "data": _diff_payload(diff),
+            "error": None,
             "meta": {
                 "fingerprint": diff.diff_fingerprint,
                 "credit_delta": diff.statistics.credit_units_delta,
+                "request_id": getattr(request.state, "request_id", None),
             },
-            "request_id": getattr(request.state, "request_id", None),
         },
     )
 
@@ -180,8 +181,8 @@ async def get_benchmark(
         content={
             "success": True,
             "data": _curriculum_summary_payload(curriculum),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -207,13 +208,14 @@ async def list_courses(
         content={
             "success": True,
             "data": [_course_summary_payload(c) for c in courses],
+            "error": None,
             "meta": {
                 "curriculum_id": curriculum_id,
                 "total": len(courses),
                 "level": level,
                 "semester": semester,
+                "request_id": getattr(request.state, "request_id", None),
             },
-            "request_id": getattr(request.state, "request_id", None),
         },
     )
 
@@ -237,8 +239,8 @@ async def get_course_detail(
         content={
             "success": True,
             "data": _course_detail_payload(course),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -262,12 +264,13 @@ async def validate_candidate(
                 "curriculum": _curriculum_summary_payload(curriculum),
                 "validation": _validation_result_payload(validation_result),
             },
+            "error": None,
             "meta": {
                 "is_valid": validation_result.is_valid,
                 "error_count": validation_result.error_count,
                 "warning_count": validation_result.warning_count,
+                "request_id": getattr(request.state, "request_id", None),
             },
-            "request_id": getattr(request.state, "request_id", None),
         },
     )
 
@@ -297,10 +300,8 @@ async def submit_for_review(
                 "curriculum": _curriculum_summary_payload(curriculum),
                 "audit_log": _audit_log_payload(audit_log),
             },
-            "meta": {
-                "diff_fingerprint": audit_log.diff_fingerprint,
-            },
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"diff_fingerprint": audit_log.diff_fingerprint, "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -330,8 +331,8 @@ async def approve_curriculum(
                 "curriculum": _curriculum_summary_payload(curriculum),
                 "audit_log": _audit_log_payload(audit_log),
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -361,8 +362,8 @@ async def reject_curriculum(
                 "curriculum": _curriculum_summary_payload(curriculum),
                 "audit_log": _audit_log_payload(audit_log),
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -392,8 +393,8 @@ async def revise_curriculum(
                 "curriculum": _curriculum_summary_payload(curriculum),
                 "audit_log": _audit_log_payload(audit_log),
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -410,8 +411,8 @@ async def get_audit_trail(
         content={
             "success": True,
             "data": [_audit_log_payload(log) for log in audit_logs],
-            "meta": {"total": len(audit_logs)},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"total": len(audit_logs), "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -438,8 +439,11 @@ async def activate_curriculum(
                 "activated": _curriculum_summary_payload(curriculum),
                 "superseded": (_curriculum_summary_payload(superseded) if superseded is not None else None),
             },
-            "meta": {"superseded_curriculum_id": (superseded.id if superseded is not None else None)},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {
+                "superseded_curriculum_id": superseded.id if superseded is not None else None,
+                "request_id": getattr(request.state, "request_id", None),
+            },
         },
     )
 
@@ -470,8 +474,8 @@ async def get_active_benchmark(
         content={
             "success": True,
             "data": _curriculum_summary_payload(curriculum),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 

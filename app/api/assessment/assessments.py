@@ -72,8 +72,8 @@ async def list_assessments(
                 for item in assessments
                 if staff or item.status == AssessmentStatus.PUBLISHED
             ],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -166,8 +166,8 @@ async def release_results(
                 "released_by": release.released_by,
                 "released_at": release.released_at.isoformat(),
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -223,12 +223,8 @@ async def get_assessment_results(
         content={
             "success": True,
             "data": response.model_dump(),
-            "meta": {
-                "total": total,
-                "limit": limit,
-                "offset": offset,
-            },
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"total": total, "limit": limit, "offset": offset, "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -274,7 +270,7 @@ def _response(
         content={
             "success": True,
             "data": _assessment_payload(assessment, with_questions=with_questions, attempts_used=attempts_used),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
