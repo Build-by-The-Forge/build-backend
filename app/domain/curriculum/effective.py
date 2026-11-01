@@ -129,24 +129,15 @@ class EffectiveCurriculumResolver:
     ) -> EffectiveCurriculum:
         # 1. Verify Benchmark Pinning (Fail Closed)
         if adoption.benchmark_curriculum_id != benchmark.id:
-            raise ClientSafeError(
-                "adoption pinned benchmark ID "
-                "does not match loaded benchmark ID"
-            )
+            raise ClientSafeError("adoption pinned benchmark ID " "does not match loaded benchmark ID")
         if adoption.benchmark_version != benchmark.version:
-            raise ClientSafeError(
-                "adoption pinned benchmark version "
-                "does not match loaded benchmark version"
-            )
+            raise ClientSafeError("adoption pinned benchmark version " "does not match loaded benchmark version")
         if (
             adoption.benchmark_fingerprint is not None
             and benchmark.review_fingerprint is not None
             and adoption.benchmark_fingerprint != benchmark.review_fingerprint
         ):
-            raise ClientSafeError(
-                "adoption pinned benchmark fingerprint "
-                "does not match loaded benchmark review fingerprint"
-            )
+            raise ClientSafeError("adoption pinned benchmark fingerprint " "does not match loaded benchmark review fingerprint")
 
         # 2. Group Overrides and Detect Conflicts
         course_overrides_by_code: dict[str, list[CurriculumOverride]] = {}

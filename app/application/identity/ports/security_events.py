@@ -49,7 +49,8 @@ class SecurityEventRecorder(Protocol):
         *,
         user_id: str | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> None: ...
+    ) -> None:
+        ...
 
     async def record_login(
         self,
@@ -57,4 +58,5 @@ class SecurityEventRecorder(Protocol):
         user_id: str | None,
         successful: bool,
         reason: LoginFailureReason | None = None,
-    ) -> None: ...
+    ) -> None:
+        ...

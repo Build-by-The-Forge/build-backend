@@ -34,9 +34,7 @@ class CompareBenchmarkCurriculaHandler:
             or source_curriculum.programme_code != target_curriculum.programme_code
             or source_curriculum.degree_level != target_curriculum.degree_level
         ):
-            raise ClientSafeError(
-                "cannot compare curricula of different programmes"
-            )
+            raise ClientSafeError("cannot compare curricula of different programmes")
 
         source_courses = await self._load_full_courses(source_curriculum.id)
         target_courses = await self._load_full_courses(target_curriculum.id)

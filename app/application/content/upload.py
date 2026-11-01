@@ -192,9 +192,7 @@ def detect_mime_type(head: bytes, file_name: str) -> str:
     for signature, mime_type, extensions in _TYPES:
         if head.startswith(signature):
             if extension not in extensions:
-                raise UnsupportedUploadTypeError(
-                    "the file's content doesn't match its name's extension"
-                )
+                raise UnsupportedUploadTypeError("the file's content doesn't match its name's extension")
             return mime_type
     raise UnsupportedUploadTypeError("only PDF, PNG and JPEG documents are accepted")
 

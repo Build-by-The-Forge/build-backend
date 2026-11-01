@@ -23,7 +23,8 @@ MAX_OBSERVATIONS = 200  # AI-service's per-call bound
 
 
 class AttemptTopicOutcomes(Protocol):
-    async def outcomes(self, tenant_id: str, attempt_id: str, user_id: str) -> list[MemoryObservation]: ...
+    async def outcomes(self, tenant_id: str, attempt_id: str, user_id: str) -> list[MemoryObservation]:
+        ...
 
 
 class LearningMemoryReporter:

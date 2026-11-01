@@ -56,7 +56,8 @@ class UserId:
 
 
 class PasswordHasher(Protocol):
-    def hash(self, password: Password) -> PasswordHash: ...
+    def hash(self, password: Password) -> PasswordHash:
+        ...
 
 
 @dataclass(frozen=True, slots=True)
