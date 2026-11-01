@@ -80,6 +80,7 @@ def test_wrong_current_password_is_refused_without_a_401(client):
         resp = _change(client, mine["access_token"], current_password=wrong)
         assert resp.status_code == 400
         assert resp.json()["error"]["message"] == "current password is incorrect"
+        assert resp.json()["error"]["code"] == "BAD_REQUEST"
 
     assert _login(client, email, PASSWORD).status_code == 200
     assert _whoami(client, mine["access_token"]).status_code == 200

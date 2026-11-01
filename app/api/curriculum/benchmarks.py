@@ -33,6 +33,7 @@ from app.application.curriculum.benchmark_service import (
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import public_message
 from app.core.tenant_context import TenantContext
 from app.domain.curriculum.audit import BenchmarkAuditLog
 from app.domain.curriculum.benchmark import (
@@ -100,7 +101,7 @@ async def ingest_candidate(
             courses=courses,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=public_message(exc)) from exc
 
     status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return JSONResponse(
@@ -146,7 +147,7 @@ async def compare_benchmarks(
             target_curriculum_id=target_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -251,7 +252,7 @@ async def validate_candidate(
     try:
         curriculum, validation_result = await service.validate_candidate(curriculum_id)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -286,7 +287,7 @@ async def submit_for_review(
             notes=payload.notes,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -319,7 +320,7 @@ async def approve_curriculum(
             reason=payload.reason,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -350,7 +351,7 @@ async def reject_curriculum(
             reason=payload.reason,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -381,7 +382,7 @@ async def revise_curriculum(
             reason=payload.reason,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -427,7 +428,7 @@ async def activate_curriculum(
             activated_by=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

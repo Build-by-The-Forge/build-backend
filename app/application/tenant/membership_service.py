@@ -47,7 +47,7 @@ def _role(value: str) -> MembershipRole:
     try:
         return MembershipRole(value)
     except ValueError:
-        raise AppError(f"unknown role: {value!r}", status_code=422) from None
+        raise AppError("unknown role", status_code=422) from None
 
 
 class TenantMembershipService:
@@ -57,7 +57,7 @@ class TenantMembershipService:
 
     async def list(self, context: TenantContext, status: str | None) -> list[MemberView]:
         if status is not None and status not in {s.value for s in MembershipStatus}:
-            raise AppError(f"unknown status: {status!r}", status_code=422)
+            raise AppError("unknown status", status_code=422)
         async with self._uow() as uow:
             rows = await uow.memberships.list_with_emails(context.tenant_id, status)
         return [MemberView(membership, email) for membership, email in rows]

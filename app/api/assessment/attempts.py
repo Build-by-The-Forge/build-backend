@@ -43,8 +43,8 @@ async def start_attempt(
         raise AppError("attempt limit reached", status_code=409, code="ATTEMPT_LIMIT_REACHED") from exc
     except ValueError as exc:
         if str(exc) == "assessment not found":
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise HTTPException(status_code=404, detail="assessment not found") from exc
+        raise HTTPException(status_code=409, detail="assessment is not available for attempts") from exc
     return _response(request, attempt, status_code=status.HTTP_201_CREATED)
 
 
@@ -151,7 +151,7 @@ async def get_attempt_result(
             raise AppError("attempt is not submitted", status_code=409, code="ATTEMPT_NOT_SUBMITTED") from exc
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
+            detail="the attempt result is not available",
         ) from exc
 
     if readable is None:

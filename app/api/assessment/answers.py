@@ -39,13 +39,13 @@ async def save_answer(
             context.user_id,
         )
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="attempt or question not found") from exc
     except AttemptAlreadySubmittedError as exc:
-        raise AppError(str(exc), status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
+        raise AppError("attempt already submitted", status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
     except AttemptExpiredError as exc:
-        raise AppError(str(exc), status_code=409, code="ATTEMPT_EXPIRED") from exc
+        raise AppError("attempt expired", status_code=409, code="ATTEMPT_EXPIRED") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="this answer isn't valid for the question") from exc
     return _response(request, answer)
 
 
@@ -99,9 +99,9 @@ async def delete_answer(
             context.user_id,
         )
     except AttemptAlreadySubmittedError as exc:
-        raise AppError(str(exc), status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
+        raise AppError("attempt already submitted", status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
     except AttemptExpiredError as exc:
-        raise AppError(str(exc), status_code=409, code="ATTEMPT_EXPIRED") from exc
+        raise AppError("attempt expired", status_code=409, code="ATTEMPT_EXPIRED") from exc
     if deleted is None:
         raise HTTPException(status_code=404, detail="attempt not found")
     return JSONResponse(

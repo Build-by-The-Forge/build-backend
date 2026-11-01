@@ -118,6 +118,7 @@ async def test_after_the_deadline_an_answer_cannot_be_saved_or_removed(client):
     changed = client.put(path, headers=student, json={"selected_option_index": 1})
     assert changed.status_code == 409
     assert changed.json()["error"]["message"] == "attempt expired"
+    assert changed.json()["error"]["code"] == "ATTEMPT_EXPIRED"
     assert client.delete(path, headers=student).status_code == 409
     answers = client.get(f"/assessment/attempts/{attempt['id']}/answers", headers=student)
     assert answers.json()["data"]["answers"][0]["selected_option_index"] == 0
@@ -188,3 +189,4 @@ async def test_a_submitted_attempt_refuses_answers_as_already_submitted(client):
     late = client.put(f"{path}/answers/{question_id}", headers=student, json={"selected_option_index": 1})
     assert late.status_code == 409
     assert late.json()["error"]["message"] == "attempt already submitted"
+    assert late.json()["error"]["code"] == "ATTEMPT_ALREADY_SUBMITTED"

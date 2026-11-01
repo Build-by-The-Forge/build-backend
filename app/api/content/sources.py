@@ -12,6 +12,7 @@ from app.application.content.source_service import ContentSourceService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import public_message
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import VisibilityScope
 from app.domain.content.source import ContentSource
@@ -70,7 +71,7 @@ async def create_source(
             trust_policy=payload.trust_policy,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -180,7 +181,7 @@ async def update_source(
             trust_policy=payload.trust_policy,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -212,7 +213,7 @@ async def deprecate_source(
     try:
         updated = await service.deprecate_source(source_id=source_id, reason=payload.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -244,7 +245,7 @@ async def revoke_source(
     try:
         updated = await service.revoke_source(source_id=source_id, reason=payload.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

@@ -115,7 +115,7 @@ class TenantJoinService:
         try:
             role = MembershipRole(default_role)
         except ValueError:
-            raise AppError(f"unknown role: {default_role!r}", status_code=422) from None
+            raise AppError("unknown role", status_code=422) from None
         async with self._uow() as uow:
             policy = await uow.join_policies.get(context.tenant_id) or TenantJoinPolicy(tenant_id=TenantId(context.tenant_id))
             try:

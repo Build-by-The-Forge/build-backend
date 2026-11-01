@@ -24,7 +24,7 @@ from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
 from app.core.dependencies import require_permission
-from app.core.exceptions import error_response
+from app.core.exceptions import error_response, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import AssetStatus, IngestionStatus
 
@@ -36,7 +36,7 @@ upload_service = build_container().get(ContentAssetUploadService)
 def _access_refused(exc: ContentAccessError) -> JSONResponse:
     """A refused write, by class: 404 for content outside the caller's
     tenant, 403 for platform content (app/application/content/access.py)."""
-    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": str(exc)}})
+    return JSONResponse(status_code=exc.status_code, content={"error": {"code": exc.code, "message": public_message(exc)}})
 
 
 @router.post(
@@ -122,7 +122,7 @@ async def _receive_upload(
     except ContentAccessError as exc:
         return _access_refused(exc)
     except UploadError as exc:
-        error: dict[str, object] = {"code": exc.code, "message": str(exc)}
+        error: dict[str, object] = {"code": exc.code, "message": public_message(exc)}
         # The existing asset is named only to a caller who may read assets.
         if isinstance(exc, DuplicateContentError) and authorization.can(context, Permission.CONTENT_ASSET_READ):
             error["existing_asset_id"] = exc.existing_asset_id
@@ -230,7 +230,7 @@ async def revoke_asset(
         )
         return JSONResponse(
             status_code=status_code,
-            content={"error": {"code": "REVOCATION_FAILED", "message": str(exc)}},
+            content={"error": {"code": "REVOCATION_FAILED", "message": public_message(exc)}},
         )
 
     resp_data = ContentAssetResponse.from_domain(revoked).model_dump(mode="json")

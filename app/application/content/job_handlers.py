@@ -314,7 +314,8 @@ class DispatchIngestionJobHandler:
                 job,
                 asset,
                 getattr(exc, "error_code", "AI_DISPATCH_FAILED"),
-                str(exc),
+                # Stored and returned on the job: only the gateway's own messages are written for that.
+                str(exc) if hasattr(exc, "error_code") else "the AI service could not take the job",
                 getattr(exc, "is_retryable", True),
             )
 

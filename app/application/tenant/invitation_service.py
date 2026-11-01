@@ -29,7 +29,7 @@ from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
 )
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.invitation import (
     DEFAULT_INVITATION_LIFETIME,
@@ -74,7 +74,7 @@ def _role(value: str) -> MembershipRole:
     try:
         return MembershipRole(value)
     except ValueError:
-        raise AppError(f"unknown role: {value!r}", status_code=422) from None
+        raise AppError("unknown role", status_code=422) from None
 
 
 class TenantInvitationService:
@@ -108,7 +108,7 @@ class TenantInvitationService:
                     lifetime=self._lifetime,
                 )
             except ValueError as exc:
-                raise AppError(str(exc), status_code=422) from exc
+                raise AppError(public_message(exc, "invalid invitation"), status_code=422) from exc
 
             existing_user = await uow.users.get_by_email(invitation.email)
             if existing_user is not None:
@@ -145,7 +145,7 @@ class TenantInvitationService:
         try:
             wanted = InvitationStatus(status) if status else None
         except ValueError:
-            raise AppError(f"unknown status: {status!r}", status_code=422) from None
+            raise AppError("unknown status", status_code=422) from None
         async with self._uow() as uow:
             return await uow.invitations.list_by_tenant(context.tenant_id, wanted)
 

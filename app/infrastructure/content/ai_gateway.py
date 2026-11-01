@@ -80,7 +80,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
             return self._keys_override
         if not settings.backend_to_ai_secret:
             raise AIServiceGatewayError(
-                message="BACKEND_TO_AI_SECRET is not configured",
+                message="the AI Service connection is not configured",
                 error_code="AI_SERVICE_NOT_CONFIGURED",
                 is_retryable=True,
             )
@@ -159,7 +159,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
             )
         except httpx.TransportError as exc:
             raise AIServiceGatewayError(
-                message=f"Transport error communicating with AI Service at {url}: {type(exc).__name__}",
+                message=f"Could not reach the AI Service: {type(exc).__name__}",
                 error_code="AI_SERVICE_TRANSPORT_ERROR",
                 is_retryable=True,
                 outcome_uncertain=True,

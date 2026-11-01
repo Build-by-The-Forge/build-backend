@@ -187,13 +187,13 @@ async def test_question_generation_is_rate_limited_per_user(client, gateway):
 
 
 @pytest.mark.parametrize(
-    "error,status",
+    "error,status,code",
     [
-        (AIAssistantError("down", error_code="AI_SERVICE_UNAVAILABLE", unavailable=True), 503),
-        (AIAssistantError("refused", error_code="AI_SERVICE_AUTH_ERROR"), 502),
+        (AIAssistantError("down", error_code="AI_SERVICE_UNAVAILABLE", unavailable=True), 503, "AI_UNAVAILABLE"),
+        (AIAssistantError("refused", error_code="AI_SERVICE_AUTH_ERROR"), 502, "AI_UPSTREAM_ERROR"),
     ],
 )
-async def test_ai_service_failures_are_mapped_without_detail(client, error, status):
+async def test_ai_service_failures_are_mapped_without_detail(client, error, status, code):
     app.dependency_overrides[get_ai_assistant_gateway] = lambda: RecordingGateway(error)
     try:
         _, _, h = await member(client, "student")
@@ -203,6 +203,7 @@ async def test_ai_service_failures_are_mapped_without_detail(client, error, stat
     assert response.status_code == status
     assert "AI_SERVICE" not in response.text
     assert response.json()["success"] is False
+    assert response.json()["error"]["code"] == code
 
 
 async def test_an_unverified_email_is_refused(client, gateway):

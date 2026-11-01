@@ -197,5 +197,6 @@ def test_account_blocked_after_the_code_was_sent_cannot_reset(client):
 
     assert resp.status_code == 401
     assert resp.json()["error"]["message"] == "invalid reset token"
+    assert resp.json()["error"]["code"] == "TOKEN_INVALID"
     _db(client, lambda db: db.execute(update(UserModel).where(UserModel.id == user_id).values(status=UserStatus.ACTIVE)))
     assert _login(client, email, PASSWORD).status_code == 200

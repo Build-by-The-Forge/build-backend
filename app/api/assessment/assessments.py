@@ -16,6 +16,7 @@ from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.dependencies import require_permission
+from app.core.exceptions import public_message
 from app.core.tenant_context import TenantContext
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.errors import AttemptPolicyLockedError
@@ -109,7 +110,7 @@ async def update_assessment(
             attempt_policy=payload.attempt_policy.to_domain() if payload.attempt_policy else None,
         )
     except AttemptPolicyLockedError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=public_message(exc)) from exc
     if assessment is None:
         raise HTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
@@ -153,7 +154,7 @@ async def release_results(
     try:
         release = await service.release_results(assessment_id, context.tenant_id or "", context.user_id)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=public_message(exc)) from exc
     if release is None:
         raise HTTPException(status_code=404, detail="assessment not found")
     return JSONResponse(

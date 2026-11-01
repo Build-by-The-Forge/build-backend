@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.metrics import errors_total
+from app.core.security import SECURITY_HEADERS
 
 logger = structlog.get_logger(__name__)
 
@@ -58,6 +59,16 @@ class RateLimitedError(AppError):
 class NotFoundError(AppError):
     def __init__(self, message: str = "Resource not found") -> None:
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
+
+
+def public_message(exc: Exception, fallback: str = "the request could not be completed") -> str:
+    """Text for a client, from an exception a route expects. Only this application
+    writes the messages of its own errors and of plain ValueError. A library's
+    subclass (pydantic, unicode, JSON) can quote the input, so it gets the fallback."""
+    kind = type(exc)
+    if kind is ValueError or kind.__module__.startswith("app."):
+        return str(exc)
+    return fallback
 
 
 def error_body(
@@ -158,12 +169,14 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """The last resort, outside every middleware. The exception's text stays in
+    """The backstop for a failure in the middleware stack itself; a failure in a
+    route is answered by UnhandledErrorMiddleware, inside CORS and the security
+    headers. CORS can't apply here, since it may be what failed. The text stays in
     the log, and the client gets only the ID that finds it there."""
     request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
-    # RequestContextMiddleware has already counted and logged it, if it ran.
+    logger.error("request_failed_outside_routes", request_id=request_id, error_type=type(exc).__name__)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=error_body(request_id, "INTERNAL_ERROR", "something went wrong"),
-        headers={"x-request-id": request_id},
+        headers={"x-request-id": request_id, **SECURITY_HEADERS},
     )

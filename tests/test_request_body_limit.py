@@ -33,6 +33,7 @@ async def test_a_declared_oversized_body_is_413_before_the_app_runs():
     response = await post(tiny_app(), b"x" * 101)
     assert response.status_code == 413
     assert response.json()["error"]["message"] == "request body too large"
+    assert response.json()["error"]["code"] == "UPLOAD_TOO_LARGE"
 
 
 async def test_a_streamed_body_that_grows_past_the_limit_is_413():

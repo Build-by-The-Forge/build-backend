@@ -15,6 +15,7 @@ from app.application.curriculum.curriculum_source_service import (
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import public_message
 from app.core.tenant_context import TenantContext
 from app.domain.curriculum.source import CurriculumSnapshot, CurriculumSource
 
@@ -38,7 +39,7 @@ async def create_source(
             parser_version=payload.parser_version,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,

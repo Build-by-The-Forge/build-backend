@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import structlog
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -24,6 +25,7 @@ from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import public_message
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.job import (
@@ -38,6 +40,7 @@ from app.infrastructure.security.service_signature import VerifiedServiceRequest
 from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
+logger = structlog.get_logger(__name__)
 service = build_container().get(ContentIngestionJobService)
 
 
@@ -63,14 +66,14 @@ async def trigger_ingestion_job(
     except UnmanagedAssetError as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"error": {"code": exc.code, "message": str(exc)}},
+            content={"error": {"code": exc.code, "message": public_message(exc)}},
         )
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
-            content={"error": {"code": "INGESTION_TRIGGER_FAILED", "message": str(exc)}},
+            content={"error": {"code": "INGESTION_TRIGGER_FAILED", "message": public_message(exc)}},
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
@@ -190,14 +193,14 @@ async def retry_job(
     except InvalidJobTransition as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": public_message(exc)}},
         )
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
-            content={"error": {"code": "RETRY_JOB_FAILED", "message": str(exc)}},
+            content={"error": {"code": "RETRY_JOB_FAILED", "message": public_message(exc)}},
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
@@ -224,14 +227,14 @@ async def reprocess_asset(
     except UnmanagedAssetError as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"error": {"code": exc.code, "message": str(exc)}},
+            content={"error": {"code": exc.code, "message": public_message(exc)}},
         )
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
         return JSONResponse(
             status_code=status_code,
-            content={"error": {"code": "REPROCESS_FAILED", "message": str(exc)}},
+            content={"error": {"code": "REPROCESS_FAILED", "message": public_message(exc)}},
         )
 
     resp_data = IngestionJobResponse.from_domain(job).model_dump(mode="json")
@@ -261,25 +264,27 @@ async def dispatch_ingestion_job(
     except RetryNotDue as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"error": {"code": "RETRY_NOT_DUE", "message": str(exc)}},
+            content={"error": {"code": "RETRY_NOT_DUE", "message": public_message(exc)}},
         )
     except InvalidJobTransition as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": public_message(exc)}},
         )
     except ValueError as exc:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": {"code": "DISPATCH_FAILED", "message": str(exc)}},
+            content={"error": {"code": "DISPATCH_FAILED", "message": public_message(exc)}},
         )
     except Exception as exc:
+        # Unexpected, so its text may name internals. The log keeps it.
+        logger.exception("content_job_dispatch_failed", job_id=job_id)
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={
                 "error": {
                     "code": getattr(exc, "error_code", "AI_GATEWAY_ERROR"),
-                    "message": str(exc),
+                    "message": "the AI service could not take the job",
                 }
             },
         )
@@ -327,22 +332,22 @@ async def reconcile_ingestion_job(
     except InvalidJobTransition as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
-            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": str(exc)}},
+            content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": public_message(exc)}},
         )
     except ValueError as exc:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": {"code": "JOB_NOT_FOUND", "message": str(exc)}},
+            content={"error": {"code": "JOB_NOT_FOUND", "message": public_message(exc)}},
         )
     except ReconcileMismatchError as exc:
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            content={"error": {"code": "AI_STATUS_MISMATCH", "message": str(exc)}},
+            content={"error": {"code": "AI_STATUS_MISMATCH", "message": public_message(exc)}},
         )
     except AIServiceGatewayError as exc:
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            content={"error": {"code": exc.error_code, "message": str(exc)}},
+            content={"error": {"code": exc.error_code, "message": public_message(exc)}},
         )
 
     resp_data = IngestionJobResponse.from_domain(result.job).model_dump(mode="json")
@@ -414,7 +419,7 @@ async def handle_ai_callback(request: Request) -> JSONResponse:
     except InvalidStageEvidence as exc:
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            content={"error": {"code": "INVALID_STAGE_EVIDENCE", "message": str(exc)}},
+            content={"error": {"code": "INVALID_STAGE_EVIDENCE", "message": public_message(exc)}},
         )
 
     if job is None or outcome is None:
