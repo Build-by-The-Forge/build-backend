@@ -4,8 +4,8 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Request, status
 
 from app.application.identity.ports.token_service import InvalidTokenError
-from app.core.exceptions import AppError
 from app.core.authorization import Permission, authorization
+from app.core.exceptions import AppError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
 from app.db.session import SessionLocal

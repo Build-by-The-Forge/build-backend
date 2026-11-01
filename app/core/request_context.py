@@ -11,7 +11,6 @@ from fastapi import Request
 
 from app.core.config import settings
 
-
 _REQUEST_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 
 

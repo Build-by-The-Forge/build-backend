@@ -118,8 +118,7 @@ def _safe_details(exc: RequestValidationError) -> dict[str, object]:
     """Where and why, never the refused value: it may be a password."""
     return {
         "fields": [
-            {"field": ".".join(str(part) for part in e["loc"]), "code": e["type"], "message": e["msg"]}
-            for e in exc.errors()
+            {"field": ".".join(str(part) for part in e["loc"]), "code": e["type"], "message": e["msg"]} for e in exc.errors()
         ]
     }
 

@@ -14,9 +14,9 @@ from app.application.ai.memory_reporting import LearningMemoryReporter
 from app.application.assessment.attempt_commands import AttemptQuestionSnapshot
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
-from app.core.exceptions import AppError
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import AppError
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIAssistantGateway
 from app.domain.assessment.attempt import AssessmentAttempt

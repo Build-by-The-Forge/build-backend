@@ -21,10 +21,10 @@ from app.application.content.upload import (
     UploadResult,
 )
 from app.bootstrap.container import build_container
-from app.core.exceptions import error_response
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
 from app.core.dependencies import require_permission
+from app.core.exceptions import error_response
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import AssetStatus, IngestionStatus
 

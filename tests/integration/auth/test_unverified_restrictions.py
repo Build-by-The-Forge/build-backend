@@ -3,9 +3,9 @@
 from uuid import uuid4
 
 import pytest
-from app.core.exceptions import AppError
 
 from app.core.dependencies import get_verified_principal
+from app.core.exceptions import AppError
 from app.core.principal import AuthenticatedPrincipal
 from tests.integration.identity_helpers import verify_email
 from tests.integration.tenant.test_tenant_context import seed_tenant_membership

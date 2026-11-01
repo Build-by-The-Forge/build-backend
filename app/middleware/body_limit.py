@@ -21,6 +21,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.core.exceptions import error_body
 from app.core.request_context import accepted_request_id
 
+
 def _too_large_body(scope: Scope) -> tuple[str, bytes]:
     # Outermost middleware: the request context has not run, so the ID is settled here.
     request_id = accepted_request_id(Headers(scope=scope).get("x-request-id"))
