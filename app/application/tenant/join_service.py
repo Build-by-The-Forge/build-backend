@@ -25,7 +25,7 @@ from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
 )
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.errors import MembershipAlreadyExistsError
 from app.domain.tenant.join_policy import JoinPolicyError, TenantJoinPolicy
@@ -126,7 +126,7 @@ class TenantJoinService:
                     updated_by_user_id=context.user_id,
                 )
             except JoinPolicyError as exc:
-                raise AppError(str(exc), status_code=422) from exc
+                raise AppError(public_message(exc, "invalid join policy"), status_code=422) from exc
             await uow.join_policies.save(policy)
 
         await self._events.record(

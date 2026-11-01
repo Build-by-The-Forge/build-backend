@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.application.curriculum.validation_commands import (
     ValidateBenchmarkCandidateCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,
@@ -28,7 +29,7 @@ class ValidateBenchmarkCandidateHandler:
     ) -> tuple[BenchmarkCurriculum, ValidationResult, list[DomainEvent]]:
         curriculum = await self.repository.get_by_id(command.curriculum_id)
         if curriculum is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         # Load all courses with full topic and outcome trees
         course_summaries = await self.repository.list_courses(curriculum.id)

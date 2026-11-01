@@ -27,6 +27,7 @@ from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.exceptions import public_message
 from app.core.tenant_context import TenantContext
+from app.domain.content.ai_report import public_failure_message
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.job import (
     CallbackOutcome,
@@ -306,7 +307,7 @@ async def dispatch_ingestion_job(
             content={
                 "error": {
                     "code": job.error_code or "AI_DISPATCH_FAILED",
-                    "message": job.error_message or "AI-service dispatch failed",
+                    "message": public_failure_message(job.error_code),
                 },
                 "data": resp_data,
             },

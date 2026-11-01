@@ -33,7 +33,7 @@ class JoinPolicyError(TenantDomainError):
 def normalise_domain(value: str) -> str:
     domain = value.strip().lower()
     if len(domain) > 253 or not _DOMAIN_RE.match(domain):
-        raise JoinPolicyError(f"not a valid email domain: {value!r}")
+        raise JoinPolicyError("not a valid email domain")
     return domain
 
 

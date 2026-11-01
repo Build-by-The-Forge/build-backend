@@ -5,11 +5,19 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.domain.content.ai_report import public_failure_message
 from app.domain.content.asset import ContentAsset
 
 
 class ContentAssetRevokeRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500)
+
+
+def _public_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+    """A failure's text comes from its code, including on rows stored before that rule."""
+    if "error_message" not in metadata:
+        return metadata
+    return {**metadata, "error_message": public_failure_message(metadata.get("error_code"))}
 
 
 class ContentAssetResponse(BaseModel):
@@ -47,7 +55,7 @@ class ContentAssetResponse(BaseModel):
             parent_asset_id=asset.parent_asset_id,
             status=asset.status.value,
             ingestion_status=asset.ingestion_status.value,
-            metadata=asset.metadata,
+            metadata=_public_metadata(asset.metadata),
             created_by=asset.created_by,
             created_by_email=asset.created_by_email,
             created_at=asset.created_at,

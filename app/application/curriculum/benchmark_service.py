@@ -46,6 +46,7 @@ from app.application.curriculum.validation_commands import (
 from app.application.curriculum.validation_handlers import (
     ValidateBenchmarkCandidateHandler,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.audit import BenchmarkAuditLog
 from app.domain.curriculum.benchmark import BenchmarkCourse, BenchmarkCurriculum
 from app.domain.curriculum.diff import BenchmarkCurriculumDiff
@@ -331,12 +332,12 @@ class BenchmarkCurriculumService:
 
     def _required_repository(self) -> BenchmarkCurriculumRepository:
         if self.repository is None:
-            raise ValueError("benchmark curriculum repository is required")
+            raise ClientSafeError("benchmark curriculum repository is required")
         return self.repository
 
     def _required_audit_repository(self) -> BenchmarkAuditRepository:
         if self.audit_repository is None:
-            raise ValueError("benchmark audit repository is required")
+            raise ClientSafeError("benchmark audit repository is required")
         return self.audit_repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:

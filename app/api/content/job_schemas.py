@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.domain.content.ai_report import public_failure_message, safe_attempt_record, safe_error_code, safe_evidence
 from app.domain.content.job import ContentIngestionJob
 
 
@@ -60,15 +61,15 @@ class IngestionJobResponse(BaseModel):
             current_stage=job.current_stage,
             attempt_count=job.attempt_count,
             max_attempts=job.max_attempts,
-            error_code=job.error_code,
-            error_message=job.error_message,
-            error_details=job.error_details,
+            error_code=safe_error_code(job.error_code) if job.error_code else None,
+            error_message=public_failure_message(job.error_code) if job.error_code else None,
+            error_details=safe_evidence(job.error_details),
             is_retryable=job.is_retryable,
             next_retry_at=job.next_retry_at,
             started_at=job.started_at,
             completed_at=job.completed_at,
-            metrics=job.metrics,
-            attempt_history=job.attempt_history,
+            metrics=safe_evidence(job.metrics),
+            attempt_history=[safe_attempt_record(record) for record in job.attempt_history],
             correlation_id=job.correlation_id,
             external_task_id=job.external_task_id,
             last_dispatched_at=job.last_dispatched_at,

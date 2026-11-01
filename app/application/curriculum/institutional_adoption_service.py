@@ -27,6 +27,7 @@ from app.application.curriculum.effective_queries import (
     GetActiveEffectiveCurriculumQuery,
     GetEffectiveCurriculumByAdoptionQuery,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
     InstitutionalAdoption,
@@ -232,12 +233,12 @@ class InstitutionalAdoptionService:
 
     def _required_adoption_repo(self) -> InstitutionalAdoptionRepository:
         if self.adoption_repository is None:
-            raise ValueError("adoption repository is required")
+            raise ClientSafeError("adoption repository is required")
         return self.adoption_repository
 
     def _required_benchmark_repo(self) -> BenchmarkCurriculumRepository:
         if self.benchmark_repository is None:
-            raise ValueError("benchmark repository is required")
+            raise ClientSafeError("benchmark repository is required")
         return self.benchmark_repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:

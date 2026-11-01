@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any
 
+from app.domain.client_safe import ClientSafeError
 from app.domain.tenant.errors import AcademicSessionAlreadyArchivedError
 from app.domain.tenant.value_objects import (
     AcademicSessionId,
@@ -46,7 +47,7 @@ class AcademicSession:
         session_id: AcademicSessionId | None = None,
     ) -> AcademicSession:
         if end_date <= start_date:
-            raise ValueError("session end_date must be after start_date")
+            raise ClientSafeError("session end_date must be after start_date")
 
         session = cls(
             id=session_id or AcademicSessionId(""),

@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.metrics import errors_total
 from app.core.security import SECURITY_HEADERS
+from app.domain.client_safe import ClientMessage
 
 logger = structlog.get_logger(__name__)
 
@@ -62,11 +63,10 @@ class NotFoundError(AppError):
 
 
 def public_message(exc: Exception, fallback: str = "the request could not be completed") -> str:
-    """Text for a client, from an exception a route expects. Only this application
-    writes the messages of its own errors and of plain ValueError. A library's
-    subclass (pydantic, unicode, JSON) can quote the input, so it gets the fallback."""
-    kind = type(exc)
-    if kind is ValueError or kind.__module__.startswith("app."):
+    """Text for a client, from an exception a route expects. Only an exception marked
+    as written for clients keeps its message; anything else gets the fallback, because
+    its text may quote input or name internals."""
+    if isinstance(exc, AppError | ClientMessage):
         return str(exc)
     return fallback
 

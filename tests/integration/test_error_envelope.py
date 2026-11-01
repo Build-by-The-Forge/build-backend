@@ -209,8 +209,7 @@ def test_a_library_error_never_reaches_a_client_as_text(error):
     assert public_message(error, "fallback") == "fallback"
 
 
-def test_this_applications_own_messages_are_kept():
-    assert public_message(ValueError("assessment not found"), "fallback") == "assessment not found"
+def test_a_message_written_for_clients_is_kept():
     assert public_message(AppError("written here"), "fallback") == "written here"
 
 

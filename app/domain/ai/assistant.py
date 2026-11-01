@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.domain.client_safe import ClientSafeError
+
 
 @dataclass(frozen=True, slots=True)
 class AIActor:
@@ -71,7 +73,7 @@ def _text(value: object, *, optional: bool = False) -> str | None:
     if value is None and optional:
         return None
     if not isinstance(value, str) or not value.strip() or len(value) > MAX_GENERATED_TEXT:
-        raise ValueError("text must be a non-empty string")
+        raise ClientSafeError("text must be a non-empty string")
     return value
 
 
@@ -81,24 +83,24 @@ def parse_generated_question(item: object) -> GeneratedQuestion | None:
     correct; true_false is exactly True/False). None when the item fails."""
     try:
         if not isinstance(item, dict):
-            raise ValueError("not an object")
+            raise ClientSafeError("not an object")
         question_type, difficulty = item.get("question_type"), item.get("difficulty")
         if question_type not in QUESTION_TYPES or difficulty not in DIFFICULTIES:
-            raise ValueError("unknown type or difficulty")
+            raise ClientSafeError("unknown type or difficulty")
         raw_options = item.get("options")
         if not isinstance(raw_options, list):
-            raise ValueError("options must be a list")
+            raise ClientSafeError("options must be a list")
         options = []
         for raw in raw_options:
             if not isinstance(raw, dict) or not isinstance(raw.get("is_correct"), bool):
-                raise ValueError("bad option")
+                raise ClientSafeError("bad option")
             options.append(GeneratedOption(text=_text(raw.get("text")) or "", is_correct=raw["is_correct"]))
         if len(options) < 2 or sum(o.is_correct for o in options) != 1:
-            raise ValueError("needs two or more options and exactly one correct")
+            raise ClientSafeError("needs two or more options and exactly one correct")
         if len({o.text.strip().lower() for o in options}) != len(options):
-            raise ValueError("options must be distinct")
+            raise ClientSafeError("options must be distinct")
         if question_type == "true_false" and sorted(o.text for o in options) != ["False", "True"]:
-            raise ValueError("true_false options are True and False")
+            raise ClientSafeError("true_false options are True and False")
         return GeneratedQuestion(
             question_type=str(question_type),
             prompt=_text(item.get("prompt")) or "",

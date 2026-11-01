@@ -7,6 +7,7 @@ from app.application.curriculum.governance_commands import (
     ReviseBenchmarkCommand,
     SubmitBenchmarkReviewCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.audit import (
     BenchmarkAuditAction,
     BenchmarkAuditLog,
@@ -39,10 +40,10 @@ class SubmitBenchmarkReviewHandler:
     ) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         if curriculum.status != BenchmarkStatus.VALIDATED:
-            raise ValueError(
+            raise ClientSafeError(
                 f"only validated benchmarks can be submitted for review, current status is '{curriculum.status.value}'"
             )
 
@@ -109,7 +110,7 @@ class ApproveBenchmarkHandler:
     async def handle(self, command: ApproveBenchmarkCommand) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         previous_status = curriculum.status.value
 
@@ -146,7 +147,7 @@ class RejectBenchmarkHandler:
     async def handle(self, command: RejectBenchmarkCommand) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         previous_status = curriculum.status.value
 
@@ -182,7 +183,7 @@ class ReviseBenchmarkHandler:
     async def handle(self, command: ReviseBenchmarkCommand) -> tuple[BenchmarkCurriculum, BenchmarkAuditLog, list[DomainEvent]]:
         curriculum = await self.benchmark_repo.get_by_id(command.curriculum_id)
         if curriculum is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         previous_status = curriculum.status.value
 

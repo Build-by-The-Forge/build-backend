@@ -17,6 +17,7 @@ from app.application.curriculum.source_handlers import (
     RecordCurriculumSnapshotHandler,
     RegisterCurriculumSourceHandler,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.source import CurriculumSnapshot, CurriculumSource
 from app.domain.repositories.curriculum_source import CurriculumSourceRepository
 from app.events.base import DomainEvent
@@ -114,7 +115,7 @@ class CurriculumSourceService:
 
     def _required_repository(self) -> CurriculumSourceRepository:
         if self.repository is None:
-            raise ValueError("curriculum source repository is required")
+            raise ClientSafeError("curriculum source repository is required")
         return self.repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:

@@ -10,6 +10,7 @@ from urllib.parse import quote
 import httpx
 
 from app.core.config import settings
+from app.domain.client_safe import ClientMessage
 from app.domain.content.asset import ContentAsset
 from app.domain.content.gateway import (
     AIServiceDispatchResult,
@@ -41,7 +42,7 @@ def _correlation_id(job: ContentIngestionJob) -> str:
     return job.id
 
 
-class AIServiceGatewayError(Exception):
+class AIServiceGatewayError(ClientMessage, Exception):
     def __init__(
         self,
         message: str,
@@ -254,7 +255,7 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
             response = await client.get(url, headers=headers)
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             raise AIServiceGatewayError(
-                message=f"Error fetching task status from AI Service: {exc}",
+                message="Could not fetch the task status from the AI Service",
                 error_code="AI_SERVICE_POLL_ERROR",
                 is_retryable=True,
             ) from exc

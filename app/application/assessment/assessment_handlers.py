@@ -14,6 +14,7 @@ from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.result import AttemptResult
 from app.domain.assessment.result_disclosure import standing_attempts
 from app.domain.assessment.result_release import ResultRelease
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository, ResultReleaseRepository
 from app.domain.repositories.course import CourseRepository
@@ -32,7 +33,7 @@ class CreateAssessmentHandler:
     async def handle(self, command: CreateAssessmentCommand) -> Assessment:
         course = await self.catalogue_repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
         if course is None:
-            raise ValueError("course not found")
+            raise ClientSafeError("course not found")
         assessment = Assessment.create(
             tenant_id=command.tenant_id,
             course_id=command.course_id,
@@ -112,7 +113,7 @@ class AddQuestionToAssessmentHandler:
             return None
         question = await self.question_repository.get_by_id(command.question_id, tenant_id=command.tenant_id)
         if question is None:
-            raise ValueError("question not found")
+            raise ClientSafeError("question not found")
         correct_idx = next(
             (index for index, option in enumerate(question.options) if option.is_correct),
             0,
@@ -138,12 +139,12 @@ class ReleaseResultsHandler:
         if assessment is None:
             return None
         if assessment.status == AssessmentStatus.DRAFT:
-            raise ValueError("a draft has no results to release")
+            raise ClientSafeError("a draft has no results to release")
         release = ResultRelease(command.assessment_id, command.tenant_id, command.released_by, datetime.now(timezone.utc))
         created = await self.releases.insert_if_absent(release)
         stored = await self.releases.get(command.assessment_id, command.tenant_id)
         if stored is None:
-            raise ValueError("assessment not found")
+            raise ClientSafeError("assessment not found")
         return stored, created
 
 

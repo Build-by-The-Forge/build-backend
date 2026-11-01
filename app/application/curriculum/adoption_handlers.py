@@ -8,6 +8,7 @@ from app.application.curriculum.adoption_commands import (
     ListAdoptionsCommand,
     RemoveCurriculumOverrideCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
     InstitutionalAdoption,
@@ -35,13 +36,13 @@ class AdoptBenchmarkCurriculumHandler:
     async def handle(self, command: AdoptBenchmarkCurriculumCommand) -> tuple[InstitutionalAdoption, list[DomainEvent]]:
         benchmark = await self.benchmark_repo.get_by_id(command.benchmark_curriculum_id)
         if benchmark is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         if benchmark.status not in (
             BenchmarkStatus.ACTIVE,
             BenchmarkStatus.APPROVED,
         ):
-            raise ValueError(f"cannot adopt benchmark in status '{benchmark.status.value}', must be active or approved")
+            raise ClientSafeError(f"cannot adopt benchmark in status '{benchmark.status.value}', must be active or approved")
 
         adoption = InstitutionalAdoption.create_draft(
             tenant_id=command.tenant_id,
@@ -70,10 +71,10 @@ class AddCurriculumOverrideHandler:
     async def handle(self, command: AddCurriculumOverrideCommand) -> CurriculumOverride:
         adoption = await self.adoption_repo.get_adoption_by_id(command.adoption_id)
         if adoption is None or adoption.tenant_id != command.tenant_id:
-            raise ValueError("adoption not found")
+            raise ClientSafeError("adoption not found")
 
         if not adoption.is_editable():
-            raise ValueError(
+            raise ClientSafeError(
                 f"cannot add overrides to adoption in status '{adoption.status.value}', overrides are immutable once activated"
             )
 
@@ -85,12 +86,12 @@ class AddCurriculumOverrideHandler:
             OverrideType.OMIT_COURSE,
         ):
             if not command.target_course_code:
-                raise ValueError(f"target_course_code is required for override type '{ov_type.value}'")
+                raise ClientSafeError(f"target_course_code is required for override type '{ov_type.value}'")
             benchmark_courses = await self.benchmark_repo.list_courses(adoption.benchmark_curriculum_id)
             existing_codes = {c.code.upper() for c in benchmark_courses}
             if command.target_course_code.upper() not in existing_codes:
-                raise ValueError(
-                    f"target course '{command.target_course_code}' "
+                raise ClientSafeError(
+                    "target course "
                     f"does not exist in adopted benchmark {adoption.benchmark_version}"
                 )
 
@@ -117,16 +118,16 @@ class RemoveCurriculumOverrideHandler:
     async def handle(self, command: RemoveCurriculumOverrideCommand) -> bool:
         adoption = await self.adoption_repo.get_adoption_by_id(command.adoption_id)
         if adoption is None or adoption.tenant_id != command.tenant_id:
-            raise ValueError("adoption not found")
+            raise ClientSafeError("adoption not found")
 
         if not adoption.is_editable():
-            raise ValueError(
+            raise ClientSafeError(
                 f"cannot remove overrides from adoption in status '{adoption.status.value}', historical adoptions are immutable"
             )
 
         override = await self.adoption_repo.get_override(command.override_id)
         if override is None or override.adoption_id != adoption.id:
-            raise ValueError("override not found in adoption")
+            raise ClientSafeError("override not found in adoption")
 
         return await self.adoption_repo.delete_override(command.override_id)
 
@@ -140,7 +141,7 @@ class ActivateAdoptionHandler:
     ) -> tuple[InstitutionalAdoption, InstitutionalAdoption | None, list[DomainEvent]]:
         adoption = await self.adoption_repo.get_adoption_by_id(command.adoption_id)
         if adoption is None or adoption.tenant_id != command.tenant_id:
-            raise ValueError("adoption not found")
+            raise ClientSafeError("adoption not found")
 
         all_events: list[DomainEvent] = []
 
@@ -169,7 +170,7 @@ class GetAdoptionDetailHandler:
     async def handle(self, command: GetAdoptionDetailCommand) -> tuple[InstitutionalAdoption, list[CurriculumOverride]]:
         adoption = await self.adoption_repo.get_adoption_by_id(command.adoption_id)
         if adoption is None or adoption.tenant_id != command.tenant_id:
-            raise ValueError("adoption not found")
+            raise ClientSafeError("adoption not found")
 
         overrides = await self.adoption_repo.list_overrides(adoption.id)
         return adoption, overrides

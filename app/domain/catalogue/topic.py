@@ -15,6 +15,7 @@ from app.domain.catalogue.value_objects import (
     TopicStatus,
     TopicTitle,
 )
+from app.domain.client_safe import ClientSafeError
 
 if TYPE_CHECKING:
     from app.domain.catalogue.learning_outcome import LearningOutcome
@@ -117,7 +118,7 @@ class Topic:
 
     def add_learning_outcome(self, learning_outcome: "LearningOutcome") -> None:
         if learning_outcome.topic_id != self.id:
-            raise ValueError("learning outcome topic_id must match the parent topic")
+            raise ClientSafeError("learning outcome topic_id must match the parent topic")
         self.learning_outcomes.append(learning_outcome)
         self.touch()
         self._events.append(

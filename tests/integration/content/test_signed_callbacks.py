@@ -6,6 +6,7 @@ them: BUILD Service Signature v1, AI_TO_BACKEND_SECRET, system context.
 """
 
 import json
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -14,7 +15,9 @@ from uuid import uuid4
 import pytest
 
 from app.core.config import settings
+from app.db.session import SessionLocal
 from app.domain.content.gateway import AIServiceDispatchResult
+from app.infrastructure.db.models.content import ContentIngestionJobModel
 from app.infrastructure.security.replay_store import RedisReplayStore
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
@@ -521,3 +524,60 @@ async def test_reusing_an_event_id_for_different_content_is_409(client, monkeypa
     again = client.post(PATH, content=reordered, headers=signed(reordered, tenant_id))
     assert again.json()["data"]["outcome"] == "duplicate"  # same meaning, other key order
     assert status_of(client, job, h) == "extracted"
+
+
+# --- a signature doesn't make a report's text fit to show ------------------------------
+
+LEAK = "http://ai-service.internal:8000/v1 password=hunter2 sk-provider-key"
+FAILURE = {
+    "error_code": "OCR_PAGE_FAILED",
+    "error_message": LEAK,
+    "details": {"provider_response": LEAK, "fetch": {"storage_uri": LEAK, "size_bytes": 3}},
+}
+
+
+def assert_no_leak(text: str) -> None:
+    for fragment in ("ai-service.internal", "hunter2", "sk-provider-key"):
+        assert fragment not in text
+
+
+def send(client, body: bytes, tenant_id: str):
+    return client.post(PATH, content=body, headers=signed(body, tenant_id))
+
+
+async def test_a_failure_report_stores_and_returns_nothing_free_form(client, monkeypatch, caplog):
+    caplog.set_level(logging.WARNING)
+    job, tenant_id, h = await processing_job(client, monkeypatch)
+    assert send(client, event(job, "job_failed", None, **FAILURE), tenant_id).status_code == 200
+
+    read = client.get(f"/content/jobs/{job['id']}", headers=h)
+    assert read.json()["data"]["error_message"] == "A page of the document could not be read."
+    assert read.json()["data"]["error_details"] == {"fetch": {"size_bytes": 3}}
+    assert_no_leak(read.text)
+    assert_no_leak(client.get(f"/content/assets/{job['asset_id']}", headers=h).text)
+
+    async with SessionLocal() as db:
+        stored = await db.get(ContentIngestionJobModel, job["id"])
+        assert_no_leak(str((stored.error_message, stored.error_details, stored.attempt_history)))
+    # The diagnostic isn't lost: the log has it, by job.
+    # Secret-looking values are redacted from the log too.
+    assert "ai-service.internal" in caplog.text
+    assert "hunter2" not in caplog.text
+    assert job["id"] in caplog.text
+
+
+async def test_a_code_carrying_text_is_replaced(client, monkeypatch):
+    job, tenant_id, h = await processing_job(client, monkeypatch)
+    body = event(job, "job_failed", None, error_code="http://internal/x", error_message="x")
+    assert send(client, body, tenant_id).status_code == 200
+    assert client.get(f"/content/jobs/{job['id']}", headers=h).json()["data"]["error_code"] == "AI_PROCESSING_FAILED"
+
+
+async def test_stage_metrics_keep_their_evidence_and_lose_free_text(client, monkeypatch):
+    job, tenant_id, h = await processing_job(client, monkeypatch)
+    body = event(job, "stage_progress", "extracted", metrics={**EVIDENCE["extracted"], "debug": LEAK})
+    assert send(client, body, tenant_id).status_code == 200
+    read = client.get(f"/content/jobs/{job['id']}", headers=h)
+    assert read.json()["data"]["status"] == "extracted"
+    assert read.json()["data"]["metrics"]["characters"] == EVIDENCE["extracted"]["characters"]
+    assert_no_leak(read.text)

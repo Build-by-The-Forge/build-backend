@@ -6,6 +6,7 @@ from enum import StrEnum
 from uuid import uuid4
 
 from app.domain.assessment.errors import AttemptAlreadySubmittedError, AttemptExpiredError
+from app.domain.client_safe import ClientSafeError
 from app.events.base import DomainEvent
 
 
@@ -44,13 +45,13 @@ class AssessmentAttempt:
 
     def __post_init__(self) -> None:
         if not self.tenant_id.strip():
-            raise ValueError("tenant_id is required")
+            raise ClientSafeError("tenant_id is required")
         if not self.assessment_id.strip():
-            raise ValueError("assessment_id is required")
+            raise ClientSafeError("assessment_id is required")
         if not self.user_id.strip():
-            raise ValueError("user_id is required")
+            raise ClientSafeError("user_id is required")
         if self.status == AttemptStatus.SUBMITTED and self.submitted_at is None:
-            raise ValueError("submitted_at is required for submitted attempts")
+            raise ClientSafeError("submitted_at is required for submitted attempts")
 
     @classmethod
     def start(

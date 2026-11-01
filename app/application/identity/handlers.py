@@ -20,7 +20,7 @@ from app.application.identity.commands import (
 from app.application.identity.ports.email_sender import EmailMessage
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, public_message
 from app.domain.identity.user import Session, User
 from app.domain.identity.value_objects import (
     AccountStatus,
@@ -90,7 +90,7 @@ class RegisterUserHandler:
         try:
             password = Password(command.password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise AppError(public_message(exc, "invalid value"), status_code=422) from exc
 
         password_hash = self.password_hasher.hash(password)
         user = User(
@@ -413,7 +413,7 @@ class ResetPasswordHandler:
         try:
             password = Password(command.password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise AppError(public_message(exc, "invalid value"), status_code=422) from exc
 
         user_id = await self.repository.consume_password_reset_token(hash_token(command.token))
         if user_id is None:
@@ -535,7 +535,7 @@ class ChangePasswordHandler:
         try:
             new_password = Password(command.new_password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise AppError(public_message(exc, "invalid value"), status_code=422) from exc
 
         user = await self.repository.get_by_id(command.user_id)
         if user is None or not user.can_authenticate:

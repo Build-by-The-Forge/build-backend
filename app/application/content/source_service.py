@@ -21,6 +21,7 @@ from app.application.content.source_handlers import (
     RevokeContentSourceHandler,
     UpdateContentSourceHandler,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.content.source import ContentSource
 from app.domain.repositories.content_source import ContentSourceRepository
 from app.events.base import DomainEvent
@@ -192,7 +193,7 @@ class ContentSourceService:
 
     def _required_repository(self) -> ContentSourceRepository:
         if self.repository is None:
-            raise ValueError("content source repository is required")
+            raise ClientSafeError("content source repository is required")
         return self.repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:

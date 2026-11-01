@@ -1,3 +1,6 @@
+from app.domain.client_safe import ClientMessage
+
+
 class QuestionAlreadyArchivedError(Exception):
     pass
 
@@ -14,7 +17,7 @@ class AttemptLimitReachedError(Exception):
     pass
 
 
-class AttemptPolicyLockedError(Exception):
+class AttemptPolicyLockedError(ClientMessage, Exception):
     pass
 
 

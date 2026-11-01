@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
 from app.events.base import DomainEvent
 
 
@@ -42,15 +43,15 @@ class CurriculumSnapshot:
         snapshot_id: str | None = None,
     ) -> CurriculumSnapshot:
         if not source_id.strip():
-            raise ValueError("source_id cannot be empty")
+            raise ClientSafeError("source_id cannot be empty")
         if not source_url.strip():
-            raise ValueError("source_url cannot be empty")
+            raise ClientSafeError("source_url cannot be empty")
         if not content_sha256.strip() or len(content_sha256) != 64:
-            raise ValueError("content_sha256 must be a valid 64-character hex string")
+            raise ClientSafeError("content_sha256 must be a valid 64-character hex string")
         if not raw_artifact_uri.strip():
-            raise ValueError("raw_artifact_uri cannot be empty")
+            raise ClientSafeError("raw_artifact_uri cannot be empty")
         if not parser_version.strip():
-            raise ValueError("parser_version cannot be empty")
+            raise ClientSafeError("parser_version cannot be empty")
 
         now = datetime.now(timezone.utc)
         return cls(
@@ -93,13 +94,13 @@ class CurriculumSource:
     ) -> CurriculumSource:
         clean_code = code.strip().upper()
         if not clean_code:
-            raise ValueError("source code cannot be empty")
+            raise ClientSafeError("source code cannot be empty")
         if not name.strip():
-            raise ValueError("source name cannot be empty")
+            raise ClientSafeError("source name cannot be empty")
         if not base_url.strip():
-            raise ValueError("source base_url cannot be empty")
+            raise ClientSafeError("source base_url cannot be empty")
         if sync_frequency_days < 1:
-            raise ValueError("sync_frequency_days must be at least 1")
+            raise ClientSafeError("sync_frequency_days must be at least 1")
 
         now = datetime.now(timezone.utc)
         source = cls(
@@ -159,7 +160,7 @@ class CurriculumSource:
         retrieved_at: datetime | None = None,
     ) -> CurriculumSnapshot:
         if self.status != SourceStatus.ACTIVE:
-            raise ValueError("cannot create snapshot for a disabled curriculum source")
+            raise ClientSafeError("cannot create snapshot for a disabled curriculum source")
 
         snapshot = CurriculumSnapshot.create(
             source_id=self.id,

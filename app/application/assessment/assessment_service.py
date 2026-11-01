@@ -23,6 +23,7 @@ from app.domain.assessment.assessment import Assessment
 from app.domain.assessment.attempt_policy import AttemptPolicy
 from app.domain.assessment.result import AttemptResult
 from app.domain.assessment.result_release import ResultRelease
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
 from app.domain.repositories.course import CourseRepository
@@ -174,7 +175,7 @@ class AssessmentService:
     async def release_results(self, assessment_id: str, tenant_id: str, released_by: str) -> ResultRelease | None:
         command = ReleaseResultsCommand(assessment_id, tenant_id, released_by)
         if self.uow_factory is None:
-            raise ValueError("releasing results needs a unit of work")
+            raise ClientSafeError("releasing results needs a unit of work")
         async with self.uow_factory() as uow:
             outcome = await ReleaseResultsHandler(uow.assessments, uow.result_releases).handle(command)
         if outcome is None:
@@ -194,28 +195,28 @@ class AssessmentService:
     async def standing_attempts(self, assessment_id: str, tenant_id: str) -> set[str]:
         command = GetAssessmentResultsCommand(assessment_id=assessment_id, tenant_id=tenant_id)
         if self.uow_factory is None:
-            raise ValueError("reading results needs a unit of work")
+            raise ClientSafeError("reading results needs a unit of work")
         async with self.uow_factory() as uow:
             return await GetAssessmentResultsHandler(uow.assessments, uow.attempt_results).standing(command)
 
     def _required_repository(self) -> AssessmentRepository:
         if self.repository is None:
-            raise ValueError("assessment repository is required")
+            raise ClientSafeError("assessment repository is required")
         return self.repository
 
     def _required_question_repository(self) -> QuestionRepository:
         if self.question_repository is None:
-            raise ValueError("question repository is required")
+            raise ClientSafeError("question repository is required")
         return self.question_repository
 
     def _required_catalogue_repository(self) -> CourseRepository:
         if self.catalogue_repository is None:
-            raise ValueError("catalogue repository is required")
+            raise ClientSafeError("catalogue repository is required")
         return self.catalogue_repository
 
     def _required_attempt_result_repository(self) -> AttemptResultRepository:
         if self.attempt_result_repository is None:
-            raise ValueError("attempt result repository is required")
+            raise ClientSafeError("attempt result repository is required")
         return self.attempt_result_repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:

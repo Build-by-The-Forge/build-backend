@@ -160,7 +160,7 @@ class TenantInvitationService:
             try:
                 invitation.revoke()
             except InvitationNotPendingError as exc:
-                raise AppError(str(exc), status_code=409) from exc
+                raise AppError(public_message(exc, "invalid invitation"), status_code=409) from exc
             if not await uow.invitations.mark_revoked(invitation):
                 raise AppError("invitation is no longer pending", status_code=409)
 
@@ -192,7 +192,7 @@ class TenantInvitationService:
             except InvitationRequiresVerifiedEmailError as exc:
                 raise AppError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED") from exc
             except InvitationEmailMismatchError as exc:
-                raise AppError(str(exc), status_code=403) from exc
+                raise AppError(public_message(exc, "invalid invitation"), status_code=403) from exc
             except (InvitationNotPendingError, InvitationExpiredError) as exc:
                 raise AppError("invitation is no longer valid", status_code=409) from exc
 

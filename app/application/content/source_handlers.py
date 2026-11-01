@@ -9,6 +9,7 @@ from app.application.content.source_commands import (
     RevokeContentSourceCommand,
     UpdateContentSourceCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.content.enums import (
     AuthorityLevel,
     ContentSourceType,
@@ -28,7 +29,7 @@ class RegisterContentSourceHandler:
         clean_code = command.code.strip().upper()
         existing = await self.repository.get_source_by_code(clean_code, command.tenant_id)
         if existing is not None:
-            raise ValueError(f"content source with code '{clean_code}' already exists in this scope")
+            raise ClientSafeError("content source with code already exists in this scope")
 
         source = ContentSource.create(
             code=clean_code,
@@ -65,7 +66,7 @@ class UpdateContentSourceHandler:
     async def handle(self, command: UpdateContentSourceCommand) -> ContentSource:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
-            raise ValueError(f"content source '{command.source_id}' not found")
+            raise ClientSafeError("content source not found")
 
         source.update_metadata(
             name=command.name,
@@ -92,7 +93,7 @@ class DeprecateContentSourceHandler:
     async def handle(self, command: DeprecateContentSourceCommand) -> ContentSource:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
-            raise ValueError(f"content source '{command.source_id}' not found")
+            raise ClientSafeError("content source not found")
 
         source.deprecate(command.reason)
         saved = await self.repository.save_source(source)
@@ -110,7 +111,7 @@ class RevokeContentSourceHandler:
     async def handle(self, command: RevokeContentSourceCommand) -> ContentSource:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
-            raise ValueError(f"content source '{command.source_id}' not found")
+            raise ClientSafeError("content source not found")
 
         source.revoke(command.reason)
         saved = await self.repository.save_source(source)
@@ -128,7 +129,7 @@ class ActivateContentSourceHandler:
     async def handle(self, command: ActivateContentSourceCommand) -> ContentSource:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
-            raise ValueError(f"content source '{command.source_id}' not found")
+            raise ClientSafeError("content source not found")
 
         source.activate()
         saved = await self.repository.save_source(source)

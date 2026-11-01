@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from app.domain.client_safe import ClientSafeError
 from app.domain.tenant.errors import ProgrammeAlreadyArchivedError
 from app.domain.tenant.value_objects import (
     DepartmentId,
@@ -51,7 +52,7 @@ class Programme:
         programme_id: ProgrammeId | None = None,
     ) -> Programme:
         if duration_years < 1 or duration_years > 7:
-            raise ValueError("duration must be 1-7 years")
+            raise ClientSafeError("duration must be 1-7 years")
 
         prog = cls(
             id=programme_id or ProgrammeId(""),

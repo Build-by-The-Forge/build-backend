@@ -23,11 +23,13 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from app.domain.client_safe import ClientMessage, ClientSafeError
+from app.domain.content.ai_report import public_failure_message, safe_error_code, safe_evidence
 from app.domain.content.enums import IngestionStatus
 from app.events.base import DomainEvent
 
 
-class InvalidJobTransition(ValueError):
+class InvalidJobTransition(ClientMessage, ValueError):
     """The requested change is not allowed from the job's current state."""
 
     status_code = 409  # a client-side conflict, logged as routine
@@ -37,7 +39,7 @@ class RetryNotDue(InvalidJobTransition):
     """A retried attempt may not be dispatched before next_retry_at."""
 
 
-class InvalidStageEvidence(ValueError):
+class InvalidStageEvidence(ClientMessage, ValueError):
     """A stage event lacks the evidence that stage requires."""
 
     status_code = 422
@@ -146,15 +148,15 @@ class ContentIngestionJob:
         job_id: str | None = None,
     ) -> ContentIngestionJob:
         if not asset_id.strip():
-            raise ValueError("asset_id cannot be empty")
+            raise ClientSafeError("asset_id cannot be empty")
         if not source_id.strip():
-            raise ValueError("source_id cannot be empty")
+            raise ClientSafeError("source_id cannot be empty")
         if not created_by.strip():
-            raise ValueError("created_by cannot be empty")
+            raise ClientSafeError("created_by cannot be empty")
         if max_attempts < 1:
-            raise ValueError("max_attempts must be at least 1")
+            raise ClientSafeError("max_attempts must be at least 1")
         if run_number < 1:
-            raise ValueError("run_number must be at least 1")
+            raise ClientSafeError("run_number must be at least 1")
 
         now = datetime.now(timezone.utc)
         job = cls(
@@ -264,7 +266,7 @@ class ContentIngestionJob:
         """
         self.ensure_dispatchable()
         if max_uncertain_dispatches < 1:
-            raise ValueError("max_uncertain_dispatches must be at least 1")
+            raise ClientSafeError("max_uncertain_dispatches must be at least 1")
 
         counter_attempt = self.metrics.get("uncertain_dispatch_attempt")
         count = self.metrics.get("uncertain_dispatch_count", 0)
@@ -381,12 +383,15 @@ class ContentIngestionJob:
         is_retryable: bool,
         details: dict[str, Any],
     ) -> None:
+        error_code = safe_error_code(error_code)
         now = datetime.now(timezone.utc)
         self.status = IngestionStatus.FAILED
         self.error_code = error_code.strip()
-        self.error_message = error_message.strip()
+        # error_message is a diagnostic for the log, written by whoever failed. What
+        # stays on the job comes from the code (app/domain/content/ai_report.py).
+        self.error_message = public_failure_message(error_code)
         self.is_retryable = is_retryable
-        self.error_details = dict(details)
+        self.error_details = safe_evidence(details)
         self.attempt_history.append(
             {
                 "attempt": self.attempt_count,
@@ -499,7 +504,7 @@ class ContentIngestionJob:
                 raise InvalidStageEvidence(f"unknown event type {event_type!r}")
 
             self._adopt_callback_task(external_task_id)
-        metrics = metrics or {}
+        metrics = safe_evidence(metrics or {})
         progress = _PROGRESS.get(self.status)
 
         if event_type == "stage_progress":

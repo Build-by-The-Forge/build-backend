@@ -25,6 +25,7 @@ from app.domain.catalogue.course import Course
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.topic import Topic
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.course import CourseRepository
 
 
@@ -39,7 +40,7 @@ class CourseService:
 
     def _repository(self) -> CourseRepository:
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
         return self.repository
 
     async def create_course(
