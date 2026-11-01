@@ -3,23 +3,31 @@ never leaves, whoever raised it. Statically, marked text is held to what's writt
 here, so a new raise or route is covered the day it's written."""
 
 import ast
+import enum
 import json
 import math
 import re
+from datetime import datetime
 from pathlib import Path
+from typing import Literal, get_args
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from pydantic import BaseModel, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic_core.core_schema import ErrorType
 
 from app.core.exceptions import (
+    _VALIDATION_MESSAGES,
     AppError,
     ClientError,
     ClientHTTPException,
     NotFoundError,
     RateLimitedError,
+    _safe_validation_message,
     public_message,
+    safe_validation_details,
 )
 from app.domain.client_safe import ClientMessage, ClientSafeError
 from app.domain.content.ai_report import safe_evidence
@@ -30,15 +38,15 @@ from app.main import add_response_middleware, app
 ROOT = Path(__file__).resolve().parents[1] / "app"
 LEAK = "http://ai-service.internal:8000/v1 password=hunter2 sk-provider-key"
 
-# Values this code controls: a status from an enum, a sequence number, a limit. Anything
-# else must be added here on purpose.
+# Values this code controls: a status from an enum, a sequence number, a limit from
+# configuration. Anything else must be added here on purpose.
 SAFE_VALUE = re.compile(
-    r"\.value$|sequence$|^(PASSWORD_M\w+|MAX_\w+|timeout_seconds|max_bytes|what|key|minimum|stage|event_type"
+    r"\.value$|sequence$|^(PASSWORD_M\w+|MAX_\w+|timeout_seconds|max_bytes|what|key|minimum"
     r"|self\.attempt_count|self\.max_attempts|retry_at\.isoformat\(\)|response\.status_code|type\(exc\)\.__name__"
     r"|', '\.join\(missing\)|adoption\.benchmark_version)$"
 )
-# Constants defined beside their use, and helpers that already apply the rule.
-SAFE_NAMES = {"NOT_ELIGIBLE", "PLATFORM_WRITE_REFUSED", "detail"}
+# Listed above as parameters, so safe only if every caller passes a literal. Checked below.
+CONTROLLED_PARAMETERS = {"what", "key", "minimum"}
 SAFE_CALLS = {"public_message", "public_failure_message"}
 
 
@@ -63,10 +71,26 @@ def _marked_class_names() -> set[str]:
     return names
 
 
-def _unsafe_parts(text: ast.expr) -> list[str]:
+def _string_constants(tree: ast.Module) -> set[str]:
+    """Names this module assigns once, at its top level, to a literal string."""
+    assigned: dict[str, list[ast.expr]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned.setdefault(target.id, []).append(node.value)
+    top_level = {t.id for n in tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)}
+    return {
+        name
+        for name, values in assigned.items()
+        if name in top_level and len(values) == 1 and isinstance(values[0], ast.Constant) and isinstance(values[0].value, str)
+    }
+
+
+def _unsafe_parts(text: ast.expr, constants: set[str] = frozenset()) -> list[str]:
     if isinstance(text, ast.Constant):
         return []
-    if isinstance(text, ast.Name) and text.id in SAFE_NAMES:
+    if isinstance(text, ast.Name) and text.id in constants:
         return []
     if isinstance(text, ast.Call) and getattr(text.func, "id", "") in SAFE_CALLS:
         return []
@@ -83,6 +107,7 @@ def _marked_text_problems() -> list[str]:
     not_text = {"RateLimitedError", "DuplicateContentError"}
     problems = []
     for path, tree in _modules():
+        constants = _string_constants(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -91,12 +116,50 @@ def _marked_text_problems() -> list[str]:
                 continue
             texts = list(node.args[:1]) + [k.value for k in node.keywords if k.arg in ("message", "detail")]
             for text in texts:
-                problems += [f"{path.relative_to(ROOT)}:{node.lineno} {part}" for part in _unsafe_parts(text)]
+                problems += [f"{path.relative_to(ROOT)}:{node.lineno} {part}" for part in _unsafe_parts(text, constants)]
     return problems
 
 
 def test_every_marked_error_holds_only_written_text():
     problems = _marked_text_problems()
+    assert not problems, " | ".join(problems)
+
+
+def _functions_taking_controlled_parameters():
+    for _, tree in _modules():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                names = [a.arg for a in node.args.args]
+                raises = [part for part in ast.walk(node) if isinstance(part, ast.Raise)]
+                for parameter in CONTROLLED_PARAMETERS & set(names):
+                    if any(_interpolates(part, parameter) for raised in raises for part in ast.walk(raised)):
+                        yield node.name, parameter, names.index(parameter)
+
+
+def _interpolates(node: ast.AST, name: str) -> bool:
+    return isinstance(node, ast.FormattedValue) and isinstance(node.value, ast.Name) and node.value.id == name
+
+
+def test_a_listed_parameter_only_ever_receives_a_literal():
+    # A name proves nothing: what matters is where the value comes from.
+    functions = list(_functions_taking_controlled_parameters())
+    assert functions, "the check must find what it guards"
+    problems = []
+    for path, tree in _modules():
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            called = getattr(node.func, "id", getattr(node.func, "attr", ""))
+            for function, parameter, position in functions:
+                if called != function:
+                    continue
+                passed = [k.value for k in node.keywords if k.arg == parameter]
+                passed += node.args[position : position + 1]
+                problems += [
+                    f"{path.relative_to(ROOT)}:{node.lineno} {parameter}={ast.unparse(value)}"
+                    for value in passed
+                    if not isinstance(value, ast.Constant)
+                ]
     assert not problems, " | ".join(problems)
 
 
@@ -201,6 +264,10 @@ def test_the_frameworks_own_errors_get_fixed_text():
 # --- validation -------------------------------------------------------------------------
 
 
+class _Colour(enum.Enum):
+    RED = "red"
+
+
 class _Validated(BaseModel):
     @model_validator(mode="after")
     def refuse(self):
@@ -238,6 +305,16 @@ def test_a_validators_marked_text_is_kept():
     assert "written for you" in response.json()["error"]["details"]["fields"][0]["message"]
 
 
+def test_only_a_declared_name_appears_as_a_field():
+    errors = [{"type": "missing", "loc": ("body", "email", 2, "looks-like-a-field", "password=hunter2"), "msg": ""}]
+    assert safe_validation_details(errors, {"email"})["fields"][0]["field"] == "body.email.2.*.*"
+
+
+def test_a_declared_field_is_still_named_through_the_app():
+    response = _posting(_EveryConstraint).post("/validate", json={"required": 7})
+    assert response.json()["error"]["details"]["fields"][0]["field"] == "body.required"
+
+
 def test_a_submitted_key_is_not_echoed_as_a_field_name():
     class Strict(BaseModel):
         model_config = {"extra": "forbid"}
@@ -245,6 +322,80 @@ def test_a_submitted_key_is_not_echoed_as_a_field_name():
     response = _posting(Strict).post("/validate", json={"password=hunter2": 1})
     assert response.status_code == 422
     assert "hunter2" not in response.text
+
+
+def test_every_pydantic_error_type_gets_written_text():
+    for kind in get_args(ErrorType):
+        message = _safe_validation_message({"type": kind, "msg": LEAK, "ctx": {"error": ValueError(LEAK)}})
+        assert message in {*_VALIDATION_MESSAGES.values(), "invalid value"}, kind
+
+
+def test_the_table_names_only_real_error_types():
+    assert set(_VALIDATION_MESSAGES) <= set(get_args(ErrorType))
+
+
+def test_a_code_that_is_not_a_plain_identifier_is_replaced():
+    details = safe_validation_details([{"type": LEAK, "loc": ("body",), "msg": LEAK}], ())
+    assert details == {"fields": [{"field": "body", "code": "invalid", "message": "invalid value"}]}
+
+
+class _EveryConstraint(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    required: str = Field(min_length=3, max_length=5, pattern="^[a-z]+$")
+    number: int = Field(default=1, ge=1, le=5)
+    ratio: float = Field(default=1.0, gt=0, lt=5)
+    flag: bool = True
+    choice: Literal["a", "b"] = "a"
+    colour: _Colour = _Colour.RED
+    when: datetime | None = None
+    identity: UUID | None = None
+    items: list[str] = Field(default_factory=list, max_length=1)
+    nested: dict[str, int] = Field(default_factory=dict)
+
+
+SECRET = "the-secret-value"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"required": SECRET},
+        {"required": "ab"},
+        {"required": 7},
+        {"required": "abc", "number": SECRET},
+        {"required": "abc", "number": 99},
+        {"required": "abc", "ratio": SECRET},
+        {"required": "abc", "ratio": 99},
+        {"required": "abc", "flag": SECRET},
+        {"required": "abc", "choice": SECRET},
+        {"required": "abc", "colour": SECRET},
+        {"required": "abc", "when": SECRET},
+        {"required": "abc", "identity": SECRET},
+        {"required": "abc", "items": [SECRET, SECRET]},
+        {"required": "abc", "items": SECRET},
+        {"required": "abc", "nested": SECRET},
+        {"required": "abc", "nested": {SECRET: SECRET}},
+        {"required": "abc", SECRET: 1},
+        [SECRET],
+    ],
+    ids=lambda body: "-".join(body) if isinstance(body, dict) else "not-an-object",
+)
+def test_no_refusal_of_any_constraint_echoes_the_value(body):
+    response = _posting(_EveryConstraint).post("/validate", json=body)
+    assert response.status_code == 422, response.text
+    assert SECRET not in response.text
+    for field in response.json()["error"]["details"]["fields"]:
+        assert field["message"] in {*_VALIDATION_MESSAGES.values(), "invalid value"}
+
+
+def test_malformed_json_echoes_nothing():
+    response = _posting(_EveryConstraint).post(
+        "/validate", content=b'{"required": the-secret-value', headers={"content-type": "application/json"}
+    )
+    assert response.status_code == 422
+    assert SECRET not in response.text
 
 
 # --- public_message ---------------------------------------------------------------------

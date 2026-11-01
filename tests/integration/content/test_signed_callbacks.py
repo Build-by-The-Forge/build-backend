@@ -581,3 +581,13 @@ async def test_stage_metrics_keep_their_evidence_and_lose_free_text(client, monk
     assert read.json()["data"]["status"] == "extracted"
     assert read.json()["data"]["metrics"]["characters"] == EVIDENCE["extracted"]["characters"]
     assert_no_leak(read.text)
+
+
+async def test_a_refused_callback_body_echoes_nothing(client, monkeypatch):
+    job, tenant_id, _ = await processing_job(client, monkeypatch)
+    body = json.dumps({"job_id": job["id"], "event_id": LEAK, "event_type": LEAK, LEAK: LEAK, "run_number": LEAK}).encode()
+    response = send(client, body, tenant_id)
+    assert response.status_code == 422
+    assert_no_leak(response.text)
+    for field in response.json()["error"]["details"]["fields"]:
+        assert set(field) == {"field", "code", "message"}

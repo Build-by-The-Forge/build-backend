@@ -103,7 +103,7 @@ def validate_stage_evidence(stage: str, metrics: dict[str, Any], recorded: dict[
         if not isinstance(index, str) or not index.strip():
             raise InvalidStageEvidence("metrics.index must name the durable index")
     else:
-        raise InvalidStageEvidence(f"unknown stage {stage!r}")
+        raise InvalidStageEvidence("unknown stage")
 
 
 @dataclass
@@ -501,7 +501,7 @@ class ContentIngestionJob:
             elif event_type != "job_failed":
                 if event_type == "job_completed":
                     return CallbackOutcome.NOT_ALLOWED
-                raise InvalidStageEvidence(f"unknown event type {event_type!r}")
+                raise InvalidStageEvidence("unknown event type")
 
             self._adopt_callback_task(external_task_id)
         metrics = safe_evidence(metrics or {})
@@ -510,7 +510,7 @@ class ContentIngestionJob:
         if event_type == "stage_progress":
             rank = _STAGE_RANK.get(stage or "")
             if rank is None:
-                raise InvalidStageEvidence(f"unknown stage {stage!r}")
+                raise InvalidStageEvidence("unknown stage")
             if progress is None:  # failed (or not yet dispatched)
                 return CallbackOutcome.NOT_ALLOWED
             if progress >= rank:
@@ -540,7 +540,7 @@ class ContentIngestionJob:
                 details=details,
             )
         else:
-            raise InvalidStageEvidence(f"unknown event type {event_type!r}")
+            raise InvalidStageEvidence("unknown event type")
 
         self.last_callback_at = datetime.now(timezone.utc)
         return CallbackOutcome.APPLIED

@@ -25,7 +25,7 @@ from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
-from app.core.exceptions import public_message
+from app.core.exceptions import public_message, safe_validation_details
 from app.core.tenant_context import TenantContext
 from app.domain.content.ai_report import public_failure_message
 from app.domain.content.enums import IngestionStatus
@@ -396,7 +396,9 @@ async def handle_ai_callback(request: Request) -> JSONResponse:
                 "error": {
                     "code": "INVALID_PAYLOAD",
                     "message": "callback body failed validation",
-                    "details": exc.errors(include_url=False, include_input=False, include_context=False),
+                    "details": safe_validation_details(
+                        exc.errors(include_url=False, include_input=False), AICallbackRequest.model_fields
+                    ),
                 }
             },
         )

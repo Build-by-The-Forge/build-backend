@@ -184,3 +184,16 @@ async def test_text_stored_before_the_filter_is_clean_on_the_way_out(client, mon
     asset = client.get(f"/content/assets/{job['asset_id']}", headers=h)
     assert asset.status_code == 200
     assert_no_leak(asset.text)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["event_type", "stage"])
+async def test_a_reported_kind_of_event_never_comes_back_as_text(client, monkeypatch, field):
+    job, _, h = await processing_job(client, monkeypatch)
+    report = failure_report(job)
+    report.events[0].update(event_type="stage_progress", stage="extracted", metrics={})
+    report.events[0][field] = LEAK
+    stub_status(monkeypatch, lambda: report)
+
+    assert_no_leak(client.post(f"/content/jobs/{job['id']}/reconcile", headers=h).text)
+    assert_no_leak(client.get(f"/content/jobs/{job['id']}", headers=h).text)

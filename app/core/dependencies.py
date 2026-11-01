@@ -32,10 +32,18 @@ async def get_unit_of_work() -> AsyncIterator[UnitOfWork]:
 _token_service = JWTTokenService()
 
 
-def _unauthorized(detail: str = "invalid token") -> ClientHTTPException:
+def _unauthorized() -> ClientHTTPException:
     return ClientHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail=detail,
+        detail="invalid token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _missing_token() -> ClientHTTPException:
+    return ClientHTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="missing bearer token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -45,7 +53,7 @@ async def get_current_principal(request: Request, uow: UnitOfWork = Depends(get_
     (Authorization: Bearer <jwt>) and return the authenticated principal."""
     auth = request.headers.get("authorization")
     if auth is None or not auth.startswith("Bearer "):
-        raise _unauthorized("missing bearer token")
+        raise _missing_token()
 
     try:
         claims = _token_service.decode_access_token(auth.split(" ", 1)[1])

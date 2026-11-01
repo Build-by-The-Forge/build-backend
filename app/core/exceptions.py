@@ -1,5 +1,6 @@
 import re
 import uuid
+from collections.abc import Collection, Iterable
 from typing import Any
 
 import structlog
@@ -157,29 +158,90 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
     )
 
 
-_SAFE_LOCATION_PART = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_LOCATION_ROOTS = frozenset({"body", "query", "path", "header", "cookie"})
 
 
-def _safe_location(location: tuple[object, ...]) -> str:
-    # A submitted object's own keys appear here, so they can be anything.
-    return ".".join(str(part) if _SAFE_LOCATION_PART.fullmatch(str(part)) else "*" for part in location)
+def _safe_location(location: tuple[object, ...], declared: Collection[str]) -> str:
+    """A submitted object's own keys appear in a location, and can look like any other
+    name. So a name is kept only if the API declares it, and otherwise becomes *."""
+    known = _LOCATION_ROOTS | set(declared)
+    return ".".join(str(part) if isinstance(part, int) or part in known else "*" for part in location)
+
+
+def _declared_names(target: Any) -> frozenset[str]:
+    """Every property and parameter name in the application's own schema."""
+    names: set[str] = set()
+
+    def collect(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key == "properties" and isinstance(value, dict):
+                    names.update(value)
+                if key == "parameters" and isinstance(value, list):
+                    names.update(p["name"] for p in value if isinstance(p, dict) and "name" in p)
+                collect(value)
+        elif isinstance(node, list):
+            for item in node:
+                collect(item)
+
+    collect(target.openapi())
+    return frozenset(names)
+
+
+# Written here, by error type. Pydantic's own text is never passed on: it can change
+# between versions and some of it quotes the input. A type not listed gets the default.
+_VALIDATION_MESSAGES = {
+    "missing": "this field is required",
+    "extra_forbidden": "this field is not allowed",
+    "json_invalid": "the request body is not valid JSON",
+    "string_type": "must be text",
+    "string_too_short": "too short",
+    "string_too_long": "too long",
+    "string_pattern_mismatch": "not in the expected format",
+    "int_type": "must be a whole number",
+    "int_parsing": "must be a whole number",
+    "float_type": "must be a number",
+    "float_parsing": "must be a number",
+    "bool_type": "must be true or false",
+    "bool_parsing": "must be true or false",
+    "list_type": "must be a list",
+    "dict_type": "must be an object",
+    "model_attributes_type": "must be an object",
+    "greater_than": "too small",
+    "greater_than_equal": "too small",
+    "less_than": "too large",
+    "less_than_equal": "too large",
+    "too_short": "too few items",
+    "too_long": "too many items",
+    "literal_error": "not an accepted value",
+    "enum": "not an accepted value",
+    "datetime_type": "must be a date and time",
+    "datetime_parsing": "must be a date and time",
+    "datetime_from_date_parsing": "must be a date and time",
+    "uuid_type": "must be a UUID",
+    "uuid_parsing": "must be a UUID",
+}
+_SAFE_VALIDATION_CODE = re.compile(r"[a-z_]{1,64}")
 
 
 def _safe_validation_message(error: Any) -> str:
-    """Pydantic's own messages, except where the text comes from a validator's exception
-    or a parser, which can quote the input."""
     kind = error["type"]
     if kind in ("value_error", "assertion_error"):
         cause = error.get("ctx", {}).get("error")
         return str(cause) if isinstance(cause, ClientMessage) else "invalid value"
-    return "invalid value" if kind.endswith("_parsing") else error["msg"]
+    return _VALIDATION_MESSAGES.get(kind, "invalid value")
 
 
-def _safe_details(exc: RequestValidationError) -> dict[str, object]:
+def safe_validation_details(errors: Iterable[Any], declared: Collection[str]) -> dict[str, object]:
     """Where and why, never the refused value: it may be a password."""
     return {
         "fields": [
-            {"field": _safe_location(e["loc"]), "code": e["type"], "message": _safe_validation_message(e)} for e in exc.errors()
+            {
+                "field": _safe_location(e["loc"], declared),
+                "code": e["type"] if _SAFE_VALIDATION_CODE.fullmatch(e["type"]) else "invalid",
+                "message": _safe_validation_message(e),
+            }
+            for e in errors
         ]
     }
 
@@ -199,7 +261,7 @@ async def validation_exception_handler(request: Request, exc: Exception) -> JSON
         status.HTTP_422_UNPROCESSABLE_CONTENT,
         "VALIDATION_FAILED",
         "validation failed",
-        details=_safe_details(exc),
+        details=safe_validation_details(exc.errors(), _declared_names(request.app)),
     )
 
 
