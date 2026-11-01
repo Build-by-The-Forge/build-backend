@@ -55,8 +55,8 @@ async def list_courses(
                 }
                 for course in courses
             ],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -88,8 +88,8 @@ async def get_course(
         content={
             "success": True,
             "data": response.model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -130,8 +130,8 @@ async def create_course(
         content={
             "success": True,
             "data": response.model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -167,8 +167,8 @@ async def update_course(
                 status=course.status.value,
                 description=course.description,
             ).model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -208,8 +208,8 @@ async def _transition_course(
                 "id": course.id.value,
                 "status": course.status.value,
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -245,8 +245,8 @@ async def create_topic(
                 "sequence": topic.sequence.value,
                 "status": topic.status.value,
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -276,8 +276,8 @@ async def list_topics(
                 }
                 for topic in course.topics
             ],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -310,8 +310,8 @@ async def update_topic(
                 "sequence": topic.sequence.value,
                 "status": topic.status.value,
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -330,8 +330,8 @@ async def archive_topic(
         content={
             "success": True,
             "data": {"id": topic.id.value, "status": topic.status.value},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -362,8 +362,8 @@ async def create_learning_outcome(
                 "description": outcome.description.value,
                 "status": outcome.status.value,
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -394,8 +394,8 @@ async def list_learning_outcomes(
                 }
                 for outcome in topic.learning_outcomes
             ],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -425,8 +425,8 @@ async def update_learning_outcome(
                 "description": outcome.description.value,
                 "status": outcome.status.value,
             },
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -445,8 +445,8 @@ async def archive_learning_outcome(
         content={
             "success": True,
             "data": {"id": outcome.id.value, "status": outcome.status.value},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -472,8 +472,8 @@ async def create_reference_material(
         content={
             "success": True,
             "data": _reference_material_payload(material),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -492,8 +492,8 @@ async def list_reference_materials(
         content={
             "success": True,
             "data": [_reference_material_payload(item) for item in course.references],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -519,8 +519,8 @@ async def update_reference_material(
         content={
             "success": True,
             "data": _reference_material_payload(material),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -539,8 +539,8 @@ async def archive_reference_material(
         content={
             "success": True,
             "data": {"id": material.id.value, "status": material.status.value},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 

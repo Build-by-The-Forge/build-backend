@@ -131,7 +131,15 @@ async def _receive_upload(
 
     data = ContentAssetResponse.from_domain(result.asset).model_dump(mode="json")
     status_code = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
-    return JSONResponse(status_code=status_code, content={"data": data})
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": True,
+            "data": data,
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
+        },
+    )
 
 
 @router.get(
@@ -148,12 +156,21 @@ async def get_asset(
         return error_response(request, status.HTTP_404_NOT_FOUND, "RESOURCE_NOT_FOUND", "asset not found")
 
     resp_data = asset_view(ContentAssetResponse.from_domain(asset).model_dump(mode="json"), context)
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": resp_data,
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
+        },
+    )
 
 
 @router.get("/sources/{source_id}/assets")
 async def list_source_assets(
     source_id: str,
+    request: Request,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_READ)),
@@ -168,14 +185,22 @@ async def list_source_assets(
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
+            "success": True,
             "data": items,
-            "meta": {"total": total, "limit": limit, "offset": offset},
+            "error": None,
+            "meta": {
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "request_id": getattr(request.state, "request_id", None),
+            },
         },
     )
 
 
 @router.get("/assets")
 async def list_all_assets(
+    request: Request,
     status_filter: str | None = Query(default=None, alias="status"),
     ingestion_filter: str | None = Query(default=None, alias="ingestion_status"),
     limit: int = Query(default=50, ge=1, le=100),
@@ -196,8 +221,15 @@ async def list_all_assets(
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
+            "success": True,
             "data": items,
-            "meta": {"total": total, "limit": limit, "offset": offset},
+            "error": None,
+            "meta": {
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "request_id": getattr(request.state, "request_id", None),
+            },
         },
     )
 
@@ -234,7 +266,15 @@ async def revoke_asset(
         )
 
     resp_data = ContentAssetResponse.from_domain(revoked).model_dump(mode="json")
-    return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "data": resp_data,
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
+        },
+    )
 
 
 # Retired routes (P3-1 PR 3b, design section 8). They answer 410 to any

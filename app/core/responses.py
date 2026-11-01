@@ -15,8 +15,7 @@ class ApiResponse(JSONResponse):
         payload = {
             "success": success,
             "data": data or {},
-            "meta": meta or {},
+            "error": None,
+            "meta": {**(meta or {}), "request_id": request_id},
         }
-        if request_id is not None:
-            payload["request_id"] = request_id
         super().__init__(content=payload)

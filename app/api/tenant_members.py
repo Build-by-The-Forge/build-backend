@@ -35,8 +35,8 @@ def _envelope(request: Request, data: object) -> JSONResponse:
         content={
             "success": True,
             "data": data,
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 

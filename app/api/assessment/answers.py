@@ -75,8 +75,8 @@ async def get_answers(
         content={
             "success": True,
             "data": response.model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -106,12 +106,7 @@ async def delete_answer(
         raise ClientHTTPException(status_code=404, detail="attempt not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={
-            "success": True,
-            "data": {},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
-        },
+        content={"success": True, "data": {}, "error": None, "meta": {"request_id": getattr(request.state, "request_id", None)}},
     )
 
 
@@ -127,7 +122,7 @@ def _response(request: Request, answer: AttemptAnswer) -> JSONResponse:
         content={
             "success": True,
             "data": payload.model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )

@@ -53,8 +53,8 @@ async def register_user(request: Request, payload: dict[str, str]) -> JSONRespon
                 "email": user.email.value,
                 "is_active": user.is_active,
             },
-            "meta": {},
-            "request_id": request_id,
+            "error": None,
+            "meta": {"request_id": request_id},
         },
     )
 
@@ -119,8 +119,8 @@ def _issued_session_response(issued: IssuedSession, request_id: str | None) -> J
                 "expires_in": settings.auth_access_token_ttl_seconds,
                 "refresh_token": issued.refresh_token,
             },
-            "meta": {},
-            "request_id": request_id,
+            "error": None,
+            "meta": {"request_id": request_id},
         },
     )
 
@@ -136,8 +136,8 @@ async def logout_all_sessions(
         content={
             "success": True,
             "data": {"revoked_sessions": revoked},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -153,7 +153,7 @@ async def logout_session(
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"success": True, "data": {}, "meta": {}, "request_id": request_id},
+        content={"success": True, "data": {}, "error": None, "meta": {"request_id": request_id}},
     )
 
 
@@ -169,8 +169,8 @@ async def verify_email(request: Request, payload: dict[str, str]) -> JSONRespons
         content={
             "success": True,
             "data": {"email_verified": user.email_verified},
-            "meta": {},
-            "request_id": request_id,
+            "error": None,
+            "meta": {"request_id": request_id},
         },
     )
 
@@ -188,8 +188,8 @@ async def resend_verification(request: Request, payload: dict[str, str]) -> JSON
         content={
             "success": True,
             "data": {},
-            "meta": {"message": "If this email needs verification, a new code has been sent."},
-            "request_id": request_id,
+            "error": None,
+            "meta": {"message": "If this email needs verification, a new code has been sent.", "request_id": request_id},
         },
     )
 
@@ -207,8 +207,8 @@ async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResp
         content={
             "success": True,
             "data": {},
-            "meta": {"message": "If an account exists for this email, a reset code has been sent."},
-            "request_id": request_id,
+            "error": None,
+            "meta": {"message": "If an account exists for this email, a reset code has been sent.", "request_id": request_id},
         },
     )
 
@@ -226,7 +226,7 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
     await throttle.password_reset_completed(email, ip)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={"success": True, "data": {}, "meta": {}, "request_id": request_id},
+        content={"success": True, "data": {}, "error": None, "meta": {"request_id": request_id}},
     )
 
 
@@ -260,12 +260,7 @@ async def change_password(
     await throttle.password_change_succeeded(principal.user_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={
-            "success": True,
-            "data": {"revoked_sessions": revoked},
-            "meta": {},
-            "request_id": request_id,
-        },
+        content={"success": True, "data": {"revoked_sessions": revoked}, "error": None, "meta": {"request_id": request_id}},
     )
 
 
@@ -289,14 +284,15 @@ async def get_current_user(
                 "status": user.status.value,
                 "email_verified": user.email_verified,
             },
-            "meta": {},
-            "request_id": request_id,
+            "error": None,
+            "meta": {"request_id": request_id},
         },
     )
 
 
 @router.get("/whoami", status_code=status.HTTP_200_OK)
 async def whoami(
+    request: Request,
     principal: AuthenticatedPrincipal = Depends(get_current_principal),
 ) -> JSONResponse:
     return JSONResponse(
@@ -304,13 +300,15 @@ async def whoami(
         content={
             "success": True,
             "data": {"user_id": principal.user_id},
-            "meta": {},
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
 
 @router.get("/tenant-context", status_code=status.HTTP_200_OK)
 async def get_tenant_context(
+    request: Request,
     context: TenantContext = Depends(get_current_tenant_context),
 ) -> JSONResponse:
     return JSONResponse(
@@ -323,13 +321,15 @@ async def get_tenant_context(
                 "membership_id": context.membership_id,
                 "role": context.role,
             },
-            "meta": {},
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
 
 @router.get("/permissions", status_code=status.HTTP_200_OK)
 async def get_permissions(
+    request: Request,
     context: TenantContext = Depends(get_current_tenant_context),
 ) -> JSONResponse:
     permissions = sorted(permission.value for permission in authorization.permissions_for(context))
@@ -342,13 +342,15 @@ async def get_permissions(
                 "role": context.role,
                 "permissions": permissions,
             },
-            "meta": {},
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
 
 @router.get("/authorization-probe", status_code=status.HTTP_200_OK)
 async def authorization_probe(
+    request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
     return JSONResponse(
@@ -360,6 +362,7 @@ async def authorization_probe(
                 "role": context.role,
                 "permission": Permission.CATALOGUE_CREATE.value,
             },
-            "meta": {},
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )

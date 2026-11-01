@@ -64,8 +64,8 @@ async def adopt_benchmark(
         content={
             "success": True,
             "data": _adoption_payload(adoption),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -85,8 +85,8 @@ async def list_adoptions(
         content={
             "success": True,
             "data": [_adoption_payload(a) for a in adoptions],
-            "meta": {"total": len(adoptions)},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"total": len(adoptions), "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -113,8 +113,8 @@ async def get_adoption(
                 "adoption": _adoption_payload(adoption),
                 "overrides": [_override_payload(o) for o in overrides],
             },
-            "meta": {"overrides_count": len(overrides)},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"overrides_count": len(overrides), "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -142,8 +142,11 @@ async def activate_adoption(
                 "activated": _adoption_payload(adoption),
                 "superseded": (_adoption_payload(superseded) if superseded is not None else None),
             },
-            "meta": {"superseded_adoption_id": (superseded.id if superseded is not None else None)},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {
+                "superseded_adoption_id": superseded.id if superseded is not None else None,
+                "request_id": getattr(request.state, "request_id", None),
+            },
         },
     )
 
@@ -177,8 +180,8 @@ async def add_override(
         content={
             "success": True,
             "data": _override_payload(override),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -210,8 +213,8 @@ async def remove_override(
         content={
             "success": True,
             "data": {"deleted": True, "override_id": override_id},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -235,11 +238,12 @@ async def get_effective_curriculum_by_adoption(
         content={
             "success": True,
             "data": _effective_curriculum_payload(effective),
+            "error": None,
             "meta": {
                 "effective_curriculum_fingerprint": effective.effective_curriculum_fingerprint,
                 "resolution_engine_version": effective.resolution_engine_version,
+                "request_id": getattr(request.state, "request_id", None),
             },
-            "request_id": getattr(request.state, "request_id", None),
         },
     )
 
@@ -265,11 +269,12 @@ async def get_active_effective_curriculum_student(
         content={
             "success": True,
             "data": _student_effective_curriculum_payload(effective),
+            "error": None,
             "meta": {
                 "effective_curriculum_fingerprint": effective.effective_curriculum_fingerprint,
                 "resolution_engine_version": effective.resolution_engine_version,
+                "request_id": getattr(request.state, "request_id", None),
             },
-            "request_id": getattr(request.state, "request_id", None),
         },
     )
 

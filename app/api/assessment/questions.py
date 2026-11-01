@@ -64,8 +64,8 @@ async def create_question(
                     for option in question.options
                 ],
             ).model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -105,8 +105,8 @@ async def get_question(
                     for option in question.options
                 ],
             ).model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -153,8 +153,8 @@ async def update_question(
                     for option in question.options
                 ],
             ).model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -174,8 +174,8 @@ async def publish_question(
         content={
             "success": True,
             "data": {"id": question.id.value, "status": question.status.value},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -195,7 +195,7 @@ async def archive_question(
         content={
             "success": True,
             "data": {"id": question.id.value, "status": question.status.value},
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )

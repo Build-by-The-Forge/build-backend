@@ -46,8 +46,8 @@ async def create_source(
         content={
             "success": True,
             "data": _source_payload(source),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -64,8 +64,8 @@ async def list_sources(
         content={
             "success": True,
             "data": [_source_payload(s) for s in sources],
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -84,8 +84,8 @@ async def get_source(
         content={
             "success": True,
             "data": _source_payload(source),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -119,8 +119,8 @@ async def list_snapshots(
         content={
             "success": True,
             "data": [_snapshot_payload(s) for s in snapshots],
-            "meta": {"total": total, "limit": limit, "offset": offset},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"total": total, "limit": limit, "offset": offset, "request_id": getattr(request.state, "request_id", None)},
         },
     )
 
@@ -144,8 +144,8 @@ async def trigger_sync(
                 job_id=job_id,
                 status="queued",
             ).model_dump(),
-            "meta": {},
-            "request_id": getattr(request.state, "request_id", None),
+            "error": None,
+            "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
     )
 
