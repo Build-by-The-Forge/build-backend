@@ -48,7 +48,7 @@ M3 is **not close to done**. The fixes merged so far closed security and lifecyc
 | L1 | Attempt policy, limits, retakes | Plan | G-29 closed | HTTP, PostgreSQL races | **Merged** | `899e52a` |
 | L2 | Result release, feedback, standing attempt | L1 | G-16, G-36 closed | HTTP, PostgreSQL | **Merged** | `31d7d6a` |
 | L3 | One finalization path, worker, database clock | L2 | G-37 closed | HTTP, PostgreSQL races, boundary | **Merged** | `bc9bee8` |
-| AI-1 | Idempotent upsert, contributions, recompute | L0-A | The plan's AI-1 tests | PostgreSQL, forced-order lock test | **In review** (ai-service #42) | |
+| AI-1 | Idempotent upsert, contributions, recompute | L0-A | The plan's AI-1 tests | PostgreSQL, forced-order lock test | **Merged** (ai-service #42) | `0553f35` (merge) |
 | L4 | Memory outbox and dispatcher, `memberships.generation`, shared membership lock, removing the background task | AI-1 | The six conditions on #59, sending `event_id`, removing #65's older table set | PostgreSQL forced-order and lock-removal races | **Specified** in `assessment-lifecycle-plan.md`, approved on #59 | |
 | Memory activation | The production gate's conditions | L4, and everything in that gate | Each condition implemented and verified | Own safety review | **Not started**. `GATE_OPEN` stays `False` | |
 
@@ -65,10 +65,19 @@ A faster order doesn't weaken any acceptance criteria. M3-D isn't done because u
 
 **Immediate work**
 
-1. AI-1: re-review and merge.
-2. This register.
-3. The boundary gate's retry-aware wait, in its own PR.
-4. M3-A.
+1. AI-1: merged (ai-service #42).
+2. This register: merged (#67).
+3. The boundary gate: fixes merged (#68, #69). The acceptance bar below is still open.
+4. M3-A, blocked until that bar is met.
+
+**Boundary gate acceptance bar, before M3-A**
+
+- 40 consecutive full gate runs against the same pinned commits, after both fixes.
+- Every first-attempt result is recorded. A rerun never erases a failure.
+- No skipped required tests, and no hidden retries that turn failures green.
+- A failure is preserved and diagnosed. After a corrective change, the count restarts from zero on new pinned commits.
+
+Forty clean runs are a practical confidence check, not proof of reliability. They sit alongside the root-cause fixes and regression tests.
 
 **M-track**
 
@@ -99,3 +108,9 @@ A faster order doesn't weaken any acceptance criteria. M3-D isn't done because u
 | 22 existing `mypy app` errors in the backend, not a CI check | #61 | Unscheduled |
 | Model-provider data handling (G-33), and reviewing the 7 public OCR documents (G-34) | M0 | Before any production provider or shared retrieval |
 | Retention lifecycle for memory events and contributions | #42 | Memory activation |
+| The event fingerprint is an unkeyed SHA-256 of low-entropy data, so someone with database access could test guesses. It must be covered by retention and account deletion | #42 | Memory activation |
+| Fingerprint immutability is application-level; consider a database trigger or equivalent | #42 | Before memory activation |
+| The fault-arming idle check is a harness synchronization, not a guarantee against work enqueued after it; it relies on no unrelated jobs starting during arming | #69 | Keep true in the gate's phases |
+| Registration reveals an existing email through a distinct 409 | Security review, 2026-11-01 | Unscheduled |
+| Identity routes accept raw `dict` payloads | Security review, 2026-11-01 | Unscheduled |
+| No HSTS or CSP headers | Security review, 2026-11-01 | Unscheduled |
