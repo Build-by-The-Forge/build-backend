@@ -49,6 +49,7 @@ from boundary.conftest import (
     to_backend,
     user_context,
 )
+from boundary.job_status import attempt_finished, wait_until_idle
 
 BACKEND_APP_DSN = os.environ.get("BOUNDARY_BACKEND_APP_DSN", "")
 FAULT_DIR = os.environ.get("BOUNDARY_FAULT_DIR", "")
@@ -75,6 +76,7 @@ def faults() -> Path:
 
 
 def arm(faults: Path, point: str) -> None:
+    wait_until_idle(busy_jobs, RECOVERY_TIMEOUT)
     (faults / f"{point}.pause").write_text("", encoding="utf-8")
 
 
@@ -134,6 +136,18 @@ def job_row(job_id: str) -> dict[str, Any]:
     if isinstance(record["attempt_history"], str):
         record["attempt_history"] = json.loads(record["attempt_history"])
     return record
+
+
+def busy_jobs() -> list[tuple[str, str, int]]:
+    """Every job the workers can still run, in any tenant. Not uploaded: nothing
+    picks those up until they are queued."""
+    rows = _fetch(
+        BACKEND_APP_DSN,
+        "SELECT id, status, attempt_count FROM content_ingestion_jobs"
+        " WHERE status IN ('queued', 'processing', 'extracted', 'chunked', 'indexed')"
+        " OR (status = 'failed' AND is_retryable AND attempt_count < max_attempts)",
+    )
+    return [(str(r["id"]), r["status"], r["attempt_count"]) for r in rows]
 
 
 def ledger(job_id: str) -> list[tuple[int | None, str | None, str | None, str, str]]:
@@ -232,6 +246,22 @@ def start_job(backend, tenant) -> tuple[dict, dict]:
     return asset, create_job_for(backend, tenant, asset)
 
 
+# --- the harness's own guarantee --------------------------------------------------
+
+
+@pytest.mark.fault_injection
+def test_arming_waits_for_earlier_work_to_finish(backend, tenant_a, faults):
+    # The gate failure: a job left from an earlier phase took the pause meant for
+    # the test's own job and held the only fault worker until the wait timed out.
+    _, earlier = start_job(backend, tenant_a)
+    arm(faults, AFTER_INDEX_WRITE)
+    try:
+        assert job_row(earlier["id"])["status"] == "ready"
+        assert busy_jobs() == []
+    finally:
+        release(faults, AFTER_INDEX_WRITE)
+
+
 # --- the race, both orderings --------------------------------------------------------
 
 
@@ -255,7 +285,7 @@ def test_race_the_effect_wins_then_recovery_replaces_it(ai, backend, tenant_a, t
 
     # Attempt 1 cannot report indexed without its record; recovery runs attempt 2.
     wait_until(
-        lambda: job_row(job_id)["status"] in ("ready", "failed") and job_row(job_id)["attempt_count"] == 2,
+        lambda: attempt_finished(job_row(job_id), 2),
         lambda: evidence(job_id, tenant, asset_id, task_1),
     )
     assert_ready_on_attempt_2_only(job_id, tenant, asset_id)
@@ -344,7 +374,7 @@ def test_c23_the_killed_attempt_is_recovered_as_attempt_2(backend, faults):
 
     # attempt 1 -> worker killed -> lease expires -> AI_TASK_LOST -> attempt 2 -> ready
     wait_until(
-        lambda: job_row(job_id)["status"] in ("ready", "failed") and job_row(job_id)["attempt_count"] == 2,
+        lambda: attempt_finished(job_row(job_id), 2),
         lambda: evidence(job_id, tenant, asset_id, task_1),
     )
     assert_ready_on_attempt_2_only(job_id, tenant, asset_id)
