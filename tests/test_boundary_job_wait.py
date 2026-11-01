@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from boundary.job_status import JobNotSettled, attempt_finished, retry_pending, wait_until_settled
+from boundary.job_status import (
+    JobNotSettled,
+    attempt_finished,
+    retry_pending,
+    wait_until_idle,
+    wait_until_settled,
+)
 
 SETTLED = {"ready", "failed"}
 
@@ -99,6 +105,17 @@ def test_an_attempt_still_running_has_not_finished(status):
 def test_a_real_failure_on_the_attempt_still_ends_the_wait():
     # So the caller's assert reports it, rather than the wait hiding it.
     assert attempt_finished(job("failed", attempt=2), 2) is True
+
+
+def test_idle_waits_until_nothing_is_left_to_run():
+    remaining = [["a", "b"], ["b"], []]
+    wait_until_idle(lambda: remaining.pop(0), 5.0, interval=0)
+    assert remaining == []
+
+
+def test_work_that_never_finishes_fails_the_idle_wait_and_names_it():
+    with pytest.raises(AssertionError, match="stuck-job"):
+        wait_until_idle(lambda: ["stuck-job"], 0.05, interval=0)
 
 
 def test_no_boundary_condition_reads_a_job_twice():

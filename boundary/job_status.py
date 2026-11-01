@@ -33,6 +33,24 @@ def attempt_finished(job: dict[str, Any], attempt: int) -> bool:
     return job["attempt_count"] == attempt and job["status"] in ("ready", "failed")
 
 
+def wait_until_idle(
+    fetch_busy: Callable[[], list[Any]],
+    timeout: float,
+    *,
+    interval: float = 0.5,
+) -> None:
+    """Until no earlier work can reach a fault point. A pause file holds whichever
+    job gets there first, and the fault worker runs one task at a time: an earlier
+    job taking the hold leaves the test's own job waiting behind it."""
+    deadline = time.monotonic() + timeout
+    busy = fetch_busy()
+    while busy:
+        if time.monotonic() >= deadline:
+            raise AssertionError(f"still busy after {timeout} s: {busy}")
+        time.sleep(interval)
+        busy = fetch_busy()
+
+
 def wait_until_settled(
     fetch: Callable[[], dict[str, Any]],
     statuses: set[str],
