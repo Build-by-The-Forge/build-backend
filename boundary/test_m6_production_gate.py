@@ -210,6 +210,8 @@ def test_every_table_belongs_to_exactly_one_service():
         "document_chunks",
         "ingestion_fences",
         "learning_memory",
+        "learning_memory_contributions",
+        "learning_memory_events",
         "session_memory",
         "ai_service_alembic_version",
     }

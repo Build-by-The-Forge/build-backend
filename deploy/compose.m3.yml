@@ -293,6 +293,7 @@ services:
     environment:
       <<: *ai-env
       DATABASE_URL: postgresql+asyncpg://build_ai_app:${BUILD_AI_APP_PASSWORD}@postgres:5432/build
+      LEARNING_MEMORY_ENABLED: "true"
     # Runtime only: migrations already ran as build_ai_owner (ai-migrate).
     entrypoint: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:

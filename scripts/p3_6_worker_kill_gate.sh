@@ -29,7 +29,7 @@ echo "C23: applying short recovery timings for the isolated worker-kill scenario
 remove_trigger
 postgres_sql <<'SQL'
 CREATE TABLE public.p36_worker_kill_gate (backend_pid integer PRIMARY KEY);
-GRANT INSERT ON public.p36_worker_kill_gate TO build_ai_app;
+GRANT SELECT, INSERT ON public.p36_worker_kill_gate TO build_ai_app;
 CREATE OR REPLACE FUNCTION public.p36_pause_ingestion_chunk() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
