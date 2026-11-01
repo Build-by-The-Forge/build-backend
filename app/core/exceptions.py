@@ -1,7 +1,9 @@
+import re
 import uuid
+from typing import Any
 
 import structlog
-from fastapi import Request, status
+from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -30,6 +32,27 @@ _CODE_BY_STATUS = {
 }
 
 
+# What a client reads when an error's own text isn't marked as written for clients.
+_MESSAGE_BY_STATUS = {
+    status.HTTP_400_BAD_REQUEST: "the request could not be completed",
+    status.HTTP_401_UNAUTHORIZED: "authentication is required",
+    status.HTTP_403_FORBIDDEN: "permission denied",
+    status.HTTP_404_NOT_FOUND: "resource not found",
+    status.HTTP_405_METHOD_NOT_ALLOWED: "method not allowed",
+    status.HTTP_409_CONFLICT: "the request conflicts with the current state",
+    status.HTTP_413_CONTENT_TOO_LARGE: "request body too large",
+    status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: "unsupported media type",
+    status.HTTP_422_UNPROCESSABLE_CONTENT: "validation failed",
+    status.HTTP_429_TOO_MANY_REQUESTS: "too many requests",
+}
+
+
+def message_for_status(status_code: int) -> str:
+    if status_code >= 500:
+        return "something went wrong"
+    return _MESSAGE_BY_STATUS.get(status_code, "the request could not be completed")
+
+
 def code_for_status(status_code: int) -> str:
     return _CODE_BY_STATUS.get(status_code, "INTERNAL_ERROR" if status_code >= 500 else "BAD_REQUEST")
 
@@ -48,7 +71,17 @@ class AppError(Exception):
         super().__init__(message)
 
 
-class RateLimitedError(AppError):
+class ClientError(ClientMessage, AppError):
+    """An AppError whose message is written for clients. A plain AppError keeps its
+    message for the log, and its client gets the status's fixed text."""
+
+
+class ClientHTTPException(ClientMessage, HTTPException):
+    """An HTTPException whose detail is written for clients. Any other's detail,
+    including the framework's own, is replaced by the status's fixed text."""
+
+
+class RateLimitedError(ClientError):
     """429 with a Retry-After hint. One message for every limit and lock, so
     the response never reveals which rule fired or whether an account exists."""
 
@@ -57,7 +90,7 @@ class RateLimitedError(AppError):
         self.retry_after = max(int(retry_after), 1)
 
 
-class NotFoundError(AppError):
+class NotFoundError(ClientError):
     def __init__(self, message: str = "Resource not found") -> None:
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
 
@@ -66,9 +99,7 @@ def public_message(exc: Exception, fallback: str = "the request could not be com
     """Text for a client, from an exception a route expects. Only an exception marked
     as written for clients keeps its message; anything else gets the fallback, because
     its text may quote input or name internals."""
-    if isinstance(exc, AppError | ClientMessage):
-        return str(exc)
-    return fallback
+    return str(exc) if isinstance(exc, ClientMessage) else fallback
 
 
 def error_body(
@@ -119,17 +150,36 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
         request,
         exc.status_code,
         code_for_status(exc.status_code),
-        str(exc.detail),
+        # The final point of disclosure: unmarked text never leaves, whoever raised it.
+        str(exc.detail) if isinstance(exc, ClientMessage) else message_for_status(exc.status_code),
         # Keep WWW-Authenticate (401), Allow (405) and similar headers.
         headers=dict(exc.headers) if exc.headers else None,
     )
+
+
+_SAFE_LOCATION_PART = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
+
+def _safe_location(location: tuple[object, ...]) -> str:
+    # A submitted object's own keys appear here, so they can be anything.
+    return ".".join(str(part) if _SAFE_LOCATION_PART.fullmatch(str(part)) else "*" for part in location)
+
+
+def _safe_validation_message(error: Any) -> str:
+    """Pydantic's own messages, except where the text comes from a validator's exception
+    or a parser, which can quote the input."""
+    kind = error["type"]
+    if kind in ("value_error", "assertion_error"):
+        cause = error.get("ctx", {}).get("error")
+        return str(cause) if isinstance(cause, ClientMessage) else "invalid value"
+    return "invalid value" if kind.endswith("_parsing") else error["msg"]
 
 
 def _safe_details(exc: RequestValidationError) -> dict[str, object]:
     """Where and why, never the refused value: it may be a password."""
     return {
         "fields": [
-            {"field": ".".join(str(part) for part in e["loc"]), "code": e["type"], "message": e["msg"]} for e in exc.errors()
+            {"field": _safe_location(e["loc"]), "code": e["type"], "message": _safe_validation_message(e)} for e in exc.errors()
         ]
     }
 
@@ -165,7 +215,9 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
         path=request.url.path,
     )
     headers = {"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None
-    return error_response(request, exc.status_code, exc.code, exc.message, headers=headers)
+    # The final point of disclosure: unmarked text never leaves, whoever raised it.
+    message = exc.message if isinstance(exc, ClientMessage) else message_for_status(exc.status_code)
+    return error_response(request, exc.status_code, exc.code, message, headers=headers)
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

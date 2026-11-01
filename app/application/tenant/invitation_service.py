@@ -29,7 +29,7 @@ from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
 )
-from app.core.exceptions import AppError, public_message
+from app.core.exceptions import ClientError, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.invitation import (
     DEFAULT_INVITATION_LIFETIME,
@@ -74,7 +74,7 @@ def _role(value: str) -> MembershipRole:
     try:
         return MembershipRole(value)
     except ValueError:
-        raise AppError("unknown role", status_code=422) from None
+        raise ClientError("unknown role", status_code=422) from None
 
 
 class TenantInvitationService:
@@ -93,7 +93,7 @@ class TenantInvitationService:
     async def invite(self, context: TenantContext, email: str, role: str) -> TenantInvitation:
         wanted = _role(role)
         if not can_grant(MembershipRole(context.role), wanted):
-            raise AppError("you cannot grant this role", status_code=403)
+            raise ClientError("you cannot grant this role", status_code=403)
 
         raw_token = secrets.token_urlsafe(32)
         replaced: str | None = None
@@ -108,19 +108,19 @@ class TenantInvitationService:
                     lifetime=self._lifetime,
                 )
             except ValueError as exc:
-                raise AppError(public_message(exc, "invalid invitation"), status_code=422) from exc
+                raise ClientError(public_message(exc, "invalid invitation"), status_code=422) from exc
 
             existing_user = await uow.users.get_by_email(invitation.email)
             if existing_user is not None:
                 membership = await uow.memberships.get_by_tenant_user(context.tenant_id, existing_user.id.value)
                 if membership is not None and membership.is_active:
-                    raise AppError("this person is already a member of the tenant", status_code=409)
+                    raise ClientError("this person is already a member of the tenant", status_code=409)
 
             # Re-inviting replaces the outstanding invitation (one pending per address).
             pending = await uow.invitations.get_pending(context.tenant_id, invitation.email)
             if pending is not None:
                 if not can_grant(MembershipRole(context.role), pending.role):
-                    raise AppError("an invitation you cannot replace is pending", status_code=403)
+                    raise ClientError("an invitation you cannot replace is pending", status_code=403)
                 pending.revoke()
                 await uow.invitations.mark_revoked(pending)
                 replaced = pending.id
@@ -145,7 +145,7 @@ class TenantInvitationService:
         try:
             wanted = InvitationStatus(status) if status else None
         except ValueError:
-            raise AppError("unknown status", status_code=422) from None
+            raise ClientError("unknown status", status_code=422) from None
         async with self._uow() as uow:
             return await uow.invitations.list_by_tenant(context.tenant_id, wanted)
 
@@ -154,15 +154,15 @@ class TenantInvitationService:
             invitation = await uow.invitations.get_by_id(invitation_id)
             # Another tenant's invitation is indistinguishable from a missing one.
             if invitation is None or invitation.tenant_id.value != context.tenant_id:
-                raise AppError("invitation not found", status_code=404)
+                raise ClientError("invitation not found", status_code=404)
             if not can_grant(MembershipRole(context.role), invitation.role):
-                raise AppError("you cannot revoke an invitation for this role", status_code=403)
+                raise ClientError("you cannot revoke an invitation for this role", status_code=403)
             try:
                 invitation.revoke()
             except InvitationNotPendingError as exc:
-                raise AppError(public_message(exc, "invalid invitation"), status_code=409) from exc
+                raise ClientError(public_message(exc, "invalid invitation"), status_code=409) from exc
             if not await uow.invitations.mark_revoked(invitation):
-                raise AppError("invitation is no longer pending", status_code=409)
+                raise ClientError("invitation is no longer pending", status_code=409)
 
         await self._events.record(
             SecurityEvent.INVITATION_REVOKED,
@@ -173,14 +173,14 @@ class TenantInvitationService:
 
     async def accept(self, user_id: str, raw_token: str) -> AcceptedInvitation:
         if not raw_token:
-            raise AppError("invalid invitation", status_code=422)
+            raise ClientError("invalid invitation", status_code=422)
         async with self._uow() as uow:
             invitation = await uow.invitations.get_by_token_hash(hash_token(raw_token))
             if invitation is None:
-                raise AppError("invalid invitation", status_code=404)
+                raise ClientError("invalid invitation", status_code=404)
             tenant = await uow.tenants.get_by_id(invitation.tenant_id.value)
             if tenant is None or not tenant.is_active:
-                raise AppError("invalid invitation", status_code=404)
+                raise ClientError("invalid invitation", status_code=404)
             user = await uow.users.get_by_id(user_id)
 
             try:
@@ -190,19 +190,19 @@ class TenantInvitationService:
                     email_verified=user.email_verified,
                 )
             except InvitationRequiresVerifiedEmailError as exc:
-                raise AppError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED") from exc
+                raise ClientError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED") from exc
             except InvitationEmailMismatchError as exc:
-                raise AppError(public_message(exc, "invalid invitation"), status_code=403) from exc
+                raise ClientError(public_message(exc, "invalid invitation"), status_code=403) from exc
             except (InvitationNotPendingError, InvitationExpiredError) as exc:
-                raise AppError("invitation is no longer valid", status_code=409) from exc
+                raise ClientError("invitation is no longer valid", status_code=409) from exc
 
             membership = await uow.memberships.get_by_tenant_user(tenant.id.value, user_id)
             if membership is not None and membership.is_active:
-                raise AppError("you are already a member of this tenant", status_code=409)
+                raise ClientError("you are already a member of this tenant", status_code=409)
 
             # Conditional on still pending: of two concurrent accepts one wins.
             if not await uow.invitations.mark_accepted(invitation):
-                raise AppError("invitation is no longer valid", status_code=409)
+                raise ClientError("invitation is no longer valid", status_code=409)
 
             reactivated = membership is not None
             if membership is None:

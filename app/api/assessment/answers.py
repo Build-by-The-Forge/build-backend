@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.assessment.schemas import (
@@ -10,7 +10,7 @@ from app.application.assessment.attempt_answer_service import AttemptAnswerServi
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError, ClientHTTPException
 from app.core.tenant_context import TenantContext
 from app.domain.assessment.attempt_answer import AttemptAnswer
 from app.domain.assessment.errors import AttemptAlreadySubmittedError, AttemptExpiredError
@@ -39,13 +39,13 @@ async def save_answer(
             context.user_id,
         )
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail="attempt or question not found") from exc
+        raise ClientHTTPException(status_code=404, detail="attempt or question not found") from exc
     except AttemptAlreadySubmittedError as exc:
-        raise AppError("attempt already submitted", status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
+        raise ClientError("attempt already submitted", status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
     except AttemptExpiredError as exc:
-        raise AppError("attempt expired", status_code=409, code="ATTEMPT_EXPIRED") from exc
+        raise ClientError("attempt expired", status_code=409, code="ATTEMPT_EXPIRED") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="this answer isn't valid for the question") from exc
+        raise ClientHTTPException(status_code=422, detail="this answer isn't valid for the question") from exc
     return _response(request, answer)
 
 
@@ -57,7 +57,7 @@ async def get_answers(
 ) -> JSONResponse:
     answers = await service.get_answers(attempt_id, context.tenant_id, context.user_id)
     if answers is None:
-        raise HTTPException(status_code=404, detail="attempt not found")
+        raise ClientHTTPException(status_code=404, detail="attempt not found")
     response = AttemptAnswersResponse(
         attempt_id=attempt_id,
         answers=[
@@ -99,11 +99,11 @@ async def delete_answer(
             context.user_id,
         )
     except AttemptAlreadySubmittedError as exc:
-        raise AppError("attempt already submitted", status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
+        raise ClientError("attempt already submitted", status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
     except AttemptExpiredError as exc:
-        raise AppError("attempt expired", status_code=409, code="ATTEMPT_EXPIRED") from exc
+        raise ClientError("attempt expired", status_code=409, code="ATTEMPT_EXPIRED") from exc
     if deleted is None:
-        raise HTTPException(status_code=404, detail="attempt not found")
+        raise ClientHTTPException(status_code=404, detail="attempt not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={

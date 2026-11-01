@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.assessment.schemas import (
@@ -11,6 +11,7 @@ from app.application.assessment.question_service import QuestionService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import ClientHTTPException
 from app.core.tenant_context import TenantContext
 
 router = APIRouter(prefix="/assessment", tags=["assessment"])
@@ -37,7 +38,7 @@ async def create_question(
     )
 
     if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -78,7 +79,7 @@ async def get_question(
 ) -> JSONResponse:
     question = await service.get_question(question_id, tenant_id=context.tenant_id)
     if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -126,7 +127,7 @@ async def update_question(
         marks=payload.marks,
     )
     if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -166,7 +167,7 @@ async def publish_question(
 ) -> JSONResponse:
     question = await service.publish_question(question_id, tenant_id=context.tenant_id)
     if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -187,7 +188,7 @@ async def archive_question(
 ) -> JSONResponse:
     question = await service.archive_question(question_id, tenant_id=context.tenant_id)
     if question is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

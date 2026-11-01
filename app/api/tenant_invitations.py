@@ -6,7 +6,7 @@ from app.application.tenant.invitation_service import TenantInvitationService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import get_verified_principal, require_tenant_permission
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.request_context import client_ip
 from app.core.tenant_context import TenantContext
@@ -48,7 +48,7 @@ def _invitation(invitation: TenantInvitation) -> dict[str, object]:
 def _text(payload: dict[str, object], key: str) -> str:
     value = payload.get(key, "")
     if not isinstance(value, str):
-        raise AppError(f"{key} must be a string", status_code=422)
+        raise ClientError(f"{key} must be a string", status_code=422)
     return value
 
 

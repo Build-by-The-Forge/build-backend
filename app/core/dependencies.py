@@ -1,11 +1,11 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timezone
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 
 from app.application.identity.ports.token_service import InvalidTokenError
 from app.core.authorization import Permission, authorization
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError, ClientHTTPException
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
 from app.db.session import SessionLocal
@@ -32,8 +32,8 @@ async def get_unit_of_work() -> AsyncIterator[UnitOfWork]:
 _token_service = JWTTokenService()
 
 
-def _unauthorized(detail: str = "invalid token") -> HTTPException:
-    return HTTPException(
+def _unauthorized(detail: str = "invalid token") -> ClientHTTPException:
+    return ClientHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=detail,
         headers={"WWW-Authenticate": "Bearer"},
@@ -69,8 +69,8 @@ async def get_current_principal(request: Request, uow: UnitOfWork = Depends(get_
     )
 
 
-def _verification_required() -> AppError:
-    return AppError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED")
+def _verification_required() -> ClientError:
+    return ClientError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED")
 
 
 async def get_verified_principal(
@@ -90,7 +90,7 @@ async def get_current_tenant_context(
 ) -> TenantContext:
     tenant_slug = request.headers.get("x-tenant-slug")
     if not tenant_slug:
-        raise AppError("tenant context is required", status_code=400, code="TENANT_REQUIRED")
+        raise ClientError("tenant context is required", status_code=400, code="TENANT_REQUIRED")
     return await _resolve_tenant_context(tenant_slug, principal, uow)
 
 
@@ -109,11 +109,11 @@ async def _resolve_tenant_context(tenant_slug: str, principal: AuthenticatedPrin
 
     tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(tenant_slug)
     if tenant is None or not tenant.is_active:
-        raise AppError("tenant access denied", status_code=403, code="TENANT_ACCESS_DENIED")
+        raise ClientError("tenant access denied", status_code=403, code="TENANT_ACCESS_DENIED")
 
     membership = await AsyncSqlAlchemyMembershipRepository(uow.session).get_by_tenant_user(tenant.id.value, principal.user_id)
     if membership is None or not membership.is_active:
-        raise AppError("tenant access denied", status_code=403, code="TENANT_ACCESS_DENIED")
+        raise ClientError("tenant access denied", status_code=403, code="TENANT_ACCESS_DENIED")
 
     return TenantContext(
         user_id=principal.user_id,
@@ -132,7 +132,7 @@ def require_tenant_permission(
         context: TenantContext = Depends(get_path_tenant_context),
     ) -> TenantContext:
         if not authorization.can(context, permission):
-            raise HTTPException(
+            raise ClientHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="permission denied",
             )
@@ -148,7 +148,7 @@ def require_permission(
         context: TenantContext = Depends(get_current_tenant_context),
     ) -> TenantContext:
         if not authorization.can(context, permission):
-            raise HTTPException(
+            raise ClientHTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="permission denied",
             )

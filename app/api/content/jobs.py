@@ -97,7 +97,7 @@ async def get_ingestion_job(
             content={
                 "error": {
                     "code": "JOB_NOT_FOUND",
-                    "message": f"ContentIngestionJob with id '{job_id}' not found",
+                    "message": "ingestion job not found",
                 }
             },
         )
@@ -122,7 +122,7 @@ async def get_latest_job_for_asset(
             content={
                 "error": {
                     "code": "JOB_NOT_FOUND",
-                    "message": f"No ingestion job found for asset '{asset_id}'",
+                    "message": "no ingestion job found for this asset",
                 }
             },
         )
@@ -277,14 +277,14 @@ async def dispatch_ingestion_job(
             status_code=status.HTTP_404_NOT_FOUND,
             content={"error": {"code": "DISPATCH_FAILED", "message": public_message(exc)}},
         )
-    except Exception as exc:
+    except Exception:
         # Unexpected, so its text may name internals. The log keeps it.
         logger.exception("content_job_dispatch_failed", job_id=job_id)
         return JSONResponse(
             status_code=status.HTTP_502_BAD_GATEWAY,
             content={
                 "error": {
-                    "code": getattr(exc, "error_code", "AI_GATEWAY_ERROR"),
+                    "code": "AI_GATEWAY_ERROR",
                     "message": "the AI service could not take the job",
                 }
             },

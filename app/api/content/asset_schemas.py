@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.domain.content.ai_report import public_failure_message
+from app.domain.content.ai_report import public_failure_message, safe_error_code
 from app.domain.content.asset import ContentAsset
 
 
@@ -17,7 +17,11 @@ def _public_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     """A failure's text comes from its code, including on rows stored before that rule."""
     if "error_message" not in metadata:
         return metadata
-    return {**metadata, "error_message": public_failure_message(metadata.get("error_code"))}
+    return {
+        **metadata,
+        "error_code": safe_error_code(metadata.get("error_code")),
+        "error_message": public_failure_message(metadata.get("error_code")),
+    }
 
 
 class ContentAssetResponse(BaseModel):

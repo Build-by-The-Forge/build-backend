@@ -44,7 +44,7 @@ from app.application.identity.ports.security_events import (
 )
 from app.application.identity.ports.token_service import TokenService
 from app.core.config import settings
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError
 from app.domain.identity.user import User
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
@@ -156,7 +156,7 @@ class UserService:
                 user_id=session.user_id.value if session else None,
                 metadata={"session_id": reuse.session_id},
             )
-            raise AppError("invalid refresh token", status_code=401, code="AUTH_REFRESH_INVALID") from None
+            raise ClientError("invalid refresh token", status_code=401, code="AUTH_REFRESH_INVALID") from None
 
         self._publish_events(issued.session.pull_events())
         return issued

@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.domain.client_safe import ClientSafeError
-from app.domain.content.ai_report import public_failure_message
+from app.domain.content.ai_report import public_failure_message, safe_error_code
 from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.events.base import DomainEvent
 
@@ -198,7 +198,7 @@ class ContentAsset:
 
         self.ingestion_status = new_status
         if error_code is not None:
-            self.metadata["error_code"] = error_code
+            self.metadata["error_code"] = safe_error_code(error_code)
         if error_message is not None:
             self.metadata["error_message"] = public_failure_message(error_code)
 

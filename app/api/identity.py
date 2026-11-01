@@ -20,7 +20,7 @@ from app.core.dependencies import (
     get_current_tenant_context,
     require_permission,
 )
-from app.core.exceptions import AppError, RateLimitedError
+from app.core.exceptions import AppError, ClientError, RateLimitedError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.request_context import client_ip as _client_ip
 from app.core.tenant_context import TenantContext
@@ -244,7 +244,7 @@ async def change_password(
 
     try:
         if not (isinstance(current_password, str) and isinstance(new_password, str) and isinstance(revoke_other_sessions, bool)):
-            raise AppError("invalid change-password payload", status_code=422)
+            raise ClientError("invalid change-password payload", status_code=422)
         revoked = await service.change_password(
             principal.user_id,
             principal.session_id,

@@ -6,7 +6,7 @@ from app.application.tenant.join_service import JoinResult, TenantJoinService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import get_verified_principal, require_tenant_permission
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.request_context import client_ip
 from app.core.tenant_context import TenantContext
@@ -83,6 +83,6 @@ async def set_join_policy(
         or not all(isinstance(d, str) for d in domains)
         or not isinstance(default_role, str)
     ):
-        raise AppError("expected enabled (bool), allowed_domains (list of strings), default_role (string)", status_code=422)
+        raise ClientError("expected enabled (bool), allowed_domains (list of strings), default_role (string)", status_code=422)
     policy = await service.set_policy(context, enabled=enabled, allowed_domains=domains, default_role=default_role)
     return _envelope(request, _policy(policy))

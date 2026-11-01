@@ -5,6 +5,7 @@ free-form is kept: a failure's message comes from its code, and evidence passes 
 allowlist of the fields the pipeline reports. The full report goes to the log.
 """
 
+import math
 import re
 from typing import Any
 
@@ -54,7 +55,7 @@ _FAILURE_MESSAGES = {
     "PDF_UNREADABLE": "The document could not be read.",
 }
 
-_NUMBERS = frozenset(
+_MEASURES = frozenset(
     {
         "attempt",
         "characters",
@@ -73,9 +74,9 @@ _NUMBERS = frozenset(
         "size_bytes",
         "uncertain_dispatch_attempt",
         "uncertain_dispatch_count",
-        "verified",
     }
 )
+_FLAGS = frozenset({"verified"})
 _SECTIONS = frozenset({"chunk_summary", "chunking", "embedding", "extraction", "fetch", "indexing"})
 _STRINGS = {
     "embedding_model": re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}"),
@@ -94,23 +95,33 @@ def public_failure_message(code: str | None) -> str:
     return _FAILURE_MESSAGES.get(code or "", DEFAULT_FAILURE_MESSAGE)
 
 
+def _safe_measure(value: Any) -> bool:
+    # bool is an int in Python, and JSON can carry NaN and Infinity into a float.
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value) and value >= 0
+
+
 def safe_evidence(report: dict[str, Any]) -> dict[str, Any]:
     """Only the fields the pipeline is known to report, each in its expected form."""
     kept: dict[str, Any] = {}
     for key, value in report.items():
         if key in _SECTIONS and isinstance(value, dict):
             kept[key] = safe_evidence(value)
-        elif key in _NUMBERS and isinstance(value, bool | int | float):
+        elif key in _FLAGS and isinstance(value, bool):
+            kept[key] = value
+        elif key in _MEASURES and _safe_measure(value):
             kept[key] = value
         elif key in _STRINGS and isinstance(value, str) and _STRINGS[key].fullmatch(value):
             kept[key] = value
     return kept
 
 
+_RECORD_FIELDS = ("attempt", "external_task_id", "stage_at_failure", "is_retryable", "failed_at")
+
+
 def safe_attempt_record(record: dict[str, Any]) -> dict[str, Any]:
     """An attempt's history entry for display, including rows stored before this filter."""
     return {
-        **record,
+        **{key: record[key] for key in _RECORD_FIELDS if key in record},
         "error_code": safe_error_code(record.get("error_code")),
         "error_message": public_failure_message(record.get("error_code")),
         "error_details": safe_evidence(record.get("error_details") or {}),

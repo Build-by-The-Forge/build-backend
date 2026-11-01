@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.curriculum.adoption_schemas import (
@@ -26,7 +26,7 @@ from app.application.curriculum.institutional_adoption_service import (
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
-from app.core.exceptions import public_message
+from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.curriculum.adoption import (
     CurriculumOverride,
@@ -57,7 +57,7 @@ async def adopt_benchmark(
             notes=payload.notes,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -103,7 +103,7 @@ async def get_adoption(
             tenant_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -132,7 +132,7 @@ async def activate_adoption(
             actor_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -170,7 +170,7 @@ async def add_override(
             custom_payload=payload.custom_payload,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -197,10 +197,10 @@ async def remove_override(
             tenant_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     if not deleted:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="override not found or already deleted",
         )
@@ -228,7 +228,7 @@ async def get_effective_curriculum_by_adoption(
             tenant_id=context.tenant_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -258,7 +258,7 @@ async def get_active_effective_curriculum_student(
             academic_session_id=academic_session_id,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

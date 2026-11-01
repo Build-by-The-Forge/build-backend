@@ -19,7 +19,7 @@ from app.application.identity.throttle import AuthThrottle
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIActor, AIAssistantError, AIAssistantGateway
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
@@ -86,11 +86,11 @@ def _envelope(request: Request, data: dict[str, object]) -> JSONResponse:
     )
 
 
-def _failed(exc: AIAssistantError) -> AppError:
+def _failed(exc: AIAssistantError) -> ClientError:
     # The client learns only that the AI step failed, not why.
     if exc.unavailable:
-        return AppError("ai service unavailable", status_code=503, code="AI_UNAVAILABLE")
-    return AppError("ai service error", status_code=502, code="AI_UPSTREAM_ERROR")
+        return ClientError("ai service unavailable", status_code=503, code="AI_UNAVAILABLE")
+    return ClientError("ai service error", status_code=502, code="AI_UPSTREAM_ERROR")
 
 
 @router.post("/chat")
@@ -132,7 +132,7 @@ async def my_memory(
 ) -> JSONResponse:
     """The member's own learning memory in the current tenant (M5 ruling R3)."""
     if topic and any(not t or len(t) > 255 for t in topic):
-        raise AppError("invalid topic", status_code=422)
+        raise ClientError("invalid topic", status_code=422)
     await throttle.ai_request(context.user_id)
     try:
         # A closed gate raises here, before anything is sent: 503.

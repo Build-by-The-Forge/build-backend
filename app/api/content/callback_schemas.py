@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.domain.client_safe import ClientSafeError
+
 # Metrics and details are stored as data, never interpreted (design B.3).
 MAX_CALLBACK_DATA_BYTES = 64 * 1024
 
@@ -36,7 +38,7 @@ class AICallbackRequest(BaseModel):
     def _bounded_data(self) -> "AICallbackRequest":
         size = len(json.dumps(self.metrics)) + len(json.dumps(self.details))
         if size > MAX_CALLBACK_DATA_BYTES:
-            raise ValueError("metrics and details exceed 64 KiB")
+            raise ClientSafeError("metrics and details exceed 64 KiB")
         return self
 
 
