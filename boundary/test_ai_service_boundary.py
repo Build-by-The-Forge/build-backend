@@ -272,3 +272,53 @@ def test_c18_c29_a_dispatch_body_naming_a_tenant_user_or_callback_is_422(ai, fie
     raw = jbytes(dispatch_body(**{field: "http://attacker.example/cb"}))
     headers = to_ai("POST", DISPATCH, raw, user_context(TENANT, USER, ["content.job.manage"]))
     assert ai.post(DISPATCH, content=raw, headers=headers).status_code == 422
+
+
+# --- dispatch idempotency against the running service --------------------------------
+
+
+def _dispatch(ai, body: dict, tenant: str):
+    # Signed afresh each time, as a real retry is: a new request ID, the same work.
+    raw = jbytes(body)
+    return ai.post(
+        DISPATCH, content=raw, headers=to_ai("POST", DISPATCH, raw, user_context(tenant, USER, ["content.job.manage"]))
+    )
+
+
+def test_dispatch_idempotency_follows_the_signed_tenant(ai):
+    body = dispatch_body()
+    first = _dispatch(ai, body, TENANT)
+    assert first.status_code == 202, first.text
+    assert first.json()["status"] == "ACCEPTED"
+
+    again = _dispatch(ai, body, TENANT)
+    assert again.status_code in (200, 202), again.text
+    assert (again.json()["status"], again.json()["external_task_id"]) == ("DUPLICATE", first.json()["external_task_id"])
+
+    # The same key from another tenant is that tenant's own work, never a look at this one.
+    other = _dispatch(ai, body, str(uuid.uuid4()))
+    assert other.status_code == 202, other.text
+    assert other.json()["status"] == "ACCEPTED"
+    assert other.json()["external_task_id"] != first.json()["external_task_id"]
+
+
+def test_a_retry_after_a_lost_response_finds_the_accepted_task(ai):
+    # The service accepted and the caller never saw the answer: the backend treats that
+    # outcome as uncertain and retries the same key, which must not start a second task.
+    body = dispatch_body()
+    lost = _dispatch(ai, body, TENANT)
+    assert lost.status_code == 202, lost.text
+
+    retried = _dispatch(ai, body, TENANT)
+    assert retried.status_code in (200, 202), retried.text
+    assert retried.json()["status"] == "DUPLICATE"
+    assert retried.json()["external_task_id"] == lost.json()["external_task_id"]
+
+
+def test_the_same_key_for_different_work_is_refused(ai):
+    body = dispatch_body()
+    assert _dispatch(ai, body, TENANT).status_code == 202
+    changed = {**body, "content_sha256": "cd" * 32}
+    response = _dispatch(ai, changed, TENANT)
+    assert response.status_code == 409, response.text
+    assert "IDEMPOTENCY_CONFLICT" in response.text
