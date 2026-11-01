@@ -11,7 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.api import identity
 from app.api.catalogue import courses
-from app.core.exceptions import AppError, code_for_status, public_message, unhandled_exception_handler
+from app.core.exceptions import AppError, ClientError, code_for_status, public_message, unhandled_exception_handler
 from app.core.middleware import UnhandledErrorMiddleware
 from app.main import add_response_middleware, app
 from tests.integration.assessment.test_assessment_visibility import assessment_with_question
@@ -210,7 +210,8 @@ def test_a_library_error_never_reaches_a_client_as_text(error):
 
 
 def test_a_message_written_for_clients_is_kept():
-    assert public_message(AppError("written here"), "fallback") == "written here"
+    assert public_message(ClientError("written here"), "fallback") == "written here"
+    assert public_message(AppError("not marked"), "fallback") == "fallback"
 
 
 # --- the last resort -----------------------------------------------------------------------
