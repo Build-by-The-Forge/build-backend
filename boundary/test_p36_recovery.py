@@ -49,6 +49,7 @@ from boundary.conftest import (
     to_backend,
     user_context,
 )
+from boundary.job_status import attempt_finished
 
 BACKEND_APP_DSN = os.environ.get("BOUNDARY_BACKEND_APP_DSN", "")
 FAULT_DIR = os.environ.get("BOUNDARY_FAULT_DIR", "")
@@ -255,7 +256,7 @@ def test_race_the_effect_wins_then_recovery_replaces_it(ai, backend, tenant_a, t
 
     # Attempt 1 cannot report indexed without its record; recovery runs attempt 2.
     wait_until(
-        lambda: job_row(job_id)["status"] in ("ready", "failed") and job_row(job_id)["attempt_count"] == 2,
+        lambda: attempt_finished(job_row(job_id), 2),
         lambda: evidence(job_id, tenant, asset_id, task_1),
     )
     assert_ready_on_attempt_2_only(job_id, tenant, asset_id)
@@ -344,7 +345,7 @@ def test_c23_the_killed_attempt_is_recovered_as_attempt_2(backend, faults):
 
     # attempt 1 -> worker killed -> lease expires -> AI_TASK_LOST -> attempt 2 -> ready
     wait_until(
-        lambda: job_row(job_id)["status"] in ("ready", "failed") and job_row(job_id)["attempt_count"] == 2,
+        lambda: attempt_finished(job_row(job_id), 2),
         lambda: evidence(job_id, tenant, asset_id, task_1),
     )
     assert_ready_on_attempt_2_only(job_id, tenant, asset_id)

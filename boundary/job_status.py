@@ -17,6 +17,13 @@ def retry_pending(job: dict[str, Any]) -> bool:
     return job["status"] == "failed" and bool(job["is_retryable"]) and job["attempt_count"] < job["max_attempts"]
 
 
+def attempt_finished(job: dict[str, Any], attempt: int) -> bool:
+    """Takes one read of the job. The retry pass moves failed on attempt N to queued
+    on attempt N + 1 at once, so a status from one read and an attempt from the next
+    can describe a state the job was never in."""
+    return job["attempt_count"] == attempt and job["status"] in ("ready", "failed")
+
+
 def wait_until_settled(
     fetch: Callable[[], dict[str, Any]],
     statuses: set[str],
