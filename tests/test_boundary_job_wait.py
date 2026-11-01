@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from boundary.job_status import attempt_finished, retry_pending, wait_until_settled
+from boundary.job_status import JobNotSettled, attempt_finished, retry_pending, wait_until_settled
 
 SETTLED = {"ready", "failed"}
 
@@ -67,14 +67,16 @@ def test_a_failure_with_its_retries_exhausted_is_final():
 
 
 def test_a_broken_worker_cannot_hang_the_wait():
-    # A retry that never comes: bounded, and the job is returned as it stands.
-    final = wait(lambda: job("failed", retryable=True), timeout=0.05)
-    assert final["status"] == "failed"
-    assert retry_pending(final) is True
+    # A retry that never comes: bounded, and not reported as a failed job.
+    with pytest.raises(JobNotSettled) as caught:
+        wait(lambda: job("failed", retryable=True), timeout=0.05)
+    assert retry_pending(caught.value.job) is True
 
 
-def test_a_job_that_never_settles_is_returned_at_the_timeout():
-    assert wait(lambda: job("processing"), timeout=0.05)["status"] == "processing"
+def test_a_job_that_never_settles_fails_the_wait_at_the_timeout():
+    with pytest.raises(JobNotSettled) as caught:
+        wait(lambda: job("processing"), timeout=0.05)
+    assert caught.value.job["status"] == "processing"
 
 
 def test_two_reads_can_describe_a_state_the_job_was_never_in():
