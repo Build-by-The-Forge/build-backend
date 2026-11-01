@@ -38,7 +38,7 @@ SAFE_VALUE = re.compile(
     r"|', '\.join\(missing\)|adoption\.benchmark_version)$"
 )
 # Constants defined beside their use, and helpers that already apply the rule.
-SAFE_NAMES = {"NOT_ELIGIBLE", "PLATFORM_WRITE_REFUSED", "error_code", "detail", "what"}
+SAFE_NAMES = {"NOT_ELIGIBLE", "PLATFORM_WRITE_REFUSED", "detail"}
 SAFE_CALLS = {"public_message", "public_failure_message"}
 
 
