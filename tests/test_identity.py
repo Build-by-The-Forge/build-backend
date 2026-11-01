@@ -86,8 +86,8 @@ def test_malformed_payload_returns_validation_error_shape(client) -> None:
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     payload = response.json()
     assert payload["success"] is False
-    assert payload["data"] == {}
-    assert "error" in payload["meta"] or "details" in payload["meta"]
+    assert payload["data"] is None
+    assert payload["error"]["code"] == "VALIDATION_FAILED"
 
 
 def test_user_aggregate_can_change_password_to_hash() -> None:

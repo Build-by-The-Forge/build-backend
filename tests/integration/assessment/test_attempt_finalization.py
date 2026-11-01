@@ -146,7 +146,7 @@ async def test_a_refused_result_read_does_not_undo_its_finalization(client):
     refused = client.get(f"/assessment/attempts/{attempt_id}/result", headers=student)
 
     assert refused.status_code == 409
-    assert "RESULT_NOT_RELEASED" in refused.text
+    assert refused.json()["error"]["code"] == "RESULT_NOT_RELEASED"
     assert (await stored(attempt_id)).status == "submitted"
     assert await result_rows(attempt_id) == 1
 

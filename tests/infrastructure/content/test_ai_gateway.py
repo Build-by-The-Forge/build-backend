@@ -467,3 +467,15 @@ async def test_a_system_dispatch_can_never_name_another_tenant() -> None:
     with pytest.raises(JobTenantMissing):
         await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=other)
     assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_a_transport_failure_never_names_the_internal_address() -> None:
+    source, asset, job = _material()
+
+    async def unreachable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused", request=request)
+
+    with pytest.raises(AIServiceGatewayError) as caught:
+        await _gateway(unreachable).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    assert "ai-service.internal" not in str(caught.value)

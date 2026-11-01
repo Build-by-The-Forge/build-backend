@@ -111,7 +111,7 @@ def test_create_benchmark_course_topic_outcome_hierarchy() -> None:
     assert len(course.topics) == 1
 
     # Duplicate topic sequence in course raises
-    with pytest.raises(ValueError, match="already exists in course"):
+    with pytest.raises(ValueError, match="already exists in this course"):
         course.add_topic(
             BenchmarkTopic.create(
                 benchmark_course_id=course.id,

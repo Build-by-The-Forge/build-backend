@@ -175,7 +175,7 @@ async def test_another_tenants_source_is_answered_like_a_missing_one(client, two
     missing = getattr(client, method)(path.format(source=uuid4()), **kwargs)
 
     assert response.status_code == missing.status_code == 404, response.text
-    assert response.json()["meta"]["error"] == missing.json()["meta"]["error"]
+    assert response.json()["error"]["message"] == missing.json()["error"]["message"]
     after = client.get(f"/content/sources/{a['source']}", headers=a["h"]).json()["data"]
     assert (after["name"], after["status"]) == ("Authorization notes", "active")
 

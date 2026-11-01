@@ -28,7 +28,7 @@ from app.application.identity.ports.security_events import (
     SecurityEventRecorder,
 )
 from app.core.authorization import Permission, authorization
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.membership import Membership
 from app.domain.tenant.role_policy import can_grant, can_manage
@@ -47,7 +47,7 @@ def _role(value: str) -> MembershipRole:
     try:
         return MembershipRole(value)
     except ValueError:
-        raise AppError(f"unknown role: {value!r}", status_code=422) from None
+        raise ClientError("unknown role", status_code=422) from None
 
 
 class TenantMembershipService:
@@ -57,7 +57,7 @@ class TenantMembershipService:
 
     async def list(self, context: TenantContext, status: str | None) -> list[MemberView]:
         if status is not None and status not in {s.value for s in MembershipStatus}:
-            raise AppError(f"unknown status: {status!r}", status_code=422)
+            raise ClientError("unknown status", status_code=422)
         async with self._uow() as uow:
             rows = await uow.memberships.list_with_emails(context.tenant_id, status)
         return [MemberView(membership, email) for membership, email in rows]
@@ -72,9 +72,9 @@ class TenantMembershipService:
         async with self._uow() as uow:
             actor, target, owners = await self._prepare(uow, context, membership_id)
             if not target.is_active:
-                raise AppError("reactivate the membership before changing its role", status_code=409)
+                raise ClientError("reactivate the membership before changing its role", status_code=409)
             if not can_grant(actor.role, new_role):
-                raise AppError("you cannot grant this role", status_code=403)
+                raise ClientError("you cannot grant this role", status_code=403)
             previous = target.role
             if previous is new_role:
                 return target
@@ -95,7 +95,7 @@ class TenantMembershipService:
         async with self._uow() as uow:
             actor, target, owners = await self._prepare(uow, context, membership_id)
             if not target.is_active:
-                raise AppError("membership is not active", status_code=409)
+                raise ClientError("membership is not active", status_code=409)
             if target.role is MembershipRole.OWNER:
                 self._keep_an_owner(target, owners)
             target.archive()
@@ -108,9 +108,9 @@ class TenantMembershipService:
         async with self._uow() as uow:
             actor, target, _ = await self._prepare(uow, context, membership_id)
             if target.is_active:
-                raise AppError("membership is already active", status_code=409)
+                raise ClientError("membership is already active", status_code=409)
             if not can_grant(actor.role, target.role):
-                raise AppError("you cannot grant this role", status_code=403)
+                raise ClientError("you cannot grant this role", status_code=403)
             target.reactivate()
             await uow.memberships.save(target)
 
@@ -128,22 +128,22 @@ class TenantMembershipService:
             else None
         )
         if fresh is None or not authorization.can(fresh, Permission.TENANT_MEMBER_MANAGE):
-            raise AppError("permission denied", status_code=403)
+            raise ClientError("permission denied", status_code=403)
 
         target = await uow.memberships.get_by_id(membership_id)
         # Another tenant's membership is indistinguishable from a missing one.
         if target is None or target.tenant_id.value != context.tenant_id:
-            raise AppError("membership not found", status_code=404)
+            raise ClientError("membership not found", status_code=404)
         if target.id.value == actor.id.value:
-            raise AppError("you cannot change your own membership", status_code=403)
+            raise ClientError("you cannot change your own membership", status_code=403)
         if not can_manage(actor.role, target.role):
-            raise AppError("you cannot manage this member", status_code=403)
+            raise ClientError("you cannot manage this member", status_code=403)
         return actor, target, owners
 
     @staticmethod
     def _keep_an_owner(target: Membership, active_owner_ids: list[str]) -> None:
         if not set(active_owner_ids) - {target.id.value}:
-            raise AppError("a tenant must keep at least one active owner", status_code=409)
+            raise ClientError("a tenant must keep at least one active owner", status_code=409)
 
     async def _record(self, event: SecurityEvent, context: TenantContext, target: Membership, extra: dict[str, str]) -> None:
         await self._events.record(

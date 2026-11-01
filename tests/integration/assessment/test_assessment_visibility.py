@@ -81,7 +81,8 @@ async def test_a_draft_by_direct_id_looks_like_it_does_not_exist(client):
     draft = client.get(f"/assessment/assessments/{draft_id}", headers=student)
     missing = client.get(f"/assessment/assessments/{uuid4()}", headers=student)
     assert draft.status_code == missing.status_code == 404
-    assert draft.json()["meta"] == missing.json()["meta"]
+    assert draft.json()["error"]["code"] == missing.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+    assert draft.json()["error"] == missing.json()["error"]
     assert "SECRET" not in draft.text
     assert client.get(f"/assessment/assessments/{draft_id}", headers=lecturer).json()["data"]["status"] == "draft"
 

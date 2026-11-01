@@ -288,6 +288,6 @@ def test_effective_curriculum_resolver_conflict_detection() -> None:
 
     with pytest.raises(
         ValueError,
-        match="conflicting overrides for course 'COS102': cannot modify and omit the same course",
+        match="conflicting overrides for course: cannot modify and omit the same course",
     ):
         resolver.resolve(adoption, benchmark, courses, [ov_mod, ov_omit])

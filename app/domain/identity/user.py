@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
 from app.domain.identity.value_objects import (
     AUTHENTICATABLE_STATUSES,
     AccountStatus,
@@ -45,7 +46,7 @@ class User:
     def verify_email(self) -> None:
         """Activate a pending account. Never lifts a lock, disable or delete."""
         if self.status is not AccountStatus.PENDING_VERIFICATION:
-            raise ValueError(f"cannot verify an account that is {self.status.value}")
+            raise ClientSafeError(f"cannot verify an account that is {self.status.value}")
         self.status = AccountStatus.ACTIVE
 
     def change_password(self, new_password: Password, hasher: PasswordHasher) -> None:

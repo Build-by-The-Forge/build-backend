@@ -18,6 +18,7 @@ from app.application.assessment.handlers import (
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.question import Question
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.course import CourseRepository
 from app.domain.repositories.question import QuestionRepository
 from app.events.base import DomainEvent
@@ -72,7 +73,7 @@ class QuestionService:
                 return question
 
         if self.repository is None or self.catalogue_repository is None:
-            raise ValueError("repository and catalogue_repository are required")
+            raise ClientSafeError("repository and catalogue_repository are required")
 
         handler = CreateQuestionHandler(
             repository=self.repository,
@@ -109,7 +110,7 @@ class QuestionService:
                 return question
 
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
 
         handler = UpdateQuestionHandler(repository=self.repository)
         question = await handler.handle(command)
@@ -132,7 +133,7 @@ class QuestionService:
                 return question
 
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
 
         handler = PublishQuestionHandler(repository=self.repository)
         question = await handler.handle(command)
@@ -155,7 +156,7 @@ class QuestionService:
                 return question
 
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
 
         handler = ArchiveQuestionHandler(repository=self.repository)
         question = await handler.handle(command)
@@ -175,7 +176,7 @@ class QuestionService:
                 return await handler.handle(command)
 
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
 
         handler = GetQuestionHandler(repository=self.repository)
         return await handler.handle(command)
@@ -192,7 +193,7 @@ class QuestionService:
                 return await handler.handle(command)
 
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
 
         handler = ListQuestionsByTopicHandler(repository=self.repository)
         return await handler.handle(command)
@@ -212,7 +213,7 @@ class QuestionService:
                 return await handler.handle(command)
 
         if self.repository is None:
-            raise ValueError("repository is required")
+            raise ClientSafeError("repository is required")
 
         handler = ListQuestionsByLearningOutcomeHandler(repository=self.repository)
         return await handler.handle(command)

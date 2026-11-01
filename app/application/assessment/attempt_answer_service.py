@@ -10,6 +10,7 @@ from app.application.assessment.attempt_answer_handlers import (
 )
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.attempt_answer import AttemptAnswer
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
@@ -64,15 +65,15 @@ class AttemptAnswerService:
 
     def _answers(self) -> AttemptAnswerRepository:
         if self.repository is None:
-            raise ValueError("attempt answer repository is required")
+            raise ClientSafeError("attempt answer repository is required")
         return self.repository
 
     def _attempts(self) -> AttemptRepository:
         if self.attempt_repository is None:
-            raise ValueError("attempt repository is required")
+            raise ClientSafeError("attempt repository is required")
         return self.attempt_repository
 
     def _assessments(self) -> AssessmentRepository:
         if self.assessment_repository is None:
-            raise ValueError("assessment repository is required")
+            raise ClientSafeError("assessment repository is required")
         return self.assessment_repository

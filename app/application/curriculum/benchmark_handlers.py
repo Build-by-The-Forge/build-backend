@@ -7,6 +7,7 @@ from app.application.curriculum.benchmark_commands import (
     ListBenchmarkCoursesCommand,
     ListBenchmarkCurriculaCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.benchmark import (
     BenchmarkCourse,
     BenchmarkCurriculum,
@@ -39,23 +40,23 @@ class IngestBenchmarkCandidateHandler:
         for course_input in command.courses:
             clean_code = course_input.code.strip().upper()
             if clean_code in seen_codes:
-                raise ValueError(f"duplicate course code '{clean_code}' in candidate payload")
+                raise ClientSafeError("duplicate course code in candidate payload")
             seen_codes.add(clean_code)
 
             if course_input.sequence in seen_sequences:
-                raise ValueError(f"duplicate course sequence '{course_input.sequence}' in candidate payload")
+                raise ClientSafeError(f"duplicate course sequence '{course_input.sequence}' in candidate payload")
             seen_sequences.add(course_input.sequence)
 
             seen_topic_sequences: set[int] = set()
             for topic_input in course_input.topics:
                 if topic_input.sequence in seen_topic_sequences:
-                    raise ValueError(f"duplicate topic sequence '{topic_input.sequence}' in course '{clean_code}'")
+                    raise ClientSafeError(f"duplicate topic sequence '{topic_input.sequence}' in course")
                 seen_topic_sequences.add(topic_input.sequence)
 
                 seen_outcome_sequences: set[int] = set()
                 for outcome_input in topic_input.outcomes:
                     if outcome_input.sequence in seen_outcome_sequences:
-                        raise ValueError(
+                        raise ClientSafeError(
                             f"duplicate outcome sequence '{outcome_input.sequence}' in topic '{topic_input.sequence}'"
                         )
                     seen_outcome_sequences.add(outcome_input.sequence)

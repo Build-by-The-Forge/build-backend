@@ -19,6 +19,7 @@ from app.application.assessment.attempt_handlers import (
 from app.application.common.uow import AssessmentUnitOfWorkFactory
 from app.domain.assessment.attempt import AssessmentAttempt
 from app.domain.assessment.errors import AttemptLimitReachedError, ResultNotReleasedError
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_result import AttemptResultRepository
@@ -146,21 +147,21 @@ class AttemptService:
             if refused:
                 raise ResultNotReleasedError("RESULT_NOT_RELEASED")
             return readable
-        raise ValueError("reading a result needs a unit of work")
+        raise ClientSafeError("reading a result needs a unit of work")
 
     def _required_repository(self) -> AttemptRepository:
         if self.repository is None:
-            raise ValueError("attempt repository is required")
+            raise ClientSafeError("attempt repository is required")
         return self.repository
 
     def _required_assessment_repository(self) -> AssessmentRepository:
         if self.assessment_repository is None:
-            raise ValueError("assessment repository is required")
+            raise ClientSafeError("assessment repository is required")
         return self.assessment_repository
 
     def _required_result_repository(self) -> AttemptResultRepository:
         if self.result_repository is None:
-            raise ValueError("attempt result repository is required")
+            raise ClientSafeError("attempt result repository is required")
         return self.result_repository
 
     def _publish_events(self, events: list[DomainEvent]) -> None:

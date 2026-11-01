@@ -3,9 +3,9 @@
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
 from app.core.dependencies import get_verified_principal
+from app.core.exceptions import AppError
 from app.core.principal import AuthenticatedPrincipal
 from tests.integration.identity_helpers import verify_email
 from tests.integration.tenant.test_tenant_context import seed_tenant_membership
@@ -41,7 +41,7 @@ async def test_unverified_member_can_sign_in_but_not_enter_the_tenant(client):
     for path in ("/identity/tenant-context", "/identity/permissions", "/identity/authorization-probe"):
         resp = client.get(path, headers=_headers(token, slug))
         assert resp.status_code == 403, path
-        assert resp.json()["meta"]["error"] == "email verification required"
+        assert resp.json()["error"]["message"] == "email verification required"
 
 
 async def test_tenant_access_opens_as_soon_as_the_email_is_verified(client):
@@ -68,7 +68,8 @@ async def test_unverified_user_learns_nothing_about_other_tenants(client):
     existing = client.get("/identity/tenant-context", headers=_headers(token, slug))
 
     assert real.status_code == existing.status_code == 403
-    assert real.json()["meta"] == existing.json()["meta"]
+    assert real.json()["error"] == existing.json()["error"]
+    assert real.json()["error"]["code"] == "EMAIL_VERIFICATION_REQUIRED"
 
 
 async def test_verification_does_not_grant_membership(client):
@@ -80,13 +81,13 @@ async def test_verification_does_not_grant_membership(client):
     resp = client.get("/identity/tenant-context", headers=_headers(token, slug))
 
     assert resp.status_code == 403
-    assert resp.json()["meta"]["error"] == "tenant access denied"
+    assert resp.json()["error"]["message"] == "tenant access denied"
 
 
 async def test_verified_principal_dependency_rejects_unverified_accounts():
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(AppError) as exc:
         await get_verified_principal(AuthenticatedPrincipal("u", "s", email_verified=False))
-    assert exc.value.status_code == 403
+    assert (exc.value.status_code, exc.value.code) == (403, "EMAIL_VERIFICATION_REQUIRED")
 
     verified = AuthenticatedPrincipal("u", "s", email_verified=True)
     assert await get_verified_principal(verified) is verified

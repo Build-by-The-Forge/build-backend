@@ -107,6 +107,7 @@ The registry below is the starting set. M1 fixes the full list, and M3-A impleme
 | HTTP | Code | Client action |
 |---|---|---|
 | 400 | `TENANT_REQUIRED` | Choose a tenant |
+| 400 | `BAD_REQUEST` | Fix the request; used only when no specific code applies |
 | 401 | `AUTH_INVALID_CREDENTIALS` | Show a sign-in error, which doesn't reveal whether the account exists |
 | 401 | `AUTH_TOKEN_INVALID` | Refresh once, then retry the request once |
 | 401 | `AUTH_REFRESH_INVALID` | Sign out. Expired, revoked and reused tokens look the same |
@@ -117,13 +118,14 @@ The registry below is the starting set. M1 fixes the full list, and M3-A impleme
 | 404 | `RESOURCE_NOT_FOUND` | Show not found. Also used for other tenants' and other users' private resources |
 | 408 | `UPLOAD_READ_TIMEOUT` | Retry with the same `Idempotency-Key` |
 | 409 | `CONFLICT` and specific codes such as `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_CONTENT`, `ATTEMPT_ALREADY_SUBMITTED` | Reconcile with server state |
+| 405 | `METHOD_NOT_ALLOWED` | A client bug; no retry |
 | 413 | `UPLOAD_TOO_LARGE` | Explain the limit |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | Explain the accepted types |
 | 422 | `VALIDATION_FAILED` | Show field errors |
 | 429 | `RATE_LIMITED` | Wait for `Retry-After`. The message doesn't reveal which limit fired |
 | 500 | `INTERNAL_ERROR` | Offer a retry only if the operation is safe to repeat |
 | 502 | `AI_UPSTREAM_ERROR` | Offer a retry |
-| 503 | `AI_UNAVAILABLE`, `OBJECT_STORAGE_UNAVAILABLE` | Wait for `Retry-After` if present, then retry |
+| 503 | `AI_UNAVAILABLE`, `OBJECT_STORAGE_UNAVAILABLE`, `SERVICE_UNAVAILABLE` | Wait for `Retry-After` if present, then retry |
 
 Validation errors use one shape, and never echo the submitted value:
 

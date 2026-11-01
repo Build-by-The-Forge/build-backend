@@ -16,6 +16,7 @@ from app.domain.assessment.value_objects import (
     QuestionStatus,
     QuestionType,
 )
+from app.domain.client_safe import ClientSafeError
 from app.events.base import DomainEvent
 
 
@@ -62,19 +63,19 @@ class Question:
     ) -> "Question":
         normalized_options = list(options or [])
         if len(normalized_options) < 2:
-            raise ValueError("question must have at least 2 options")
+            raise ClientSafeError("question must have at least 2 options")
 
         correct_options = [option for option in normalized_options if option.is_correct]
         if len(correct_options) != 1:
-            raise ValueError("MCQ questions require exactly one correct option")
+            raise ClientSafeError("MCQ questions require exactly one correct option")
 
         seen_orders: set[int] = set()
         for option in normalized_options:
             if option.display_order.value in seen_orders:
-                raise ValueError("question options must have unique display order values")
+                raise ClientSafeError("question options must have unique display order values")
             seen_orders.add(option.display_order.value)
             if not option.text.value.strip():
-                raise ValueError("question option text must be a non-empty string")
+                raise ClientSafeError("question option text must be a non-empty string")
 
         question = cls(
             id=question_id or QuestionId(""),

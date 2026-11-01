@@ -75,7 +75,8 @@ def test_login_is_refused_for_blocked_statuses(client, status):
     resp = _login(client, email)
 
     assert resp.status_code == 403
-    assert resp.json()["meta"]["error"] == "account is not active"
+    assert resp.json()["error"]["message"] == "account is not active"
+    assert resp.json()["error"]["code"] == "ACCOUNT_NOT_ACTIVE"
 
 
 def test_login_is_refused_for_deactivated_accounts(client):

@@ -1,6 +1,7 @@
 from app.application.curriculum.activation_commands import (
     ActivateBenchmarkCurriculumCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.audit import (
     BenchmarkAuditAction,
     BenchmarkAuditLog,
@@ -30,10 +31,10 @@ class ActivateBenchmarkCurriculumHandler:
     ) -> tuple[BenchmarkCurriculum, BenchmarkCurriculum | None, list[DomainEvent]]:
         curriculum = await self.repository.get_by_id(command.curriculum_id)
         if curriculum is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         if curriculum.status != BenchmarkStatus.APPROVED:
-            raise ValueError(f"only approved benchmarks can be activated, current status is '{curriculum.status.value}'")
+            raise ClientSafeError(f"only approved benchmarks can be activated, current status is '{curriculum.status.value}'")
 
         all_events: list[DomainEvent] = []
 

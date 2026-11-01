@@ -149,7 +149,7 @@ def test_an_unverified_inviter_is_refused(client):
 
     resp = _invite(client, slug, actor, f"x-{uuid4().hex}@example.com", "student")
 
-    assert resp.status_code == 403 and resp.json()["meta"]["error"] == "email verification required"
+    assert resp.status_code == 403 and resp.json()["error"]["message"] == "email verification required"
 
 
 def test_inviting_an_existing_active_member_is_refused(client):
@@ -220,7 +220,7 @@ def test_accept_requires_the_invited_verified_account(client):
 
     unverified = _account(client, verified=False, email=invited_email)
     resp = _accept(client, unverified, code)
-    assert resp.status_code == 403 and resp.json()["meta"]["error"] == "email verification required"
+    assert resp.status_code == 403 and resp.json()["error"]["message"] == "email verification required"
 
     someone_else = _account(client)
     assert _accept(client, someone_else, code).status_code == 403

@@ -29,7 +29,7 @@ from app.application.identity.ports.counter_store import (
     CounterStore,
     CounterStoreUnavailable,
 )
-from app.core.exceptions import AppError, RateLimitedError
+from app.core.exceptions import ClientError, RateLimitedError
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class AuthThrottle:
         try:
             return await operation
         except CounterStoreUnavailable:
-            raise AppError("service temporarily unavailable", status_code=503) from None
+            raise ClientError("service temporarily unavailable", status_code=503) from None
 
     async def _limit(self, rule: Rule, subject: str) -> None:
         count, ttl = await self._guard(self.store.hit(self._key(rule.name, subject), rule.window_seconds))

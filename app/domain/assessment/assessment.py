@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from app.domain.assessment.attempt_policy import AttemptPolicy
 from app.domain.assessment.errors import AssessmentAlreadyArchivedError, AttemptPolicyLockedError
+from app.domain.client_safe import ClientSafeError
 from app.events.base import DomainEvent
 
 
@@ -29,16 +30,16 @@ class AssessmentQuestion:
 
     def __post_init__(self) -> None:
         if not self.question_id or not self.question_id.strip():
-            raise ValueError("question_id is required")
+            raise ClientSafeError("question_id is required")
         if not self.prompt.strip():
-            raise ValueError("question prompt cannot be empty")
+            raise ClientSafeError("question prompt cannot be empty")
         if not self.options:
-            raise ValueError("question must contain at least one option")
+            raise ClientSafeError("question must contain at least one option")
         if self.marks <= 0:
-            raise ValueError("question marks must be positive")
+            raise ClientSafeError("question marks must be positive")
         if self.correct_option_index is not None:
             if self.correct_option_index < 0 or self.correct_option_index >= len(self.options):
-                raise ValueError("correct_option_index is outside the valid option range")
+                raise ClientSafeError("correct_option_index is outside the valid option range")
 
 
 @dataclass
@@ -59,17 +60,17 @@ class Assessment:
 
     def __post_init__(self) -> None:
         if not self.tenant_id.strip():
-            raise ValueError("tenant_id is required")
+            raise ClientSafeError("tenant_id is required")
         if not self.course_id.strip():
-            raise ValueError("course_id is required")
+            raise ClientSafeError("course_id is required")
         if not self.title.strip():
-            raise ValueError("title is required")
+            raise ClientSafeError("title is required")
         if not self.instructions.strip():
-            raise ValueError("instructions are required")
+            raise ClientSafeError("instructions are required")
         if self.duration_minutes <= 0:
-            raise ValueError("duration_minutes must be positive")
+            raise ClientSafeError("duration_minutes must be positive")
         if self.passing_score < 0:
-            raise ValueError("passing_score cannot be negative")
+            raise ClientSafeError("passing_score cannot be negative")
 
     @classmethod
     def create(
@@ -127,9 +128,9 @@ class Assessment:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
         if self.status != AssessmentStatus.DRAFT:
-            raise ValueError("questions cannot be changed after publication")
+            raise ClientSafeError("questions cannot be changed after publication")
         if any(existing.question_id == question_id for existing in self.questions):
-            raise ValueError(f"question {question_id} already exists in this assessment")
+            raise ClientSafeError("question already exists in this assessment")
 
         item = AssessmentQuestion(
             question_id=question_id,
@@ -169,19 +170,19 @@ class Assessment:
 
         if title is not None:
             if not title.strip():
-                raise ValueError("title is required")
+                raise ClientSafeError("title is required")
             self.title = title
         if instructions is not None:
             if not instructions.strip():
-                raise ValueError("instructions are required")
+                raise ClientSafeError("instructions are required")
             self.instructions = instructions
         if duration_minutes is not None:
             if duration_minutes <= 0:
-                raise ValueError("duration_minutes must be positive")
+                raise ClientSafeError("duration_minutes must be positive")
             self.duration_minutes = duration_minutes
         if passing_score is not None:
             if passing_score < 0:
-                raise ValueError("passing_score cannot be negative")
+                raise ClientSafeError("passing_score cannot be negative")
             self.passing_score = passing_score
         if attempt_policy is not None:
             self.attempt_policy = attempt_policy
@@ -200,9 +201,9 @@ class Assessment:
         if self.status == AssessmentStatus.PUBLISHED:
             return
         if self.status == AssessmentStatus.OPEN:
-            raise ValueError("assessment cannot be republished while open")
+            raise ClientSafeError("assessment cannot be republished while open")
         if not self.questions:
-            raise ValueError("assessment must contain at least one question")
+            raise ClientSafeError("assessment must contain at least one question")
         self.status = AssessmentStatus.PUBLISHED
         self.touch()
         self._events.append(
@@ -216,7 +217,7 @@ class Assessment:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
         if self.status not in {AssessmentStatus.PUBLISHED, AssessmentStatus.OPEN}:
-            raise ValueError("assessment must be published before opening")
+            raise ClientSafeError("assessment must be published before opening")
         self.status = AssessmentStatus.OPEN
         self.touch()
         self._events.append(
@@ -230,7 +231,7 @@ class Assessment:
         if self.status == AssessmentStatus.ARCHIVED:
             raise AssessmentAlreadyArchivedError("assessment already archived")
         if self.status != AssessmentStatus.OPEN:
-            raise ValueError("assessment must be open before closing")
+            raise ClientSafeError("assessment must be open before closing")
         self.status = AssessmentStatus.CLOSED
         self.touch()
         self._events.append(

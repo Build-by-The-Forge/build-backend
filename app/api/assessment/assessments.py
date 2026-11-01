@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.assessment.schemas import (
@@ -16,6 +16,7 @@ from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.dependencies import require_permission
+from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.assessment.assessment import Assessment, AssessmentStatus
 from app.domain.assessment.errors import AttemptPolicyLockedError
@@ -86,7 +87,7 @@ async def get_assessment(
     assessment = await service.get_assessment(assessment_id, tenant_id=context.tenant_id or "")
     staff = _is_staff(context)
     if assessment is None or not (staff or assessment.status == AssessmentStatus.PUBLISHED):
-        raise HTTPException(status_code=404, detail="assessment not found")
+        raise ClientHTTPException(status_code=404, detail="assessment not found")
     used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
     return _response(request, assessment, with_questions=staff, attempts_used=used.get(assessment.id, 0))
 
@@ -109,9 +110,9 @@ async def update_assessment(
             attempt_policy=payload.attempt_policy.to_domain() if payload.attempt_policy else None,
         )
     except AttemptPolicyLockedError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=409, detail=public_message(exc)) from exc
     if assessment is None:
-        raise HTTPException(status_code=404, detail="assessment not found")
+        raise ClientHTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
 
 
@@ -123,7 +124,7 @@ async def publish_assessment(
 ) -> JSONResponse:
     assessment = await service.publish_assessment(assessment_id, context.tenant_id or "")
     if assessment is None:
-        raise HTTPException(status_code=404, detail="assessment not found")
+        raise ClientHTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
 
 
@@ -140,7 +141,7 @@ async def add_question(
         context.tenant_id or "",
     )
     if assessment is None:
-        raise HTTPException(status_code=404, detail="assessment not found")
+        raise ClientHTTPException(status_code=404, detail="assessment not found")
     return _response(request, assessment)
 
 
@@ -153,9 +154,9 @@ async def release_results(
     try:
         release = await service.release_results(assessment_id, context.tenant_id or "", context.user_id)
     except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=409, detail=public_message(exc)) from exc
     if release is None:
-        raise HTTPException(status_code=404, detail="assessment not found")
+        raise ClientHTTPException(status_code=404, detail="assessment not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -180,12 +181,12 @@ async def get_assessment_results(
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_RESULT_READ)),
 ) -> JSONResponse:
     if limit < 1 or limit > 100:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="limit must be between 1 and 100",
         )
     if offset < 0:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="offset must be greater than or equal to 0",
         )
@@ -197,7 +198,7 @@ async def get_assessment_results(
         offset=offset,
     )
     if result_data is None:
-        raise HTTPException(status_code=404, detail="assessment not found")
+        raise ClientHTTPException(status_code=404, detail="assessment not found")
 
     results, total = result_data
     standing = await service.standing_attempts(assessment_id, context.tenant_id or "")

@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from app.domain.client_safe import ClientSafeError
+
 PASSWORD_MIN_LENGTH = 12
 # Bounds hashing cost per request (Argon2 work grows with input length).
 PASSWORD_MAX_LENGTH = 128
@@ -15,7 +17,7 @@ class Email:
     def __post_init__(self) -> None:
         normalized = self.value.strip().lower()
         if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", normalized):
-            raise ValueError("invalid email format")
+            raise ClientSafeError("invalid email format")
         object.__setattr__(self, "value", normalized)
 
 
@@ -25,9 +27,9 @@ class Password:
 
     def __post_init__(self) -> None:
         if len(self.value) < PASSWORD_MIN_LENGTH:
-            raise ValueError(f"password must be at least {PASSWORD_MIN_LENGTH} characters")
+            raise ClientSafeError(f"password must be at least {PASSWORD_MIN_LENGTH} characters")
         if len(self.value) > PASSWORD_MAX_LENGTH:
-            raise ValueError(f"password must be at most {PASSWORD_MAX_LENGTH} characters")
+            raise ClientSafeError(f"password must be at most {PASSWORD_MAX_LENGTH} characters")
 
 
 @dataclass(frozen=True, slots=True)

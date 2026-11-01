@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError
 from app.application.common.uow import ContentUnitOfWorkFactory
 from app.application.content.access import ContentNotFoundError, ensure_tenant_may_write
 from app.core.metrics import content_upload_orphaned_objects_total
+from app.domain.client_safe import ClientMessage
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import AssetStatus, SourceStatus, VisibilityScope
 from app.domain.content.storage import (
@@ -51,7 +52,7 @@ _TYPES: tuple[tuple[bytes, str, tuple[str, ...]], ...] = (
 SIGNATURE_BYTES = max(len(signature) for signature, _, _ in _TYPES)
 
 
-class UploadError(Exception):
+class UploadError(ClientMessage, Exception):
     """A refused or failed upload. ``status_code`` and ``code`` go to the
     client; the message never contains bytes, keys or credentials."""
 
@@ -191,9 +192,7 @@ def detect_mime_type(head: bytes, file_name: str) -> str:
     for signature, mime_type, extensions in _TYPES:
         if head.startswith(signature):
             if extension not in extensions:
-                raise UnsupportedUploadTypeError(
-                    f"the content is {mime_type}, but the file name ends in {extension or 'no extension'}"
-                )
+                raise UnsupportedUploadTypeError("the file's content doesn't match its name's extension")
             return mime_type
     raise UnsupportedUploadTypeError("only PDF, PNG and JPEG documents are accepted")
 

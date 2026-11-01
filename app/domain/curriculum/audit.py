@@ -6,6 +6,8 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
+
 
 class BenchmarkAuditAction(StrEnum):
     SUBMIT_REVIEW = "submit_review"
@@ -47,11 +49,11 @@ class BenchmarkAuditLog:
         log_id: str | None = None,
     ) -> BenchmarkAuditLog:
         if not curriculum_id.strip():
-            raise ValueError("curriculum_id cannot be empty")
+            raise ClientSafeError("curriculum_id cannot be empty")
         if not actor_id.strip():
-            raise ValueError("actor_id cannot be empty")
+            raise ClientSafeError("actor_id cannot be empty")
         if not actor_email.strip():
-            raise ValueError("actor_email cannot be empty")
+            raise ClientSafeError("actor_email cannot be empty")
 
         return cls(
             id=log_id or f"bmaudit-{uuid4()}",

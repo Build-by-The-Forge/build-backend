@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
+
 
 @dataclass(slots=True)
 class AttemptAnswer:
@@ -17,13 +19,13 @@ class AttemptAnswer:
 
     def __post_init__(self) -> None:
         if not self.tenant_id.strip():
-            raise ValueError("tenant_id is required")
+            raise ClientSafeError("tenant_id is required")
         if not self.attempt_id.strip():
-            raise ValueError("attempt_id is required")
+            raise ClientSafeError("attempt_id is required")
         if not self.assessment_question_id.strip():
-            raise ValueError("assessment_question_id is required")
+            raise ClientSafeError("assessment_question_id is required")
         if self.selected_option_index < 0:
-            raise ValueError("selected_option_index must be non-negative")
+            raise ClientSafeError("selected_option_index must be non-negative")
 
     @property
     def id(self) -> str:
@@ -48,9 +50,9 @@ class AttemptAnswer:
 
     def update_selection(self, selected_option_index: int, *, option_count: int) -> None:
         if selected_option_index < 0:
-            raise ValueError("selected_option_index must be non-negative")
+            raise ClientSafeError("selected_option_index must be non-negative")
         if selected_option_index >= option_count:
-            raise ValueError("selected_option_index is outside the valid option range")
+            raise ClientSafeError("selected_option_index is outside the valid option range")
 
         self.selected_option_index = selected_option_index
         self.updated_at = datetime.now(timezone.utc)

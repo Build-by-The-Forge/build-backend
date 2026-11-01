@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
 from app.events.base import DomainEvent
 
 
@@ -18,15 +19,15 @@ class QuestionResult:
 
     def __post_init__(self) -> None:
         if not self.assessment_question_id.strip():
-            raise ValueError("assessment_question_id is required")
+            raise ClientSafeError("assessment_question_id is required")
         if self.correct_option_index < 0:
-            raise ValueError("correct_option_index must be non-negative")
+            raise ClientSafeError("correct_option_index must be non-negative")
         if self.selected_option_index is not None and self.selected_option_index < 0:
-            raise ValueError("selected_option_index must be non-negative if provided")
+            raise ClientSafeError("selected_option_index must be non-negative if provided")
         if self.max_marks <= 0:
-            raise ValueError("max_marks must be positive")
+            raise ClientSafeError("max_marks must be positive")
         if self.awarded_marks < 0 or self.awarded_marks > self.max_marks:
-            raise ValueError("awarded_marks must be between 0 and max_marks")
+            raise ClientSafeError("awarded_marks must be between 0 and max_marks")
 
 
 @dataclass(slots=True)
@@ -48,21 +49,21 @@ class AttemptResult:
 
     def __post_init__(self) -> None:
         if not self.tenant_id.strip():
-            raise ValueError("tenant_id is required")
+            raise ClientSafeError("tenant_id is required")
         if not self.attempt_id.strip():
-            raise ValueError("attempt_id is required")
+            raise ClientSafeError("attempt_id is required")
         if not self.assessment_id.strip():
-            raise ValueError("assessment_id is required")
+            raise ClientSafeError("assessment_id is required")
         if not self.user_id.strip():
-            raise ValueError("user_id is required")
+            raise ClientSafeError("user_id is required")
         if self.total_score < 0:
-            raise ValueError("total_score cannot be negative")
+            raise ClientSafeError("total_score cannot be negative")
         if self.max_score < 0:
-            raise ValueError("max_score cannot be negative")
+            raise ClientSafeError("max_score cannot be negative")
         if self.total_score > self.max_score:
-            raise ValueError("total_score cannot exceed max_score")
+            raise ClientSafeError("total_score cannot exceed max_score")
         if self.percentage < 0.0 or self.percentage > 100.0:
-            raise ValueError("percentage must be between 0.0 and 100.0")
+            raise ClientSafeError("percentage must be between 0.0 and 100.0")
 
     @property
     def id(self) -> str:

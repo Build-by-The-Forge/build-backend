@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
 from app.events.base import DomainEvent
 
 
@@ -58,13 +59,13 @@ class CurriculumOverride:
         override_id: str | None = None,
     ) -> CurriculumOverride:
         if not adoption_id.strip():
-            raise ValueError("adoption_id cannot be empty")
+            raise ClientSafeError("adoption_id cannot be empty")
         if not reason or not reason.strip():
-            raise ValueError("academic rationale (reason) is mandatory for institutional overrides")
+            raise ClientSafeError("academic rationale (reason) is mandatory for institutional overrides")
         if not created_by.strip():
-            raise ValueError("created_by cannot be empty")
+            raise ClientSafeError("created_by cannot be empty")
         if not created_by_email.strip():
-            raise ValueError("created_by_email cannot be empty")
+            raise ClientSafeError("created_by_email cannot be empty")
 
         ov_type = OverrideType(override_type) if isinstance(override_type, str) else override_type
 
@@ -78,14 +79,14 @@ class CurriculumOverride:
             )
             and not norm_course_code
         ):
-            raise ValueError(f"target_course_code is required for override type '{ov_type.value}'")
+            raise ClientSafeError(f"target_course_code is required for override type '{ov_type.value}'")
 
         if ov_type == OverrideType.ADD_COURSE:
             payload = custom_payload or {}
             required_keys = ("code", "title", "credit_units", "level", "semester")
             missing = [k for k in required_keys if k not in payload]
             if missing:
-                raise ValueError(f"custom_payload for add_course is missing required fields: {', '.join(missing)}")
+                raise ClientSafeError(f"custom_payload for add_course is missing required fields: {', '.join(missing)}")
 
         return cls(
             id=override_id or str(uuid4()),
@@ -135,17 +136,17 @@ class InstitutionalAdoption:
         adoption_id: str | None = None,
     ) -> InstitutionalAdoption:
         if not tenant_id.strip():
-            raise ValueError("tenant_id cannot be empty")
+            raise ClientSafeError("tenant_id cannot be empty")
         if not programme_id.strip():
-            raise ValueError("programme_id cannot be empty")
+            raise ClientSafeError("programme_id cannot be empty")
         if not benchmark_curriculum_id.strip():
-            raise ValueError("benchmark_curriculum_id cannot be empty")
+            raise ClientSafeError("benchmark_curriculum_id cannot be empty")
         if not benchmark_version.strip():
-            raise ValueError("benchmark_version cannot be empty")
+            raise ClientSafeError("benchmark_version cannot be empty")
         if not adopted_by.strip():
-            raise ValueError("adopted_by cannot be empty")
+            raise ClientSafeError("adopted_by cannot be empty")
         if not adopted_by_email.strip():
-            raise ValueError("adopted_by_email cannot be empty")
+            raise ClientSafeError("adopted_by_email cannot be empty")
 
         now = datetime.now(timezone.utc)
         adoption = cls(
@@ -181,7 +182,7 @@ class InstitutionalAdoption:
 
     def activate(self, activated_by: str | None = None) -> None:
         if self.status != AdoptionStatus.DRAFT:
-            raise ValueError(f"only draft adoptions can be activated, current status is '{self.status.value}'")
+            raise ClientSafeError(f"only draft adoptions can be activated, current status is '{self.status.value}'")
         self.status = AdoptionStatus.ACTIVE
         self.updated_at = datetime.now(timezone.utc)
         self._record_event(
@@ -200,7 +201,7 @@ class InstitutionalAdoption:
 
     def supersede(self) -> None:
         if self.status != AdoptionStatus.ACTIVE:
-            raise ValueError(f"only active adoptions can be superseded, current status is '{self.status.value}'")
+            raise ClientSafeError(f"only active adoptions can be superseded, current status is '{self.status.value}'")
         self.status = AdoptionStatus.SUPERSEDED
         self.updated_at = datetime.now(timezone.utc)
         self._record_event(

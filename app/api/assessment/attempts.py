@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.ai import correlation_id_for, get_ai_assistant_gateway
@@ -16,6 +16,7 @@ from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import ClientError, ClientHTTPException
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIAssistantGateway
 from app.domain.assessment.attempt import AssessmentAttempt
@@ -39,11 +40,11 @@ async def start_attempt(
     try:
         attempt = await service.start_attempt(assessment_id, context.tenant_id, context.user_id)
     except AttemptLimitReachedError as exc:
-        raise HTTPException(status_code=409, detail="ATTEMPT_LIMIT_REACHED") from exc
+        raise ClientError("attempt limit reached", status_code=409, code="ATTEMPT_LIMIT_REACHED") from exc
     except ValueError as exc:
         if str(exc) == "assessment not found":
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+            raise ClientHTTPException(status_code=404, detail="assessment not found") from exc
+        raise ClientHTTPException(status_code=409, detail="assessment is not available for attempts") from exc
     return _response(request, attempt, status_code=status.HTTP_201_CREATED)
 
 
@@ -55,7 +56,7 @@ async def get_attempt(
 ) -> JSONResponse:
     attempt = await service.get_attempt(attempt_id, context.tenant_id, context.user_id)
     if attempt is None:
-        raise HTTPException(status_code=404, detail="attempt not found")
+        raise ClientHTTPException(status_code=404, detail="attempt not found")
     return _response(request, attempt)
 
 
@@ -67,10 +68,10 @@ async def get_attempt_questions(
 ) -> JSONResponse:
     attempt = await service.get_attempt(attempt_id, context.tenant_id, context.user_id)
     if attempt is None:
-        raise HTTPException(status_code=404, detail="attempt questions not found")
+        raise ClientHTTPException(status_code=404, detail="attempt questions not found")
     questions = await service.get_attempt_questions(attempt_id, context.tenant_id, context.user_id)
     if questions is None:
-        raise HTTPException(status_code=404, detail="attempt questions not found")
+        raise ClientHTTPException(status_code=404, detail="attempt questions not found")
 
     response = AttemptQuestionsResponse(
         attempt_id=attempt_id,
@@ -115,7 +116,7 @@ async def submit_attempt(
 ) -> JSONResponse:
     attempt = await service.submit_attempt(attempt_id, context.tenant_id, context.user_id)
     if attempt is None:
-        raise HTTPException(status_code=404, detail="attempt not found")
+        raise ClientHTTPException(status_code=404, detail="attempt not found")
     # After the response, and only once the graded attempt is committed: the
     # learner's memory in AI-service (M5 ruling R3). Best effort.
     if attempt.newly_submitted:
@@ -144,20 +145,17 @@ async def get_attempt_result(
             is_staff=is_staff,
         )
     except ResultNotReleasedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="RESULT_NOT_RELEASED") from exc
+        raise ClientError("result not released", status_code=409, code="RESULT_NOT_RELEASED") from exc
     except ValueError as exc:
         if str(exc) == "attempt is not submitted":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="attempt is not submitted",
-            ) from exc
-        raise HTTPException(
+            raise ClientError("attempt is not submitted", status_code=409, code="ATTEMPT_NOT_SUBMITTED") from exc
+        raise ClientHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
+            detail="the attempt result is not available",
         ) from exc
 
     if readable is None:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="attempt result not found",
         )

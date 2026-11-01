@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
+
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _CODE_RE = re.compile(r"^[A-Z0-9]{2,20}$")
 _PROG_CODE_RE = re.compile(r"^[A-Z0-9-]{2,30}$")
@@ -32,7 +34,7 @@ class TenantName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 2 or len(v) > 100:
-            raise ValueError("tenant name must be 2-100 chars")
+            raise ClientSafeError("tenant name must be 2-100 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -46,9 +48,9 @@ class TenantSlug:
     def __post_init__(self) -> None:
         v = self.value.strip().lower()
         if len(v) < 3 or len(v) > 50:
-            raise ValueError("tenant slug must be 3-50 chars")
+            raise ClientSafeError("tenant slug must be 3-50 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("tenant slug must be lowercase alphanumeric and hyphens only")
+            raise ClientSafeError("tenant slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -80,7 +82,7 @@ class FacultyName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 2 or len(v) > 100:
-            raise ValueError("faculty name must be 2-100 chars")
+            raise ClientSafeError("faculty name must be 2-100 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -94,9 +96,9 @@ class FacultySlug:
     def __post_init__(self) -> None:
         v = self.value.strip().lower()
         if len(v) < 3 or len(v) > 50:
-            raise ValueError("faculty slug must be 3-50 chars")
+            raise ClientSafeError("faculty slug must be 3-50 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("faculty slug must be lowercase alphanumeric and hyphens only")
+            raise ClientSafeError("faculty slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -128,7 +130,7 @@ class DepartmentName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 2 or len(v) > 100:
-            raise ValueError("department name must be 2-100 chars")
+            raise ClientSafeError("department name must be 2-100 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -142,9 +144,9 @@ class DepartmentSlug:
     def __post_init__(self) -> None:
         v = self.value.strip().lower()
         if len(v) < 3 or len(v) > 50:
-            raise ValueError("department slug must be 3-50 chars")
+            raise ClientSafeError("department slug must be 3-50 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("department slug must be lowercase alphanumeric and hyphens only")
+            raise ClientSafeError("department slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -158,7 +160,7 @@ class DepartmentCode:
     def __post_init__(self) -> None:
         v = self.value.strip().upper()
         if not _CODE_RE.match(v):
-            raise ValueError("department code must be 2-20 uppercase alphanumeric")
+            raise ClientSafeError("department code must be 2-20 uppercase alphanumeric")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -190,7 +192,7 @@ class ProgrammeName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 2 or len(v) > 150:
-            raise ValueError("programme name must be 2-150 chars")
+            raise ClientSafeError("programme name must be 2-150 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -204,9 +206,9 @@ class ProgrammeSlug:
     def __post_init__(self) -> None:
         v = self.value.strip().lower()
         if len(v) < 3 or len(v) > 80:
-            raise ValueError("programme slug must be 3-80 chars")
+            raise ClientSafeError("programme slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("programme slug must be lowercase alphanumeric and hyphens only")
+            raise ClientSafeError("programme slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -220,7 +222,7 @@ class ProgrammeCode:
     def __post_init__(self) -> None:
         v = self.value.strip().upper()
         if not _PROG_CODE_RE.match(v):
-            raise ValueError("programme code must be 2-30 uppercase alphanumeric and hyphens")
+            raise ClientSafeError("programme code must be 2-30 uppercase alphanumeric and hyphens")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -252,7 +254,7 @@ class LevelCode:
     def __post_init__(self) -> None:
         v = self.value
         if v not in (100, 200, 300, 400, 500, 600, 700):
-            raise ValueError("level code must be one of 100, 200, 300, 400, 500, 600, 700")
+            raise ClientSafeError("level code must be one of 100, 200, 300, 400, 500, 600, 700")
 
     def __str__(self) -> str:
         return str(self.value)
@@ -265,7 +267,7 @@ class LevelName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 2 or len(v) > 50:
-            raise ValueError("level name must be 2-50 chars")
+            raise ClientSafeError("level name must be 2-50 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -297,10 +299,10 @@ class AcademicSessionName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if not _SESSION_RE.match(v):
-            raise ValueError("session name must be YYYY/YYYY e.g. 2025/2026")
+            raise ClientSafeError("session name must be YYYY/YYYY e.g. 2025/2026")
         start, end = int(v.split("/")[0]), int(v.split("/")[1])
         if end != start + 1:
-            raise ValueError("session end year must be start year + 1")
+            raise ClientSafeError("session end year must be start year + 1")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -314,10 +316,10 @@ class AcademicSessionSlug:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if not _SESSION_SLUG_RE.match(v):
-            raise ValueError("session slug must be YYYY-YYYY e.g. 2025-2026")
+            raise ClientSafeError("session slug must be YYYY-YYYY e.g. 2025-2026")
         start, end = int(v.split("-")[0]), int(v.split("-")[1])
         if end != start + 1:
-            raise ValueError("session slug end year must be start + 1")
+            raise ClientSafeError("session slug end year must be start + 1")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -349,7 +351,7 @@ class SemesterName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 2 or len(v) > 50:
-            raise ValueError("semester name must be 2-50 chars")
+            raise ClientSafeError("semester name must be 2-50 chars")
         object.__setattr__(self, "value", v.title())
 
     def __str__(self) -> str:
@@ -387,7 +389,7 @@ class UserId:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 1:
-            raise ValueError("user_id cannot be empty")
+            raise ClientSafeError("user_id cannot be empty")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:

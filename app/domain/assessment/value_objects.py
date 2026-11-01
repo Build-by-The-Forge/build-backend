@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
+
 
 @dataclass(frozen=True, slots=True)
 class QuestionId:
@@ -36,7 +38,7 @@ class QuestionPrompt:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if not v:
-            raise ValueError("non-empty prompt required")
+            raise ClientSafeError("non-empty prompt required")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -50,7 +52,7 @@ class QuestionExplanation:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if not v:
-            raise ValueError("question explanation must be a non-empty string")
+            raise ClientSafeError("question explanation must be a non-empty string")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -63,7 +65,7 @@ class QuestionMarks:
 
     def __post_init__(self) -> None:
         if self.value <= 0:
-            raise ValueError("question marks must be positive")
+            raise ClientSafeError("question marks must be positive")
 
     def __int__(self) -> int:
         return self.value
@@ -75,7 +77,7 @@ class QuestionDisplayOrder:
 
     def __post_init__(self) -> None:
         if self.value <= 0:
-            raise ValueError("question display order must be positive")
+            raise ClientSafeError("question display order must be positive")
 
     def __int__(self) -> int:
         return self.value
@@ -88,7 +90,7 @@ class QuestionOptionText:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if not v:
-            raise ValueError("non-empty option text required")
+            raise ClientSafeError("non-empty option text required")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:

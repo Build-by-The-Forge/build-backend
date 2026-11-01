@@ -94,7 +94,7 @@ def test_an_unverified_address_cannot_join(client):
 
     resp = _join(client, slug, unverified)
 
-    assert resp.status_code == 403 and resp.json()["meta"]["error"] == "email verification required"
+    assert resp.status_code == 403 and resp.json()["error"]["message"] == "email verification required"
     assert _memberships(client, tenant_id, unverified["id"]) == []
 
 
@@ -108,7 +108,7 @@ def test_only_an_exactly_listed_domain_is_eligible(client, domain):
 
     resp = _join(client, slug, outsider)
 
-    assert resp.status_code == 403 and resp.json()["meta"]["error"] == "you are not eligible to join this tenant"
+    assert resp.status_code == 403 and resp.json()["error"]["message"] == "you are not eligible to join this tenant"
     assert _memberships(client, tenant_id, outsider["id"]) == []
 
 
@@ -158,7 +158,7 @@ def test_a_revoked_member_cannot_rejoin_by_domain(client):
 
     resp = _join(client, slug, student)
 
-    assert resp.status_code == 403 and "revoked" in resp.json()["meta"]["error"]
+    assert resp.status_code == 403 and "revoked" in resp.json()["error"]["message"]
     assert [m.status for m in _memberships(client, tenant_id, student["id"])] == ["archived"]
 
 

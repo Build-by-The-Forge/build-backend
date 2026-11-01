@@ -4,6 +4,7 @@ from app.application.curriculum.effective_queries import (
     GetActiveEffectiveCurriculumQuery,
     GetEffectiveCurriculumByAdoptionQuery,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.benchmark import BenchmarkCourse
 from app.domain.curriculum.effective import (
     EffectiveCurriculum,
@@ -30,11 +31,11 @@ class GetEffectiveCurriculumByAdoptionHandler:
     async def handle(self, query: GetEffectiveCurriculumByAdoptionQuery) -> EffectiveCurriculum:
         adoption = await self.adoption_repo.get_adoption_by_id(query.adoption_id)
         if adoption is None or adoption.tenant_id != query.tenant_id:
-            raise ValueError("adoption not found")
+            raise ClientSafeError("adoption not found")
 
         benchmark = await self.benchmark_repo.get_by_id(adoption.benchmark_curriculum_id)
         if benchmark is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         course_summaries = await self.benchmark_repo.list_courses(benchmark.id)
         full_courses: list[BenchmarkCourse] = []
@@ -70,11 +71,11 @@ class GetActiveEffectiveCurriculumHandler:
             academic_session_id=query.academic_session_id,
         )
         if adoption is None:
-            raise ValueError(f"no active curriculum adoption found for programme '{query.programme_id}'")
+            raise ClientSafeError("no active curriculum adoption found for programme")
 
         benchmark = await self.benchmark_repo.get_by_id(adoption.benchmark_curriculum_id)
         if benchmark is None:
-            raise ValueError("benchmark curriculum not found")
+            raise ClientSafeError("benchmark curriculum not found")
 
         course_summaries = await self.benchmark_repo.list_courses(benchmark.id)
         full_courses: list[BenchmarkCourse] = []

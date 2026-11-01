@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
+
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _CODE_RE = re.compile(r"^[A-Z0-9]{2,20}$")
 
@@ -124,7 +126,7 @@ class CourseCode:
     def __post_init__(self) -> None:
         v = self.value.strip().upper()
         if not _CODE_RE.match(v):
-            raise ValueError("course code must be 2-20 uppercase alphanumeric")
+            raise ClientSafeError("course code must be 2-20 uppercase alphanumeric")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -138,7 +140,7 @@ class CourseTitle:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 5 or len(v) > 200:
-            raise ValueError("course title must be 5-200 chars")
+            raise ClientSafeError("course title must be 5-200 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -152,9 +154,9 @@ class CourseSlug:
     def __post_init__(self) -> None:
         v = self.value.strip().lower()
         if len(v) < 3 or len(v) > 80:
-            raise ValueError("course slug must be 3-80 chars")
+            raise ClientSafeError("course slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("course slug must be lowercase alphanumeric and hyphens only")
+            raise ClientSafeError("course slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -167,7 +169,7 @@ class CourseCreditUnits:
 
     def __post_init__(self) -> None:
         if self.value < 0 or self.value > 10:
-            raise ValueError("credit units must be between 0 and 10")
+            raise ClientSafeError("credit units must be between 0 and 10")
 
     def __int__(self) -> int:
         return self.value
@@ -179,7 +181,7 @@ class CourseLevel:
 
     def __post_init__(self) -> None:
         if self.value not in (100, 200, 300, 400, 500, 600):
-            raise ValueError("course level must be one of 100, 200, 300, 400, 500, 600")
+            raise ClientSafeError("course level must be one of 100, 200, 300, 400, 500, 600")
 
     def __int__(self) -> int:
         return self.value
@@ -191,7 +193,7 @@ class CourseSemester:
 
     def __post_init__(self) -> None:
         if self.value not in (1, 2):
-            raise ValueError("course semester must be 1 or 2")
+            raise ClientSafeError("course semester must be 1 or 2")
 
     def __int__(self) -> int:
         return self.value
@@ -209,7 +211,7 @@ class CurriculumVersionName:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 3 or len(v) > 100:
-            raise ValueError("curriculum version name must be 3-100 chars")
+            raise ClientSafeError("curriculum version name must be 3-100 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -223,7 +225,7 @@ class TopicTitle:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 3 or len(v) > 200:
-            raise ValueError("topic title must be 3-200 chars")
+            raise ClientSafeError("topic title must be 3-200 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -237,9 +239,9 @@ class TopicSlug:
     def __post_init__(self) -> None:
         v = self.value.strip().lower()
         if len(v) < 3 or len(v) > 80:
-            raise ValueError("topic slug must be 3-80 chars")
+            raise ClientSafeError("topic slug must be 3-80 chars")
         if not _SLUG_RE.match(v):
-            raise ValueError("topic slug must be lowercase alphanumeric and hyphens only")
+            raise ClientSafeError("topic slug must be lowercase alphanumeric and hyphens only")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -263,7 +265,7 @@ class TopicSequence:
 
     def __post_init__(self) -> None:
         if self.value < 1:
-            raise ValueError("topic sequence must be >= 1")
+            raise ClientSafeError("topic sequence must be >= 1")
 
     def __int__(self) -> int:
         return self.value
@@ -276,7 +278,7 @@ class LearningOutcomeDescription:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 10 or len(v) > 1000:
-            raise ValueError("learning outcome description must be 10-1000 chars")
+            raise ClientSafeError("learning outcome description must be 10-1000 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -289,7 +291,7 @@ class LearningOutcomeSequence:
 
     def __post_init__(self) -> None:
         if self.value < 1:
-            raise ValueError("learning outcome sequence must be >= 1")
+            raise ClientSafeError("learning outcome sequence must be >= 1")
 
     def __int__(self) -> int:
         return self.value
@@ -302,7 +304,7 @@ class ReferenceMaterialTitle:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) < 3 or len(v) > 200:
-            raise ValueError("reference material title must be 3-200 chars")
+            raise ClientSafeError("reference material title must be 3-200 chars")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -316,7 +318,7 @@ class ReferenceMaterialUrl:
     def __post_init__(self) -> None:
         v = self.value.strip()
         if len(v) > 0 and not v.startswith("http"):
-            raise ValueError("reference material URL must be a valid HTTP/HTTPS URL")
+            raise ClientSafeError("reference material URL must be a valid HTTP/HTTPS URL")
         object.__setattr__(self, "value", v)
 
     def __str__(self) -> str:
@@ -384,7 +386,7 @@ class YearLevel:
 
     def __post_init__(self) -> None:
         if self.value < 100 or self.value > 600:
-            raise ValueError("year level must be between 100 and 600")
+            raise ClientSafeError("year level must be between 100 and 600")
 
     def __int__(self) -> int:
         return self.value
@@ -396,7 +398,7 @@ class SemesterNumber:
 
     def __post_init__(self) -> None:
         if self.value not in (1, 2):
-            raise ValueError("semester number must be 1 or 2")
+            raise ClientSafeError("semester number must be 1 or 2")
 
     def __int__(self) -> int:
         return self.value

@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from app.domain.client_safe import ClientSafeError
+
 
 class AttemptKind(StrEnum):
     PRACTICE = "practice"
@@ -45,11 +47,11 @@ class AttemptPolicy:
 
     def __post_init__(self) -> None:
         if self.max_attempts is not None and self.max_attempts < 1:
-            raise ValueError("max_attempts must be at least 1")
+            raise ClientSafeError("max_attempts must be at least 1")
         if self.retake_after_submission == (self.max_attempts == 1):
-            raise ValueError("a retake needs max_attempts null or above 1, and no retake needs exactly 1")
+            raise ClientSafeError("a retake needs max_attempts null or above 1, and no retake needs exactly 1")
         if self.feedback_timing is FeedbackTiming.AFTER_FINAL_ATTEMPT and self.max_attempts is None:
-            raise ValueError("after_final_attempt needs a limit, since it's never reached without one")
+            raise ClientSafeError("after_final_attempt needs a limit, since it's never reached without one")
 
     @classmethod
     def practice_default(cls) -> AttemptPolicy:

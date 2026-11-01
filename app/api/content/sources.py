@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.content.reader_view import source_view
@@ -12,6 +12,7 @@ from app.application.content.source_service import ContentSourceService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.content.enums import VisibilityScope
 from app.domain.content.source import ContentSource
@@ -30,13 +31,13 @@ def _visible_source(source: ContentSource | None, context: TenantContext) -> Con
     source. Another tenant's source is answered exactly like a missing one
     (404), on reads and writes alike (P3-1 PR 3b)."""
     if source is None or (source.visibility != VisibilityScope.PLATFORM and source.tenant_id != context.tenant_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="content source not found")
     return source
 
 
 def _refuse_platform_write(source: ContentSource) -> None:
     if source.visibility == VisibilityScope.PLATFORM:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
+        raise ClientHTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -46,7 +47,7 @@ async def create_source(
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_MANAGE)),
 ) -> JSONResponse:
     if payload.visibility == VisibilityScope.PLATFORM.value:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
+        raise ClientHTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=PLATFORM_WRITE_REFUSED)
     tenant_id = context.tenant_id
 
     try:
@@ -70,7 +71,7 @@ async def create_source(
             trust_policy=payload.trust_policy,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_409_CONFLICT, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -95,12 +96,12 @@ async def list_sources(
     context: TenantContext = Depends(require_permission(Permission.CONTENT_SOURCE_READ)),
 ) -> JSONResponse:
     if limit < 1 or limit > 100:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="limit must be between 1 and 100",
         )
     if offset < 0:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="offset must be greater than or equal to 0",
         )
@@ -136,7 +137,7 @@ async def get_source(
 
     # Check accessibility within caller's tenant
     if not source.is_accessible_by(tenant_id=context.tenant_id):
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="access denied to content source outside tenant scope",
         )
@@ -162,7 +163,7 @@ async def update_source(
     source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot update content source outside tenant scope",
         )
@@ -180,7 +181,7 @@ async def update_source(
             trust_policy=payload.trust_policy,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -203,7 +204,7 @@ async def deprecate_source(
     source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot manage content source outside tenant scope",
         )
@@ -212,7 +213,7 @@ async def deprecate_source(
     try:
         updated = await service.deprecate_source(source_id=source_id, reason=payload.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -235,7 +236,7 @@ async def revoke_source(
     source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot manage content source outside tenant scope",
         )
@@ -244,7 +245,7 @@ async def revoke_source(
     try:
         updated = await service.revoke_source(source_id=source_id, reason=payload.reason)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -266,7 +267,7 @@ async def activate_source(
     source = _visible_source(await service.get_source(source_id), context)
 
     if not source.is_accessible_by(tenant_id=context.tenant_id):
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="cannot manage content source outside tenant scope",
         )

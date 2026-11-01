@@ -18,10 +18,10 @@ def test_a_public_route_does_not_echo_a_refused_value(client):
 
 def test_validation_details_name_the_problem_without_the_value(client):
     response = client.post("/identity/users", json={"email": "someone@example.com", "password": [SECRET]})
-    details = response.json()["meta"]["details"]
+    details = response.json()["error"]["details"]["fields"]
     assert details
     for detail in details:
-        assert set(detail) == {"type", "loc", "msg"}
+        assert set(detail) == {"field", "code", "message"}
 
 
 @pytest.mark.asyncio

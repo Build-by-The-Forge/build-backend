@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from app.domain.client_safe import ClientMessage
 
-class TenantDomainError(Exception):
+
+class TenantDomainError(ClientMessage, Exception):
     pass
 
 

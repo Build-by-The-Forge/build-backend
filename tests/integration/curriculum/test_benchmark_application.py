@@ -158,7 +158,7 @@ async def test_ingest_duplicate_course_code_rejected(
         ),
     ]
 
-    with pytest.raises(ValueError, match="duplicate course code 'CSC101' in candidate payload"):
+    with pytest.raises(ValueError, match="duplicate course code in candidate payload"):
         await service.ingest_candidate(
             source_snapshot_id=snap.id,
             extractor_version="v1.2",

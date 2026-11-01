@@ -196,7 +196,7 @@ async def test_institutional_adoption_workflow_and_invariants(
     # Invariant: Override targeting non-existent benchmark course fails
     with pytest.raises(
         ValueError,
-        match="target course 'INVALID999' does not exist in adopted benchmark",
+        match="target course does not exist in adopted benchmark",
     ):
         await adoption_service.add_override(
             adoption_id=futa_adoption.id,

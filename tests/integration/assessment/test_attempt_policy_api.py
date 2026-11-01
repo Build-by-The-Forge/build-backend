@@ -175,7 +175,7 @@ async def test_one_attempt_means_one(client):
 
     refused = start(client, student, assessment_id)
     assert refused.status_code == 409
-    assert "ATTEMPT_LIMIT_REACHED" in refused.text
+    assert refused.json()["error"]["code"] == "ATTEMPT_LIMIT_REACHED"
 
 
 async def test_a_limit_allows_retakes_up_to_it_and_no_further(client):
@@ -231,7 +231,7 @@ async def test_abandoning_an_attempt_past_the_limit_still_finalizes_it(client):
     refused = start(client, student, assessment_id)
 
     assert refused.status_code == 409
-    assert "ATTEMPT_LIMIT_REACHED" in refused.text
+    assert refused.json()["error"]["code"] == "ATTEMPT_LIMIT_REACHED"
     assert client.get(f"/assessment/attempts/{only}", headers=student).json()["data"]["status"] == "submitted"
     assert await result_rows(only) == 1
     # And it stays refused, with one result, however often the student retries.

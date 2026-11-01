@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.catalogue.schemas import (
@@ -16,6 +16,7 @@ from app.application.catalogue.course_service import CourseService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import ClientHTTPException
 from app.core.tenant_context import TenantContext
 from app.domain.catalogue.reference_material import ReferenceMaterial
 
@@ -33,18 +34,7 @@ async def list_courses(
     department_id: str | None = None,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    try:
-        courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
-    except Exception as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": getattr(request.state, "request_id", None),
-            },
-        )
+    courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -79,7 +69,7 @@ async def get_course(
 ) -> JSONResponse:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
 
     response = CourseResponse(
         id=course.id.value,
@@ -110,28 +100,17 @@ async def create_course(
     payload: CreateCourseRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
-    try:
-        course = await service.create_course(
-            tenant_id=context.tenant_id,
-            department_id=payload.department_id,
-            code=payload.code,
-            title=payload.title,
-            slug=payload.slug,
-            credit_units=payload.credit_units,
-            level=payload.level,
-            semester=payload.semester,
-            description=payload.description,
-        )
-    except Exception as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": getattr(request.state, "request_id", None),
-            },
-        )
+    course = await service.create_course(
+        tenant_id=context.tenant_id,
+        department_id=payload.department_id,
+        code=payload.code,
+        title=payload.title,
+        slug=payload.slug,
+        credit_units=payload.credit_units,
+        level=payload.level,
+        semester=payload.semester,
+        description=payload.description,
+    )
 
     response = CourseResponse(
         id=course.id.value,
@@ -171,7 +150,7 @@ async def update_course(
         description=payload.description,
     )
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -220,7 +199,7 @@ async def _transition_course(
 ) -> JSONResponse:
     course = await service.transition_course(course_id, context.tenant_id, transition)
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -251,7 +230,7 @@ async def create_topic(
         tenant_id=context.tenant_id,
     )
     if topic is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -280,7 +259,7 @@ async def list_topics(
 ) -> JSONResponse:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -317,7 +296,7 @@ async def update_topic(
         description=payload.description,
     )
     if topic is None:
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -345,7 +324,7 @@ async def archive_topic(
 ) -> JSONResponse:
     topic = await service.transition_topic(topic_id, context.tenant_id, "archive")
     if topic is None:
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -371,7 +350,7 @@ async def create_learning_outcome(
         tenant_id=context.tenant_id,
     )
     if outcome is None:
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     return JSONResponse(
         status_code=201,
         content={
@@ -397,10 +376,10 @@ async def list_learning_outcomes(
 ) -> JSONResponse:
     course = await service.get_course_by_topic(topic_id, context.tenant_id)
     if course is None:
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     topic = next((item for item in course.topics if item.id.value == topic_id), None)
     if topic is None:
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -434,7 +413,7 @@ async def update_learning_outcome(
         tenant_id=context.tenant_id,
     )
     if outcome is None:
-        raise HTTPException(status_code=404, detail="learning outcome not found")
+        raise ClientHTTPException(status_code=404, detail="learning outcome not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -460,7 +439,7 @@ async def archive_learning_outcome(
 ) -> JSONResponse:
     outcome = await service.transition_learning_outcome(learning_outcome_id, context.tenant_id, "archive")
     if outcome is None:
-        raise HTTPException(status_code=404, detail="learning outcome not found")
+        raise ClientHTTPException(status_code=404, detail="learning outcome not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -487,7 +466,7 @@ async def create_reference_material(
         tenant_id=context.tenant_id,
     )
     if material is None:
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     return JSONResponse(
         status_code=201,
         content={
@@ -507,7 +486,7 @@ async def list_reference_materials(
 ) -> JSONResponse:
     course = await service.get_course_by_topic(topic_id, context.tenant_id)
     if course is None or not any(item.id.value == topic_id for item in course.topics):
-        raise HTTPException(status_code=404, detail="topic not found")
+        raise ClientHTTPException(status_code=404, detail="topic not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -534,7 +513,7 @@ async def update_reference_material(
         tenant_id=context.tenant_id,
     )
     if material is None:
-        raise HTTPException(status_code=404, detail="reference material not found")
+        raise ClientHTTPException(status_code=404, detail="reference material not found")
     return JSONResponse(
         status_code=200,
         content={
@@ -554,7 +533,7 @@ async def archive_reference_material(
 ) -> JSONResponse:
     material = await service.transition_reference_material(reference_material_id, context.tenant_id, "archive")
     if material is None:
-        raise HTTPException(status_code=404, detail="reference material not found")
+        raise ClientHTTPException(status_code=404, detail="reference material not found")
     return JSONResponse(
         status_code=200,
         content={

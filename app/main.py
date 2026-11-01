@@ -18,11 +18,12 @@ from app.core.exceptions import (
     AppError,
     app_exception_handler,
     http_exception_handler,
+    unhandled_exception_handler,
     validation_exception_handler,
 )
 from app.core.logging import configure_logging
 from app.core.metrics import learning_memory_enabled, metrics_payload, requests_total
-from app.core.middleware import RequestContextMiddleware
+from app.core.middleware import RequestContextMiddleware, UnhandledErrorMiddleware
 from app.core.responses import ApiResponse
 from app.core.security import SecurityHeadersMiddleware
 from app.core.tracing import configure_tracing
@@ -70,6 +71,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
+def add_response_middleware(target: FastAPI, cors_origins: list[str]) -> None:
+    """Innermost first. Every response, including an unexpected failure's, passes
+    back through all of these."""
+    target.add_middleware(UnhandledErrorMiddleware)
+    target.add_middleware(RequestContextMiddleware)
+    target.add_middleware(SecurityHeadersMiddleware)
+    if cors_origins:
+        target.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+            allow_headers=["Authorization", "Content-Type", "X-Tenant-Slug", "X-Request-ID"],
+            expose_headers=["X-Request-ID", "Retry-After"],
+            max_age=600,
+        )
+
+
 app = FastAPI(
     title="BUILD Backend",
     version="0.1.0",
@@ -90,18 +109,7 @@ app.add_middleware(
     keys=_callback_keys(),
     is_protected=_is_callback_path,
 )
-app.add_middleware(RequestContextMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-if settings.cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-Tenant-Slug", "X-Request-ID"],
-        expose_headers=["X-Request-ID", "Retry-After"],
-        max_age=600,
-    )
+add_response_middleware(app, settings.cors_origins)
 # Outermost: an oversized body is refused before anything else reads it.
 app.add_middleware(
     RequestBodyLimitMiddleware,
@@ -123,6 +131,7 @@ app.include_router(tenant_join_router)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(AppError, app_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
 @app.get("/")

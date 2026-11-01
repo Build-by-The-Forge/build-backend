@@ -4,6 +4,7 @@ from app.application.assessment.attempt_answer_commands import (
     SaveAttemptAnswerCommand,
 )
 from app.domain.assessment.attempt_answer import AttemptAnswer
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.assessment import AssessmentRepository
 from app.domain.repositories.attempt import AttemptRepository
 from app.domain.repositories.attempt_answer import AttemptAnswerRepository
@@ -38,7 +39,7 @@ class SaveAttemptAnswerHandler:
         if snapshot is None:
             raise LookupError("assessment question not found")
         if command.selected_option_index < 0 or command.selected_option_index >= len(snapshot.options):
-            raise ValueError("selected_option_index is outside the valid option range")
+            raise ClientSafeError("selected_option_index is outside the valid option range")
 
         answer = await self.answers.get_by_attempt_and_question(
             command.attempt_id,

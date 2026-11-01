@@ -162,7 +162,7 @@ async def test_content_source_api_lifecycle_and_rbac(client) -> None:
     foreign_get = client.get(f"/content/sources/{inst_source_id}", headers=foreign_headers)
     missing_get = client.get(f"/content/sources/{uuid4()}", headers=foreign_headers)
     assert foreign_get.status_code == missing_get.status_code == 404
-    assert foreign_get.json()["meta"]["error"] == missing_get.json()["meta"]["error"]
+    assert foreign_get.json()["error"]["message"] == missing_get.json()["error"]["message"]
 
     # 11b. Foreign Lecturer reads the Platform source directly -> 200 OK
     foreign_platform_get = client.get(f"/content/sources/{reg_source_id}", headers=foreign_headers)

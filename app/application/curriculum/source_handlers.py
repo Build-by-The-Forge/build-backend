@@ -7,6 +7,7 @@ from app.application.curriculum.source_commands import (
     RecordCurriculumSnapshotCommand,
     RegisterCurriculumSourceCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.source import CurriculumSnapshot, CurriculumSource
 from app.domain.repositories.curriculum_source import CurriculumSourceRepository
 from app.events.base import DomainEvent
@@ -19,7 +20,7 @@ class RegisterCurriculumSourceHandler:
     async def handle(self, command: RegisterCurriculumSourceCommand) -> CurriculumSource:
         existing = await self.repository.get_source_by_code(command.code)
         if existing is not None:
-            raise ValueError(f"curriculum source with code '{command.code}' already exists")
+            raise ClientSafeError("curriculum source with code already exists")
 
         source = CurriculumSource.create(
             code=command.code,
@@ -55,7 +56,7 @@ class RecordCurriculumSnapshotHandler:
     async def handle(self, command: RecordCurriculumSnapshotCommand) -> tuple[CurriculumSnapshot, bool, list[DomainEvent]]:
         source = await self.repository.get_source_by_id(command.source_id)
         if source is None:
-            raise ValueError(f"curriculum source '{command.source_id}' not found")
+            raise ClientSafeError("curriculum source not found")
 
         # Idempotency check: see if snapshot with identical hash already exists
         existing_snapshot = await self.repository.get_snapshot_by_hash(

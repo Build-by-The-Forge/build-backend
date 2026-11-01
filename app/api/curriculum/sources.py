@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.curriculum.schemas import (
@@ -15,6 +15,7 @@ from app.application.curriculum.curriculum_source_service import (
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
+from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.curriculum.source import CurriculumSnapshot, CurriculumSource
 
@@ -38,7 +39,7 @@ async def create_source(
             parser_version=payload.parser_version,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise ClientHTTPException(status_code=status.HTTP_409_CONFLICT, detail=public_message(exc)) from exc
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -77,7 +78,7 @@ async def get_source(
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -98,19 +99,19 @@ async def list_snapshots(
     context: TenantContext = Depends(require_permission(Permission.CURRICULUM_SOURCE_READ)),
 ) -> JSONResponse:
     if limit < 1 or limit > 100:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="limit must be between 1 and 100",
         )
     if offset < 0:
-        raise HTTPException(
+        raise ClientHTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="offset must be greater than or equal to 0",
         )
 
     res = await service.list_snapshots(source_id=source_id, limit=limit, offset=offset)
     if res is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
 
     snapshots, total = res
     return JSONResponse(
@@ -132,7 +133,7 @@ async def trigger_sync(
 ) -> JSONResponse:
     source = await service.get_source(source_id)
     if source is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="curriculum source not found")
 
     job_id = f"job-sync-{uuid4()}"
     return JSONResponse(

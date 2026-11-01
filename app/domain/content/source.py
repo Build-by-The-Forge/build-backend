@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
 from app.domain.content.enums import (
     AuthorityLevel,
     ContentSourceType,
@@ -63,13 +64,13 @@ class ContentSource:
     ) -> ContentSource:
         clean_code = code.strip().upper()
         if not clean_code:
-            raise ValueError("source code cannot be empty")
+            raise ClientSafeError("source code cannot be empty")
         if not name.strip():
-            raise ValueError("source name cannot be empty")
+            raise ClientSafeError("source name cannot be empty")
         if not created_by.strip():
-            raise ValueError("created_by cannot be empty")
+            raise ClientSafeError("created_by cannot be empty")
         if not created_by_email.strip():
-            raise ValueError("created_by_email cannot be empty")
+            raise ClientSafeError("created_by_email cannot be empty")
 
         st = ContentSourceType(source_type) if isinstance(source_type, str) else source_type
         al = AuthorityLevel(authority_level) if isinstance(authority_level, str) else authority_level
@@ -78,25 +79,25 @@ class ContentSource:
         # Invariant 1: Regulatory authority requires platform visibility and no tenant scoping
         if al == AuthorityLevel.REGULATORY:
             if vis != VisibilityScope.PLATFORM:
-                raise ValueError("regulatory content sources must have platform visibility")
+                raise ClientSafeError("regulatory content sources must have platform visibility")
             if tenant_id is not None:
-                raise ValueError("regulatory content sources cannot be scoped to a single tenant")
+                raise ClientSafeError("regulatory content sources cannot be scoped to a single tenant")
 
         # Invariant 2: Non-platform visibility scopes require tenant_id
         if vis != VisibilityScope.PLATFORM and not tenant_id:
-            raise ValueError(f"visibility scope '{vis.value}' requires a valid tenant_id")
+            raise ClientSafeError(f"visibility scope '{vis.value}' requires a valid tenant_id")
 
         # Invariant 3: Specific sub-tenant visibility requirements
         if vis == VisibilityScope.FACULTY and not faculty_id:
-            raise ValueError("faculty visibility scope requires faculty_id")
+            raise ClientSafeError("faculty visibility scope requires faculty_id")
         if vis == VisibilityScope.DEPARTMENT and not department_id:
-            raise ValueError("department visibility scope requires department_id")
+            raise ClientSafeError("department visibility scope requires department_id")
         if vis == VisibilityScope.PROGRAMME and not programme_id:
-            raise ValueError("programme visibility scope requires programme_id")
+            raise ClientSafeError("programme visibility scope requires programme_id")
 
         # Invariant 4: Institutional authority requires institutional tenant association
         if al == AuthorityLevel.INSTITUTIONAL and vis == VisibilityScope.PLATFORM:
-            raise ValueError("institutional content sources cannot have platform-wide visibility")
+            raise ClientSafeError("institutional content sources cannot have platform-wide visibility")
 
         now = datetime.now(timezone.utc)
         source = cls(
@@ -150,12 +151,12 @@ class ContentSource:
         trust_policy: dict[str, Any] | None = None,
     ) -> None:
         if self.status == SourceStatus.REVOKED:
-            raise ValueError("cannot update metadata of a revoked content source")
+            raise ClientSafeError("cannot update metadata of a revoked content source")
 
         if name is not None:
             clean_name = name.strip()
             if not clean_name:
-                raise ValueError("source name cannot be empty")
+                raise ClientSafeError("source name cannot be empty")
             self.name = clean_name
 
         if description is not None:
@@ -185,9 +186,9 @@ class ContentSource:
 
     def deprecate(self, reason: str) -> None:
         if not reason.strip():
-            raise ValueError("deprecation reason cannot be empty")
+            raise ClientSafeError("deprecation reason cannot be empty")
         if self.status == SourceStatus.REVOKED:
-            raise ValueError("cannot deprecate a revoked content source")
+            raise ClientSafeError("cannot deprecate a revoked content source")
         if self.status == SourceStatus.DEPRECATED:
             return
 
@@ -206,7 +207,7 @@ class ContentSource:
 
     def revoke(self, reason: str) -> None:
         if not reason.strip():
-            raise ValueError("revocation reason cannot be empty")
+            raise ClientSafeError("revocation reason cannot be empty")
         if self.status == SourceStatus.REVOKED:
             return
 

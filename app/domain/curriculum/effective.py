@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.adoption import (
     AdoptionStatus,
     CurriculumOverride,
@@ -128,24 +129,15 @@ class EffectiveCurriculumResolver:
     ) -> EffectiveCurriculum:
         # 1. Verify Benchmark Pinning (Fail Closed)
         if adoption.benchmark_curriculum_id != benchmark.id:
-            raise ValueError(
-                f"adoption pinned benchmark ID '{adoption.benchmark_curriculum_id}' "
-                f"does not match loaded benchmark ID '{benchmark.id}'"
-            )
+            raise ClientSafeError("adoption pinned benchmark ID does not match loaded benchmark ID")
         if adoption.benchmark_version != benchmark.version:
-            raise ValueError(
-                f"adoption pinned benchmark version '{adoption.benchmark_version}' "
-                f"does not match loaded benchmark version '{benchmark.version}'"
-            )
+            raise ClientSafeError("adoption pinned benchmark version does not match loaded benchmark version")
         if (
             adoption.benchmark_fingerprint is not None
             and benchmark.review_fingerprint is not None
             and adoption.benchmark_fingerprint != benchmark.review_fingerprint
         ):
-            raise ValueError(
-                f"adoption pinned benchmark fingerprint '{adoption.benchmark_fingerprint}' "
-                f"does not match loaded benchmark review fingerprint '{benchmark.review_fingerprint}'"
-            )
+            raise ClientSafeError("adoption pinned benchmark fingerprint does not match loaded benchmark review fingerprint")
 
         # 2. Group Overrides and Detect Conflicts
         course_overrides_by_code: dict[str, list[CurriculumOverride]] = {}
@@ -164,7 +156,7 @@ class EffectiveCurriculumResolver:
         for code, ov_list in course_overrides_by_code.items():
             types = {o.override_type for o in ov_list}
             if OverrideType.MODIFY_COURSE in types and OverrideType.OMIT_COURSE in types:
-                raise ValueError(f"conflicting overrides for course '{code}': cannot modify and omit the same course")
+                raise ClientSafeError("conflicting overrides for course: cannot modify and omit the same course")
 
             # Detect duplicate field overrides on same course
             seen_fields: set[str] = set()
@@ -172,7 +164,7 @@ class EffectiveCurriculumResolver:
                 if o.override_type == OverrideType.MODIFY_COURSE and o.field_overrides:
                     for field_name in o.field_overrides:
                         if field_name in seen_fields:
-                            raise ValueError(f"duplicate field override '{field_name}' on course '{code}'")
+                            raise ClientSafeError("duplicate field override on course")
                         seen_fields.add(field_name)
 
         # 3. Resolve Benchmark Courses

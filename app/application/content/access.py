@@ -19,8 +19,10 @@ tenant (``ContentSource.is_accessible_by``).
 
 from __future__ import annotations
 
+from app.domain.client_safe import ClientMessage
 
-class ContentAccessError(ValueError):
+
+class ContentAccessError(ClientMessage, ValueError):
     """A refused content write. A ValueError, so existing handlers still
     catch it; routes map it by class, not by message."""
 

@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from app.domain.client_safe import ClientSafeError
+from app.domain.content.ai_report import public_failure_message, safe_error_code
 from app.domain.content.enums import AssetStatus, IngestionStatus
 from app.events.base import DomainEvent
 
@@ -53,24 +55,24 @@ class ContentAsset:
         asset_id: str | None = None,
     ) -> ContentAsset:
         if not source_id.strip():
-            raise ValueError("source_id cannot be empty")
+            raise ClientSafeError("source_id cannot be empty")
         if not file_name.strip():
-            raise ValueError("file_name cannot be empty")
+            raise ClientSafeError("file_name cannot be empty")
         if not mime_type.strip():
-            raise ValueError("mime_type cannot be empty")
+            raise ClientSafeError("mime_type cannot be empty")
         if file_size_bytes <= 0:
-            raise ValueError("file_size_bytes must be greater than 0")
+            raise ClientSafeError("file_size_bytes must be greater than 0")
         clean_sha = content_sha256.strip().lower()
         if not _HEX_64_PATTERN.match(clean_sha):
-            raise ValueError("content_sha256 must be a valid 64-character hex string")
+            raise ClientSafeError("content_sha256 must be a valid 64-character hex string")
         if not storage_uri.strip():
-            raise ValueError("storage_uri cannot be empty")
+            raise ClientSafeError("storage_uri cannot be empty")
         if not created_by.strip():
-            raise ValueError("created_by cannot be empty")
+            raise ClientSafeError("created_by cannot be empty")
         if not created_by_email.strip():
-            raise ValueError("created_by_email cannot be empty")
+            raise ClientSafeError("created_by_email cannot be empty")
         if asset_version < 1:
-            raise ValueError("asset_version must be at least 1")
+            raise ClientSafeError("asset_version must be at least 1")
 
         st = AssetStatus(status) if isinstance(status, str) else status
         ing_st = IngestionStatus(ingestion_status) if isinstance(ingestion_status, str) else ingestion_status
@@ -126,11 +128,11 @@ class ContentAsset:
     ) -> ContentAsset:
         """Creates an updated edition/version of this asset, transitioning current asset to SUPERSEDED."""
         if self.status == AssetStatus.REVOKED:
-            raise ValueError("cannot create a new version of a revoked asset")
+            raise ClientSafeError("cannot create a new version of a revoked asset")
 
         clean_new_sha = content_sha256.strip().lower()
         if clean_new_sha == self.content_sha256:
-            raise ValueError("new version must have different content bytes (SHA-256 is identical to current version)")
+            raise ClientSafeError("new version must have different content bytes (SHA-256 is identical to current version)")
 
         new_asset = ContentAsset.create(
             source_id=self.source_id,
@@ -167,7 +169,7 @@ class ContentAsset:
 
     def revoke(self, reason: str) -> None:
         if not reason.strip():
-            raise ValueError("revocation reason cannot be empty")
+            raise ClientSafeError("revocation reason cannot be empty")
         if self.status == AssetStatus.REVOKED:
             return
 
@@ -196,9 +198,9 @@ class ContentAsset:
 
         self.ingestion_status = new_status
         if error_code is not None:
-            self.metadata["error_code"] = error_code
+            self.metadata["error_code"] = safe_error_code(error_code)
         if error_message is not None:
-            self.metadata["error_message"] = error_message
+            self.metadata["error_message"] = public_failure_message(error_code)
 
         self.touch()
         self._events.append(

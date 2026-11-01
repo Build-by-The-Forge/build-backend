@@ -5,7 +5,7 @@ from app.application.tenant.membership_service import TenantMembershipService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
 from app.core.dependencies import get_current_principal, require_tenant_permission
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.membership import Membership
@@ -84,7 +84,7 @@ async def change_member_role(
 ) -> JSONResponse:
     role = payload.get("role")
     if not isinstance(role, str):
-        raise AppError("role must be a string", status_code=422)
+        raise ClientError("role must be a string", status_code=422)
     return _envelope(request, _member(await service.change_role(context, membership_id, role)))
 
 

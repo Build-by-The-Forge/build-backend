@@ -29,6 +29,7 @@ from app.core.metrics import (
     content_terminal_failures_total,
     content_uncertain_dispatches_total,
 )
+from app.domain.client_safe import ClientMessage, ClientSafeError
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import (
@@ -72,11 +73,11 @@ def owned_job(job: ContentIngestionJob | None, tenant_id: str, job_id: str) -> C
     exactly like a missing one, so a caller learns nothing about it.
     """
     if job is None or job.tenant_id is None or job.tenant_id != tenant_id:
-        raise ValueError(f"ContentIngestionJob with id '{job_id}' does not exist")
+        raise ClientSafeError("ContentIngestionJob does not exist")
     return job
 
 
-class UnmanagedAssetError(ValueError):
+class UnmanagedAssetError(ClientMessage, ValueError):
     """The asset's storage_uri is not the server-managed reference for its
     row (design section 10): it is never queued or sent to the AI-service."""
 
@@ -96,7 +97,7 @@ ASSET_DISPATCH_REFUSALS = frozenset({"ASSET_NOT_IN_MANAGED_STORAGE", "ASSET_OBJE
 
 def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> ContentAsset:
     if asset is None or asset.tenant_id is None or asset.tenant_id != tenant_id:
-        raise ValueError(f"ContentAsset with id '{asset_id}' does not exist")
+        raise ClientSafeError("ContentAsset does not exist")
     return asset
 
 
@@ -260,7 +261,7 @@ class DispatchIngestionJobHandler:
         except JobTenantMissing as exc:
             asset = await self._uow.assets.get_asset_by_id(job.asset_id)
             if asset is None:
-                raise ValueError(f"ContentAsset with id '{job.asset_id}' does not exist") from exc
+                raise ClientSafeError("ContentAsset does not exist") from exc
             job.ensure_dispatchable()
             return await self._record_dispatch_failure(job, asset, exc.error_code, str(exc), False)
         return await self._dispatch(job, actor)
@@ -270,11 +271,11 @@ class DispatchIngestionJobHandler:
     ) -> ContentIngestionJob:
         asset = await self._uow.assets.get_asset_by_id(job.asset_id)
         if asset is None:
-            raise ValueError(f"ContentAsset with id '{job.asset_id}' does not exist")
+            raise ClientSafeError("ContentAsset does not exist")
 
         source = await self._uow.sources.get_source_by_id(job.source_id)
         if source is None:
-            raise ValueError(f"ContentSource with id '{job.source_id}' does not exist")
+            raise ClientSafeError("ContentSource does not exist")
 
         # No callback URL is sent: AI-service reports only to its configured
         # BACKEND_CALLBACK_URL.
@@ -345,6 +346,7 @@ class DispatchIngestionJobHandler:
             attempt=job.attempt_count,
             error_code=_metric_error_code(error_code),
             retryable=retryable,
+            diagnostic=message,
         )
         asset.update_ingestion_status(IngestionStatus.FAILED, error_code=error_code, error_message=message)
         # queued -> failed is a recorded business outcome, not an error to
@@ -373,6 +375,7 @@ class DispatchIngestionJobHandler:
             error_code=_metric_error_code(getattr(error, "error_code", None) or "AI_DISPATCH_UNCERTAIN"),
             uncertain_attempt=int(job.metrics.get("uncertain_dispatch_count", 0)) + 1,
         )
+        logger.warning("content_job_dispatch_uncertain_detail", job_id=job.id, diagnostic=str(error))
         retry_same_attempt = job.defer_uncertain_dispatch(
             error_code=getattr(error, "error_code", "AI_DISPATCH_UNCERTAIN"),
             error_message=str(error),
@@ -442,6 +445,18 @@ class HandleAICallbackHandler:
                 return job, CallbackOutcome.LEGACY
             return job, CallbackOutcome.DUPLICATE
 
+        if cmd.error_message or cmd.details:
+            # The report's own words, for whoever investigates. They stop here: the job
+            # keeps what ai_report.py allows.
+            logger.warning(
+                "content_job_ai_report",
+                job_id=job.id,
+                event_id=cmd.event_id,
+                task_id=cmd.external_task_id,
+                error_code=_metric_error_code(cmd.error_code),
+                diagnostic=cmd.error_message,
+                details=cmd.details,
+            )
         previous_status = job.status
         outcome = job.apply_callback(
             event_type=cmd.event_type,
@@ -562,7 +577,7 @@ class ListIngestionJobsHandler:
         )
 
 
-class ReconcileMismatchError(Exception):
+class ReconcileMismatchError(ClientMessage, Exception):
     """AI-service reported on a task that is not the job's active attempt."""
 
     status_code = 502
@@ -701,7 +716,7 @@ class RecoverIngestionJobHandler:
         now: datetime | None = None,
     ) -> RecoverResult:
         if max_in_flight_seconds < 1:
-            raise ValueError("max_in_flight_seconds must be at least 1")
+            raise ClientSafeError("max_in_flight_seconds must be at least 1")
         status: AIServiceStatusResult | None = None
         callbacks: list[tuple[str, str]] = []
         if job.external_task_id and job.tenant_id:

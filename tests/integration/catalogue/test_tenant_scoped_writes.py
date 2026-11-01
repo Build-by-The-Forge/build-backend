@@ -194,5 +194,5 @@ async def test_client_tenant_id_is_rejected(client):
 
     assert response.status_code == 422
     assert response.json()["success"] is False
-    assert response.json()["data"] == {}
+    assert response.json()["data"] is None
     assert tenant_id not in response.text

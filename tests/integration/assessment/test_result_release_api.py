@@ -56,7 +56,7 @@ def result(client, h, attempt_id):
 
 def assert_withheld(response):
     assert response.status_code == 409
-    assert "RESULT_NOT_RELEASED" in response.text
+    assert response.json()["error"]["code"] == "RESULT_NOT_RELEASED"
     for leak in ("total_score", "percentage", "passed", "is_correct", "awarded_marks", "breakdown"):
         assert leak not in response.text
 

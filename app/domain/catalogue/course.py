@@ -16,6 +16,7 @@ from app.domain.catalogue.value_objects import (
     CourseTitle,
     DepartmentId,
 )
+from app.domain.client_safe import ClientSafeError
 
 if TYPE_CHECKING:
     from app.domain.catalogue.reference_material import ReferenceMaterial
@@ -127,7 +128,7 @@ class Course:
 
     def add_topic(self, topic: "Topic") -> None:
         if topic.course_id != self.id:
-            raise ValueError("topic course_id must match the parent course")
+            raise ClientSafeError("topic course_id must match the parent course")
         self.topics.append(topic)
         self.touch()
         self._events.append(
@@ -142,7 +143,7 @@ class Course:
 
     def add_reference(self, reference: "ReferenceMaterial") -> None:
         if reference.course_id != self.id:
-            raise ValueError("reference course_id must match the parent course")
+            raise ClientSafeError("reference course_id must match the parent course")
         self.references.append(reference)
         self.touch()
         self._events.append(

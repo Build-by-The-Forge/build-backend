@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: 0ad04cac02ac70f5511ba09b0808ff9549371e893533772f2dad374fee46eae5
+contract_sha256: ba7078d9a1ff234db1d85f94cb0de3157efdea2f0ef55c4acd52aac4feb2bbd2
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -53,39 +53,9 @@ contract_gaps:
   evidence: Reviewer decision at 976c88a.
 - id: G-20
   severity: High
-  summary: Mobile routes don't return the contract's envelopes or stable error codes
+  summary: Mobile routes don't return the contract's success envelope
   closes_in: M3-A
   findings:
-  - error_envelope DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
-  - error_envelope GET /assessment/assessments keys
-  - error_envelope GET /assessment/assessments/{assessment_id} keys
-  - error_envelope GET /assessment/attempts keys
-  - error_envelope GET /assessment/attempts/{attempt_id} keys
-  - error_envelope GET /assessment/attempts/{attempt_id}/answers keys
-  - error_envelope GET /assessment/attempts/{attempt_id}/questions keys
-  - error_envelope GET /assessment/attempts/{attempt_id}/result keys
-  - error_envelope GET /catalogue/courses keys
-  - error_envelope GET /catalogue/courses/{course_id} keys
-  - error_envelope GET /catalogue/courses/{course_id}/topics keys
-  - error_envelope GET /catalogue/topics/{topic_id}/learning-outcomes keys
-  - error_envelope GET /catalogue/topics/{topic_id}/reference-materials keys
-  - error_envelope GET /content/assets/{asset_id} keys
-  - error_envelope GET /content/sources keys
-  - error_envelope GET /content/sources/{source_id}/assets keys
-  - error_envelope GET /identity/me keys
-  - error_envelope GET /identity/memberships keys
-  - error_envelope POST /assessment/assessments/{assessment_id}/attempts keys
-  - error_envelope POST /assessment/attempts/{attempt_id}/submit keys
-  - error_envelope POST /identity/authenticate keys
-  - error_envelope POST /identity/forgot-password keys
-  - error_envelope POST /identity/refresh keys
-  - error_envelope POST /identity/resend-verification keys
-  - error_envelope POST /identity/reset-password keys
-  - error_envelope POST /identity/users keys
-  - error_envelope POST /identity/verify-email keys
-  - error_envelope POST /invitations/accept keys
-  - error_envelope POST /tenants/{slug}/join keys
-  - error_envelope PUT /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
   - success_envelope DELETE /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
   - success_envelope GET /assessment/assessments keys
   - success_envelope GET /assessment/assessments/{assessment_id} keys
@@ -107,12 +77,6 @@ contract_gaps:
   - success_envelope POST /assessment/assessments/{assessment_id}/attempts keys
   - success_envelope POST /assessment/attempts/{attempt_id}/submit keys
   - success_envelope PUT /assessment/attempts/{attempt_id}/answers/{assessment_question_id} keys
-- id: G-22
-  severity: Low
-  summary: X-Request-ID is accepted with no format or length check
-  closes_in: M3-A
-  findings:
-  - request_id_unvalidated GET /health/live
 - id: G-23
   severity: Low
   summary: Asset ordering has no unique tie-breaker
@@ -166,11 +130,6 @@ implementation_gaps:
   summary: Retrieval isn't limited to ready documents or to what this user may read
   closes_in: M4
   evidence: Phase 3 release record; ai-service retrieval.py.
-- id: G-08
-  severity: Medium
-  summary: The course list catches every exception and returns its text
-  closes_in: M3-A
-  evidence: Read from app/api/catalogue/courses.py.
 - id: G-09
   severity: Medium
   summary: No read routes for faculties, departments or programmes
@@ -249,6 +208,12 @@ implementation_gaps:
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
 closed:
+- id: G-08
+  summary: The course list caught every exception and returned its text
+  proof: tests/integration/test_error_envelope.py::test_an_unexpected_failure_on_the_course_list_reveals_nothing
+- id: G-22
+  summary: X-Request-ID was accepted with no format or length check
+  proof: tests/integration/test_error_envelope.py::test_an_unsafe_request_id_is_replaced
 - id: G-03
   summary: Students could read draft assessments
   proof: tests/integration/assessment/test_assessment_visibility.py::test_a_draft_by_direct_id_looks_like_it_does_not_exist

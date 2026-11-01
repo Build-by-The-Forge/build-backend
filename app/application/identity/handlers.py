@@ -20,7 +20,7 @@ from app.application.identity.commands import (
 from app.application.identity.ports.email_sender import EmailMessage
 from app.application.identity.ports.password_hasher import PasswordHasher
 from app.application.identity.ports.token_service import TokenService
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError, public_message
 from app.domain.identity.user import Session, User
 from app.domain.identity.value_objects import (
     AccountStatus,
@@ -82,15 +82,15 @@ class RegisterUserHandler:
         try:
             email = Email(command.email)
         except ValueError as exc:
-            raise AppError("invalid email format", status_code=422) from exc
+            raise ClientError("invalid email format", status_code=422) from exc
 
         if await self.repository.exists_by_email(email.value):
-            raise AppError("User already exists", status_code=409)
+            raise ClientError("User already exists", status_code=409)
 
         try:
             password = Password(command.password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise ClientError(public_message(exc, "invalid value"), status_code=422) from exc
 
         password_hash = self.password_hasher.hash(password)
         user = User(
@@ -111,17 +111,18 @@ class RegisterUserHandler:
         return saved_user
 
 
-class AuthenticationFailed(AppError):
+class AuthenticationFailed(ClientError):
     """Sign-in refused. Carries the account (if one matched) for the audit
     trail; the HTTP response is the same as a plain AppError."""
 
     def __init__(self, message: str, status_code: int, reason: str, user_id: str | None) -> None:
-        super().__init__(message, status_code=status_code)
+        code = "ACCOUNT_NOT_ACTIVE" if reason == "account_not_active" else "AUTH_INVALID_CREDENTIALS"
+        super().__init__(message, status_code=status_code, code=code)
         self.reason = reason
         self.user_id = user_id
 
 
-class CurrentPasswordIncorrect(AppError):
+class CurrentPasswordIncorrect(ClientError):
     def __init__(self) -> None:
         super().__init__("current password is incorrect", status_code=400)
 
@@ -221,7 +222,7 @@ class RefreshSessionHandler:
         self.refresh_idle_lifetime = refresh_idle_lifetime
 
     async def handle(self, command: RefreshSessionCommand) -> IssuedSession:
-        invalid = AppError("invalid refresh token", status_code=401)
+        invalid = ClientError("invalid refresh token", status_code=401, code="AUTH_REFRESH_INVALID")
         if not command.refresh_token:
             raise invalid
 
@@ -297,7 +298,7 @@ class LogoutSessionHandler:
     async def handle(self, command: LogoutSessionCommand) -> None:
         session = await self.session_repository.get_by_id(command.session_id)
         if session is None or session.user_id.value != command.user_id:
-            raise AppError("session not found", status_code=404)
+            raise ClientError("session not found", status_code=404)
 
         await RevokeSessionHandler(self.session_repository, self.refresh_token_repository).handle(command.session_id)
 
@@ -368,7 +369,7 @@ class ForgotPasswordHandler:
         try:
             email = Email(command.email)
         except ValueError as exc:
-            raise AppError("invalid email format", status_code=422) from exc
+            raise ClientError("invalid email format", status_code=422) from exc
 
         user = await self.repository.get_by_email(email.value)
         # Unknown and blocked accounts get no token; the caller's response
@@ -407,22 +408,22 @@ class ResetPasswordHandler:
     async def handle(self, command: ResetPasswordCommand) -> User:
         """Reset the password; return the account."""
         if not command.token:
-            raise AppError("invalid reset token", status_code=422)
+            raise ClientError("invalid reset token", status_code=422)
 
         try:
             password = Password(command.password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise ClientError(public_message(exc, "invalid value"), status_code=422) from exc
 
         user_id = await self.repository.consume_password_reset_token(hash_token(command.token))
         if user_id is None:
-            raise AppError("invalid reset token", status_code=401)
+            raise ClientError("invalid reset token", status_code=401, code="TOKEN_INVALID")
 
         user = await self.repository.get_by_id(user_id)
         # A blocked account must not regain access through reset; answer as
         # for a bad code so the response says nothing about the account.
         if user is None or not user.can_authenticate:
-            raise AppError("invalid reset token", status_code=401)
+            raise ClientError("invalid reset token", status_code=401, code="TOKEN_INVALID")
 
         user.change_password(password, self.password_hasher)
         await self.repository.save(user)
@@ -482,7 +483,7 @@ class RequestEmailVerificationHandler:
         try:
             email = Email(command.email)
         except ValueError as exc:
-            raise AppError("invalid email format", status_code=422) from exc
+            raise ClientError("invalid email format", status_code=422) from exc
 
         user = await self.repository.get_by_email(email.value)
         # Only pending accounts that may sign in get a code; the caller's
@@ -498,17 +499,17 @@ class VerifyEmailHandler:
 
     async def handle(self, command: VerifyEmailCommand) -> User:
         if not command.token:
-            raise AppError("invalid verification token", status_code=422)
+            raise ClientError("invalid verification token", status_code=422)
 
         user_id = await self.repository.consume_verification_token(hash_token(command.token))
         if user_id is None:
-            raise AppError("invalid verification token", status_code=401)
+            raise ClientError("invalid verification token", status_code=401, code="TOKEN_INVALID")
 
         user = await self.repository.get_by_id(user_id)
         # Verification only ever activates a pending account; it must not
         # bring back one that was locked, disabled or deleted.
         if user is None or not user.can_authenticate or user.status is not AccountStatus.PENDING_VERIFICATION:
-            raise AppError("invalid verification token", status_code=401)
+            raise ClientError("invalid verification token", status_code=401, code="TOKEN_INVALID")
 
         user.verify_email()
         await self.repository.save(user)
@@ -534,11 +535,11 @@ class ChangePasswordHandler:
         try:
             new_password = Password(command.new_password)
         except ValueError as exc:
-            raise AppError(str(exc), status_code=422) from exc
+            raise ClientError(public_message(exc, "invalid value"), status_code=422) from exc
 
         user = await self.repository.get_by_id(command.user_id)
         if user is None or not user.can_authenticate:
-            raise AppError("invalid credentials", status_code=401)
+            raise ClientError("invalid credentials", status_code=401, code="AUTH_INVALID_CREDENTIALS")
 
         # Not 401: the caller's token is fine, and a 401 would push clients
         # into a pointless refresh. Input that cannot be a valid password
@@ -550,7 +551,7 @@ class ChangePasswordHandler:
         if current_password is None or not self.password_hasher.verify(current_password, user.password_hash):
             raise CurrentPasswordIncorrect()
         if command.new_password == command.current_password:
-            raise AppError("new password must differ from the current password", status_code=422)
+            raise ClientError("new password must differ from the current password", status_code=422)
 
         user.change_password(new_password, self.password_hasher)
         await self.repository.save(user)
@@ -572,5 +573,5 @@ class GetCurrentUserHandler:
     async def handle(self, command: GetCurrentUserCommand) -> User:
         user = await self.repository.get_by_id(command.user_id)
         if user is None:
-            raise AppError("user not found", status_code=404)
+            raise ClientError("user not found", status_code=404)
         return user

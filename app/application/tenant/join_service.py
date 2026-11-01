@@ -25,7 +25,7 @@ from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
 )
-from app.core.exceptions import AppError
+from app.core.exceptions import ClientError, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.tenant.errors import MembershipAlreadyExistsError
 from app.domain.tenant.join_policy import JoinPolicyError, TenantJoinPolicy
@@ -55,7 +55,7 @@ class TenantJoinService:
             async with self._uow() as uow:
                 tenant = await uow.tenants.get_by_slug(slug.strip().lower())
                 if tenant is None or not tenant.is_active:
-                    raise AppError("tenant not found", status_code=404)
+                    raise ClientError("tenant not found", status_code=404)
                 existing = await uow.memberships.get_by_tenant_user(tenant.id.value, user_id)
                 if existing is not None:
                     return self._existing(tenant, existing)
@@ -73,7 +73,7 @@ class TenantJoinService:
                     else None
                 )
                 if role is None:
-                    raise AppError(NOT_ELIGIBLE, status_code=403)
+                    raise ClientError(NOT_ELIGIBLE, status_code=403)
 
                 membership = Membership.create(tenant_id=tenant.id, user_id=UserId(user_id), role=role)
                 await uow.memberships.add(membership)
@@ -98,7 +98,7 @@ class TenantJoinService:
     @staticmethod
     def _existing(tenant: Any, membership: Membership) -> JoinResult:
         if not membership.is_active:
-            raise AppError(
+            raise ClientError(
                 "your membership of this tenant was revoked; ask an administrator",
                 status_code=403,
             )
@@ -115,7 +115,7 @@ class TenantJoinService:
         try:
             role = MembershipRole(default_role)
         except ValueError:
-            raise AppError(f"unknown role: {default_role!r}", status_code=422) from None
+            raise ClientError("unknown role", status_code=422) from None
         async with self._uow() as uow:
             policy = await uow.join_policies.get(context.tenant_id) or TenantJoinPolicy(tenant_id=TenantId(context.tenant_id))
             try:
@@ -126,7 +126,7 @@ class TenantJoinService:
                     updated_by_user_id=context.user_id,
                 )
             except JoinPolicyError as exc:
-                raise AppError(str(exc), status_code=422) from exc
+                raise ClientError(public_message(exc, "invalid join policy"), status_code=422) from exc
             await uow.join_policies.save(policy)
 
         await self._events.record(

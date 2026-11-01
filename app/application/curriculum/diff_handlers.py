@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.application.curriculum.diff_commands import (
     CompareBenchmarkCurriculaCommand,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.curriculum.benchmark import BenchmarkCourse
 from app.domain.curriculum.diff import (
     BenchmarkCurriculumDiff,
@@ -21,11 +22,11 @@ class CompareBenchmarkCurriculaHandler:
     async def handle(self, command: CompareBenchmarkCurriculaCommand) -> BenchmarkCurriculumDiff:
         source_curriculum = await self.repository.get_by_id(command.source_curriculum_id)
         if source_curriculum is None:
-            raise ValueError(f"source benchmark curriculum '{command.source_curriculum_id}' not found")
+            raise ClientSafeError("source benchmark curriculum not found")
 
         target_curriculum = await self.repository.get_by_id(command.target_curriculum_id)
         if target_curriculum is None:
-            raise ValueError(f"target benchmark curriculum '{command.target_curriculum_id}' not found")
+            raise ClientSafeError("target benchmark curriculum not found")
 
         # Validate both belong to the same benchmark identity
         if (
@@ -33,11 +34,7 @@ class CompareBenchmarkCurriculaHandler:
             or source_curriculum.programme_code != target_curriculum.programme_code
             or source_curriculum.degree_level != target_curriculum.degree_level
         ):
-            raise ValueError(
-                f"cannot compare curricula of different programmes "
-                f"('{source_curriculum.discipline_group}/{source_curriculum.programme_code}' vs "
-                f"'{target_curriculum.discipline_group}/{target_curriculum.programme_code}')"
-            )
+            raise ClientSafeError("cannot compare curricula of different programmes")
 
         source_courses = await self._load_full_courses(source_curriculum.id)
         target_courses = await self._load_full_courses(target_curriculum.id)
