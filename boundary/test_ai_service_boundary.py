@@ -6,10 +6,12 @@ narrows), C29 (body cannot name an identity) at AI-service.
 
 import base64
 import json
+import os
 import time
 import uuid
 
 import pytest
+from redis import Redis
 
 from boundary.conftest import (
     A2B,
@@ -302,17 +304,29 @@ def test_dispatch_idempotency_follows_the_signed_tenant(ai):
     assert other.json()["external_task_id"] != first.json()["external_task_id"]
 
 
+def _task_records_for(job_id: str) -> list[dict[str, str]]:
+    """What the AI service holds, read without going through its API. The dispatch
+    answer can't be the evidence here: this scenario is the caller never getting it."""
+    with Redis.from_url(os.environ["BOUNDARY_AI_REDIS_URL"], decode_responses=True) as client:
+        records = [client.hgetall(key) for key in client.scan_iter(match="{ai-tasks}:ingest:task:*", count=500)]
+    return [record for record in records if record.get("job_id") == job_id]
+
+
 def test_a_retry_after_a_lost_response_finds_the_accepted_task(ai):
     # The service accepted and the caller never saw the answer: the backend treats that
-    # outcome as uncertain and retries the same key, which must not start a second task.
+    # outcome as uncertain and retries the same key. Nothing from the first response
+    # is read, so all the retry can rely on is what the service recorded.
     body = dispatch_body()
-    lost = _dispatch(ai, body, TENANT)
-    assert lost.status_code == 202, lost.text
+    _dispatch(ai, body, TENANT)
 
     retried = _dispatch(ai, body, TENANT)
     assert retried.status_code in (200, 202), retried.text
     assert retried.json()["status"] == "DUPLICATE"
-    assert retried.json()["external_task_id"] == lost.json()["external_task_id"]
+
+    # Exactly one task exists for this work, the one the retry was told about.
+    records = _task_records_for(body["job_id"])
+    assert [r["external_task_id"] for r in records] == [retried.json()["external_task_id"]], records
+    assert records[0]["tenant_id"] == TENANT
 
 
 def test_the_same_key_for_different_work_is_refused(ai):
