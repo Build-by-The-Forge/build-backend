@@ -67,10 +67,10 @@ A faster order doesn't weaken any acceptance criteria. M3-D isn't done because u
 
 1. AI-1: merged (ai-service #42).
 2. This register: merged (#67).
-3. The boundary gate: fixes merged (#68, #69). The acceptance bar below is still open.
-4. M3-A, blocked until that bar is met.
+3. The boundary gate: fixes merged (#68, #69), and the acceptance bar below is met.
+4. M3-A, authorized to begin once this register update merges.
 
-**Boundary gate acceptance bar, before M3-A**
+**Boundary gate acceptance bar, before M3-A: met**
 
 - 40 consecutive full gate runs against the same pinned commits, after both fixes.
 - Every first-attempt result is recorded. A rerun never erases a failure.
@@ -78,6 +78,12 @@ A faster order doesn't weaken any acceptance criteria. M3-D isn't done because u
 - A failure is preserved and diagnosed. After a corrective change, the count restarts from zero on new pinned commits.
 
 Forty clean runs are a practical confidence check, not proof of reliability. They sit alongside the root-cause fixes and regression tests.
+
+The 40-run boundary-gate requirement is met. All 40 full executions passed on their first attempt against the same pinned merge commits (`backend: 9dd8de6`, `ai-service: 0553f35`). Executions were independently isolated and dispatched in sequence, with up to eight running concurrently. No retries, skipped tests or count variations occurred. This establishes 40 consecutive clean executions by campaign dispatch order, but does not constitute a strictly sequential or long-duration soak test.
+
+Ledger of all 40 runs: [#70](https://github.com/Build-by-The-Forge/build-backend/pull/70#issuecomment-6561912352). Accepted by the reviewer on 2026-11-01.
+
+Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milestone, and `GATE_OPEN` stays `False`.
 
 **M-track**
 
@@ -90,6 +96,12 @@ Forty clean runs are a practical confidence check, not proof of reliability. The
 11. M7 on pinned SHAs. Its test design can start at any time.
 
 **L-track, independently:** AI-1, then L4 after M3-A, then memory activation under its own approval once every gate condition is implemented and verified.
+
+## Open incidents
+
+| Incident | Status | Closes when |
+|---|---|---|
+| Commit `067d980` (closed PR #66) was pushed to a public branch with an internal audit file | **Open.** GitHub Support purge request outstanding; treat the file as publicly accessible | GitHub confirms the purge |
 
 ## Deferred risks
 
