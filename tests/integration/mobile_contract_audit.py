@@ -134,6 +134,8 @@ def _envelope_problem(response) -> str | None:
         error = body["error"]
         if body["success"] is not False or body["data"] is not None or not isinstance(error, dict) or "code" not in error:
             return "error_shape"
+        if error["code"] not in load_spec()["components"]["schemas"]["ErrorCode"]["enum"]:
+            return "unregistered_code"
     elif body["success"] is not True or body["error"] is not None:
         return "success_shape"
     return None

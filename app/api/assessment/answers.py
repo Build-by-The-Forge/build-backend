@@ -8,6 +8,7 @@ from app.api.assessment.schemas import (
 )
 from app.application.assessment.attempt_answer_service import AttemptAnswerService
 from app.bootstrap.container import build_container
+from app.core.exceptions import AppError
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
@@ -39,8 +40,10 @@ async def save_answer(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except (AttemptAlreadySubmittedError, AttemptExpiredError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AttemptAlreadySubmittedError as exc:
+        raise AppError(str(exc), status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
+    except AttemptExpiredError as exc:
+        raise AppError(str(exc), status_code=409, code="ATTEMPT_EXPIRED") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _response(request, answer)
@@ -95,8 +98,10 @@ async def delete_answer(
             context.tenant_id,
             context.user_id,
         )
-    except (AttemptAlreadySubmittedError, AttemptExpiredError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except AttemptAlreadySubmittedError as exc:
+        raise AppError(str(exc), status_code=409, code="ATTEMPT_ALREADY_SUBMITTED") from exc
+    except AttemptExpiredError as exc:
+        raise AppError(str(exc), status_code=409, code="ATTEMPT_EXPIRED") from exc
     if deleted is None:
         raise HTTPException(status_code=404, detail="attempt not found")
     return JSONResponse(

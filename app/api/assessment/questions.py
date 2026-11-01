@@ -24,28 +24,17 @@ async def create_question(
     payload: CreateQuestionRequest,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_QUESTION_CREATE)),
 ) -> JSONResponse:
-    try:
-        question = await service.create_question(
-            topic_id=payload.topic_id,
-            question_type=payload.question_type,
-            prompt=payload.prompt,
-            difficulty=payload.difficulty,
-            marks=payload.marks,
-            explanation=payload.explanation,
-            learning_outcome_id=payload.learning_outcome_id,
-            options=[option.model_dump() for option in payload.options],
-            tenant_id=context.tenant_id,
-        )
-    except Exception as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": getattr(request.state, "request_id", None),
-            },
-        )
+    question = await service.create_question(
+        topic_id=payload.topic_id,
+        question_type=payload.question_type,
+        prompt=payload.prompt,
+        difficulty=payload.difficulty,
+        marks=payload.marks,
+        explanation=payload.explanation,
+        learning_outcome_id=payload.learning_outcome_id,
+        options=[option.model_dump() for option in payload.options],
+        tenant_id=context.tenant_id,
+    )
 
     if question is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="question not found")

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Request, status
 
 from app.application.identity.ports.token_service import InvalidTokenError
+from app.core.exceptions import AppError
 from app.core.authorization import Permission, authorization
 from app.core.principal import AuthenticatedPrincipal
 from app.core.tenant_context import TenantContext
@@ -68,11 +69,8 @@ async def get_current_principal(request: Request, uow: UnitOfWork = Depends(get_
     )
 
 
-def _verification_required() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="email verification required",
-    )
+def _verification_required() -> AppError:
+    return AppError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED")
 
 
 async def get_verified_principal(
@@ -92,10 +90,7 @@ async def get_current_tenant_context(
 ) -> TenantContext:
     tenant_slug = request.headers.get("x-tenant-slug")
     if not tenant_slug:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="tenant context is required",
-        )
+        raise AppError("tenant context is required", status_code=400, code="TENANT_REQUIRED")
     return await _resolve_tenant_context(tenant_slug, principal, uow)
 
 
@@ -114,17 +109,11 @@ async def _resolve_tenant_context(tenant_slug: str, principal: AuthenticatedPrin
 
     tenant = await AsyncSqlAlchemyTenantRepository(uow.session).get_by_slug(tenant_slug)
     if tenant is None or not tenant.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="tenant access denied",
-        )
+        raise AppError("tenant access denied", status_code=403, code="TENANT_ACCESS_DENIED")
 
     membership = await AsyncSqlAlchemyMembershipRepository(uow.session).get_by_tenant_user(tenant.id.value, principal.user_id)
     if membership is None or not membership.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="tenant access denied",
-        )
+        raise AppError("tenant access denied", status_code=403, code="TENANT_ACCESS_DENIED")
 
     return TenantContext(
         user_id=principal.user_id,

@@ -33,18 +33,7 @@ async def list_courses(
     department_id: str | None = None,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    try:
-        courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
-    except Exception as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": getattr(request.state, "request_id", None),
-            },
-        )
+    courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -110,28 +99,17 @@ async def create_course(
     payload: CreateCourseRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
 ) -> JSONResponse:
-    try:
-        course = await service.create_course(
-            tenant_id=context.tenant_id,
-            department_id=payload.department_id,
-            code=payload.code,
-            title=payload.title,
-            slug=payload.slug,
-            credit_units=payload.credit_units,
-            level=payload.level,
-            semester=payload.semester,
-            description=payload.description,
-        )
-    except Exception as exc:
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": getattr(request.state, "request_id", None),
-            },
-        )
+    course = await service.create_course(
+        tenant_id=context.tenant_id,
+        department_id=payload.department_id,
+        code=payload.code,
+        title=payload.title,
+        slug=payload.slug,
+        credit_units=payload.credit_units,
+        level=payload.level,
+        semester=payload.semester,
+        description=payload.description,
+    )
 
     response = CourseResponse(
         id=course.id.value,

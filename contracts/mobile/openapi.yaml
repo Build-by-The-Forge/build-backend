@@ -1529,7 +1529,10 @@ components:
         - EMAIL_VERIFICATION_REQUIRED
         - TENANT_ACCESS_DENIED
         - PERMISSION_DENIED
+        - BAD_REQUEST
         - RESOURCE_NOT_FOUND
+        - METHOD_NOT_ALLOWED
+        - CONFLICT
         - UPLOAD_READ_TIMEOUT
         - IDEMPOTENCY_KEY_REUSED
         - DUPLICATE_CONTENT
@@ -1548,6 +1551,7 @@ components:
         - AI_UPSTREAM_ERROR
         - AI_UNAVAILABLE
         - OBJECT_STORAGE_UNAVAILABLE
+        - SERVICE_UNAVAILABLE
     ValidationDetails:
       type: object
       required: [fields]

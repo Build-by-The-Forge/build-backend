@@ -42,18 +42,7 @@ async def register_user(request: Request, payload: dict[str, str]) -> JSONRespon
     request_id = getattr(request.state, "request_id", None)
     await throttle.register(_client_ip(request))
 
-    try:
-        user = await service.register_user(email, password)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    user = await service.register_user(email, password)
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -98,15 +87,7 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
         elif exc.status_code == status.HTTP_403_FORBIDDEN:
             # Only reachable with the right password: not a guessing failure.
             await throttle.login_succeeded(email, ip)
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+        raise
 
     await throttle.login_succeeded(email, ip)
     return _issued_session_response(issued, request_id)
@@ -118,18 +99,7 @@ async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResp
     request_id = getattr(request.state, "request_id", None)
     await throttle.refresh(_client_ip(request))
 
-    try:
-        issued = await service.refresh_session(refresh_token)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    issued = await service.refresh_session(refresh_token)
 
     return _issued_session_response(issued, request_id)
 
@@ -179,18 +149,7 @@ async def logout_session(
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
 
-    try:
-        await service.logout_session(principal.session_id, principal.user_id)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    await service.logout_session(principal.session_id, principal.user_id)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -203,18 +162,7 @@ async def verify_email(request: Request, payload: dict[str, str]) -> JSONRespons
     request_id = getattr(request.state, "request_id", None)
     await throttle.verify_email(_client_ip(request))
 
-    try:
-        user = await service.verify_email(payload.get("token", ""))
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    user = await service.verify_email(payload.get("token", ""))
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -233,18 +181,7 @@ async def resend_verification(request: Request, payload: dict[str, str]) -> JSON
     email = payload.get("email", "")
     await throttle.resend_verification(email, _client_ip(request))
 
-    try:
-        await service.request_email_verification(email)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    await service.request_email_verification(email)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -263,18 +200,7 @@ async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResp
     request_id = getattr(request.state, "request_id", None)
     await throttle.forgot_password(email, _client_ip(request))
 
-    try:
-        await service.forgot_password(email)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    await service.forgot_password(email)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -295,18 +221,7 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
     ip = _client_ip(request)
     await throttle.reset_password(ip)
 
-    try:
-        email = await service.reset_password(token, password)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    email = await service.reset_password(token, password)
 
     await throttle.password_reset_completed(email, ip)
     return JSONResponse(
@@ -340,15 +255,7 @@ async def change_password(
     except AppError as exc:
         if isinstance(exc, CurrentPasswordIncorrect):
             await throttle.password_change_failed(principal.user_id)
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+        raise
 
     await throttle.password_change_succeeded(principal.user_id)
     return JSONResponse(
@@ -369,18 +276,7 @@ async def get_current_user(
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
 
-    try:
-        user = await service.get_current_user(principal.user_id)
-    except AppError as exc:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "success": False,
-                "data": {},
-                "meta": {"error": str(exc)},
-                "request_id": request_id,
-            },
-        )
+    user = await service.get_current_user(principal.user_id)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

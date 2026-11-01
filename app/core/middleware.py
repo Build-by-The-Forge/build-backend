@@ -1,5 +1,4 @@
 import time
-import uuid
 from collections.abc import Awaitable, Callable
 
 import structlog
@@ -8,7 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from app.core.metrics import errors_total, requests_total
-from app.core.request_context import RequestMeta, client_ip, current_request
+from app.core.request_context import RequestMeta, accepted_request_id, client_ip, current_request
 
 logger = structlog.get_logger(__name__)
 
@@ -19,7 +18,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+        request_id = accepted_request_id(request.headers.get("x-request-id"))
         request.state.request_id = request_id
         request.state.start_time = time.perf_counter()
         context_token = current_request.set(

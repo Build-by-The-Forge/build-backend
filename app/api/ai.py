@@ -89,8 +89,8 @@ def _envelope(request: Request, data: dict[str, object]) -> JSONResponse:
 def _failed(exc: AIAssistantError) -> AppError:
     # The client learns only that the AI step failed, not why.
     if exc.unavailable:
-        return AppError("ai service unavailable", status_code=503)
-    return AppError("ai service error", status_code=502)
+        return AppError("ai service unavailable", status_code=503, code="AI_UNAVAILABLE")
+    return AppError("ai service error", status_code=502, code="AI_UPSTREAM_ERROR")
 
 
 @router.post("/chat")

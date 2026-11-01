@@ -79,7 +79,7 @@ def test_wrong_current_password_is_refused_without_a_401(client):
     for wrong in ("WrongPass12345!", "short", "x" * 500):
         resp = _change(client, mine["access_token"], current_password=wrong)
         assert resp.status_code == 400
-        assert resp.json()["meta"]["error"] == "current password is incorrect"
+        assert resp.json()["error"]["message"] == "current password is incorrect"
 
     assert _login(client, email, PASSWORD).status_code == 200
     assert _whoami(client, mine["access_token"]).status_code == 200

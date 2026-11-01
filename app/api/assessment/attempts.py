@@ -14,6 +14,7 @@ from app.application.ai.memory_reporting import LearningMemoryReporter
 from app.application.assessment.attempt_commands import AttemptQuestionSnapshot
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
+from app.core.exceptions import AppError
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.tenant_context import TenantContext
@@ -39,7 +40,7 @@ async def start_attempt(
     try:
         attempt = await service.start_attempt(assessment_id, context.tenant_id, context.user_id)
     except AttemptLimitReachedError as exc:
-        raise HTTPException(status_code=409, detail="ATTEMPT_LIMIT_REACHED") from exc
+        raise AppError("attempt limit reached", status_code=409, code="ATTEMPT_LIMIT_REACHED") from exc
     except ValueError as exc:
         if str(exc) == "assessment not found":
             raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -144,13 +145,10 @@ async def get_attempt_result(
             is_staff=is_staff,
         )
     except ResultNotReleasedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="RESULT_NOT_RELEASED") from exc
+        raise AppError("result not released", status_code=409, code="RESULT_NOT_RELEASED") from exc
     except ValueError as exc:
         if str(exc) == "attempt is not submitted":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="attempt is not submitted",
-            ) from exc
+            raise AppError("attempt is not submitted", status_code=409, code="ATTEMPT_NOT_SUBMITTED") from exc
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),

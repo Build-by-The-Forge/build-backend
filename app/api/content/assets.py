@@ -21,6 +21,7 @@ from app.application.content.upload import (
     UploadResult,
 )
 from app.bootstrap.container import build_container
+from app.core.exceptions import error_response
 from app.core.authorization import Permission, authorization
 from app.core.config import settings
 from app.core.dependencies import require_permission
@@ -144,15 +145,7 @@ async def get_asset(
 ) -> JSONResponse:
     asset = await service.get_asset(asset_id=asset_id, tenant_id=context.tenant_id)
     if asset is None:
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={
-                "error": {
-                    "code": "ASSET_NOT_FOUND",
-                    "message": f"ContentAsset with id '{asset_id}' not found",
-                }
-            },
-        )
+        return error_response(request, status.HTTP_404_NOT_FOUND, "RESOURCE_NOT_FOUND", "asset not found")
 
     resp_data = asset_view(ContentAssetResponse.from_domain(asset).model_dump(mode="json"), context)
     return JSONResponse(status_code=status.HTTP_200_OK, content={"data": resp_data})

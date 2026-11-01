@@ -156,7 +156,7 @@ class UserService:
                 user_id=session.user_id.value if session else None,
                 metadata={"session_id": reuse.session_id},
             )
-            raise AppError("invalid refresh token", status_code=401) from None
+            raise AppError("invalid refresh token", status_code=401, code="AUTH_REFRESH_INVALID") from None
 
         self._publish_events(issued.session.pull_events())
         return issued

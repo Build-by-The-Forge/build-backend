@@ -19,7 +19,7 @@ def _login(client, email, password):
 
 def _assert_429(resp):
     assert resp.status_code == 429
-    assert resp.json()["meta"]["error"] == "too many requests"
+    assert resp.json()["error"]["message"] == "too many requests"
     assert int(resp.headers["Retry-After"]) > 0
 
 

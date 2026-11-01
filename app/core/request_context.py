@@ -2,12 +2,24 @@
 (for example the security-event recorder)."""
 
 import ipaddress
+import re
+import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass
 
 from fastapi import Request
 
 from app.core.config import settings
+
+
+_REQUEST_ID = re.compile(r"[A-Za-z0-9._:-]{1,128}")
+
+
+def accepted_request_id(sent: str | None) -> str:
+    """The client's ID if it is safe to log and return, otherwise a new one."""
+    if sent is not None and _REQUEST_ID.fullmatch(sent):
+        return sent
+    return str(uuid.uuid4())
 
 
 @dataclass(frozen=True, slots=True)

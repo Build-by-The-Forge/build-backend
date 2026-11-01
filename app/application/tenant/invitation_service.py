@@ -190,7 +190,7 @@ class TenantInvitationService:
                     email_verified=user.email_verified,
                 )
             except InvitationRequiresVerifiedEmailError as exc:
-                raise AppError("email verification required", status_code=403) from exc
+                raise AppError("email verification required", status_code=403, code="EMAIL_VERIFICATION_REQUIRED") from exc
             except InvitationEmailMismatchError as exc:
                 raise AppError(str(exc), status_code=403) from exc
             except (InvitationNotPendingError, InvitationExpiredError) as exc:

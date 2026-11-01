@@ -18,7 +18,13 @@ from collections.abc import Sequence
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-_BODY = json.dumps({"success": False, "data": {}, "meta": {"error": "request body too large"}}).encode()
+from app.core.exceptions import error_body
+from app.core.request_context import accepted_request_id
+
+def _too_large_body(scope: Scope) -> tuple[str, bytes]:
+    # Outermost middleware: the request context has not run, so the ID is settled here.
+    request_id = accepted_request_id(Headers(scope=scope).get("x-request-id"))
+    return request_id, json.dumps(error_body(request_id, "UPLOAD_TOO_LARGE", "request body too large")).encode()
 
 
 class _TooLarge(Exception):
@@ -57,7 +63,7 @@ class RequestBodyLimitMiddleware:
         limit = self._limit_for(scope)
         declared = Headers(scope=scope).get("content-length")
         if declared is not None and declared.isdigit() and int(declared) > limit:
-            await _reject(send)
+            await _reject(scope, send)
             return
 
         received = 0
@@ -82,15 +88,20 @@ class RequestBodyLimitMiddleware:
             await self.app(scope, limited_receive, tracking_send)
         except _TooLarge:
             if not started:
-                await _reject(send)
+                await _reject(scope, send)
 
 
-async def _reject(send: Send) -> None:
+async def _reject(scope: Scope, send: Send) -> None:
+    request_id, body = _too_large_body(scope)
     await send(
         {
             "type": "http.response.start",
             "status": 413,
-            "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(_BODY)).encode())],
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+                (b"x-request-id", request_id.encode()),
+            ],
         }
     )
-    await send({"type": "http.response.body", "body": _BODY})
+    await send({"type": "http.response.body", "body": body})

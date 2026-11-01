@@ -116,7 +116,8 @@ class AuthenticationFailed(AppError):
     trail; the HTTP response is the same as a plain AppError."""
 
     def __init__(self, message: str, status_code: int, reason: str, user_id: str | None) -> None:
-        super().__init__(message, status_code=status_code)
+        code = "ACCOUNT_NOT_ACTIVE" if reason == "account_not_active" else "AUTH_INVALID_CREDENTIALS"
+        super().__init__(message, status_code=status_code, code=code)
         self.reason = reason
         self.user_id = user_id
 
@@ -221,7 +222,7 @@ class RefreshSessionHandler:
         self.refresh_idle_lifetime = refresh_idle_lifetime
 
     async def handle(self, command: RefreshSessionCommand) -> IssuedSession:
-        invalid = AppError("invalid refresh token", status_code=401)
+        invalid = AppError("invalid refresh token", status_code=401, code="AUTH_REFRESH_INVALID")
         if not command.refresh_token:
             raise invalid
 
@@ -416,13 +417,13 @@ class ResetPasswordHandler:
 
         user_id = await self.repository.consume_password_reset_token(hash_token(command.token))
         if user_id is None:
-            raise AppError("invalid reset token", status_code=401)
+            raise AppError("invalid reset token", status_code=401, code="TOKEN_INVALID")
 
         user = await self.repository.get_by_id(user_id)
         # A blocked account must not regain access through reset; answer as
         # for a bad code so the response says nothing about the account.
         if user is None or not user.can_authenticate:
-            raise AppError("invalid reset token", status_code=401)
+            raise AppError("invalid reset token", status_code=401, code="TOKEN_INVALID")
 
         user.change_password(password, self.password_hasher)
         await self.repository.save(user)
@@ -502,13 +503,13 @@ class VerifyEmailHandler:
 
         user_id = await self.repository.consume_verification_token(hash_token(command.token))
         if user_id is None:
-            raise AppError("invalid verification token", status_code=401)
+            raise AppError("invalid verification token", status_code=401, code="TOKEN_INVALID")
 
         user = await self.repository.get_by_id(user_id)
         # Verification only ever activates a pending account; it must not
         # bring back one that was locked, disabled or deleted.
         if user is None or not user.can_authenticate or user.status is not AccountStatus.PENDING_VERIFICATION:
-            raise AppError("invalid verification token", status_code=401)
+            raise AppError("invalid verification token", status_code=401, code="TOKEN_INVALID")
 
         user.verify_email()
         await self.repository.save(user)
@@ -538,7 +539,7 @@ class ChangePasswordHandler:
 
         user = await self.repository.get_by_id(command.user_id)
         if user is None or not user.can_authenticate:
-            raise AppError("invalid credentials", status_code=401)
+            raise AppError("invalid credentials", status_code=401, code="AUTH_INVALID_CREDENTIALS")
 
         # Not 401: the caller's token is fine, and a 401 would push clients
         # into a pointless refresh. Input that cannot be a valid password
