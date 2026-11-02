@@ -215,3 +215,42 @@ async def test_two_users_racing_for_one_new_device_id_never_fail(client):
     async with SessionLocal() as session:
         count = await session.execute(text("select count(*) from devices where id = :d"), {"d": device_id})
         assert count.scalar_one() == 1
+
+
+@pytest.mark.parametrize("same_user", [False, True])
+async def test_losing_the_race_for_a_device_id_is_answered_by_the_constraint(client, monkeypatch, same_user):
+    # Forced: the first look finds nothing, as if the other sign-in hadn't committed, and
+    # the row is there. The insert must hit the constraint, inside its savepoint.
+    winner = await _registered_id(client)
+    loser = winner if same_user else await _registered_id(client)
+    device_id = str(uuid4())
+    async with SessionLocal() as session:
+        assert await SQLAlchemySessionRepository(session).claim_device(winner, device_id) is True
+        await session.commit()
+
+    real = SQLAlchemySessionRepository._device_owner
+    looks: list[str | None] = []
+
+    async def stale_first_look(self, wanted):
+        owner = await real(self, wanted)
+        looks.append(owner)
+        return None if len(looks) == 1 else owner
+
+    monkeypatch.setattr(SQLAlchemySessionRepository, "_device_owner", stale_first_look)
+    async with SessionLocal() as session:
+        claimed = await SQLAlchemySessionRepository(session).claim_device(loser, device_id)
+        # The transaction survived the conflict, so the sign-in can carry on and commit.
+        assert (await session.execute(text("select 1"))).scalar_one() == 1
+        await session.commit()
+
+    assert claimed is same_user
+    # Two looks prove the conflict branch ran, and it read the real owner.
+    assert looks == [winner, winner]
+
+
+async def _registered_id(client) -> str:
+    email = f"smoke-{uuid4().hex}@example.com"
+    registered = await client.post("/identity/users", json={"email": email, "password": PASSWORD})
+    assert registered.status_code in (201, 202), registered.text
+    async with SessionLocal() as session:
+        return (await session.execute(text("select id from users where email = :e"), {"e": email})).scalar_one()
