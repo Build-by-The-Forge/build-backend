@@ -80,14 +80,6 @@ implementation_gaps:
   summary: Retrieval isn't limited to ready documents or to what this user may read
   closes_in: M4
   evidence: Phase 3 release record; ai-service retrieval.py.
-- id: G-09
-  severity: Medium
-  summary: No read routes for faculties, departments or programmes
-  closes_in: M3-C
-  findings:
-  - missing_route GET /catalogue/departments
-  - missing_route GET /catalogue/faculties
-  - missing_route GET /catalogue/programmes
 - id: G-11
   severity: Medium
   summary: The 60-second read limit makes large uploads fail on slower connections
@@ -158,6 +150,9 @@ implementation_gaps:
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
 closed:
+- id: G-09
+  summary: No read routes for faculties, departments or programmes
+  proof: tests/integration/catalogue/test_academic_structure.py::test_a_futa_shaped_hierarchy_comes_back_as_it_is
 - id: G-14
   summary: Identity bodies were untyped, so the contract couldn't describe them
   proof: tests/integration/auth/test_identity_bodies.py::test_a_malformed_body_is_a_validation_failure

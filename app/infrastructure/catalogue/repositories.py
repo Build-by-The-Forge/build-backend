@@ -1,8 +1,11 @@
-from sqlalchemy import func, select
+from typing import TypeVar
+
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.structure import DepartmentEntry, FacultyEntry, ProgrammeEntry
 from app.domain.catalogue.value_objects import CourseStatus
 from app.domain.repositories.course import CourseRepository
 from app.infrastructure.catalogue.mappers import course_to_domain, course_to_model
@@ -12,7 +15,22 @@ from app.infrastructure.db.models.catalogue import (
     ReferenceMaterialModel,
     TopicModel,
 )
-from app.infrastructure.db.models.tenant_core import DepartmentModel
+from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel, ProgrammeModel
+
+StructureModel = TypeVar("StructureModel", FacultyModel, DepartmentModel, ProgrammeModel)
+
+
+def _active_faculty(tenant_id: str) -> list[ColumnElement[bool]]:
+    return [FacultyModel.tenant_id == tenant_id, FacultyModel.status == "active"]
+
+
+def _active_department(tenant_id: str) -> list[ColumnElement[bool]]:
+    """A department under an inactive faculty is out of reach too."""
+    return [
+        DepartmentModel.tenant_id == tenant_id,
+        DepartmentModel.status == "active",
+        DepartmentModel.faculty_id.in_(select(FacultyModel.id).where(*_active_faculty(tenant_id))),
+    ]
 
 
 class SqlAlchemyCourseRepository(CourseRepository):
@@ -50,6 +68,53 @@ class SqlAlchemyCourseRepository(CourseRepository):
             )
         )
         return found is not None
+
+    async def _structure_page(
+        self, model: type[StructureModel], conditions: list[ColumnElement[bool]], limit: int, offset: int
+    ) -> tuple[list[StructureModel], int]:
+        total = await self._session.scalar(select(func.count()).select_from(model).where(*conditions))
+        rows = await self._session.scalars(
+            select(model).where(*conditions).order_by(model.name, model.id).limit(limit).offset(offset)
+        )
+        return list(rows.all()), total or 0
+
+    async def list_faculties(self, tenant_id: str, limit: int, offset: int) -> tuple[list[FacultyEntry], int]:
+        rows, total = await self._structure_page(FacultyModel, _active_faculty(tenant_id), limit, offset)
+        return [FacultyEntry(id=row.id, name=row.name, slug=row.slug) for row in rows], total
+
+    async def list_departments(
+        self, tenant_id: str, faculty_id: str | None, limit: int, offset: int
+    ) -> tuple[list[DepartmentEntry], int]:
+        conditions = _active_department(tenant_id)
+        if faculty_id is not None:
+            conditions.append(DepartmentModel.faculty_id == faculty_id)
+        rows, total = await self._structure_page(DepartmentModel, conditions, limit, offset)
+        return [DepartmentEntry(id=row.id, faculty_id=row.faculty_id, name=row.name, slug=row.slug) for row in rows], total
+
+    async def list_programmes(
+        self, tenant_id: str, department_id: str | None, limit: int, offset: int
+    ) -> tuple[list[ProgrammeEntry], int]:
+        conditions: list[ColumnElement[bool]] = [
+            ProgrammeModel.tenant_id == tenant_id,
+            ProgrammeModel.status == "active",
+            ProgrammeModel.faculty_id.in_(select(FacultyModel.id).where(*_active_faculty(tenant_id))),
+            ProgrammeModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
+        ]
+        if department_id is not None:
+            conditions.append(ProgrammeModel.department_id == department_id)
+        rows, total = await self._structure_page(ProgrammeModel, conditions, limit, offset)
+        return [
+            ProgrammeEntry(
+                id=row.id,
+                faculty_id=row.faculty_id,
+                department_id=row.department_id,
+                name=row.name,
+                slug=row.slug,
+                code=row.code,
+                duration_years=row.duration_years,
+            )
+            for row in rows
+        ], total
 
     async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         statement = select(CourseModel).where(CourseModel.id == course_id)

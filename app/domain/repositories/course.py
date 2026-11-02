@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.structure import DepartmentEntry, FacultyEntry, ProgrammeEntry
 
 
 class CourseRepository(Protocol):
@@ -8,6 +9,19 @@ class CourseRepository(Protocol):
         raise NotImplementedError
 
     async def has_active_department(self, department_id: str, tenant_id: str) -> bool:
+        raise NotImplementedError
+
+    async def list_faculties(self, tenant_id: str, limit: int, offset: int) -> tuple[list[FacultyEntry], int]:
+        raise NotImplementedError
+
+    async def list_departments(
+        self, tenant_id: str, faculty_id: str | None, limit: int, offset: int
+    ) -> tuple[list[DepartmentEntry], int]:
+        raise NotImplementedError
+
+    async def list_programmes(
+        self, tenant_id: str, department_id: str | None, limit: int, offset: int
+    ) -> tuple[list[ProgrammeEntry], int]:
         raise NotImplementedError
 
     async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:

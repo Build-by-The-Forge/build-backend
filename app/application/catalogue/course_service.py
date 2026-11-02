@@ -24,6 +24,7 @@ from app.application.common.uow import CourseUnitOfWorkFactory
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.structure import DepartmentEntry, FacultyEntry, ProgrammeEntry
 from app.domain.catalogue.topic import Topic
 from app.domain.repositories.course import CourseRepository
 
@@ -88,6 +89,28 @@ class CourseService:
 
         handler = ListCoursesHandler(repository=self._repository())
         return await handler.handle(tenant_id, department_id, active_only, limit, offset)
+
+    async def list_faculties(self, tenant_id: str, limit: int, offset: int) -> tuple[list[FacultyEntry], int]:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.list_faculties(tenant_id, limit, offset)
+        return await self._repository().list_faculties(tenant_id, limit, offset)
+
+    async def list_departments(
+        self, tenant_id: str, faculty_id: str | None, limit: int, offset: int
+    ) -> tuple[list[DepartmentEntry], int]:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.list_departments(tenant_id, faculty_id, limit, offset)
+        return await self._repository().list_departments(tenant_id, faculty_id, limit, offset)
+
+    async def list_programmes(
+        self, tenant_id: str, department_id: str | None, limit: int, offset: int
+    ) -> tuple[list[ProgrammeEntry], int]:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.list_programmes(tenant_id, department_id, limit, offset)
+        return await self._repository().list_programmes(tenant_id, department_id, limit, offset)
 
     async def get_course(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         if self.uow_factory is not None:
