@@ -49,7 +49,8 @@ async def test_racing_registrations_and_workers_make_one_account_and_one_email(c
             break
 
     assert await _counts(email) == (0, 1)
-    assert sent == [email]
+    # Only this email: other tests may have left rows for the same worker pass.
+    assert [to for to in sent if to == email] == [email]
 
 
 async def test_two_workers_never_hold_the_same_row(client, monkeypatch):

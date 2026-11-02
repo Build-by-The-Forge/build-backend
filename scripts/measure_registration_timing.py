@@ -244,6 +244,8 @@ def measure(samples: int, email_delay: float, seed: int, sustained_samples: int)
                         slowest_database = max(slowest_database, after - middle)
                     without_database[kind].append(slowest_plain)
                     with_database[kind].append(slowest_database)
+            # Nothing left behind, including the password hashes in unprocessed rows.
+            _wait_until_processed(timeout=120 + (samples + WARM_UP) * email_delay * 2)
     finally:
         server.terminate()
         worker.terminate()
