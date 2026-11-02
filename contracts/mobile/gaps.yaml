@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: cb02161e77bfb2bd75762d68908fb8fa718d287ea702bbfa2f08d594e499146f
+contract_sha256: 5431e7903cb6f288a773c1ab5a073840d3543ac526340969ab0fe09e118202d5
 contract_gaps:
 - id: G-07
   severity: Medium

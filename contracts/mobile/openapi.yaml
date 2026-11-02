@@ -30,8 +30,10 @@ paths:
       summary: Register a student account
       description: >
         A bodyless 202, identical whether or not the email already has an account, so
-        registration can't be used to discover accounts. A verification email follows
-        for a new account.
+        registration can't be used to discover accounts. Nothing looks for the account
+        until after this answer, so a 202 doesn't promise one was created. A verification
+        email follows for a new account, usually within a few seconds, and signing in
+        before then can answer AUTH_INVALID_CREDENTIALS. Registering again is safe.
       security: []
       requestBody:
         required: true
