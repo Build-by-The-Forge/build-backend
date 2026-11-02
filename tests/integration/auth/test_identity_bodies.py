@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from tests.integration.assessment.test_question_api import verify_email
 from tests.integration.tenant.test_my_memberships_api import seed_tenant_membership
 
 PASSWORD = "StrongPass123!"
@@ -231,5 +232,10 @@ def test_memberships_no_longer_carry_the_tenant_id(client):
 
 
 def test_accepting_an_invitation_needs_a_token_field(client):
-    _, bearer = account(client)
-    assert client.post("/invitations/accept", json={}, headers=bearer).status_code in (403, 422)
+    # A verified account, so nothing but the body can be the reason.
+    email, _ = account(client)
+    verify_email(client, email)
+    token = client.post("/identity/authenticate", json={"email": email, "password": PASSWORD}).json()["data"]["access_token"]
+    response = client.post("/invitations/accept", json={}, headers={"Authorization": f"Bearer {token}"})
+    assert_refused(response, 422, "VALIDATION_FAILED", "validation failed")
+    assert [field["field"] for field in response.json()["error"]["details"]["fields"]] == ["body.token"]
