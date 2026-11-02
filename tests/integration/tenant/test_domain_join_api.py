@@ -11,6 +11,7 @@ from app.infrastructure.db.models.tenant_core import (
     TenantModel,
 )
 from app.infrastructure.identity.models import UserModel, UserStatus
+from tests.integration.accounts import register_and_get_id
 from tests.integration.identity_helpers import verify_email
 from tests.integration.tenant.test_tenant_context import seed_tenant_membership
 
@@ -29,7 +30,7 @@ def _db(client, fn):
 
 def _account(client, domain="futa.edu.ng", verified=True):
     email = f"j-{uuid4().hex[:12]}@{domain}"
-    user_id = client.post("/identity/users", json={"email": email, "password": PASSWORD}).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD})
     if verified:
         verify_email(client, email)
     token = client.post("/identity/authenticate", json={"email": email, "password": PASSWORD}).json()["data"]["access_token"]

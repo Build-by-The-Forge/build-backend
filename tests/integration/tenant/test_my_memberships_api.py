@@ -4,6 +4,7 @@ from sqlalchemy import update
 
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.tenant_core import MembershipModel, TenantModel
+from tests.integration.accounts import register_and_get_id
 from tests.integration.identity_helpers import verify_email
 from tests.integration.tenant.test_tenant_context import seed_tenant_membership
 
@@ -12,7 +13,7 @@ PASSWORD = "StrongPass123!"
 
 def _account(client, verified=True):
     email = f"mine-{uuid4().hex}@example.com"
-    user_id = client.post("/identity/users", json={"email": email, "password": PASSWORD}).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD})
     if verified:
         verify_email(client, email)
     token = client.post("/identity/authenticate", json={"email": email, "password": PASSWORD}).json()["data"]["access_token"]

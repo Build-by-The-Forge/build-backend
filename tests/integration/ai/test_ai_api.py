@@ -23,6 +23,7 @@ from app.domain.ai.assistant import (
     MemoryItem,
 )
 from app.main import app
+from tests.integration.accounts import register_and_get_id
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import (
     register_and_authenticate,
@@ -208,7 +209,7 @@ async def test_ai_service_failures_are_mapped_without_detail(client, error, stat
 
 async def test_an_unverified_email_is_refused(client, gateway):
     payload = {"email": f"ai-unverified-{uuid4()}@example.com", "password": "StrongPass123!"}
-    user_id = client.post("/identity/users", json=payload).json()["data"]["id"]
+    user_id = register_and_get_id(client, payload)
     token = client.post("/identity/authenticate", json=payload).json()["data"]["access_token"]
     _, slug, _, _ = await seed_tenant_context(user_id, "student")
     response = client.post("/ai/chat", json={"message": "hi"}, headers=headers(token, slug))

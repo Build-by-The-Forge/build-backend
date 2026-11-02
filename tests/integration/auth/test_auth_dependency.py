@@ -4,6 +4,7 @@ import jwt
 import pytest
 
 from app.infrastructure.security.jwt_token_service import JWTTokenService
+from tests.integration.accounts import register_and_get_id
 
 
 @pytest.mark.asyncio
@@ -27,9 +28,7 @@ async def test_whoami_malformed_header(client, session):
 async def test_whoami_valid_token_for_existing_user(client, session):
     # register a user
     payload = {"email": "a@example.com", "password": "StrongPass123!"}
-    r = client.post("/identity/users", json=payload)
-    assert r.status_code == 201
-    user = r.json()["data"]
+    user = {"id": register_and_get_id(client, payload)}
 
     auth = client.post("/identity/authenticate", json=payload)
     assert auth.status_code == 200
@@ -54,7 +53,7 @@ async def test_whoami_signed_token_for_nonexistent_user(client, session):
 
 def _register_and_login(client):
     payload = {"email": f"victim-{uuid4().hex}@example.com", "password": "StrongPass123!"}
-    user_id = client.post("/identity/users", json=payload).json()["data"]["id"]
+    user_id = register_and_get_id(client, payload)
     tokens = client.post("/identity/authenticate", json=payload).json()["data"]
     return user_id, tokens
 

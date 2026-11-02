@@ -28,6 +28,7 @@ from app.infrastructure.assessment.repositories import SqlAlchemyAssessmentRepos
 from app.infrastructure.db.models.assessment import AssessmentAttemptModel, AssessmentModel
 from app.infrastructure.db.models.catalogue import CourseModel
 from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel, TenantModel
+from pg_smoke.accounts import register_and_get_id
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -82,11 +83,7 @@ async def _assessment(*, status="published", **policy) -> tuple[str, str]:
 
 
 async def _student(client) -> str:
-    registered = await client.post(
-        "/identity/users", json={"email": f"race-{uuid4()}@example.com", "password": "Correct-Horse-Battery-9"}
-    )
-    assert registered.status_code == 201, registered.text
-    return registered.json()["data"]["id"]
+    return await register_and_get_id(client, {"email": f"race-{uuid4()}@example.com", "password": "Correct-Horse-Battery-9"})
 
 
 async def _attempt_count(assessment_id: str) -> int:

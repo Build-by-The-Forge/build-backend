@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api import identity as identity_api
 from app.db.session import SessionLocal
 from app.infrastructure.identity.sqlalchemy_session_repository import SQLAlchemySessionRepository
+from pg_smoke.accounts import register_and_get_id
 from scripts.check_schema_drift import find_unexpected_drift
 
 # The app has one engine whose pooled asyncpg connections belong to the loop
@@ -40,7 +41,7 @@ INSERT_DEPARTMENT = (
 async def _verified_admin(client) -> tuple[dict[str, str], str]:
     """A verified user who is admin of a fresh tenant with one department."""
     email = f"smoke-{uuid4().hex}@example.com"
-    user_id = (await client.post("/identity/users", json={"email": email, "password": PASSWORD})).json()["data"]["id"]
+    user_id = await register_and_get_id(client, {"email": email, "password": PASSWORD})
     message = identity_api.service.email_sender.latest_to(email, "Verify your BUILD email address")
     assert (await client.post("/identity/verify-email", json={"token": message.body.split("\n\n")[1]})).status_code == 200
     token = (await client.post("/identity/authenticate", json={"email": email, "password": PASSWORD})).json()["data"][
@@ -167,7 +168,7 @@ async def test_memberships_require_an_existing_user():
 
 async def test_sign_in_writes_security_records(client):
     email = f"smoke-{uuid4().hex}@example.com"
-    user_id = (await client.post("/identity/users", json={"email": email, "password": PASSWORD})).json()["data"]["id"]
+    user_id = await register_and_get_id(client, {"email": email, "password": PASSWORD})
     assert (await client.post("/identity/authenticate", json={"email": email, "password": PASSWORD})).status_code == 200
 
     async with SessionLocal() as session:
@@ -201,8 +202,7 @@ async def test_two_users_racing_for_one_new_device_id_never_fail(client):
     user_ids = []
     for _ in range(2):
         email = f"smoke-{uuid4().hex}@example.com"
-        registered = await client.post("/identity/users", json={"email": email, "password": PASSWORD})
-        user_ids.append(registered.json()["data"]["id"])
+        user_ids.append(await register_and_get_id(client, {"email": email, "password": PASSWORD}))
 
     async def claim(user_id):
         async with SessionLocal() as session:

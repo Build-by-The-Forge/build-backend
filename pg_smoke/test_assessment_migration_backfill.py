@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import select, text
 
 from app.db.session import SessionLocal, engine
+from pg_smoke.accounts import register_and_get_id
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -27,11 +28,7 @@ def _alembic(*args: str) -> None:
 
 
 async def test_existing_rows_get_a_deadline_and_the_practice_defaults(client):
-    registered = await client.post(
-        "/identity/users", json={"email": f"mig-{uuid4()}@example.com", "password": "Correct-Horse-Battery-9"}
-    )
-    assert registered.status_code == 201, registered.text
-    user_id = registered.json()["data"]["id"]
+    user_id = await register_and_get_id(client, {"email": f"mig-{uuid4()}@example.com", "password": "Correct-Horse-Battery-9"})
     tag = uuid4().hex[:8]
     tenant_id, faculty_id, department_id, course_id, assessment_id, attempt_id = (str(uuid4()) for _ in range(6))
     now = datetime.now(timezone.utc)

@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from app.api import identity as identity_api
 from app.db.session import SessionLocal
+from pg_smoke.accounts import register_and_get_id
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -15,7 +16,7 @@ PASSWORD = "StrongPass123!"
 
 async def _account(client, domain: str) -> tuple[str, dict[str, str]]:
     email = f"dj-{uuid4().hex[:12]}@{domain}"
-    user_id = (await client.post("/identity/users", json={"email": email, "password": PASSWORD})).json()["data"]["id"]
+    user_id = await register_and_get_id(client, {"email": email, "password": PASSWORD})
     message = identity_api.service.email_sender.latest_to(email, "Verify your BUILD email address")
     await client.post("/identity/verify-email", json={"token": message.body.split("\n\n")[1]})
     login = await client.post("/identity/authenticate", json={"email": email, "password": PASSWORD})

@@ -7,6 +7,7 @@ from sqlalchemy import select, update
 from app.db.session import SessionLocal
 from app.infrastructure.identity.models import SessionModel, UserModel, UserStatus
 from app.infrastructure.security.jwt_token_service import JWTTokenService
+from tests.integration.accounts import register_and_get_id
 
 PASSWORD = "StrongPass123!"
 
@@ -25,7 +26,7 @@ def _db(client, fn):
 
 def _register(client):
     email = f"user-{uuid4().hex}@example.com"
-    user_id = client.post("/identity/users", json={"email": email, "password": PASSWORD}).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD})
     return email, user_id
 
 

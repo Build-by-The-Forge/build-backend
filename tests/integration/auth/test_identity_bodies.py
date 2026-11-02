@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from tests.integration.accounts import register_and_get_id
 from tests.integration.assessment.test_question_api import verify_email
 from tests.integration.tenant.test_my_memberships_api import seed_tenant_membership
 
@@ -220,7 +221,7 @@ def test_a_refused_secret_is_not_echoed(client, path, body):
 def test_memberships_no_longer_carry_the_tenant_id(client):
     email = f"bodies-{uuid4()}@example.com"
     payload = {"email": email, "password": PASSWORD}
-    user_id = client.post("/identity/users", json=payload).json()["data"]["id"]
+    user_id = register_and_get_id(client, payload)
     token = client.post("/identity/authenticate", json=payload).json()["data"]["access_token"]
     client.portal.call(seed_tenant_membership, f"bodies-{uuid4().hex[:10]}", user_id, "student")
 

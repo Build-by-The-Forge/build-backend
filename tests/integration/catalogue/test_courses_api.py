@@ -10,6 +10,7 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
+from tests.integration.accounts import register_and_get_id
 from tests.integration.identity_helpers import verify_email
 
 
@@ -69,10 +70,8 @@ async def test_create_course_api(client, session):
         "email": f"catalogue-{uuid.uuid4()}@example.com",
         "password": "StrongPass123!",
     }
-    registered = client.post("/identity/users", json=auth_payload)
-    assert registered.status_code == 201
+    user_id = register_and_get_id(client, auth_payload)
     verify_email(client, auth_payload["email"])
-    user_id = registered.json()["data"]["id"]
     authenticated = client.post("/identity/authenticate", json=auth_payload)
     assert authenticated.status_code == 200
     access_token = authenticated.json()["data"]["access_token"]
