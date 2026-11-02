@@ -257,6 +257,43 @@ services:
       retries: 60
     networks: [internal]
 
+  backend-registration-worker:
+    # Its own service, not a loop in backend-worker. Registration's account-dependent
+    # work must stay out of the web process, and the gate stops backend-worker while
+    # its fixtures still register people.
+    image: build-m3-backend
+    depends_on:
+      backend-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENVIRONMENT: development
+      POSTGRES_URL: postgresql+asyncpg://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
+      REDIS_URL: redis://redis:6379/0
+      AI_SERVICE_URL: http://ai-service:8000
+      BACKEND_TO_AI_SECRET: ${BACKEND_TO_AI_SECRET}
+      AI_TO_BACKEND_SECRET: ${AI_TO_BACKEND_SECRET}
+      AUTH_RATE_LIMIT_FAILURE_MODE: closed
+      EMAIL_OUTBOX_PATH: /outbox/emails.jsonl
+      LEARNING_MEMORY_ENABLED: "true"
+      # The backend's storage identity (read, write, list on the bucket).
+      # Configured now; the upload endpoint (P3-1 PR 2) is its first user.
+      OBJECT_STORAGE_ENDPOINT_URL: http://object-storage:8333
+      OBJECT_STORAGE_BUCKET: build-documents
+      OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY}
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY}
+    entrypoint: ["python", "-m", "app.worker", "--registrations"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker", "--check", "--registrations"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    volumes:
+      - outbox:/outbox
+    networks: [internal]
+
   backend-worker:
     image: build-m3-backend
     depends_on:
