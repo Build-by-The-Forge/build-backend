@@ -47,11 +47,13 @@ security_events = container.get(SQLAlchemySecurityEventRecorder)
 @router.post("/users", status_code=status.HTTP_202_ACCEPTED, response_class=Response)
 async def register_user(request: Request, payload: RegisterRequest, background: BackgroundTasks) -> Response:
     """The same answer whether or not the email has an account, so this can't be used to
-    find accounts: no body, and nothing looks for the account until after the response."""
+    find accounts: no body, and nothing looks for the account here. The worker does that,
+    in its own process, after this request is recorded."""
     await throttle.register(_client_ip(request))
 
-    prepared = service.prepare_registration(payload.email, payload.password)
-    background.add_task(service.complete_registration, prepared)
+    await service.accept_registration(payload.email, payload.password)
+    if settings.registration_inline_for_tests:
+        background.add_task(service.process_pending_registrations)
 
     return Response(status_code=status.HTTP_202_ACCEPTED)
 

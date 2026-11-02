@@ -53,3 +53,12 @@ def reset_auth_rate_limits():
     if local is not None:
         local.reset()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _registrations_complete_inline(monkeypatch):
+    """These suites have no worker process. Set on the object, not the environment, so
+    a test building its own production Settings isn't affected."""
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "registration_inline_for_tests", True)

@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     auth_jwt_issuer: str = Field(default="build-backend")
     auth_jwt_audience: str = Field(default="build-api")
     auth_access_token_ttl_seconds: int = Field(default=900)
+    # Registrations are normally completed only by the worker. Inline is for test suites
+    # that have no worker, and it's refused wherever the timing could matter.
+    registration_inline_for_tests: bool = Field(default=False)
+    worker_registration_interval_seconds: int = Field(default=1, ge=1, le=60)
     # Absolute session lifetime: no refresh can extend a session past this.
     auth_session_absolute_ttl_seconds: int = Field(default=30 * 24 * 3600)
     # Idle lifetime of a refresh token; each rotation starts a new window.
@@ -206,6 +210,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_service_boundary(self) -> "Settings":
         strict = self.app_environment in STRICT_ENVIRONMENTS
+        if strict and self.registration_inline_for_tests:
+            raise ValueError(f"REGISTRATION_INLINE_FOR_TESTS must be off when app_environment is {self.app_environment}")
         if not self.ai_service_url:
             if strict:
                 raise ValueError(f"AI_SERVICE_URL is required when app_environment is {self.app_environment!r}")

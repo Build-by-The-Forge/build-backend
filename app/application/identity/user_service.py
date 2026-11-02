@@ -1,7 +1,7 @@
+import asyncio
 from datetime import timedelta
 
 import structlog
-from sqlalchemy.exc import IntegrityError
 
 from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.commands import (
@@ -22,7 +22,6 @@ from app.application.identity.handlers import (
     AuthenticationFailed,
     ChangePasswordHandler,
     CurrentPasswordIncorrect,
-    EmailVerificationRequest,
     ForgotPasswordHandler,
     GetCurrentUserHandler,
     IssuedSession,
@@ -51,12 +50,16 @@ from app.application.identity.ports.security_events import (
 from app.application.identity.ports.token_service import TokenService
 from app.core.config import settings
 from app.core.exceptions import ClientError
+from app.core.request_context import RequestMeta, current_request
 from app.domain.identity.user import User
+from app.domain.identity.value_objects import Email, PasswordHash
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
 
 logger = structlog.get_logger(__name__)
+# Enough to outlast a brief outage: the row holds a password hash, so it doesn't wait forever.
+MAX_REGISTRATION_ATTEMPTS = 5
 
 
 class UserService:
@@ -79,44 +82,72 @@ class UserService:
         self.email_sender = email_sender
         self.security_events = security_events
 
-    def prepare_registration(self, email: str, password: str) -> RegistrationRequest:
-        """Refuses what breaks a rule. Everything else gets the same answer."""
-        return prepare_registration(RegisterUserCommand(email=email, password=password), self.password_hasher)
+    async def accept_registration(self, email: str, password: str) -> None:
+        """Refuses what breaks a rule, and records everything else. Nothing here looks for
+        the account, so every accepted request does the same work and gets the same answer."""
+        request = prepare_registration(RegisterUserCommand(email=email, password=password), self.password_hasher)
+        meta = current_request.get()
+        async with self.uow_factory() as uow:
+            await uow.pending_registrations.add(
+                request.email.value,
+                request.password_hash.value,
+                request_id=meta.request_id,
+                ip_address=meta.ip,
+                user_agent=meta.user_agent,
+            )
 
-    async def complete_registration(self, request: RegistrationRequest) -> None:
-        """After the response, so how long it takes can't show which answer it was. A
-        failure here reaches no one: nothing was promised but the attempt, and registering
-        again is safe. Only a new account gets an email."""
+    async def process_pending_registrations(self, stop: asyncio.Event | None = None) -> None:
+        """One pass over what's waiting. A row that fails stays for the next pass, up to its
+        limit. Only the worker runs this, away from the requests it could otherwise slow."""
+        excluded_ids: set[str] = set()
+        while not (stop and stop.is_set()):
+            claimed: list[str] = []
+            try:
+                if not await self._process_one_registration(excluded_ids, claimed):
+                    return
+            except Exception as exc:
+                if not claimed:
+                    raise
+                await self._record_registration_failure(claimed[-1], exc)
+            excluded_ids.update(claimed)
+
+    async def _process_one_registration(self, excluded_ids: set[str], claimed: list[str]) -> bool:
+        async with self.uow_factory() as uow:
+            pending = await uow.pending_registrations.claim_next(excluded_ids)
+            if pending is None:
+                return False
+            claimed.append(pending.id)
+            request = RegistrationRequest(email=Email(pending.email), password_hash=PasswordHash(pending.password_hash))
+            user = await RegisterUserHandler(repository=uow.users).handle(request)
+            verification = None
+            if user is not None:
+                verification = await issue_email_verification(uow.users, user, self._verification_lifetime())
+            await uow.pending_registrations.delete(pending.id)
+
+        # Committed: the row and its password hash are gone whatever happens next, and an
+        # undelivered email can be asked for again.
+        if user is None:
+            return True
+        token = current_request.set(RequestMeta(pending.request_id, pending.ip_address, pending.user_agent))
         try:
-            account = await self._create_account(request)
-        except Exception:
-            logger.exception("registration_failed")
-            return
-        if account is None:
-            return
-        user, verification = account
-        if verification is not None:
             try:
                 await self.email_sender.send(email_verification_email(verification))
             except Exception:
                 logger.exception("registration_email_failed", user_id=user.id.value)
-        await self.security_events.record(SecurityEvent.ACCOUNT_REGISTERED, user_id=user.id.value)
-        self._publish_events(user.pull_events())
+            await self.security_events.record(SecurityEvent.ACCOUNT_REGISTERED, user_id=user.id.value)
+            self._publish_events(user.pull_events())
+        finally:
+            current_request.reset(token)
+        return True
 
-    async def _create_account(self, request: RegistrationRequest) -> tuple[User, EmailVerificationRequest | None] | None:
-        if self.uow_factory is None:
-            user = await RegisterUserHandler(repository=self.repository).handle(request)
-            return (user, None) if user is not None else None
-        try:
-            async with self.uow_factory() as uow:
-                user = await RegisterUserHandler(repository=uow.users).handle(request)
-                if user is None:
-                    return None
-                verification = await issue_email_verification(uow.users, user, self._verification_lifetime())
-        except IntegrityError:
-            # Another request registered this email between the check and the commit.
-            return None
-        return user, verification
+    async def _record_registration_failure(self, registration_id: str, exc: Exception) -> None:
+        async with self.uow_factory() as uow:
+            dropped = await uow.pending_registrations.record_failure(registration_id, MAX_REGISTRATION_ATTEMPTS)
+        logger.error(
+            "registration_dropped" if dropped else "registration_failed",
+            registration_id=registration_id,
+            error_type=type(exc).__name__,
+        )
 
     async def authenticate_user(
         self,
