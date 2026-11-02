@@ -11,6 +11,7 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
+from tests.integration.accounts import register_and_get_id
 from tests.integration.identity_helpers import verify_email
 
 
@@ -91,10 +92,8 @@ async def seed_catalogue(tenant_slug: str, user_id: str, code: str) -> tuple[str
 
 async def register_and_authenticate(client, email: str) -> tuple[str, str]:
     payload = {"email": email, "password": "StrongPass123!"}
-    registered = client.post("/identity/users", json=payload)
-    assert registered.status_code == 201
+    user_id = register_and_get_id(client, payload)
     verify_email(client, payload["email"])
-    user_id = registered.json()["data"]["id"]
     authenticated = client.post("/identity/authenticate", json=payload)
     assert authenticated.status_code == 200
     return user_id, authenticated.json()["data"]["access_token"]

@@ -128,5 +128,5 @@ def test_registration_is_limited_per_ip(client):
         for _ in range(31)
     ]
 
-    assert codes[:30] == [201] * 30
+    assert codes[:30] == [202] * 30
     assert codes[30] == 429

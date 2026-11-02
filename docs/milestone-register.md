@@ -17,7 +17,7 @@ There are two tracks, and neither one's progress counts for the other:
 | M1 | Intended mobile API contract | M0 | The contract describes what the system should guarantee | `tests/test_mobile_contract.py` | **Merged** | `31faad4` |
 | M2 | Drift gate against the contract | M1 | Every known gap is listed, and a closed gap stays closed | `test_mobile_contract_drift.py` | **Merged** | `16a5227` (merge) |
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
-| M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **In progress:** bodies and devices in review; registration's 202 next | |
+| M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete** once registration's 202 merges: G-14 closed; G-39's membership finding closed, the rest with M3-E | #75 `4faca25` (merge) |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Not started** | |
 | M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Not started** | |
 | M3-E | Assessment contract | M3-A, L1 to L3 | G-10 and G-39 with their partners. Lifecycle gaps are already closed | HTTP, drift gate | **Partly done** by L1 to L3 | |
@@ -29,7 +29,7 @@ There are two tracks, and neither one's progress counts for the other:
 
 ### M3 position
 
-M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A is the only slice whose gaps are closed. M3-B to M3-F haven't started, apart from the lifecycle work in M3-E.
+M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A and M3-B are the only slices whose gaps are closed. M3-C to M3-F haven't started, apart from the lifecycle work in M3-E.
 
 | | Count | IDs |
 |---|---|---|
@@ -123,7 +123,10 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 | The event fingerprint is an unkeyed SHA-256 of low-entropy data, so someone with database access could test guesses. It must be covered by retention and account deletion | #42 | Memory activation |
 | Fingerprint immutability is application-level; consider a database trigger or equivalent | #42 | Before memory activation |
 | The fault-arming idle check is a harness synchronization, not a guarantee against work enqueued after it; it relies on no unrelated jobs starting during arming | #69 | Keep true in the gate's phases |
-| Registration reveals an existing email through a distinct 409 | Security review, 2026-11-01 | M3-B, its registration PR |
+| Accepted registrations wait in `pending_registrations`, with their password hash, until `backend-registration-worker` runs. A row is dropped after 5 failed attempts, but there's no age limit, so a stopped worker leaves hashes in place, and nothing reports the backlog yet | M3-B registration | First deployment: run the worker, and alert on backlog |
+| The worker and requests share the database, so in principle its writes could slow a request. Six seeds showed no consistent difference through the database, within a noise floor of about 14 ms on one machine. An attacker with a quieter database might do better | M3-B registration | Re-measure in the deployed environment |
+| New devices hold `platform: unknown`, and `last_seen` isn't updated on later sign-ins | #75 | When devices are used |
+| The gateway's uncertain-timeout unit tests need reviewing | #74 | Before release |
 | No HSTS or CSP headers | Security review, 2026-11-01 | Unscheduled |
 | The AI service's report text stays in the logs, minus what redaction catches, so log access needs protecting | #72 | First deployment |
 | `tests/integration/content/test_real_ai_dispatch.py` runs in no workflow. Its behaviours are covered by the boundary gate, by name | #72 | Before release, confirm line by line or retire the file |

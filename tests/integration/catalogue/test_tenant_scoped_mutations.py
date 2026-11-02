@@ -12,15 +12,14 @@ from app.infrastructure.db.models.tenant_core import (
     MembershipModel,
     TenantModel,
 )
+from tests.integration.accounts import register_and_get_id
 from tests.integration.identity_helpers import verify_email
 
 
 async def seed_course_context(client, role: str = "lecturer") -> tuple[str, str, str, str, str]:
     payload = {"email": f"mutation-{uuid4()}@example.com", "password": "StrongPass123!"}
-    registered = client.post("/identity/users", json=payload)
-    assert registered.status_code == 201
+    user_id = register_and_get_id(client, payload)
     verify_email(client, payload["email"])
-    user_id = registered.json()["data"]["id"]
     authenticated = client.post("/identity/authenticate", json=payload)
     assert authenticated.status_code == 200
     token = authenticated.json()["data"]["access_token"]

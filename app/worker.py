@@ -331,6 +331,14 @@ async def run_attempt_finalizer_pass(stop: asyncio.Event | None = None) -> None:
         processed += 1
 
 
+async def run_registration_pass(stop: asyncio.Event | None = None) -> None:
+    # Imported here: the other loops don't need the identity services built.
+    from app.application.identity.user_service import UserService
+    from app.bootstrap.container import build_container
+
+    await build_container().get(UserService).process_pending_registrations(stop)
+
+
 def write_health_state(completed_at: dict[str, float], path: Path = HEALTH_PATH) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=f"{path.name}.", dir=path.parent)
@@ -348,18 +356,22 @@ def write_health_state(completed_at: dict[str, float], path: Path = HEALTH_PATH)
         raise
 
 
-def check_worker_health(now: float | None = None, path: Path = HEALTH_PATH) -> None:
+def check_worker_health(now: float | None = None, path: Path = HEALTH_PATH, *, registrations: bool = False) -> None:
     if not path.is_file():
         raise RuntimeError("worker health file is missing")
     state = json.loads(path.read_text(encoding="utf-8"))
     current = time.time() if now is None else now
-    intervals = {
-        "dispatch": settings.worker_dispatch_interval_seconds,
-        "retry": settings.worker_retry_interval_seconds,
-        "orphan_sweep": settings.worker_orphan_sweep_interval_seconds,
-        "recoverer": settings.worker_recoverer_interval_seconds,
-        "attempt_finalizer": settings.worker_attempt_finalizer_interval_seconds,
-    }
+    intervals = (
+        {"registrations": settings.worker_registration_interval_seconds}
+        if registrations
+        else {
+            "dispatch": settings.worker_dispatch_interval_seconds,
+            "retry": settings.worker_retry_interval_seconds,
+            "orphan_sweep": settings.worker_orphan_sweep_interval_seconds,
+            "recoverer": settings.worker_recoverer_interval_seconds,
+            "attempt_finalizer": settings.worker_attempt_finalizer_interval_seconds,
+        }
+    )
     unhealthy = [name for name, interval in intervals.items() if name not in state or current - state[name] > 3 * interval]
     if unhealthy:
         raise RuntimeError(f"worker loops are overdue: {', '.join(unhealthy)}")
@@ -392,7 +404,12 @@ async def _run_loop(
             pass
 
 
-async def serve() -> None:
+def _registration_loops(stop: asyncio.Event, completed_at: dict[str, float]) -> list[asyncio.Task[None]]:
+    interval = settings.worker_registration_interval_seconds
+    return [asyncio.create_task(_run_loop("registrations", interval, run_registration_pass, stop, completed_at))]
+
+
+async def serve(*, registrations: bool = False) -> None:
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGINT, signal.SIGTERM):
@@ -404,53 +421,57 @@ async def serve() -> None:
     completed_at: dict[str, float] = {}
     write_health_state(completed_at)
     metrics_server, _ = start_http_server(WORKER_METRICS_PORT, registry=registry)
-    workers = [
-        asyncio.create_task(
-            _run_loop(
-                "dispatch",
-                settings.worker_dispatch_interval_seconds,
-                _dispatch_and_measure,
-                stop,
-                completed_at,
-            )
-        ),
-        asyncio.create_task(
-            _run_loop(
-                "retry",
-                settings.worker_retry_interval_seconds,
-                run_retry_pass,
-                stop,
-                completed_at,
-            )
-        ),
-        asyncio.create_task(
-            _run_loop(
-                "orphan_sweep",
-                settings.worker_orphan_sweep_interval_seconds,
-                run_orphan_sweep_pass,
-                stop,
-                completed_at,
-            )
-        ),
-        asyncio.create_task(
-            _run_loop(
-                "recoverer",
-                settings.worker_recoverer_interval_seconds,
-                run_recoverer_pass,
-                stop,
-                completed_at,
-            )
-        ),
-        asyncio.create_task(
-            _run_loop(
-                "attempt_finalizer",
-                settings.worker_attempt_finalizer_interval_seconds,
-                run_attempt_finalizer_pass,
-                stop,
-                completed_at,
-            )
-        ),
-    ]
+    workers = (
+        _registration_loops(stop, completed_at)
+        if registrations
+        else [
+            asyncio.create_task(
+                _run_loop(
+                    "dispatch",
+                    settings.worker_dispatch_interval_seconds,
+                    _dispatch_and_measure,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
+                    "retry",
+                    settings.worker_retry_interval_seconds,
+                    run_retry_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
+                    "orphan_sweep",
+                    settings.worker_orphan_sweep_interval_seconds,
+                    run_orphan_sweep_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
+                    "recoverer",
+                    settings.worker_recoverer_interval_seconds,
+                    run_recoverer_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
+                    "attempt_finalizer",
+                    settings.worker_attempt_finalizer_interval_seconds,
+                    run_attempt_finalizer_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+        ]
+    )
     for worker in workers:
         worker.add_done_callback(lambda _: stop.set())
     try:
@@ -472,11 +493,16 @@ async def serve() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="P3-6 content ingestion worker")
     parser.add_argument("--check", action="store_true", help="fail if any worker loop is overdue")
+    parser.add_argument(
+        "--registrations",
+        action="store_true",
+        help="run only the registration loop: its own process, so it can't slow a request or stop with the others",
+    )
     args = parser.parse_args()
     if args.check:
-        check_worker_health()
+        check_worker_health(registrations=args.registrations)
         return
-    asyncio.run(serve())
+    asyncio.run(serve(registrations=args.registrations))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 
 from app.api.identity_schemas import (
@@ -44,26 +44,18 @@ throttle = container.get(AuthThrottle)
 security_events = container.get(SQLAlchemySecurityEventRecorder)
 
 
-@router.post("/users", status_code=status.HTTP_201_CREATED)
-async def register_user(request: Request, payload: RegisterRequest) -> JSONResponse:
-    request_id = getattr(request.state, "request_id", None)
+@router.post("/users", status_code=status.HTTP_202_ACCEPTED, response_class=Response)
+async def register_user(request: Request, payload: RegisterRequest, background: BackgroundTasks) -> Response:
+    """The same answer whether or not the email has an account, so this can't be used to
+    find accounts: no body, and nothing looks for the account here. The worker does that,
+    in its own process, after this request is recorded."""
     await throttle.register(_client_ip(request))
 
-    user = await service.register_user(payload.email, payload.password)
+    await service.accept_registration(payload.email, payload.password)
+    if settings.registration_inline_for_tests:
+        background.add_task(service.process_pending_registrations)
 
-    return JSONResponse(
-        status_code=status.HTTP_201_CREATED,
-        content={
-            "success": True,
-            "data": {
-                "id": user.id.value,
-                "email": user.email.value,
-                "is_active": user.is_active,
-            },
-            "error": None,
-            "meta": {"request_id": request_id},
-        },
-    )
+    return Response(status_code=status.HTTP_202_ACCEPTED)
 
 
 @router.post("/authenticate", status_code=status.HTTP_200_OK)

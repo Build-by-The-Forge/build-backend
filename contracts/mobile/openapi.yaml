@@ -30,8 +30,12 @@ paths:
       summary: Register a student account
       description: >
         A bodyless 202, identical whether or not the email already has an account, so
-        registration can't be used to discover accounts. A verification email follows
-        for a new account.
+        registration can't be used to discover accounts. A 202 means the request is
+        recorded and survives a restart, not that a new account exists: a worker looks for
+        the account afterwards. A verification email follows for a new account, usually
+        within a few seconds, and signing in before then can answer
+        AUTH_INVALID_CREDENTIALS. Registering again is safe. A failure to record the
+        request answers 500.
       security: []
       requestBody:
         required: true

@@ -14,6 +14,7 @@ from app.db.session import SessionLocal
 from app.infrastructure.db.models.assessment import AssessmentAttemptResultModel, AssessmentModel
 from app.infrastructure.db.models.catalogue import CourseModel
 from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel, TenantModel
+from pg_smoke.accounts import register_and_get_id
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -65,11 +66,7 @@ async def _published_assessment() -> tuple[str, str]:
 
 
 async def test_concurrent_submits_grade_once(client):
-    registered = await client.post(
-        "/identity/users", json={"email": f"race-{uuid4()}@example.com", "password": "Correct-Horse-Battery-9"}
-    )
-    assert registered.status_code == 201, registered.text
-    user_id = registered.json()["data"]["id"]
+    user_id = await register_and_get_id(client, {"email": f"race-{uuid4()}@example.com", "password": "Correct-Horse-Battery-9"})
     tenant_id, assessment_id = await _published_assessment()
 
     service = build_container().get(AttemptService)

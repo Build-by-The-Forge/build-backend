@@ -74,7 +74,7 @@ def test_every_json_response_on_a_route_is_built_from_a_literal_body():
 
 def test_the_identity_flow_succeeds_in_the_contracts_shape(client):
     payload = {"email": f"shape-{uuid4()}@example.com", "password": PASSWORD}
-    assert assert_success(client.post("/identity/users", json=payload), 201)["email"] == payload["email"]
+    assert client.post("/identity/users", json=payload).status_code == 202
 
     issued = assert_success(client.post("/identity/authenticate", json=payload))
     bearer = {"Authorization": f"Bearer {issued['access_token']}"}
@@ -104,7 +104,8 @@ async def test_a_paginated_list_keeps_its_counts_beside_the_request_id(client):
 
 def test_a_client_request_id_comes_back_in_the_body(client):
     payload = {"email": f"shape-{uuid4()}@example.com", "password": PASSWORD}
-    response = client.post("/identity/users", json=payload, headers={"X-Request-ID": "trace-2"})
+    assert client.post("/identity/users", json=payload).status_code == 202
+    response = client.post("/identity/authenticate", json=payload, headers={"X-Request-ID": "trace-2"})
     assert response.json()["meta"]["request_id"] == "trace-2"
     assert "request_id" not in response.json()
 

@@ -27,6 +27,7 @@ from app.domain.identity.value_objects import (
     DeviceId,
     Email,
     Password,
+    PasswordHash,
     SessionId,
     UserId,
 )
@@ -73,30 +74,45 @@ class RefreshTokenReuseError(Exception):
         self.session_id = session_id
 
 
+@dataclass(frozen=True, slots=True)
+class RegistrationRequest:
+    """A registration that passed its rules, with its password already hashed."""
+
+    email: Email
+    password_hash: PasswordHash
+
+
+def prepare_registration(command: RegisterUserCommand, password_hasher: PasswordHasher) -> RegistrationRequest:
+    """Everything a registration does before it's answered. None of it depends on whether
+    the email has an account, because none of it looks: that's what keeps the answer from
+    showing it, in its content or its timing. Hashing happens here for every request, so
+    the cost of one isn't what tells them apart."""
+    try:
+        email = Email(command.email)
+    except ValueError as exc:
+        raise ClientError("invalid email format", status_code=422) from exc
+
+    try:
+        password = Password(command.password)
+    except ValueError as exc:
+        raise ClientError(public_message(exc, "invalid value"), status_code=422) from exc
+
+    return RegistrationRequest(email=email, password_hash=password_hasher.hash(password))
+
+
 class RegisterUserHandler:
-    def __init__(self, repository: UserRepository, password_hasher: PasswordHasher) -> None:
+    def __init__(self, repository: UserRepository) -> None:
         self.repository = repository
-        self.password_hasher = password_hasher
 
-    async def handle(self, command: RegisterUserCommand) -> User:
-        try:
-            email = Email(command.email)
-        except ValueError as exc:
-            raise ClientError("invalid email format", status_code=422) from exc
+    async def handle(self, request: RegistrationRequest) -> User | None:
+        """The new user, or None if the email already has an account."""
+        if await self.repository.exists_by_email(request.email.value):
+            return None
 
-        if await self.repository.exists_by_email(email.value):
-            raise ClientError("User already exists", status_code=409)
-
-        try:
-            password = Password(command.password)
-        except ValueError as exc:
-            raise ClientError(public_message(exc, "invalid value"), status_code=422) from exc
-
-        password_hash = self.password_hasher.hash(password)
         user = User(
             id=UserId(""),
-            email=email,
-            password_hash=password_hash,
+            email=request.email,
+            password_hash=request.password_hash,
         )
         saved_user = await self.repository.save(user)
         saved_user.record_event(

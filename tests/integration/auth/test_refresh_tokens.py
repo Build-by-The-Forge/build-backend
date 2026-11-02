@@ -6,6 +6,7 @@ from sqlalchemy import select, update
 
 from app.db.session import SessionLocal
 from app.infrastructure.identity.models import RefreshTokenModel, UserModel, UserStatus
+from tests.integration.accounts import register_and_get_id
 
 PASSWORD = "StrongPass123!"
 
@@ -22,7 +23,7 @@ def _db(client, fn):
 
 def _login(client):
     email = f"user-{uuid4().hex}@example.com"
-    user_id = client.post("/identity/users", json={"email": email, "password": PASSWORD}).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD})
     data = client.post("/identity/authenticate", json={"email": email, "password": PASSWORD}).json()["data"]
     return user_id, email, data
 

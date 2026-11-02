@@ -8,8 +8,11 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
+    func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -205,6 +208,27 @@ class RefreshTokenModel(Base):
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     session: Mapped[SessionModel] = relationship("SessionModel", back_populates="refresh_tokens")
+
+
+class PendingRegistrationModel(Base):
+    """A registration accepted before anyone looks for its account. The worker removes it."""
+
+    __tablename__ = "pending_registrations"
+    __table_args__ = (Index("ix_pending_registrations_created_at", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    email: Mapped[str] = mapped_column(String, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    request_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
 
 
 class VerificationTokenModel(Base):

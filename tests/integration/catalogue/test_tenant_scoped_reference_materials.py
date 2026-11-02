@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import ReferenceMaterialModel
 from app.infrastructure.db.models.tenant_core import MembershipModel
+from tests.integration.accounts import register_and_get_id
 from tests.integration.catalogue.test_tenant_scoped_mutations import (
     headers,
     seed_course_context,
@@ -57,10 +58,8 @@ async def test_student_cannot_create_reference_material(client):
         "email": f"student-material-{uuid4()}@example.com",
         "password": "StrongPass123!",
     }
-    registered = client.post("/identity/users", json=payload)
-    assert registered.status_code == 201
+    student_id = register_and_get_id(client, payload)
     verify_email(client, payload["email"])
-    student_id = registered.json()["data"]["id"]
     authenticated = client.post("/identity/authenticate", json=payload)
     assert authenticated.status_code == 200
     student_token = authenticated.json()["data"]["access_token"]

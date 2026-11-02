@@ -12,6 +12,7 @@ from app.infrastructure.identity.models import (
     UserStatus,
     VerificationTokenModel,
 )
+from tests.integration.accounts import register_and_get_id
 
 PASSWORD = "StrongPass123!"
 SUBJECT = "Verify your BUILD email address"
@@ -30,7 +31,7 @@ def _db(client, fn):
 
 def _register(client):
     email = f"user-{uuid4().hex}@example.com"
-    user_id = client.post("/identity/users", json={"email": email, "password": PASSWORD}).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD})
     return email, user_id
 
 

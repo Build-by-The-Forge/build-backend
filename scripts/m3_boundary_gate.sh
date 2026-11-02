@@ -72,7 +72,7 @@ cleanup() {
   # On failure, the services' own logs before they are removed: the
   # workflow's failure step runs after this, when nothing is left to read.
   if [[ $rc -ne 0 ]]; then
-    for service in ai-worker ai-worker-faults ai-service backend backend-worker; do
+    for service in ai-worker ai-worker-faults ai-service backend backend-worker backend-registration-worker; do
       echo "::group::$service logs (last 150 lines)"
       "${COMPOSE[@]}" logs --no-color --tail 150 "$service" 2>&1 || true
       echo "::endgroup::"
@@ -85,7 +85,7 @@ cleanup() {
 trap cleanup EXIT
 
 "${COMPOSE[@]}" --profile gate --profile faults down -v --remove-orphans >/dev/null 2>&1 || true
-"${COMPOSE[@]}" up -d --build --wait --scale backend-worker=2 backend backend-worker ai-service ai-worker
+"${COMPOSE[@]}" up -d --build --wait --scale backend-worker=2 backend backend-worker backend-registration-worker ai-service ai-worker
 # The test image: `up --build` skips profile services and `compose run`
 # reuses an existing image, so build it from this checkout explicitly.
 "${COMPOSE[@]}" --profile gate build boundary-tests

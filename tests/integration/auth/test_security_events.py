@@ -11,6 +11,7 @@ from app.infrastructure.identity.models import (
     UserModel,
     UserStatus,
 )
+from tests.integration.accounts import register_and_get_id
 
 PASSWORD = "StrongPass123!"
 WRONG = "WrongPass12345!"
@@ -29,7 +30,7 @@ def _db(client, fn):
 
 def _register(client):
     email = f"audit-{uuid4().hex}@example.com"
-    user_id = client.post("/identity/users", json={"email": email, "password": PASSWORD}).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD})
     return email, user_id
 
 
@@ -162,9 +163,7 @@ def test_refresh_token_reuse_and_logouts_are_recorded(client):
 def test_events_carry_the_request_id_and_client_ip(client):
     request_id = f"req-{uuid4().hex}"
     email = f"audit-{uuid4().hex}@example.com"
-    user_id = client.post(
-        "/identity/users", json={"email": email, "password": PASSWORD}, headers={"X-Request-ID": request_id}
-    ).json()["data"]["id"]
+    user_id = register_and_get_id(client, {"email": email, "password": PASSWORD}, headers={"X-Request-ID": request_id})
 
     ((_, _, meta, ip),) = _events(client, user_id)
 
