@@ -357,6 +357,7 @@ async def create_topic(
 async def list_topics(
     course_id: str,
     request: Request,
+    page: Page,
     include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
@@ -380,10 +381,10 @@ async def list_topics(
                     "sequence": topic.sequence.value,
                     "status": topic.status.value,
                 }
-                for topic in topics
+                for topic in page.slice(topics)
             ],
             "error": None,
-            "meta": {"request_id": getattr(request.state, "request_id", None)},
+            "meta": {"request_id": getattr(request.state, "request_id", None), "pagination": page.meta(len(topics))},
         },
     )
 
@@ -483,6 +484,7 @@ async def create_learning_outcome(
 async def list_learning_outcomes(
     topic_id: str,
     request: Request,
+    page: Page,
     include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
@@ -504,10 +506,10 @@ async def list_learning_outcomes(
                     "description": outcome.description.value,
                     "status": outcome.status.value,
                 }
-                for outcome in outcomes
+                for outcome in page.slice(outcomes)
             ],
             "error": None,
-            "meta": {"request_id": getattr(request.state, "request_id", None)},
+            "meta": {"request_id": getattr(request.state, "request_id", None), "pagination": page.meta(len(outcomes))},
         },
     )
 
@@ -599,6 +601,7 @@ async def create_reference_material(
 async def list_reference_materials(
     topic_id: str,
     request: Request,
+    page: Page,
     include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
@@ -612,9 +615,9 @@ async def list_reference_materials(
         status_code=200,
         content={
             "success": True,
-            "data": [_reference_material_payload(item) for item in materials],
+            "data": [_reference_material_payload(item) for item in page.slice(materials)],
             "error": None,
-            "meta": {"request_id": getattr(request.state, "request_id", None)},
+            "meta": {"request_id": getattr(request.state, "request_id", None), "pagination": page.meta(len(materials))},
         },
     )
 
