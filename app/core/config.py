@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     auth_jwt_issuer: str = Field(default="build-backend")
     auth_jwt_audience: str = Field(default="build-api")
     auth_access_token_ttl_seconds: int = Field(default=900)
+    # Registration's work starts at a random point this long after its answer, so a
+    # request sent straight after can't feel it. Zero only where tests must not wait.
+    registration_completion_jitter_seconds: float = Field(default=1.0, ge=0, le=30)
     # Absolute session lifetime: no refresh can extend a session past this.
     auth_session_absolute_ttl_seconds: int = Field(default=30 * 24 * 3600)
     # Idle lifetime of a refresh token; each rotation starts a new window.

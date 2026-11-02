@@ -1,6 +1,7 @@
 import os
 
 os.environ["APP_ENVIRONMENT"] = "testing"
+os.environ["REGISTRATION_COMPLETION_JITTER_SECONDS"] = "0"
 
 import pytest
 

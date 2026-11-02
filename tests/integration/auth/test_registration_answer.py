@@ -1,11 +1,13 @@
 """Registering can't be used to find accounts (contract: POST /identity/users). The answer
 is the same in every way a caller can see, and the work before it is the same."""
 
+import asyncio
 from uuid import uuid4
 
 import pytest
 
 from app.api import identity
+from app.core.config import Settings, settings
 from app.core.exceptions import AppError
 from tests.integration.accounts import register_and_get_id, user_id_for
 
@@ -188,3 +190,29 @@ def test_a_database_failure_after_answering_reaches_no_one(client, monkeypatch):
 
     assert response.status_code == 202
     assert response.content == b""
+
+
+@pytest.mark.parametrize("jitter,waits", [(0.0, False), (0.25, True)])
+def test_the_work_after_the_answer_starts_at_a_random_point(client, monkeypatch, jitter, waits):
+    slept: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def recording(seconds):
+        slept.append(seconds)
+        await real_sleep(0)
+
+    monkeypatch.setattr(settings, "registration_completion_jitter_seconds", jitter)
+    monkeypatch.setattr("app.application.identity.user_service.asyncio.sleep", recording)
+    email = fresh_email()
+    response = client.post("/identity/users", json={"email": email, "password": PASSWORD})
+
+    assert response.status_code == 202
+    assert client.portal.call(user_id_for, email)
+    if waits:
+        assert len(slept) == 1 and 0 <= slept[0] <= jitter
+    else:
+        assert slept == []
+
+
+def test_the_default_keeps_the_work_unaligned():
+    assert Settings.model_fields["registration_completion_jitter_seconds"].default == 1.0

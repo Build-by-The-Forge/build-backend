@@ -9,6 +9,7 @@ import os
 
 # Must run before the app is imported: "testing" would swap in SQLite.
 os.environ["APP_ENVIRONMENT"] = "development"
+os.environ["REGISTRATION_COMPLETION_JITTER_SECONDS"] = "0"
 
 import pytest  # noqa: E402
 
