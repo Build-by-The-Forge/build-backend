@@ -116,6 +116,11 @@ paths:
       summary: Revoke every session of this user
       responses:
         '200': { $ref: '#/components/responses/RevokedSessions' }
+        '400':
+          description: CURRENT_PASSWORD_INCORRECT. Not 401, which tells a client to refresh and retry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -254,6 +259,11 @@ paths:
             schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
       responses:
         '200': { $ref: '#/components/responses/RevokedSessions' }
+        '400':
+          description: CURRENT_PASSWORD_INCORRECT. Not 401, which tells a client to refresh and retry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -1530,6 +1540,7 @@ components:
         - TENANT_ACCESS_DENIED
         - PERMISSION_DENIED
         - BAD_REQUEST
+        - CURRENT_PASSWORD_INCORRECT
         - RESOURCE_NOT_FOUND
         - METHOD_NOT_ALLOWED
         - CONFLICT
@@ -1590,8 +1601,14 @@ components:
       properties:
         email: { type: string, format: email }
         password: { type: string, writeOnly: true }
-        device_id: { type: string }
-        user_agent: { type: string }
+        device_id:
+          type: string
+          pattern: '^[A-Za-z0-9._:-]{1,36}$'
+          description: >
+            An opaque ID the app keeps for this install. It's recorded for the user once the
+            password verifies. If it belongs to another user, the session has no device and
+            the sign-in still succeeds.
+        user_agent: { type: string, maxLength: 512 }
     RefreshRequest:
       type: object
       required: [refresh_token]

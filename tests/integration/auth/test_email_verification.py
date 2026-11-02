@@ -97,7 +97,7 @@ def test_code_works_once(client):
     code = _code_for(email)
 
     assert _verify(client, code).status_code == 200
-    assert _verify(client, code).status_code == 401
+    assert _verify(client, code).status_code == 400
 
 
 def test_expired_code_is_rejected(client):
@@ -112,7 +112,7 @@ def test_expired_code_is_rejected(client):
         ),
     )
 
-    assert _verify(client, code).status_code == 401
+    assert _verify(client, code).status_code == 400
     assert _user(client, user_id).status == UserStatus.PENDING_VERIFICATION
 
 
@@ -137,7 +137,7 @@ def test_resending_invalidates_the_previous_code(client):
 
     assert resp.json()["meta"]["message"] == GENERIC
     assert first != second
-    assert _verify(client, first).status_code == 401
+    assert _verify(client, first).status_code == 400
     assert _verify(client, second).status_code == 200
 
 
@@ -170,7 +170,7 @@ def test_blocked_account_cannot_verify_its_way_back(client, status):
     code = _code_for(email)
     _set_status(client, user_id, status)
 
-    assert _verify(client, code).status_code == 401
+    assert _verify(client, code).status_code == 400
     assert _user(client, user_id).status == status
 
     _resend(client, email)
@@ -179,7 +179,7 @@ def test_blocked_account_cannot_verify_its_way_back(client, status):
 
 def test_garbage_codes_are_rejected(client):
     assert _verify(client, "").status_code == 422
-    assert _verify(client, "not-a-real-code").status_code == 401
+    assert _verify(client, "not-a-real-code").status_code == 400
 
 
 def test_verification_survives_login_and_logout(client):

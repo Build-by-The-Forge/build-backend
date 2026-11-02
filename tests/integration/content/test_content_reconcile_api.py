@@ -90,7 +90,7 @@ async def test_a_student_cannot_reconcile(client, monkeypatch):
     slug = client.get("/identity/memberships", headers={"Authorization": f"Bearer {token}"}).json()
     from tests.integration.assessment.test_attempt_api import headers as tenant_headers
 
-    tenant_slug = next(m["tenant_slug"] for m in slug["data"] if m["tenant_id"] == tenant_id)
+    tenant_slug = slug["data"][0]["tenant_slug"]
     resp = client.post(f"/content/jobs/{job['id']}/reconcile", headers=tenant_headers(token, tenant_slug))
     assert resp.status_code == 403
 

@@ -51,6 +51,7 @@ UnitOfWorkFactory = Callable[[], AbstractAsyncContextManager[Any]]
 class AcceptedInvitation:
     tenant_id: str
     tenant_slug: str
+    tenant_name: str
     membership_id: str
     role: MembershipRole
     reactivated: bool
@@ -227,6 +228,7 @@ class TenantInvitationService:
         return AcceptedInvitation(
             tenant_id=tenant.id.value,
             tenant_slug=tenant.slug.value,
+            tenant_name=tenant.name.value,
             membership_id=membership.id.value,
             role=invitation.role,
             reactivated=reactivated,

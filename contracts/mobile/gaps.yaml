@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: ba7078d9a1ff234db1d85f94cb0de3157efdea2f0ef55c4acd52aac4feb2bbd2
+contract_sha256: cb02161e77bfb2bd75762d68908fb8fa718d287ea702bbfa2f08d594e499146f
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -27,20 +27,6 @@ contract_gaps:
   - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials limit
   - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials offset
   - trailing_slash GET /catalogue/courses
-- id: G-14
-  severity: Medium
-  summary: Identity bodies are untyped, so the contract can't describe them
-  closes_in: M3-B
-  findings:
-  - untyped_body POST /identity/authenticate
-  - untyped_body POST /identity/change-password
-  - untyped_body POST /identity/forgot-password
-  - untyped_body POST /identity/refresh
-  - untyped_body POST /identity/resend-verification
-  - untyped_body POST /identity/reset-password
-  - untyped_body POST /identity/users
-  - untyped_body POST /identity/verify-email
-  - untyped_body POST /invitations/accept
 - id: G-18
   severity: Medium
   summary: Chat returns raw context passages, including uncited ones
@@ -74,7 +60,6 @@ contract_gaps:
   - exposes_field GET /assessment/attempts/{attempt_id} user_id
   - exposes_field GET /assessment/attempts/{attempt_id}/result tenant_id
   - exposes_field GET /assessment/attempts/{attempt_id}/result user_id
-  - exposes_field GET /identity/memberships tenant_id
   - exposes_field POST /assessment/assessments/{assessment_id}/attempts tenant_id
   - exposes_field POST /assessment/assessments/{assessment_id}/attempts user_id
   - exposes_field POST /assessment/attempts/{attempt_id}/submit tenant_id
@@ -182,6 +167,9 @@ implementation_gaps:
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
 closed:
+- id: G-14
+  summary: Identity bodies were untyped, so the contract couldn't describe them
+  proof: tests/integration/auth/test_identity_bodies.py::test_a_malformed_body_is_a_validation_failure
 - id: G-20
   summary: Mobile routes didn't return the contract's envelopes or stable error codes
   proof: tests/integration/test_success_envelope.py::test_every_success_body_on_a_route_has_the_contracts_shape

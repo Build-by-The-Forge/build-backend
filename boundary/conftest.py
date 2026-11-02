@@ -244,7 +244,9 @@ def provision(backend: httpx.Client, label: str) -> Tenant:
     entry = next(m for m in memberships.json()["data"] if m["tenant_slug"] == slug)
     me = backend.get("/identity/me", headers={"Authorization": f"Bearer {token}"}).json()["data"]
     owner = Member(email, me["id"], token, "owner", entry.get("membership_id", entry.get("id", "")))
-    return Tenant(slug=slug, tenant_id=entry["tenant_id"], owner=owner)
+    context = backend.get("/identity/tenant-context", headers={"Authorization": f"Bearer {token}", "X-Tenant-Slug": slug})
+    assert context.status_code == 200, context.text
+    return Tenant(slug=slug, tenant_id=context.json()["data"]["tenant_id"], owner=owner)
 
 
 def invite(backend: httpx.Client, tenant: Tenant, role: str) -> Member:

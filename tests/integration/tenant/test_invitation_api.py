@@ -83,6 +83,8 @@ def test_invite_and_accept_creates_the_membership(client):
 
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["data"]["role"] == "lecturer" and accepted.json()["data"]["tenant_slug"] == slug
+    assert "tenant_id" not in accepted.json()["data"]
+    assert accepted.json()["data"]["tenant_name"]
     context = client.get("/identity/tenant-context", headers={**invitee["headers"], "X-Tenant-Slug": slug})
     assert context.status_code == 200 and context.json()["data"]["role"] == "lecturer"
     listed = client.get(f"/tenants/{slug}/invitations?status=accepted", headers=admin["headers"]).json()["data"]

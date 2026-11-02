@@ -54,7 +54,6 @@ async def my_memberships(
         request,
         [
             {
-                "tenant_id": tenant.id.value,
                 "tenant_slug": tenant.slug.value,
                 "tenant_name": tenant.name.value,
                 "membership_id": membership.id.value,

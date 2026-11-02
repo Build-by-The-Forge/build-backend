@@ -124,7 +124,7 @@ class AuthenticationFailed(ClientError):
 
 class CurrentPasswordIncorrect(ClientError):
     def __init__(self) -> None:
-        super().__init__("current password is incorrect", status_code=400)
+        super().__init__("current password is incorrect", status_code=400, code="CURRENT_PASSWORD_INCORRECT")
 
 
 class AuthenticateUserHandler:
@@ -173,10 +173,19 @@ class AuthenticateUserHandler:
             await self.repository.save(user)
 
         now = datetime.now(timezone.utc)
+        # Only now, with the password verified: a failed sign-in records nothing. A device
+        # that's another user's is left off this session rather than refused.
+        linked_device = (
+            command.device_id
+            if command.device_id
+            and self.session_repository is not None
+            and await self.session_repository.claim_device(user.id.value, command.device_id)
+            else None
+        )
         session = Session(
             id=SessionId(str(uuid4())),
             user_id=user.id,
-            device_id=DeviceId(command.device_id) if command.device_id else None,
+            device_id=DeviceId(linked_device) if linked_device else None,
             user_agent=command.user_agent,
             expires_at=now + self.session_lifetime,
         )
@@ -417,13 +426,13 @@ class ResetPasswordHandler:
 
         user_id = await self.repository.consume_password_reset_token(hash_token(command.token))
         if user_id is None:
-            raise ClientError("invalid reset token", status_code=401, code="TOKEN_INVALID")
+            raise ClientError("invalid reset token", status_code=400, code="TOKEN_INVALID")
 
         user = await self.repository.get_by_id(user_id)
         # A blocked account must not regain access through reset; answer as
         # for a bad code so the response says nothing about the account.
         if user is None or not user.can_authenticate:
-            raise ClientError("invalid reset token", status_code=401, code="TOKEN_INVALID")
+            raise ClientError("invalid reset token", status_code=400, code="TOKEN_INVALID")
 
         user.change_password(password, self.password_hasher)
         await self.repository.save(user)
@@ -503,13 +512,13 @@ class VerifyEmailHandler:
 
         user_id = await self.repository.consume_verification_token(hash_token(command.token))
         if user_id is None:
-            raise ClientError("invalid verification token", status_code=401, code="TOKEN_INVALID")
+            raise ClientError("invalid verification token", status_code=400, code="TOKEN_INVALID")
 
         user = await self.repository.get_by_id(user_id)
         # Verification only ever activates a pending account; it must not
         # bring back one that was locked, disabled or deleted.
         if user is None or not user.can_authenticate or user.status is not AccountStatus.PENDING_VERIFICATION:
-            raise ClientError("invalid verification token", status_code=401, code="TOKEN_INVALID")
+            raise ClientError("invalid verification token", status_code=400, code="TOKEN_INVALID")
 
         user.verify_email()
         await self.repository.save(user)

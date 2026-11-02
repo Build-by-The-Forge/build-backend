@@ -84,6 +84,8 @@ def test_a_verified_address_on_the_tenant_domain_joins_as_a_student(client):
 
     assert resp.status_code == 201, resp.text
     assert (resp.json()["data"]["role"], resp.json()["data"]["created"]) == ("student", True)
+    assert "tenant_id" not in resp.json()["data"]
+    assert resp.json()["data"]["tenant_name"]
     context = client.get("/identity/tenant-context", headers={**student["headers"], "X-Tenant-Slug": slug})
     assert context.status_code == 200 and context.json()["data"]["role"] == "student"
 

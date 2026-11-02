@@ -171,7 +171,7 @@ def test_an_unavailable_dependency_is_service_unavailable(client, monkeypatch):
 
 
 def test_a_bad_verification_token_is_token_invalid(client):
-    assert_error(client.post("/identity/verify-email", json={"token": "nope"}), 401, "TOKEN_INVALID")
+    assert_error(client.post("/identity/verify-email", json={"token": "nope"}), 400, "TOKEN_INVALID")
 
 
 @pytest.mark.asyncio
