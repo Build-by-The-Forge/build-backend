@@ -17,7 +17,6 @@ from app.core.config import settings
 from app.core.exceptions import (
     AppError,
     app_exception_handler,
-    client_safe_error_handler,
     http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
@@ -30,7 +29,6 @@ from app.core.security import SecurityHeadersMiddleware
 from app.core.tracing import configure_tracing
 from app.db.base import Base
 from app.db.session import engine
-from app.domain.client_safe import ClientSafeError
 from app.infrastructure.security.replay_store import RedisReplayStore
 from app.infrastructure.security.service_signature import Direction, ServiceKeys
 from app.middleware.body_limit import RequestBodyLimitMiddleware, RouteBodyLimit
@@ -133,7 +131,6 @@ app.include_router(tenant_join_router)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(AppError, app_exception_handler)
-app.add_exception_handler(ClientSafeError, client_safe_error_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 

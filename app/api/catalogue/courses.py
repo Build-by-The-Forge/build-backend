@@ -1,3 +1,7 @@
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import ParamSpec
+
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
@@ -16,12 +20,13 @@ from app.application.catalogue.course_service import CourseService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
 from app.core.dependencies import require_permission
-from app.core.exceptions import ClientHTTPException
+from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import CourseStatus, LearningOutcomeStatus, ReferenceMaterialStatus, TopicStatus
+from app.domain.client_safe import ClientSafeError
 
 router = APIRouter(prefix="/catalogue/courses", tags=["catalogue"])
 topic_router = APIRouter(prefix="/catalogue/topics", tags=["catalogue"])
@@ -29,6 +34,23 @@ learning_outcome_router = APIRouter(prefix="/catalogue/learning-outcomes", tags=
 reference_router = APIRouter(prefix="/catalogue/reference-materials", tags=["catalogue"])
 container = build_container()
 service = container.get(CourseService)
+
+P = ParamSpec("P")
+
+
+def _answers_refusals(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[P, Awaitable[JSONResponse]]:
+    """For a route that takes what a client wrote: a domain rule refusing it is the caller's
+    to fix. Only here, not globally, since a marked error from a stored row or an internal
+    invariant is still a server failure, and a read has no client input to blame."""
+
+    @wraps(route)
+    async def answering(*args: P.args, **kwargs: P.kwargs) -> JSONResponse:
+        try:
+            return await route(*args, **kwargs)
+        except ClientSafeError as exc:
+            raise ClientHTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=public_message(exc)) from exc
+
+    return answering
 
 
 def _sees_archived(context: TenantContext) -> bool:
@@ -121,6 +143,7 @@ async def get_course(
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
+@_answers_refusals
 async def create_course(
     request: Request,
     payload: CreateCourseRequest,
@@ -163,6 +186,7 @@ async def create_course(
 
 
 @router.patch("/{course_id}", status_code=status.HTTP_200_OK)
+@_answers_refusals
 async def update_course(
     course_id: str,
     request: Request,
@@ -241,6 +265,7 @@ async def _transition_course(
 
 
 @router.post("/{course_id}/topics", status_code=status.HTTP_201_CREATED)
+@_answers_refusals
 async def create_topic(
     course_id: str,
     request: Request,
@@ -311,6 +336,7 @@ async def list_topics(
 
 
 @topic_router.patch("/{topic_id}", status_code=status.HTTP_200_OK)
+@_answers_refusals
 async def update_topic(
     topic_id: str,
     request: Request,
@@ -365,6 +391,7 @@ async def archive_topic(
 
 
 @topic_router.post("/{topic_id}/learning-outcomes", status_code=status.HTTP_201_CREATED)
+@_answers_refusals
 async def create_learning_outcome(
     topic_id: str,
     request: Request,
@@ -432,6 +459,7 @@ async def list_learning_outcomes(
 
 
 @learning_outcome_router.patch("/{learning_outcome_id}", status_code=status.HTTP_200_OK)
+@_answers_refusals
 async def update_learning_outcome(
     learning_outcome_id: str,
     request: Request,
@@ -483,6 +511,7 @@ async def archive_learning_outcome(
 
 
 @topic_router.post("/{topic_id}/reference-materials", status_code=status.HTTP_201_CREATED)
+@_answers_refusals
 async def create_reference_material(
     topic_id: str,
     request: Request,
@@ -536,6 +565,7 @@ async def list_reference_materials(
 
 
 @reference_router.patch("/{reference_material_id}", status_code=status.HTTP_200_OK)
+@_answers_refusals
 async def update_reference_material(
     reference_material_id: str,
     request: Request,
