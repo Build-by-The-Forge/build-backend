@@ -18,5 +18,5 @@ async def user_id_for(email: str) -> str:
 
 def register_and_get_id(client, payload: dict[str, Any], **request_options: Any) -> str:
     registered = client.post("/identity/users", json=payload, **request_options)
-    assert registered.status_code in (201, 202), registered.text
+    assert registered.status_code == 202, registered.text
     return client.portal.call(user_id_for, payload["email"])

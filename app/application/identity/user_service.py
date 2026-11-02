@@ -1,5 +1,8 @@
 from datetime import timedelta
 
+import structlog
+from sqlalchemy.exc import IntegrityError
+
 from app.application.common.uow import IdentityUnitOfWorkFactory
 from app.application.identity.commands import (
     AuthenticateUserCommand,
@@ -19,6 +22,7 @@ from app.application.identity.handlers import (
     AuthenticationFailed,
     ChangePasswordHandler,
     CurrentPasswordIncorrect,
+    EmailVerificationRequest,
     ForgotPasswordHandler,
     GetCurrentUserHandler,
     IssuedSession,
@@ -27,6 +31,7 @@ from app.application.identity.handlers import (
     RefreshSessionHandler,
     RefreshTokenReuseError,
     RegisterUserHandler,
+    RegistrationRequest,
     RequestEmailVerificationHandler,
     ResetPasswordHandler,
     RevokeSessionHandler,
@@ -34,6 +39,7 @@ from app.application.identity.handlers import (
     email_verification_email,
     issue_email_verification,
     password_reset_email,
+    prepare_registration,
 )
 from app.application.identity.ports.email_sender import EmailSender
 from app.application.identity.ports.password_hasher import PasswordHasher
@@ -49,6 +55,8 @@ from app.domain.identity.user import User
 from app.domain.repositories.user import UserRepository
 from app.events.base import DomainEvent
 from app.events.event_bus import EventBus
+
+logger = structlog.get_logger(__name__)
 
 
 class UserService:
@@ -71,23 +79,44 @@ class UserService:
         self.email_sender = email_sender
         self.security_events = security_events
 
-    async def register_user(self, email: str, password: str) -> User:
-        command = RegisterUserCommand(email=email, password=password)
-        if self.uow_factory is not None:
-            async with self.uow_factory() as uow:
-                handler = RegisterUserHandler(repository=uow.users, password_hasher=self.password_hasher)
-                user = await handler.handle(command)
-                verification = await issue_email_verification(uow.users, user, self._verification_lifetime())
-            # Sent only after the account and code are committed.
-            await self.email_sender.send(email_verification_email(verification))
-            await self.security_events.record(SecurityEvent.ACCOUNT_REGISTERED, user_id=user.id.value)
-            self._publish_events(user.pull_events())
-            return user
+    def prepare_registration(self, email: str, password: str) -> RegistrationRequest:
+        """Refuses what breaks a rule. Everything else gets the same answer."""
+        return prepare_registration(RegisterUserCommand(email=email, password=password), self.password_hasher)
 
-        handler = RegisterUserHandler(repository=self.repository, password_hasher=self.password_hasher)
-        user = await handler.handle(command)
+    async def complete_registration(self, request: RegistrationRequest) -> None:
+        """After the response, so how long it takes can't show which answer it was. A
+        failure here reaches no one: nothing was promised but the attempt, and registering
+        again is safe. Only a new account gets an email."""
+        try:
+            account = await self._create_account(request)
+        except Exception:
+            logger.exception("registration_failed")
+            return
+        if account is None:
+            return
+        user, verification = account
+        if verification is not None:
+            try:
+                await self.email_sender.send(email_verification_email(verification))
+            except Exception:
+                logger.exception("registration_email_failed", user_id=user.id.value)
+        await self.security_events.record(SecurityEvent.ACCOUNT_REGISTERED, user_id=user.id.value)
         self._publish_events(user.pull_events())
-        return user
+
+    async def _create_account(self, request: RegistrationRequest) -> tuple[User, EmailVerificationRequest | None] | None:
+        if self.uow_factory is None:
+            user = await RegisterUserHandler(repository=self.repository).handle(request)
+            return (user, None) if user is not None else None
+        try:
+            async with self.uow_factory() as uow:
+                user = await RegisterUserHandler(repository=uow.users).handle(request)
+                if user is None:
+                    return None
+                verification = await issue_email_verification(uow.users, user, self._verification_lifetime())
+        except IntegrityError:
+            # Another request registered this email between the check and the commit.
+            return None
+        return user, verification
 
     async def authenticate_user(
         self,

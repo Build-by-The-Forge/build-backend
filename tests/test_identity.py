@@ -35,14 +35,11 @@ def test_register_user_creates_identity_record(client) -> None:
         json={"email": "student@example.com", "password": "StrongPass123!"},
     )
 
-    assert response.status_code == 201
-    payload = response.json()
-    assert payload["success"] is True
-    assert payload["data"]["email"] == "student@example.com"
-    assert payload["data"]["is_active"] is True
+    assert response.status_code == 202
+    assert response.content == b""
 
 
-def test_duplicate_user_email_is_rejected(client) -> None:
+def test_a_repeated_registration_gets_the_same_answer(client) -> None:
     first = client.post(
         "/identity/users",
         json={"email": "dup@example.com", "password": "StrongPass123!"},
@@ -52,9 +49,8 @@ def test_duplicate_user_email_is_rejected(client) -> None:
         json={"email": "dup@example.com", "password": "StrongPass123!"},
     )
 
-    assert first.status_code == 201
-    assert second.status_code == 409
-    assert second.json()["success"] is False
+    assert first.status_code == second.status_code == 202
+    assert first.content == second.content == b""
 
 
 def test_invalid_email_is_rejected(client) -> None:

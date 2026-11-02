@@ -261,7 +261,7 @@ def invite(backend: httpx.Client, tenant: Tenant, role: str) -> Member:
     invitation_code = outbox_code(email, "You have been invited", mark)
 
     registered = backend.post("/identity/users", json={"email": email, "password": PASSWORD})
-    assert registered.status_code == 201, registered.text
+    assert registered.status_code == 202, registered.text
     verified = backend.post("/identity/verify-email", json={"token": outbox_code(email, "Verify your BUILD", mark)})
     assert verified.status_code == 200, verified.text
     token = login(backend, email)

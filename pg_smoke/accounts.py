@@ -11,7 +11,7 @@ from app.infrastructure.identity.models import UserModel
 
 async def register_and_get_id(client, payload: dict[str, Any]) -> str:
     registered = await client.post("/identity/users", json=payload)
-    assert registered.status_code in (201, 202), registered.text
+    assert registered.status_code == 202, registered.text
     async with SessionLocal() as session:
         user_id = await session.scalar(select(UserModel.id).where(UserModel.email == payload["email"].strip().lower()))
     assert user_id is not None, f"no account for {payload['email']}"

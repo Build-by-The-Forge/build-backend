@@ -251,6 +251,6 @@ async def test_losing_the_race_for_a_device_id_is_answered_by_the_constraint(cli
 async def _registered_id(client) -> str:
     email = f"smoke-{uuid4().hex}@example.com"
     registered = await client.post("/identity/users", json={"email": email, "password": PASSWORD})
-    assert registered.status_code in (201, 202), registered.text
+    assert registered.status_code == 202, registered.text
     async with SessionLocal() as session:
         return (await session.execute(text("select id from users where email = :e"), {"e": email})).scalar_one()

@@ -42,7 +42,7 @@ EXTRA = [
 def account(client) -> tuple[str, dict[str, str]]:
     email = f"bodies-{uuid4()}@example.com"
     payload = {"email": email, "password": PASSWORD}
-    assert client.post("/identity/users", json=payload).status_code == 201
+    assert client.post("/identity/users", json=payload).status_code == 202
     token = client.post("/identity/authenticate", json=payload).json()["data"]["access_token"]
     return email, {"Authorization": f"Bearer {token}"}
 
