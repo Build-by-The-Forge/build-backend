@@ -89,6 +89,14 @@ def _sees_archived(context: TenantContext) -> bool:
     return authorization.can(context, Permission.CATALOGUE_UPDATE)
 
 
+def _lists_archived(context: TenantContext, include_archived: bool) -> bool:
+    """A list holds only what's active, for everyone, as the contract says. Staff who need
+    the rest ask for it; anyone else asking is refused rather than quietly ignored."""
+    if include_archived and not _sees_archived(context):
+        raise ClientHTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="permission denied")
+    return include_archived
+
+
 async def _readable_course(course_id: str, context: TenantContext) -> Course:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
     if course is None or not (_sees_archived(context) or course.status is CourseStatus.ACTIVE):
@@ -111,10 +119,11 @@ async def _readable_topic(topic_id: str, context: TenantContext) -> tuple[Course
 async def list_courses(
     request: Request,
     department_id: str | None = None,
+    include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
-    if not _sees_archived(context):
+    if not _lists_archived(context, include_archived):
         courses = [course for course in courses if course.status is CourseStatus.ACTIVE]
 
     return JSONResponse(
@@ -341,11 +350,13 @@ async def create_topic(
 async def list_topics(
     course_id: str,
     request: Request,
+    include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
+    archived_too = _lists_archived(context, include_archived)
     course = await _readable_course(course_id, context)
     topics = sorted(
-        (topic for topic in course.topics if _sees_archived(context) or topic.status is TopicStatus.ACTIVE),
+        (topic for topic in course.topics if archived_too or topic.status is TopicStatus.ACTIVE),
         key=lambda topic: (topic.sequence.value, topic.id.value),
     )
     return JSONResponse(
@@ -465,15 +476,13 @@ async def create_learning_outcome(
 async def list_learning_outcomes(
     topic_id: str,
     request: Request,
+    include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
+    archived_too = _lists_archived(context, include_archived)
     _, topic = await _readable_topic(topic_id, context)
     outcomes = sorted(
-        (
-            outcome
-            for outcome in topic.learning_outcomes
-            if _sees_archived(context) or outcome.status is LearningOutcomeStatus.ACTIVE
-        ),
+        (outcome for outcome in topic.learning_outcomes if archived_too or outcome.status is LearningOutcomeStatus.ACTIVE),
         key=lambda outcome: (outcome.sequence.value, outcome.id.value),
     )
     return JSONResponse(
@@ -583,15 +592,13 @@ async def create_reference_material(
 async def list_reference_materials(
     topic_id: str,
     request: Request,
+    include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
+    archived_too = _lists_archived(context, include_archived)
     course, _ = await _readable_topic(topic_id, context)
     materials = sorted(
-        (
-            material
-            for material in course.references
-            if _sees_archived(context) or material.status is ReferenceMaterialStatus.ACTIVE
-        ),
+        (material for material in course.references if archived_too or material.status is ReferenceMaterialStatus.ACTIVE),
         key=lambda material: (material.title.value, material.id.value),
     )
     return JSONResponse(

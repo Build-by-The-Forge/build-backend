@@ -1,5 +1,6 @@
-"""What a reader sees of the catalogue: only what's active, at every level. Staff who
-manage it still see what they archived, or they couldn't restore or audit it."""
+"""What a reader sees of the catalogue: only what's active, at every level. A list holds
+only what's active for staff too, as the contract says, until they ask for the rest. They
+can still open what they archived, or they couldn't restore or audit it."""
 
 from uuid import uuid4
 
@@ -81,15 +82,33 @@ async def test_a_reader_cant_find_an_archived_course_anywhere(client):
 
 
 @pytest.mark.asyncio
-async def test_staff_still_see_what_they_archived(client):
+async def test_staff_see_what_they_archived_only_when_they_ask(client):
     course_id, staff, _, add_topic = await catalogue(client)
     topic_id = add_topic("Limits")
     archive(client, f"/catalogue/topics/{topic_id}", staff)
     archive(client, f"/catalogue/courses/{course_id}", staff)
 
-    assert course_id in ids(client.get("/catalogue/courses/", headers=staff))
+    assert course_id not in ids(client.get("/catalogue/courses/", headers=staff))
+    assert course_id in ids(client.get("/catalogue/courses/?include_archived=true", headers=staff))
     assert client.get(f"/catalogue/courses/{course_id}", headers=staff).json()["data"]["status"] == "archived"
-    assert topic_id in ids(client.get(f"/catalogue/courses/{course_id}/topics", headers=staff))
+    assert topic_id not in ids(client.get(f"/catalogue/courses/{course_id}/topics", headers=staff))
+    assert topic_id in ids(client.get(f"/catalogue/courses/{course_id}/topics?include_archived=true", headers=staff))
+
+
+@pytest.mark.asyncio
+async def test_a_reader_asking_for_whats_archived_is_refused(client):
+    course_id, staff, student, add_topic = await catalogue(client)
+    topic_id = add_topic("Limits")
+
+    for path in (
+        "/catalogue/courses/",
+        f"/catalogue/courses/{course_id}/topics",
+        f"/catalogue/topics/{topic_id}/learning-outcomes",
+        f"/catalogue/topics/{topic_id}/reference-materials",
+    ):
+        refused = client.get(f"{path}?include_archived=true", headers=student)
+        assert refused.status_code == 403, path
+        assert client.get(f"{path}?include_archived=true", headers=staff).status_code == 200, path
 
 
 @pytest.mark.asyncio
@@ -112,7 +131,9 @@ async def test_a_reader_doesnt_see_an_archived_outcome(client):
     archive(client, f"/catalogue/learning-outcomes/{archived}", staff)
 
     assert ids(client.get(f"/catalogue/topics/{topic_id}/learning-outcomes", headers=student)) == [kept]
-    assert set(ids(client.get(f"/catalogue/topics/{topic_id}/learning-outcomes", headers=staff))) == {kept, archived}
+    assert ids(client.get(f"/catalogue/topics/{topic_id}/learning-outcomes", headers=staff)) == [kept]
+    path = f"/catalogue/topics/{topic_id}/learning-outcomes?include_archived=true"
+    assert set(ids(client.get(path, headers=staff))) == {kept, archived}
 
 
 @pytest.mark.asyncio
@@ -124,4 +145,6 @@ async def test_a_reader_doesnt_see_an_archived_reference_material(client):
     archive(client, f"/catalogue/reference-materials/{archived}", staff)
 
     assert ids(client.get(f"/catalogue/topics/{topic_id}/reference-materials", headers=student)) == [kept]
-    assert set(ids(client.get(f"/catalogue/topics/{topic_id}/reference-materials", headers=staff))) == {kept, archived}
+    assert ids(client.get(f"/catalogue/topics/{topic_id}/reference-materials", headers=staff)) == [kept]
+    path = f"/catalogue/topics/{topic_id}/reference-materials?include_archived=true"
+    assert set(ids(client.get(path, headers=staff))) == {kept, archived}
