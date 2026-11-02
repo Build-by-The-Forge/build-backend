@@ -7,6 +7,10 @@ class SessionRepository(Protocol):
     async def save(self, session: Session) -> Session:
         raise NotImplementedError
 
+    async def claim_device(self, user_id: str, device_id: str) -> bool:
+        """Record a new device for this user. False if it belongs to someone else."""
+        raise NotImplementedError
+
     async def get_by_id(self, session_id: str) -> Session | None:
         raise NotImplementedError
 

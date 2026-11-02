@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 
+from app.api.identity_schemas import TokenRequest
 from app.application.identity.throttle import AuthThrottle
 from app.application.tenant.invitation_service import TenantInvitationService
 from app.bootstrap.container import build_container
@@ -86,16 +87,16 @@ async def revoke_invitation(
 @router.post("/invitations/accept", status_code=status.HTTP_200_OK)
 async def accept_invitation(
     request: Request,
-    payload: dict[str, object],
+    payload: TokenRequest,
     principal: AuthenticatedPrincipal = Depends(get_verified_principal),
 ) -> JSONResponse:
     await throttle.accept_invitation(client_ip(request))
-    accepted = await service.accept(principal.user_id, _text(payload, "token"))
+    accepted = await service.accept(principal.user_id, payload.token)
     return _envelope(
         request,
         {
-            "tenant_id": accepted.tenant_id,
             "tenant_slug": accepted.tenant_slug,
+            "tenant_name": accepted.tenant_name,
             "membership_id": accepted.membership_id,
             "role": accepted.role.value,
             "reactivated": accepted.reactivated,

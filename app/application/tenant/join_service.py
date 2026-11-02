@@ -41,6 +41,7 @@ NOT_ELIGIBLE = "you are not eligible to join this tenant"
 class JoinResult:
     tenant_id: str
     tenant_slug: str
+    tenant_name: str
     membership: Membership
     created: bool
 
@@ -93,7 +94,7 @@ class TenantJoinService:
                 "role": membership.role.value,
             },
         )
-        return JoinResult(tenant.id.value, tenant.slug.value, membership, created=True)
+        return JoinResult(tenant.id.value, tenant.slug.value, tenant.name.value, membership, created=True)
 
     @staticmethod
     def _existing(tenant: Any, membership: Membership) -> JoinResult:
@@ -102,7 +103,7 @@ class TenantJoinService:
                 "your membership of this tenant was revoked; ask an administrator",
                 status_code=403,
             )
-        return JoinResult(tenant.id.value, tenant.slug.value, membership, created=False)
+        return JoinResult(tenant.id.value, tenant.slug.value, tenant.name.value, membership, created=False)
 
     async def get_policy(self, context: TenantContext) -> TenantJoinPolicy:
         async with self._uow() as uow:

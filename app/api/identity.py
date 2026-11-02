@@ -1,6 +1,15 @@
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
+from app.api.identity_schemas import (
+    AuthenticateRequest,
+    ChangePasswordRequest,
+    EmailRequest,
+    RefreshRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenRequest,
+)
 from app.application.identity.handlers import (
     AuthenticationFailed,
     CurrentPasswordIncorrect,
@@ -20,7 +29,7 @@ from app.core.dependencies import (
     get_current_tenant_context,
     require_permission,
 )
-from app.core.exceptions import AppError, ClientError, RateLimitedError
+from app.core.exceptions import AppError, RateLimitedError
 from app.core.principal import AuthenticatedPrincipal
 from app.core.request_context import client_ip as _client_ip
 from app.core.tenant_context import TenantContext
@@ -36,13 +45,11 @@ security_events = container.get(SQLAlchemySecurityEventRecorder)
 
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)
-async def register_user(request: Request, payload: dict[str, str]) -> JSONResponse:
-    email = payload.get("email", "")
-    password = payload.get("password", "")
+async def register_user(request: Request, payload: RegisterRequest) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
     await throttle.register(_client_ip(request))
 
-    user = await service.register_user(email, password)
+    user = await service.register_user(payload.email, payload.password)
 
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
@@ -60,11 +67,11 @@ async def register_user(request: Request, payload: dict[str, str]) -> JSONRespon
 
 
 @router.post("/authenticate", status_code=status.HTTP_200_OK)
-async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONResponse:
-    email = payload.get("email", "")
-    password = payload.get("password", "")
-    device_id = payload.get("device_id")
-    user_agent = payload.get("user_agent")
+async def authenticate_user(request: Request, payload: AuthenticateRequest) -> JSONResponse:
+    email = payload.email
+    password = payload.password
+    device_id = payload.device_id
+    user_agent = payload.user_agent
     request_id = getattr(request.state, "request_id", None)
     ip = _client_ip(request)
     try:
@@ -94,8 +101,8 @@ async def authenticate_user(request: Request, payload: dict[str, str]) -> JSONRe
 
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)
-async def refresh_session(request: Request, payload: dict[str, str]) -> JSONResponse:
-    refresh_token = payload.get("refresh_token", "")
+async def refresh_session(request: Request, payload: RefreshRequest) -> JSONResponse:
+    refresh_token = payload.refresh_token
     request_id = getattr(request.state, "request_id", None)
     await throttle.refresh(_client_ip(request))
 
@@ -158,11 +165,11 @@ async def logout_session(
 
 
 @router.post("/verify-email", status_code=status.HTTP_200_OK)
-async def verify_email(request: Request, payload: dict[str, str]) -> JSONResponse:
+async def verify_email(request: Request, payload: TokenRequest) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
     await throttle.verify_email(_client_ip(request))
 
-    user = await service.verify_email(payload.get("token", ""))
+    user = await service.verify_email(payload.token)
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -176,9 +183,9 @@ async def verify_email(request: Request, payload: dict[str, str]) -> JSONRespons
 
 
 @router.post("/resend-verification", status_code=status.HTTP_200_OK)
-async def resend_verification(request: Request, payload: dict[str, str]) -> JSONResponse:
+async def resend_verification(request: Request, payload: EmailRequest) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
-    email = payload.get("email", "")
+    email = payload.email
     await throttle.resend_verification(email, _client_ip(request))
 
     await service.request_email_verification(email)
@@ -195,8 +202,8 @@ async def resend_verification(request: Request, payload: dict[str, str]) -> JSON
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
-async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResponse:
-    email = payload.get("email", "")
+async def forgot_password(request: Request, payload: EmailRequest) -> JSONResponse:
+    email = payload.email
     request_id = getattr(request.state, "request_id", None)
     await throttle.forgot_password(email, _client_ip(request))
 
@@ -214,9 +221,9 @@ async def forgot_password(request: Request, payload: dict[str, str]) -> JSONResp
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
-async def reset_password(request: Request, payload: dict[str, str]) -> JSONResponse:
-    token = payload.get("token", "")
-    password = payload.get("password", "")
+async def reset_password(request: Request, payload: ResetPasswordRequest) -> JSONResponse:
+    token = payload.token
+    password = payload.password
     request_id = getattr(request.state, "request_id", None)
     ip = _client_ip(request)
     await throttle.reset_password(ip)
@@ -233,24 +240,19 @@ async def reset_password(request: Request, payload: dict[str, str]) -> JSONRespo
 @router.post("/change-password", status_code=status.HTTP_200_OK)
 async def change_password(
     request: Request,
-    payload: dict[str, object],
+    payload: ChangePasswordRequest,
     principal: AuthenticatedPrincipal = Depends(get_current_principal),
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None)
-    current_password = payload.get("current_password", "")
-    new_password = payload.get("new_password", "")
-    revoke_other_sessions = payload.get("revoke_other_sessions", True)
     await throttle.before_password_change(principal.user_id)
 
     try:
-        if not (isinstance(current_password, str) and isinstance(new_password, str) and isinstance(revoke_other_sessions, bool)):
-            raise ClientError("invalid change-password payload", status_code=422)
         revoked = await service.change_password(
             principal.user_id,
             principal.session_id,
-            current_password,
-            new_password,
-            revoke_other_sessions=revoke_other_sessions,
+            payload.current_password,
+            payload.new_password,
+            revoke_other_sessions=payload.revoke_other_sessions,
         )
     except AppError as exc:
         if isinstance(exc, CurrentPasswordIncorrect):

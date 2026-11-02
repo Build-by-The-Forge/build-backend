@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -8,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api import identity as identity_api
 from app.db.session import SessionLocal
+from app.infrastructure.identity.sqlalchemy_session_repository import SQLAlchemySessionRepository
 from scripts.check_schema_drift import find_unexpected_drift
 
 # The app has one engine whose pooled asyncpg connections belong to the loop
@@ -180,11 +182,36 @@ async def test_sign_in_writes_security_records(client):
     assert (logins, events) == (1, 1)
 
 
-@pytest.mark.xfail(strict=True, reason="known: unregistered device_id hits sessions.device_id FK -> 500 (hardening list)")
-async def test_sign_in_with_an_unregistered_device_id_is_a_client_error(client):
+async def test_sign_in_with_a_new_device_id_records_it(client):
     email = f"smoke-{uuid4().hex}@example.com"
     await client.post("/identity/users", json={"email": email, "password": PASSWORD})
 
     response = await client.post("/identity/authenticate", json={"email": email, "password": PASSWORD, "device_id": str(uuid4())})
 
-    assert response.status_code < 500
+    assert response.status_code == 200, response.text
+    device_id = response.json()["data"]["device_id"]
+    assert device_id
+    async with SessionLocal() as session:
+        linked = await session.execute(text("select count(*) from sessions where device_id = :d"), {"d": device_id})
+        assert linked.scalar_one() == 1
+
+
+async def test_two_users_racing_for_one_new_device_id_never_fail(client):
+    device_id = str(uuid4())
+    user_ids = []
+    for _ in range(2):
+        email = f"smoke-{uuid4().hex}@example.com"
+        registered = await client.post("/identity/users", json={"email": email, "password": PASSWORD})
+        user_ids.append(registered.json()["data"]["id"])
+
+    async def claim(user_id):
+        async with SessionLocal() as session:
+            claimed = await SQLAlchemySessionRepository(session).claim_device(user_id, device_id)
+            await session.commit()
+            return claimed
+
+    results = await asyncio.gather(*(claim(user_id) for user_id in user_ids))
+    assert sorted(results) == [False, True]
+    async with SessionLocal() as session:
+        count = await session.execute(text("select count(*) from devices where id = :d"), {"d": device_id})
+        assert count.scalar_one() == 1

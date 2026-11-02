@@ -41,8 +41,8 @@ def _policy(policy: TenantJoinPolicy) -> dict[str, object]:
 
 def _joined(result: JoinResult) -> dict[str, object]:
     return {
-        "tenant_id": result.tenant_id,
         "tenant_slug": result.tenant_slug,
+        "tenant_name": result.tenant_name,
         "membership_id": result.membership.id.value,
         "role": result.membership.role.value,
         "created": result.created,

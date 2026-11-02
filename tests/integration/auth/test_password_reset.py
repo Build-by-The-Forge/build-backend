@@ -114,7 +114,7 @@ def test_reset_code_works_once(client):
     assert _reset(client, code).status_code == 200
     assert _login(client, email, NEW_PASSWORD).status_code == 200
     assert _login(client, email, PASSWORD).status_code == 401
-    assert _reset(client, code, "Another-Passphrase-77").status_code == 401
+    assert _reset(client, code, "Another-Passphrase-77").status_code == 400
 
 
 def test_requesting_a_new_code_invalidates_the_previous_one(client):
@@ -125,7 +125,7 @@ def test_requesting_a_new_code_invalidates_the_previous_one(client):
     second = _code_for(email)
 
     assert first != second
-    assert _reset(client, first).status_code == 401
+    assert _reset(client, first).status_code == 400
     assert _reset(client, second).status_code == 200
 
 
@@ -142,7 +142,7 @@ def test_expired_reset_code_is_rejected(client):
         ),
     )
 
-    assert _reset(client, code).status_code == 401
+    assert _reset(client, code).status_code == 400
     assert _login(client, email, PASSWORD).status_code == 200
 
 
@@ -164,7 +164,7 @@ def test_reset_rejects_garbage_and_weak_passwords(client):
     _forgot(client, email)
 
     assert _reset(client, "").status_code == 422
-    assert _reset(client, "not-a-real-code").status_code == 401
+    assert _reset(client, "not-a-real-code").status_code == 400
     assert _reset(client, _code_for(email), "short").status_code == 422
 
 
@@ -195,7 +195,7 @@ def test_account_blocked_after_the_code_was_sent_cannot_reset(client):
 
     resp = _reset(client, code)
 
-    assert resp.status_code == 401
+    assert resp.status_code == 400
     assert resp.json()["error"]["message"] == "invalid reset token"
     assert resp.json()["error"]["code"] == "TOKEN_INVALID"
     _db(client, lambda db: db.execute(update(UserModel).where(UserModel.id == user_id).values(status=UserStatus.ACTIVE)))

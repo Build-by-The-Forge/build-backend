@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.identity.user import Session
@@ -11,7 +12,7 @@ from app.infrastructure.identity.mappers import (
     domain_session_to_model,
     session_model_to_domain,
 )
-from app.infrastructure.identity.models import SessionModel
+from app.infrastructure.identity.models import DeviceModel, SessionModel
 
 
 class SQLAlchemySessionRepository(SessionRepository):
@@ -27,6 +28,23 @@ class SQLAlchemySessionRepository(SessionRepository):
             model = domain_session_to_model(session, model=model)
         await self._session.flush()
         return session_model_to_domain(model)
+
+    async def claim_device(self, user_id: str, device_id: str) -> bool:
+        owner = await self._device_owner(device_id)
+        if owner is None:
+            try:
+                # In its own savepoint: losing a race to the same ID mustn't end the sign-in.
+                async with self._session.begin_nested():
+                    self._session.add(
+                        DeviceModel(id=device_id, user_id=user_id, platform="unknown", last_seen=datetime.now(timezone.utc))
+                    )
+                return True
+            except IntegrityError:
+                owner = await self._device_owner(device_id)
+        return owner == user_id
+
+    async def _device_owner(self, device_id: str) -> str | None:
+        return await self._session.scalar(select(DeviceModel.user_id).where(DeviceModel.id == device_id))
 
     async def get_by_id(self, session_id: str) -> Session | None:
         model = await self._find_by_id(session_id)

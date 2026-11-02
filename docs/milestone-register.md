@@ -17,7 +17,7 @@ There are two tracks, and neither one's progress counts for the other:
 | M1 | Intended mobile API contract | M0 | The contract describes what the system should guarantee | `tests/test_mobile_contract.py` | **Merged** | `31faad4` |
 | M2 | Drift gate against the contract | M1 | Every known gap is listed, and a closed gap stays closed | `test_mobile_contract_drift.py` | **Merged** | `16a5227` (merge) |
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
-| M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Not started** | |
+| M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **In progress:** bodies and devices in review; registration's 202 next | |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Not started** | |
 | M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Not started** | |
 | M3-E | Assessment contract | M3-A, L1 to L3 | G-10 and G-39 with their partners. Lifecycle gaps are already closed | HTTP, drift gate | **Partly done** by L1 to L3 | |
@@ -33,8 +33,8 @@ M3 is **not close to done**. The fixes merged so far closed security and lifecyc
 
 | | Count | IDs |
 |---|---|---|
-| Closed | 14 | G-03, G-06, G-08, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-29, G-35, G-36, G-37 |
-| Open | 25 | 8 contract, 17 implementation, listed in `contracts/mobile/gaps.yaml` |
+| Closed | 15 | G-03, G-06, G-08, G-14, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-29, G-35, G-36, G-37 |
+| Open | 24 | 7 contract, 17 implementation, listed in `contracts/mobile/gaps.yaml` |
 | Open and blocking | 2 | G-01, G-02: students can't upload or start ingestion |
 
 `contracts/mobile/gaps.yaml` stays the source of truth for individual gaps. This table is a snapshot of it. Don't reopen a closed gap without new evidence.
@@ -123,8 +123,7 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 | The event fingerprint is an unkeyed SHA-256 of low-entropy data, so someone with database access could test guesses. It must be covered by retention and account deletion | #42 | Memory activation |
 | Fingerprint immutability is application-level; consider a database trigger or equivalent | #42 | Before memory activation |
 | The fault-arming idle check is a harness synchronization, not a guarantee against work enqueued after it; it relies on no unrelated jobs starting during arming | #69 | Keep true in the gate's phases |
-| Registration reveals an existing email through a distinct 409 | Security review, 2026-11-01 | Unscheduled |
-| Identity routes accept raw `dict` payloads | Security review, 2026-11-01 | Unscheduled |
+| Registration reveals an existing email through a distinct 409 | Security review, 2026-11-01 | M3-B, its registration PR |
 | No HSTS or CSP headers | Security review, 2026-11-01 | Unscheduled |
 | The AI service's report text stays in the logs, minus what redaction catches, so log access needs protecting | #72 | First deployment |
 | `tests/integration/content/test_real_ai_dispatch.py` runs in no workflow. Its behaviours are covered by the boundary gate, by name | #72 | Before release, confirm line by line or retire the file |

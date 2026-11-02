@@ -80,7 +80,7 @@ def test_wrong_current_password_is_refused_without_a_401(client):
         resp = _change(client, mine["access_token"], current_password=wrong)
         assert resp.status_code == 400
         assert resp.json()["error"]["message"] == "current password is incorrect"
-        assert resp.json()["error"]["code"] == "BAD_REQUEST"
+        assert resp.json()["error"]["code"] == "CURRENT_PASSWORD_INCORRECT"
 
     assert _login(client, email, PASSWORD).status_code == 200
     assert _whoami(client, mine["access_token"]).status_code == 200
@@ -108,7 +108,7 @@ def test_change_password_cancels_outstanding_reset_codes(client):
     assert _change(client, mine["access_token"]).status_code == 200
 
     reset = client.post("/identity/reset-password", json={"token": code, "password": "Third-Passphrase-99"})
-    assert reset.status_code == 401
+    assert reset.status_code == 400
 
     async def outstanding():
         async with SessionLocal() as db:
