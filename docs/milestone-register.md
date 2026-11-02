@@ -17,7 +17,7 @@ There are two tracks, and neither one's progress counts for the other:
 | M1 | Intended mobile API contract | M0 | The contract describes what the system should guarantee | `tests/test_mobile_contract.py` | **Merged** | `31faad4` |
 | M2 | Drift gate against the contract | M1 | Every known gap is listed, and a closed gap stays closed | `test_mobile_contract_drift.py` | **Merged** | `16a5227` (merge) |
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
-| M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete** once registration's 202 merges: G-14 closed; G-39's membership finding closed, the rest with M3-E | #75 `4faca25` (merge) |
+| M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete:** G-14 closed; registration's durable, non-enumerating 202; G-39's membership finding closed, the rest with M3-E | #75 `4faca25`, #76 `604f8b1` (merges) |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Not started** | |
 | M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Not started** | |
 | M3-E | Assessment contract | M3-A, L1 to L3 | G-10 and G-39 with their partners. Lifecycle gaps are already closed | HTTP, drift gate | **Partly done** by L1 to L3 | |
@@ -54,6 +54,36 @@ M3 is **not close to done**. The fixes merged so far closed security and lifecyc
 
 **L4 is the plan's final L-track PR.** The plan defines no L5, L6 or L7, so this register doesn't list any.
 
+## M3 exit checklist
+
+Set by the reviewer on #76. M3 is done when all of these hold, each with evidence:
+
+- M3-A: G-08, G-20 and G-22 closed.
+- M3-B: G-14, and registration's durable, non-enumerating 202, closed.
+- M3-C: G-09, and catalogue pagination and trailing-slash requirements, closed.
+- M3-D: all upload, ingestion, rights, ownership, deduplication, retry and deletion requirements closed.
+- M3-E: assessment pagination and the remaining G-39 findings closed, with the L1 to L3 guarantees preserved.
+- M3-F: conversation persistence, cited responses and grounding behaviour closed.
+- The contract-drift tests pass with no unapproved gaps.
+- PostgreSQL, authorization and boundary tests pass.
+- The mobile contract and backend implementation agree.
+- This register is updated with exact merged SHAs and acceptance evidence.
+
+**M3-D is larger than its route gaps.** Closing every listed gap isn't enough. These are also acceptance criteria:
+
+- My Shelf and Public views, with 100 to 500 level filters and course filtering.
+- Uploads private by default, with explicit consent to publish.
+- Form-like shelf submission, prefilled only when classification is confident enough.
+- Chat uploads and shelf uploads entering the same backend-owned ingestion pipeline.
+- Exact duplicate detection that never reveals another student's private record.
+- Reuse of eligible stored content without needless reprocessing.
+- Authorized opening, reading and downloading of public resources.
+- Processing states and retry visible to the student.
+- Rights, provenance, trust class and audience restrictions preserved through processing.
+- **Deduplicating a physical file must not merge ownership, publication consent or access permissions.** M3-D must prove this separation.
+
+M4 is a security boundary, not a search improvement: being indexed doesn't mean every student may retrieve a document.
+
 ## Approved order
 
 Decided by the reviewer on #66. M3-A goes before L4, which changes the plan's scheduling, not L4's architecture or its existence. Two conditions hold:
@@ -87,13 +117,15 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 
 **M-track**
 
-5. M3-B and M3-C.
-6. M3-D, which holds the two blockers.
-7. M3-E and M3-F.
-8. M4.
-9. M5. Its scaffolding can start once M3-A's error shape is merged.
-10. M6, against the generated client. Screen design can start earlier.
-11. M7 on pinned SHAs. Its test design can start at any time.
+5. M3-B: complete (#75, #76).
+6. M3-C, now, with M3-D's design prepared alongside.
+7. M3-D, the largest slice, which holds the two blockers.
+8. M3-E, which can run alongside M3-C.
+9. M3-F, its design alongside M3-D, tested against the completed authorization rules.
+10. M4.
+11. M5. Its scaffolding can start once M3-A's error shape is merged.
+12. M6, against the generated client. Screen design can start earlier.
+13. M7 on pinned SHAs. Its test design can start at any time.
 
 **L-track, independently:** AI-1, then L4 after M3-A, then memory activation under its own approval once every gate condition is implemented and verified.
 
