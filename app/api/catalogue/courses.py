@@ -4,6 +4,7 @@ from typing import ParamSpec
 
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.api.catalogue.schemas import (
     CourseResponse,
@@ -23,6 +24,12 @@ from app.core.dependencies import require_permission
 from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.errors import (
+    CourseAlreadyArchivedError,
+    LearningOutcomeAlreadyArchivedError,
+    ReferenceMaterialAlreadyArchivedError,
+    TopicAlreadyArchivedError,
+)
 from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.topic import Topic
 from app.domain.catalogue.value_objects import CourseStatus, LearningOutcomeStatus, ReferenceMaterialStatus, TopicStatus
@@ -49,6 +56,30 @@ def _answers_refusals(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[P
             return await route(*args, **kwargs)
         except ClientSafeError as exc:
             raise ClientHTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=public_message(exc)) from exc
+
+    return answering
+
+
+def _answers_conflicts(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[P, Awaitable[JSONResponse]]:
+    """The request is fine but the catalogue's current state refuses it: already archived,
+    or a code, slug or sequence that's taken. The database's constraints decide the second,
+    so two racing requests get the same answer as two in a row."""
+
+    @wraps(route)
+    async def answering(*args: P.args, **kwargs: P.kwargs) -> JSONResponse:
+        try:
+            return await route(*args, **kwargs)
+        except (
+            CourseAlreadyArchivedError,
+            TopicAlreadyArchivedError,
+            LearningOutcomeAlreadyArchivedError,
+            ReferenceMaterialAlreadyArchivedError,
+        ) as exc:
+            raise ClientHTTPException(status_code=status.HTTP_409_CONFLICT, detail="this is already archived") from exc
+        except IntegrityError as exc:
+            raise ClientHTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="this conflicts with an existing catalogue record"
+            ) from exc
 
     return answering
 
@@ -144,6 +175,7 @@ async def get_course(
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 @_answers_refusals
+@_answers_conflicts
 async def create_course(
     request: Request,
     payload: CreateCourseRequest,
@@ -187,6 +219,7 @@ async def create_course(
 
 @router.patch("/{course_id}", status_code=status.HTTP_200_OK)
 @_answers_refusals
+@_answers_conflicts
 async def update_course(
     course_id: str,
     request: Request,
@@ -241,6 +274,7 @@ async def archive_course(
     return await _transition_course(course_id, request, context, "archive")
 
 
+@_answers_conflicts
 async def _transition_course(
     course_id: str,
     request: Request,
@@ -266,6 +300,7 @@ async def _transition_course(
 
 @router.post("/{course_id}/topics", status_code=status.HTTP_201_CREATED)
 @_answers_refusals
+@_answers_conflicts
 async def create_topic(
     course_id: str,
     request: Request,
@@ -337,6 +372,7 @@ async def list_topics(
 
 @topic_router.patch("/{topic_id}", status_code=status.HTTP_200_OK)
 @_answers_refusals
+@_answers_conflicts
 async def update_topic(
     topic_id: str,
     request: Request,
@@ -371,6 +407,7 @@ async def update_topic(
 
 
 @topic_router.post("/{topic_id}/archive", status_code=status.HTTP_200_OK)
+@_answers_conflicts
 async def archive_topic(
     topic_id: str,
     request: Request,
@@ -392,6 +429,7 @@ async def archive_topic(
 
 @topic_router.post("/{topic_id}/learning-outcomes", status_code=status.HTTP_201_CREATED)
 @_answers_refusals
+@_answers_conflicts
 async def create_learning_outcome(
     topic_id: str,
     request: Request,
@@ -460,6 +498,7 @@ async def list_learning_outcomes(
 
 @learning_outcome_router.patch("/{learning_outcome_id}", status_code=status.HTTP_200_OK)
 @_answers_refusals
+@_answers_conflicts
 async def update_learning_outcome(
     learning_outcome_id: str,
     request: Request,
@@ -491,6 +530,7 @@ async def update_learning_outcome(
 
 
 @learning_outcome_router.post("/{learning_outcome_id}/archive", status_code=status.HTTP_200_OK)
+@_answers_conflicts
 async def archive_learning_outcome(
     learning_outcome_id: str,
     request: Request,
@@ -512,6 +552,7 @@ async def archive_learning_outcome(
 
 @topic_router.post("/{topic_id}/reference-materials", status_code=status.HTTP_201_CREATED)
 @_answers_refusals
+@_answers_conflicts
 async def create_reference_material(
     topic_id: str,
     request: Request,
@@ -566,6 +607,7 @@ async def list_reference_materials(
 
 @reference_router.patch("/{reference_material_id}", status_code=status.HTTP_200_OK)
 @_answers_refusals
+@_answers_conflicts
 async def update_reference_material(
     reference_material_id: str,
     request: Request,
@@ -593,6 +635,7 @@ async def update_reference_material(
 
 
 @reference_router.post("/{reference_material_id}/archive", status_code=status.HTTP_200_OK)
+@_answers_conflicts
 async def archive_reference_material(
     reference_material_id: str,
     request: Request,
