@@ -22,7 +22,7 @@ async def _insert(session, table: str, columns: dict) -> None:
     await session.execute(text(f"insert into {table} ({names}) values ({values})"), columns)
 
 
-async def _institution(client) -> tuple[dict, dict]:
+async def institution(client, role: str = "student") -> tuple[dict, dict]:
     now = datetime.now(timezone.utc)
     stamps = {"status": "active", "created_at": now, "updated_at": now}
     tenant_id, slug = str(uuid4()), f"struct-{uuid4().hex[:10]}"
@@ -78,7 +78,7 @@ async def _institution(client) -> tuple[dict, dict]:
         await _insert(
             session,
             "memberships",
-            {"id": str(uuid4()), "tenant_id": tenant_id, "user_id": user_id, "role": "student", **stamps},
+            {"id": str(uuid4()), "tenant_id": tenant_id, "user_id": user_id, "role": role, **stamps},
         )
         await session.commit()
     reader = {"Authorization": f"Bearer {login.json()['data']['access_token']}", "X-Tenant-Slug": slug}
@@ -86,7 +86,7 @@ async def _institution(client) -> tuple[dict, dict]:
 
 
 async def test_the_structure_reads_on_the_migrated_schema(client):
-    reader, ids = await _institution(client)
+    reader, ids = await institution(client)
 
     for _ in range(7):
         faculties = await client.get("/catalogue/faculties", headers=reader)
