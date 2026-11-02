@@ -11,22 +11,13 @@ contract_gaps:
   evidence: Read from job_schemas.py.
 - id: G-10
   severity: Medium
-  summary: Catalogue, assessment and attempt lists aren't paginated, and the course list needs a trailing slash
-  closes_in: M3-C, M3-E
+  summary: Assessment and attempt lists aren't paginated
+  closes_in: M3-E
   findings:
   - missing_query_parameter GET /assessment/assessments limit
   - missing_query_parameter GET /assessment/assessments offset
   - missing_query_parameter GET /assessment/attempts limit
   - missing_query_parameter GET /assessment/attempts offset
-  - missing_query_parameter GET /catalogue/courses limit
-  - missing_query_parameter GET /catalogue/courses offset
-  - missing_query_parameter GET /catalogue/courses/{course_id}/topics limit
-  - missing_query_parameter GET /catalogue/courses/{course_id}/topics offset
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/learning-outcomes limit
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/learning-outcomes offset
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials limit
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials offset
-  - trailing_slash GET /catalogue/courses
 - id: G-18
   severity: Medium
   summary: Chat returns raw context passages, including uncited ones
