@@ -1,5 +1,3 @@
-import asyncio
-import random
 from datetime import timedelta
 
 import structlog
@@ -89,10 +87,6 @@ class UserService:
         """After the response, so how long it takes can't show which answer it was. A
         failure here reaches no one: nothing was promised but the attempt, and registering
         again is safe. Only a new account gets an email."""
-        jitter = settings.registration_completion_jitter_seconds
-        if jitter > 0:
-            # Not a secret, just unaligned: it's for the request sent right after this one.
-            await asyncio.sleep(random.uniform(0, jitter))  # noqa: S311
         try:
             account = await self._create_account(request)
         except Exception:

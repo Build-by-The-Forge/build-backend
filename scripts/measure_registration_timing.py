@@ -94,8 +94,6 @@ def _median_difference_interval(new: list[float], existing: list[float], rng: ra
 
 
 def measure(samples: int, email_delay: float, seed: int, sustained_samples: int) -> dict[str, object]:
-    from app.core.config import settings
-
     rng = random.Random(seed)
     server, base_url = _start_server(email_delay)
     try:
@@ -110,7 +108,7 @@ def measure(samples: int, email_delay: float, seed: int, sustained_samples: int)
             for email in existing_emails:
                 assert register(email)[1].status_code == 202
             # Their accounts are created after their answers: "existing" must be true.
-            time.sleep(settings.registration_completion_jitter_seconds + email_delay + 2)
+            time.sleep(email_delay + 2)
 
             plan = ["new"] * (samples + WARM_UP) + ["existing"] * (samples + WARM_UP)
             rng.shuffle(plan)
@@ -146,7 +144,6 @@ def measure(samples: int, email_delay: float, seed: int, sustained_samples: int)
         "samples_per_kind": samples,
         "warm_up_discarded": WARM_UP,
         "email_delay_ms": round(email_delay * 1000),
-        "completion_jitter_seconds": settings.registration_completion_jitter_seconds,
         "seed": seed,
         "new": _summary(new),
         "existing": _summary(existing),

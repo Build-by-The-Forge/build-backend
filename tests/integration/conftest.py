@@ -4,7 +4,6 @@ import os
 from collections.abc import AsyncIterator
 
 os.environ["APP_ENVIRONMENT"] = "testing"
-os.environ["REGISTRATION_COMPLETION_JITTER_SECONDS"] = "0"
 
 import pytest
 from fastapi.testclient import TestClient
