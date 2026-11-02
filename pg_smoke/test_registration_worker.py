@@ -7,6 +7,7 @@ import pytest
 from sqlalchemy import select, text
 
 from app.api import identity
+from app.application.identity import user_service
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.infrastructure.identity.models import PendingRegistrationModel, UserModel
@@ -78,3 +79,55 @@ async def test_a_processed_registration_leaves_no_password_hash_behind(client, m
     async with SessionLocal() as session:
         left = await session.execute(text("select count(*) from pending_registrations where email = :e"), {"e": email})
         assert left.scalar_one() == 0
+
+
+async def test_counting_a_failure_on_a_row_another_worker_finished_is_harmless(client):
+    # The race: this worker failed, and another finished the row before it could count that.
+    async with SessionLocal() as session:
+        gone = await SQLAlchemyPendingRegistrationRepository(session).record_failure(str(uuid4()), 5)
+        await session.commit()
+    assert gone is False
+
+
+async def test_a_row_is_dropped_at_exactly_its_limit(client, monkeypatch):
+    monkeypatch.setattr(settings, "registration_inline_for_tests", False)
+    email = f"limit-{uuid4().hex}@example.com"
+    await client.post("/identity/users", json={"email": email, "password": PASSWORD})
+    async with SessionLocal() as session:
+        row_id = await session.scalar(select(PendingRegistrationModel.id).where(PendingRegistrationModel.email == email))
+
+    results = []
+    for _ in range(3):
+        async with SessionLocal() as session:
+            results.append(await SQLAlchemyPendingRegistrationRepository(session).record_failure(row_id, 3))
+            await session.commit()
+
+    assert results == [False, False, True]
+    assert (await _counts(email))[0] == 0
+
+
+async def test_a_failure_that_cannot_be_counted_does_not_stop_the_pass(client, monkeypatch):
+    monkeypatch.setattr(settings, "registration_inline_for_tests", False)
+    bad, good = f"bad-{uuid4().hex}@example.com", f"good-{uuid4().hex}@example.com"
+    await client.post("/identity/users", json={"email": bad, "password": PASSWORD})
+    await client.post("/identity/users", json={"email": good, "password": PASSWORD})
+
+    real_issue = user_service.issue_email_verification
+
+    async def failing_for_bad(repository, user, lifetime):
+        if user.email.value == bad:
+            raise RuntimeError("database trouble")
+        return await real_issue(repository, user, lifetime)
+
+    async def cannot_count(_registration_id, _exc):
+        raise RuntimeError("database still in trouble")
+
+    with monkeypatch.context() as broken:
+        broken.setattr(user_service, "issue_email_verification", failing_for_bad)
+        broken.setattr(identity.service, "_record_registration_failure", cannot_count)
+        await identity.service.process_pending_registrations()
+
+    assert await _counts(good) == (0, 1)
+    assert await _counts(bad) == (1, 0)
+    await identity.service.process_pending_registrations()
+    assert await _counts(bad) == (0, 1)

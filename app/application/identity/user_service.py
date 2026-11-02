@@ -108,7 +108,11 @@ class UserService:
             except Exception as exc:
                 if not claimed:
                     raise
-                await self._record_registration_failure(claimed[-1], exc)
+                try:
+                    await self._record_registration_failure(claimed[-1], exc)
+                except Exception:
+                    # It's retried next pass regardless. This pass still has other rows.
+                    logger.exception("registration_failure_not_recorded", registration_id=claimed[-1])
             excluded_ids.update(claimed)
 
     async def _process_one_registration(self, excluded_ids: set[str], claimed: list[str]) -> bool:

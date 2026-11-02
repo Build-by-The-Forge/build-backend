@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.repositories.pending_registration import PendingRegistration, PendingRegistrationRepository
@@ -62,11 +62,15 @@ class SQLAlchemyPendingRegistrationRepository(PendingRegistrationRepository):
         await self._session.execute(delete(PendingRegistrationModel).where(PendingRegistrationModel.id == registration_id))
 
     async def record_failure(self, registration_id: str, max_attempts: int) -> bool:
-        model = await self._session.get(PendingRegistrationModel, registration_id)
-        if model is None:
+        # One statement: another worker may have finished this row since this one failed.
+        attempts = await self._session.scalar(
+            update(PendingRegistrationModel)
+            .where(PendingRegistrationModel.id == registration_id)
+            .values(attempts=PendingRegistrationModel.attempts + 1)
+            .returning(PendingRegistrationModel.attempts)
+            .execution_options(synchronize_session=False)
+        )
+        if attempts is None or attempts < max_attempts:
             return False
-        model.attempts += 1
-        if model.attempts >= max_attempts:
-            await self._session.delete(model)
-            return True
-        return False
+        await self.delete(registration_id)
+        return True
