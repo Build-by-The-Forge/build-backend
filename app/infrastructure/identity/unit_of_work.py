@@ -3,6 +3,9 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.identity.sqlalchemy_pending_registration_repository import (
+    SQLAlchemyPendingRegistrationRepository,
+)
 from app.infrastructure.identity.sqlalchemy_refresh_token_repository import (
     SQLAlchemyRefreshTokenRepository,
 )
@@ -21,6 +24,7 @@ class IdentityUnitOfWork(UnitOfWork):
         self.users = SQLAlchemyUserRepository(session)
         self.sessions = SQLAlchemySessionRepository(session)
         self.refresh_tokens = SQLAlchemyRefreshTokenRepository(session)
+        self.pending_registrations = SQLAlchemyPendingRegistrationRepository(session)
 
 
 @asynccontextmanager

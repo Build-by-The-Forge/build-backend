@@ -20,6 +20,7 @@ from app.domain.repositories.curriculum_source import CurriculumSourceRepository
 from app.domain.repositories.institutional_adoption import (
     InstitutionalAdoptionRepository,
 )
+from app.domain.repositories.pending_registration import PendingRegistrationRepository
 from app.domain.repositories.question import QuestionRepository
 from app.domain.repositories.refresh_token import RefreshTokenRepository
 from app.domain.repositories.session import SessionRepository
@@ -60,6 +61,9 @@ class IdentityUnitOfWorkPort(Protocol):
 
     @property
     def refresh_tokens(self) -> RefreshTokenRepository: ...
+
+    @property
+    def pending_registrations(self) -> PendingRegistrationRepository: ...
 
 
 class CurriculumUnitOfWorkPort(Protocol):
