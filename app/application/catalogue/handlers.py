@@ -30,6 +30,7 @@ from app.domain.catalogue.value_objects import (
     TopicSlug,
     TopicTitle,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.course import CourseRepository
 
 
@@ -38,6 +39,12 @@ class CreateCourseHandler:
         self.repository = repository
 
     async def handle(self, command: CreateCourseCommand) -> Course:
+        # The database's foreign key can't see tenants: only this keeps a course out of
+        # another institution's department.
+        if command.tenant_id is not None and not await self.repository.has_active_department(
+            command.department_id, command.tenant_id
+        ):
+            raise ClientSafeError("department not found")
         course = Course.create(
             department_id=DepartmentId(command.department_id),
             code=CourseCode(command.code),

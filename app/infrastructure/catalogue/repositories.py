@@ -11,6 +11,7 @@ from app.infrastructure.db.models.catalogue import (
     ReferenceMaterialModel,
     TopicModel,
 )
+from app.infrastructure.db.models.tenant_core import DepartmentModel
 
 
 class SqlAlchemyCourseRepository(CourseRepository):
@@ -38,6 +39,16 @@ class SqlAlchemyCourseRepository(CourseRepository):
                 model.tenant_id = tenant_id
         await self._session.flush()
         return course
+
+    async def has_active_department(self, department_id: str, tenant_id: str) -> bool:
+        found = await self._session.scalar(
+            select(DepartmentModel.id).where(
+                DepartmentModel.id == department_id,
+                DepartmentModel.tenant_id == tenant_id,
+                DepartmentModel.status == "active",
+            )
+        )
+        return found is not None
 
     async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         statement = select(CourseModel).where(CourseModel.id == course_id)

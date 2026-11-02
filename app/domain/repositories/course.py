@@ -7,6 +7,9 @@ class CourseRepository(Protocol):
     async def save(self, course: Course, tenant_id: str | None = None) -> Course:
         raise NotImplementedError
 
+    async def has_active_department(self, department_id: str, tenant_id: str) -> bool:
+        raise NotImplementedError
+
     async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         raise NotImplementedError
 
