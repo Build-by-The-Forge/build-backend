@@ -268,7 +268,8 @@ def invite(backend: httpx.Client, tenant: Tenant, role: str) -> Member:
     accepted = backend.post("/invitations/accept", json={"token": invitation_code}, headers={"Authorization": f"Bearer {token}"})
     assert accepted.status_code == 200, accepted.text
     data = accepted.json()["data"]
-    member = Member(email, registered.json()["data"]["id"], token, role, data["membership_id"])
+    me = backend.get("/identity/me", headers={"Authorization": f"Bearer {token}"}).json()["data"]
+    member = Member(email, me["id"], token, role, data["membership_id"])
     tenant.members[role] = member
     return member
 
