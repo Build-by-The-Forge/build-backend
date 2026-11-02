@@ -14,11 +14,14 @@ from app.api.catalogue.schemas import (
 )
 from app.application.catalogue.course_service import CourseService
 from app.bootstrap.container import build_container
-from app.core.authorization import Permission
+from app.core.authorization import Permission, authorization
 from app.core.dependencies import require_permission
 from app.core.exceptions import ClientHTTPException
 from app.core.tenant_context import TenantContext
+from app.domain.catalogue.course import Course
 from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.topic import Topic
+from app.domain.catalogue.value_objects import CourseStatus, LearningOutcomeStatus, ReferenceMaterialStatus, TopicStatus
 
 router = APIRouter(prefix="/catalogue/courses", tags=["catalogue"])
 topic_router = APIRouter(prefix="/catalogue/topics", tags=["catalogue"])
@@ -28,6 +31,29 @@ container = build_container()
 service = container.get(CourseService)
 
 
+def _sees_archived(context: TenantContext) -> bool:
+    """Whoever can change the catalogue sees all of it. Everyone else sees only what's active."""
+    return authorization.can(context, Permission.CATALOGUE_UPDATE)
+
+
+async def _readable_course(course_id: str, context: TenantContext) -> Course:
+    course = await service.get_course(course_id, tenant_id=context.tenant_id)
+    if course is None or not (_sees_archived(context) or course.status is CourseStatus.ACTIVE):
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+    return course
+
+
+async def _readable_topic(topic_id: str, context: TenantContext) -> tuple[Course, Topic]:
+    """A topic is out of reach if it or its course is archived, for whoever can't see those."""
+    course = await service.get_course_by_topic(topic_id, context.tenant_id)
+    topic = next((item for item in course.topics if item.id.value == topic_id), None) if course else None
+    if course is None or topic is None:
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="topic not found")
+    if not _sees_archived(context) and (course.status is not CourseStatus.ACTIVE or topic.status is not TopicStatus.ACTIVE):
+        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="topic not found")
+    return course, topic
+
+
 @router.get("/", status_code=status.HTTP_200_OK)
 async def list_courses(
     request: Request,
@@ -35,6 +61,8 @@ async def list_courses(
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
+    if not _sees_archived(context):
+        courses = [course for course in courses if course.status is CourseStatus.ACTIVE]
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -67,9 +95,7 @@ async def get_course(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    course = await service.get_course(course_id, tenant_id=context.tenant_id)
-    if course is None:
-        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+    course = await _readable_course(course_id, context)
 
     response = CourseResponse(
         id=course.id.value,
@@ -257,9 +283,11 @@ async def list_topics(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    course = await service.get_course(course_id, tenant_id=context.tenant_id)
-    if course is None:
-        raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
+    course = await _readable_course(course_id, context)
+    topics = sorted(
+        (topic for topic in course.topics if _sees_archived(context) or topic.status is TopicStatus.ACTIVE),
+        key=lambda topic: (topic.sequence.value, topic.id.value),
+    )
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -274,7 +302,7 @@ async def list_topics(
                     "sequence": topic.sequence.value,
                     "status": topic.status.value,
                 }
-                for topic in course.topics
+                for topic in topics
             ],
             "error": None,
             "meta": {"request_id": getattr(request.state, "request_id", None)},
@@ -374,12 +402,15 @@ async def list_learning_outcomes(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    course = await service.get_course_by_topic(topic_id, context.tenant_id)
-    if course is None:
-        raise ClientHTTPException(status_code=404, detail="topic not found")
-    topic = next((item for item in course.topics if item.id.value == topic_id), None)
-    if topic is None:
-        raise ClientHTTPException(status_code=404, detail="topic not found")
+    _, topic = await _readable_topic(topic_id, context)
+    outcomes = sorted(
+        (
+            outcome
+            for outcome in topic.learning_outcomes
+            if _sees_archived(context) or outcome.status is LearningOutcomeStatus.ACTIVE
+        ),
+        key=lambda outcome: (outcome.sequence.value, outcome.id.value),
+    )
     return JSONResponse(
         status_code=200,
         content={
@@ -392,7 +423,7 @@ async def list_learning_outcomes(
                     "description": outcome.description.value,
                     "status": outcome.status.value,
                 }
-                for outcome in topic.learning_outcomes
+                for outcome in outcomes
             ],
             "error": None,
             "meta": {"request_id": getattr(request.state, "request_id", None)},
@@ -484,14 +515,20 @@ async def list_reference_materials(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    course = await service.get_course_by_topic(topic_id, context.tenant_id)
-    if course is None or not any(item.id.value == topic_id for item in course.topics):
-        raise ClientHTTPException(status_code=404, detail="topic not found")
+    course, _ = await _readable_topic(topic_id, context)
+    materials = sorted(
+        (
+            material
+            for material in course.references
+            if _sees_archived(context) or material.status is ReferenceMaterialStatus.ACTIVE
+        ),
+        key=lambda material: (material.title.value, material.id.value),
+    )
     return JSONResponse(
         status_code=200,
         content={
             "success": True,
-            "data": [_reference_material_payload(item) for item in course.references],
+            "data": [_reference_material_payload(item) for item in materials],
             "error": None,
             "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
