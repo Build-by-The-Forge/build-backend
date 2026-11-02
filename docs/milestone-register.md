@@ -123,8 +123,8 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 | The event fingerprint is an unkeyed SHA-256 of low-entropy data, so someone with database access could test guesses. It must be covered by retention and account deletion | #42 | Memory activation |
 | Fingerprint immutability is application-level; consider a database trigger or equivalent | #42 | Before memory activation |
 | The fault-arming idle check is a harness synchronization, not a guarantee against work enqueued after it; it relies on no unrelated jobs starting during arming | #69 | Keep true in the gate's phases |
-| A registration's work runs in the web process after its answer. Probing continuously through the next second can see it: about 1 to 3 ms on the slowest probe, measured on one machine. Bounded by the limit of 30 registrations per hour per IP | M3-B registration | A durable queue and worker, when one is built |
-| A crash between a registration's answer and its commit loses it, with no email. Registering again is safe, but nothing tells the person | M3-B registration | The same queue and worker |
+| Accepted registrations wait in `pending_registrations`, with their password hash, until `backend-registration-worker` runs. A row is dropped after 5 failed attempts, but there's no age limit, so a stopped worker leaves hashes in place, and nothing reports the backlog yet | M3-B registration | First deployment: run the worker, and alert on backlog |
+| The worker and requests share the database, so in principle its writes could slow a request. Six seeds showed no consistent difference through the database, within a noise floor of about 14 ms on one machine. An attacker with a quieter database might do better | M3-B registration | Re-measure in the deployed environment |
 | New devices hold `platform: unknown`, and `last_seen` isn't updated on later sign-ins | #75 | When devices are used |
 | The gateway's uncertain-timeout unit tests need reviewing | #74 | Before release |
 | No HSTS or CSP headers | Security review, 2026-11-01 | Unscheduled |
