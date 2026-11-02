@@ -11,7 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.metrics import errors_total
 from app.core.security import SECURITY_HEADERS
-from app.domain.client_safe import ClientMessage
+from app.domain.client_safe import ClientMessage, ClientSafeError
 
 logger = structlog.get_logger(__name__)
 
@@ -280,6 +280,14 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
     # The final point of disclosure: unmarked text never leaves, whoever raised it.
     message = exc.message if isinstance(exc, ClientMessage) else message_for_status(exc.status_code)
     return error_response(request, exc.status_code, exc.code, message, headers=headers)
+
+
+async def client_safe_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """A domain rule refused the request and no route said otherwise. That's the caller's
+    to fix, not a server failure, and its message is written for clients."""
+    if not isinstance(exc, ClientSafeError):
+        raise TypeError("expected ClientSafeError")
+    return error_response(request, status.HTTP_422_UNPROCESSABLE_CONTENT, "VALIDATION_FAILED", str(exc))
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
