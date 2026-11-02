@@ -1,43 +1,112 @@
-"""How long POST /identity/users takes for a new and for an existing email.
+"""How long POST /identity/users takes for a new and for an existing email, and whether
+anything a caller can reach behaves differently afterwards.
 
-Real uvicorn, real HTTP over a socket, the real Argon2 hasher, and whatever database
-POSTGRES_URL names. The per-IP limit is lifted, because it exists to stop exactly this.
-New and existing requests are shuffled together, so drift affects both alike. Each uses
-its own email, and a warm-up is discarded.
+Four processes, as deployed: uvicorn over a real socket, the registration worker, a stall
+detector and this client, with the real Argon2 hasher and whatever database POSTGRES_URL
+names. The per-IP limit is lifted, because it exists to stop exactly this. New and existing
+requests are shuffled together so drift affects both alike, each uses its own email, and a
+warm-up is discarded.
 
-The email sender is replaced by one that takes --email-delay seconds. A response that
-waited for it would show up as a difference of at least that much.
+The comparisons:
 
-Three comparisons. new vs existing is the channel itself. The noise floor compares two
-random halves of the existing samples, so it's what a difference of nothing looks like.
-The follow-up compares a health check sent straight after each registration, because a
-new account's work continues after its answer and could slow whatever comes next. The
-sustained probe keeps checking through the jitter window and keeps the slowest answer,
-which is what someone looking for that work would try.
+- new vs existing: the channel itself.
+- noise floor: two random halves of the existing samples, so what no difference looks like.
+- follow-up: a health check sent straight after each registration.
+- sustained: for each of the first registrations, probing a route without the database and
+  one with it, for longer than the worker's interval, keeping the slowest of each. That's
+  what someone looking for the worker's writes would try, and the database is the only
+  thing the worker and a request still share.
 
-    python scripts/measure_registration_timing.py --samples 300 --email-delay 0.5
+Outliers: answers over three times their kind's median, each checked against the stall
+detector, a separate process that notices when it isn't scheduled on time. An outlier
+overlapping a stall happened while the whole machine was held up.
 
-Prints JSON. It can't prove there's no channel: it measures one machine, and a patient
-attacker averages across many requests. The per-IP limit is what bounds that.
+    python scripts/measure_registration_timing.py --samples 300
+
+Prints JSON. It can't prove there's no channel: it measures one machine.
 """
 
 import argparse
 import asyncio
 import json
+import os
 import random
 import socket
 import statistics
-import threading
+import subprocess
+import sys
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
-import httpx
-import uvicorn
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+import httpx  # noqa: E402
 
 PASSWORD = "Correct-Horse-Battery-9"
 WARM_UP = 20
 BOOTSTRAP_ROUNDS = 2000
-PROBE_WINDOW_SECONDS = 1.2
+PROBE_WINDOW_SECONDS = 1.5
+STALL_TICK_SECONDS = 0.005
+STALL_REPORTED_SECONDS = 0.05
+
+
+def _replace_email(identity, email_delay: float) -> None:
+    async def slow_send(_message: object) -> None:
+        await asyncio.sleep(email_delay)
+
+    identity.service.email_sender.send = slow_send
+
+
+def _run_server(port: int, email_delay: float) -> None:
+    import uvicorn
+
+    from app.api import identity
+    from app.main import app
+
+    async def unlimited(_ip: str) -> None:
+        return None
+
+    identity.throttle.register = unlimited
+    _replace_email(identity, email_delay)
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="error", lifespan="on")
+
+
+def _run_worker(email_delay: float) -> None:
+    from app.api import identity
+    from app.core.config import settings
+
+    _replace_email(identity, email_delay)
+
+    async def forever() -> None:
+        while True:
+            await identity.service.process_pending_registrations()
+            await asyncio.sleep(settings.worker_registration_interval_seconds)
+
+    asyncio.run(forever())
+
+
+def _run_stall_detector() -> None:
+    """Prints [started_at, seconds] per stall when told to stop by closing its stdin."""
+    import threading
+
+    stalls: list[list[float]] = []
+    done = threading.Event()
+    threading.Thread(target=lambda: (sys.stdin.read(), done.set()), daemon=True).start()
+    while not done.is_set():
+        before = time.time()
+        time.sleep(STALL_TICK_SECONDS)
+        late = time.time() - before - STALL_TICK_SECONDS
+        if late > STALL_REPORTED_SECONDS:
+            stalls.append([before, late])
+    print(json.dumps(stalls))
+
+
+def _spawn(role: str, *arguments: str, **options) -> subprocess.Popen:
+    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    return subprocess.Popen([sys.executable, __file__, "--role", role, *arguments], cwd=ROOT, env=env, **options)
 
 
 def _free_port() -> int:
@@ -46,25 +115,27 @@ def _free_port() -> int:
         return probe.getsockname()[1]
 
 
-def _start_server(email_delay: float) -> tuple[uvicorn.Server, str]:
-    from app.api import identity
-    from app.main import app
+async def _pending_count() -> int:
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
 
-    async def unlimited(_ip: str) -> None:
-        return None
+    from app.core.config import settings
 
-    async def slow_send(_message: object) -> None:
-        await asyncio.sleep(email_delay)
+    engine = create_async_engine(settings.effective_postgres_url, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            return (await connection.execute(text("select count(*) from pending_registrations"))).scalar_one()
+    finally:
+        await engine.dispose()
 
-    identity.throttle.register = unlimited  # type: ignore[method-assign]
-    identity.service.email_sender.send = slow_send  # type: ignore[method-assign]
 
-    port = _free_port()
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", lifespan="on"))
-    threading.Thread(target=server.run, daemon=True).start()
-    while not server.started:
-        time.sleep(0.05)
-    return server, f"http://127.0.0.1:{port}"
+def _wait_until_processed(timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while asyncio.run(_pending_count()) > 0:
+        if time.monotonic() > deadline:
+            raise TimeoutError("the worker didn't finish the seeded registrations")
+        time.sleep(0.5)
 
 
 def _summary(samples: list[float]) -> dict[str, float | int]:
@@ -83,63 +154,110 @@ def _summary(samples: list[float]) -> dict[str, float | int]:
     }
 
 
-def _median_difference_interval(new: list[float], existing: list[float], rng: random.Random) -> list[float]:
-    """A bootstrap 95% interval for median(new) - median(existing), in milliseconds."""
+def _compare(first: list[float], second: list[float], rng: random.Random) -> dict[str, object]:
+    """Median difference, with a bootstrap 95% interval, in milliseconds."""
     differences = sorted(
-        statistics.median(rng.choices(new, k=len(new))) - statistics.median(rng.choices(existing, k=len(existing)))
+        statistics.median(rng.choices(first, k=len(first))) - statistics.median(rng.choices(second, k=len(second)))
         for _ in range(BOOTSTRAP_ROUNDS)
     )
     low, high = differences[int(BOOTSTRAP_ROUNDS * 0.025)], differences[int(BOOTSTRAP_ROUNDS * 0.975)]
-    return [round(low * 1000, 2), round(high * 1000, 2)]
+    return {
+        "difference_ms": round((statistics.median(first) - statistics.median(second)) * 1000, 2),
+        "interval_95_ms": [round(low * 1000, 2), round(high * 1000, 2)],
+    }
+
+
+def _outliers(kind: str, spans: list[tuple[float, float]], stalls: list[list[float]]) -> list[dict[str, object]]:
+    median = statistics.median(end - start for start, end in spans)
+    found = []
+    for position, (start, end) in enumerate(spans):
+        if end - start > median * 3:
+            overlapping = [stall for stall in stalls if stall[0] < end and stall[0] + stall[1] > start]
+            found.append(
+                {
+                    "kind": kind,
+                    "position": position,
+                    "ms": round((end - start) * 1000, 1),
+                    "started_at_utc": datetime.fromtimestamp(start, timezone.utc).strftime("%H:%M:%S.%f")[:-3],
+                    "stalled_ms": round(sum(stall[1] for stall in overlapping) * 1000, 1),
+                }
+            )
+    return found
 
 
 def measure(samples: int, email_delay: float, seed: int, sustained_samples: int) -> dict[str, object]:
     rng = random.Random(seed)
-    server, base_url = _start_server(email_delay)
+    port = _free_port()
+    detector = _spawn("stalls", stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    server = _spawn("server", "--port", str(port), "--email-delay", str(email_delay))
+    worker = _spawn("worker", "--email-delay", str(email_delay))
     try:
-        with httpx.Client(base_url=base_url, timeout=30) as client:
+        with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=60) as client:
+            for _ in range(120):
+                try:
+                    if client.get("/health/live").status_code == 200:
+                        break
+                except httpx.TransportError:
+                    time.sleep(0.5)
 
-            def register(email: str) -> tuple[float, httpx.Response]:
-                started = time.perf_counter()
+            def register(email: str) -> tuple[float, float, httpx.Response]:
+                started = time.time()
                 response = client.post("/identity/users", json={"email": email, "password": PASSWORD})
-                return time.perf_counter() - started, response
+                return started, time.time(), response
 
+            probe_email = f"timing-probe-{uuid4().hex}@example.com"
             existing_emails = [f"timing-{uuid4().hex}@example.com" for _ in range(samples + WARM_UP)]
-            for email in existing_emails:
-                assert register(email)[1].status_code == 202
-            # Their accounts are created after their answers: "existing" must be true.
-            time.sleep(email_delay + 2)
+            for email in [probe_email, *existing_emails]:
+                assert register(email)[2].status_code == 202
+            # "Existing" must be true by now: the worker creates them after their answers.
+            _wait_until_processed(timeout=120 + (samples + WARM_UP) * email_delay * 2)
+            signed_in = client.post("/identity/authenticate", json={"email": probe_email, "password": PASSWORD})
+            assert signed_in.status_code == 200, signed_in.text
+            bearer = {"Authorization": f"Bearer {signed_in.json()['data']['access_token']}"}
 
             plan = ["new"] * (samples + WARM_UP) + ["existing"] * (samples + WARM_UP)
             rng.shuffle(plan)
             remaining = list(existing_emails)
-            timings: dict[str, list[float]] = {"new": [], "existing": []}
+            spans: dict[str, list[tuple[float, float]]] = {"new": [], "existing": []}
             follow_ups: dict[str, list[float]] = {"new": [], "existing": []}
-            sustained: dict[str, list[float]] = {"new": [], "existing": []}
+            without_database: dict[str, list[float]] = {"new": [], "existing": []}
+            with_database: dict[str, list[float]] = {"new": [], "existing": []}
             answers: set[tuple[int, bytes]] = set()
             for kind in plan:
                 email = f"timing-{uuid4().hex}@example.com" if kind == "new" else remaining.pop()
-                elapsed, response = register(email)
+                started, ended, response = register(email)
                 answers.add((response.status_code, response.content))
-                timings[kind].append(elapsed)
-                started = time.perf_counter()
+                spans[kind].append((started, ended))
+                before = time.perf_counter()
                 client.get("/health/live")
-                follow_ups[kind].append(time.perf_counter() - started)
-                if len(sustained[kind]) < sustained_samples:
-                    slowest = 0.0
+                follow_ups[kind].append(time.perf_counter() - before)
+                if len(with_database[kind]) < sustained_samples:
+                    slowest_plain, slowest_database = 0.0, 0.0
                     window_ends = time.perf_counter() + PROBE_WINDOW_SECONDS
                     while time.perf_counter() < window_ends:
-                        started = time.perf_counter()
+                        before = time.perf_counter()
                         client.get("/health/live")
-                        slowest = max(slowest, time.perf_counter() - started)
-                    sustained[kind].append(slowest)
+                        middle = time.perf_counter()
+                        client.get("/identity/me", headers=bearer)
+                        after = time.perf_counter()
+                        slowest_plain = max(slowest_plain, middle - before)
+                        slowest_database = max(slowest_database, after - middle)
+                    without_database[kind].append(slowest_plain)
+                    with_database[kind].append(slowest_database)
     finally:
-        server.should_exit = True
+        server.terminate()
+        worker.terminate()
+        stall_output, _ = detector.communicate("", timeout=30)
+    stalls = json.loads(stall_output)
 
-    new, existing = timings["new"][WARM_UP:], timings["existing"][WARM_UP:]
-    next_new, next_existing = follow_ups["new"][WARM_UP:], follow_ups["existing"][WARM_UP:]
+    kept = {kind: spans[kind][WARM_UP:] for kind in spans}
+    new = [end - start for start, end in kept["new"]]
+    existing = [end - start for start, end in kept["existing"]]
     shuffled = rng.sample(existing, k=len(existing))
     half_a, half_b = shuffled[: len(shuffled) // 2], shuffled[len(shuffled) // 2 :]
+    outliers = _outliers("new", kept["new"], stalls) + _outliers("existing", kept["existing"], stalls)
+    database_probes = rng.sample(with_database["existing"], k=len(with_database["existing"]))
+    probes_a, probes_b = database_probes[: len(database_probes) // 2], database_probes[len(database_probes) // 2 :]
     return {
         "samples_per_kind": samples,
         "warm_up_discarded": WARM_UP,
@@ -147,32 +265,41 @@ def measure(samples: int, email_delay: float, seed: int, sustained_samples: int)
         "seed": seed,
         "new": _summary(new),
         "existing": _summary(existing),
-        "median_difference_ms": round((statistics.median(new) - statistics.median(existing)) * 1000, 2),
-        "median_difference_95_ci_ms": _median_difference_interval(new, existing, rng),
-        "noise_floor_median_difference_ms": round((statistics.median(half_a) - statistics.median(half_b)) * 1000, 2),
-        "noise_floor_95_ci_ms": _median_difference_interval(half_a, half_b, rng),
-        "follow_up_after_new": _summary(next_new),
-        "follow_up_after_existing": _summary(next_existing),
-        "follow_up_median_difference_ms": round((statistics.median(next_new) - statistics.median(next_existing)) * 1000, 2),
-        "follow_up_median_difference_95_ci_ms": _median_difference_interval(next_new, next_existing, rng),
-        "sustained_probe_after_new": _summary(sustained["new"]),
-        "sustained_probe_after_existing": _summary(sustained["existing"]),
-        "sustained_median_difference_ms": round(
-            (statistics.median(sustained["new"]) - statistics.median(sustained["existing"])) * 1000, 2
-        ),
-        "sustained_median_difference_95_ci_ms": _median_difference_interval(sustained["new"], sustained["existing"], rng),
+        "answer": _compare(new, existing, rng),
+        "noise_floor": _compare(half_a, half_b, rng),
+        "follow_up": _compare(follow_ups["new"][WARM_UP:], follow_ups["existing"][WARM_UP:], rng),
+        "follow_up_after_new": _summary(follow_ups["new"][WARM_UP:]),
+        "follow_up_after_existing": _summary(follow_ups["existing"][WARM_UP:]),
+        "sustained_samples_per_kind": sustained_samples,
+        "sustained_without_database": _compare(without_database["new"], without_database["existing"], rng),
+        "sustained_with_database": _compare(with_database["new"], with_database["existing"], rng),
+        "sustained_with_database_noise_floor": _compare(probes_a, probes_b, rng),
+        "sustained_with_database_after_new": _summary(with_database["new"]),
+        "sustained_with_database_after_existing": _summary(with_database["existing"]),
         "distinct_answers": len(answers),
+        "stalls_over_50_ms": len(stalls),
+        "longest_stall_ms": round(max((stall[1] for stall in stalls), default=0) * 1000, 1),
+        "outliers_over_3x_median": outliers,
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=300)
-    parser.add_argument("--email-delay", type=float, default=0.5)
+    parser.add_argument("--email-delay", type=float, default=0.05)
     parser.add_argument("--seed", type=int, default=20261102)
     parser.add_argument("--sustained-samples", type=int, default=100)
+    parser.add_argument("--role", choices=["measure", "server", "worker", "stalls"], default="measure")
+    parser.add_argument("--port", type=int, default=0)
     options = parser.parse_args()
-    print(json.dumps(measure(options.samples, options.email_delay, options.seed, options.sustained_samples), indent=1))
+    if options.role == "server":
+        _run_server(options.port, options.email_delay)
+    elif options.role == "worker":
+        _run_worker(options.email_delay)
+    elif options.role == "stalls":
+        _run_stall_detector()
+    else:
+        print(json.dumps(measure(options.samples, options.email_delay, options.seed, options.sustained_samples), indent=1))
 
 
 if __name__ == "__main__":
