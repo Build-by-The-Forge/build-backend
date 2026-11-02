@@ -62,10 +62,17 @@ class ListCoursesHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(self, department_id: str | None = None, tenant_id: str | None = None) -> list[Course]:
-        if department_id:
-            return await self.repository.list_by_department(department_id, tenant_id=tenant_id)
-        return await self.repository.list_all(tenant_id=tenant_id)
+    async def handle(
+        self,
+        tenant_id: str,
+        department_id: str | None = None,
+        active_only: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Course], int]:
+        return await self.repository.list_page(
+            tenant_id, department_id=department_id, active_only=active_only, limit=limit, offset=offset
+        )
 
 
 class CreateTopicHandler:

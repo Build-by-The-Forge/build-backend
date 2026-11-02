@@ -1,8 +1,9 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.value_objects import CourseStatus
 from app.domain.repositories.course import CourseRepository
 from app.infrastructure.catalogue.mappers import course_to_domain, course_to_model
 from app.infrastructure.db.models.catalogue import (
@@ -62,27 +63,33 @@ class SqlAlchemyCourseRepository(CourseRepository):
         model = result.first()
         return course_to_domain(model) if model is not None else None
 
-    async def list_by_department(self, department_id: str, tenant_id: str | None = None) -> list[Course]:
-        statement = select(CourseModel).where(CourseModel.department_id == department_id)
-        if tenant_id is not None:
-            statement = statement.where(CourseModel.tenant_id == tenant_id)
-        statement = statement.options(
-            selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
-            selectinload(CourseModel.reference_materials),
+    async def list_page(
+        self,
+        tenant_id: str,
+        department_id: str | None = None,
+        active_only: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Course], int]:
+        conditions = [CourseModel.tenant_id == tenant_id]
+        if department_id is not None:
+            conditions.append(CourseModel.department_id == department_id)
+        if active_only:
+            conditions.append(CourseModel.status == CourseStatus.ACTIVE.value)
+        total = await self._session.scalar(select(func.count()).select_from(CourseModel).where(*conditions))
+        statement = (
+            select(CourseModel)
+            .where(*conditions)
+            .order_by(CourseModel.code, CourseModel.id)
+            .limit(limit)
+            .offset(offset)
+            .options(
+                selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
+                selectinload(CourseModel.reference_materials),
+            )
         )
         result = await self._session.scalars(statement)
-        return [course_to_domain(c) for c in result.all()]
-
-    async def list_all(self, tenant_id: str | None = None) -> list[Course]:
-        statement = select(CourseModel)
-        if tenant_id is not None:
-            statement = statement.where(CourseModel.tenant_id == tenant_id)
-        statement = statement.options(
-            selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
-            selectinload(CourseModel.reference_materials),
-        )
-        result = await self._session.scalars(statement)
-        return [course_to_domain(c) for c in result.all()]
+        return [course_to_domain(c) for c in result.all()], total or 0
 
     async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
         statement = select(CourseModel).join(TopicModel, TopicModel.course_id == CourseModel.id).where(TopicModel.id == topic_id)

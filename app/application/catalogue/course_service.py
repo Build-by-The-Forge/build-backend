@@ -73,14 +73,21 @@ class CourseService:
         handler = CreateCourseHandler(repository=self._repository())
         return await handler.handle(command)
 
-    async def list_courses(self, department_id: str | None = None, tenant_id: str | None = None) -> list[Course]:
+    async def list_courses(
+        self,
+        tenant_id: str,
+        department_id: str | None = None,
+        active_only: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Course], int]:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = ListCoursesHandler(repository=uow.courses)
-                return await handler.handle(department_id=department_id, tenant_id=tenant_id)
+                return await handler.handle(tenant_id, department_id, active_only, limit, offset)
 
         handler = ListCoursesHandler(repository=self._repository())
-        return await handler.handle(department_id=department_id, tenant_id=tenant_id)
+        return await handler.handle(tenant_id, department_id, active_only, limit, offset)
 
     async def get_course(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         if self.uow_factory is not None:

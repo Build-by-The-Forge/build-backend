@@ -17,6 +17,7 @@ from app.api.catalogue.schemas import (
     UpdateReferenceMaterialRequest,
     UpdateTopicRequest,
 )
+from app.api.pagination import Page
 from app.application.catalogue.course_service import CourseService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission, authorization
@@ -115,16 +116,22 @@ async def _readable_topic(topic_id: str, context: TenantContext) -> tuple[Course
     return course, topic
 
 
-@router.get("/", status_code=status.HTTP_200_OK)
+@router.get("", status_code=status.HTTP_200_OK)
+@router.get("/", status_code=status.HTTP_200_OK, include_in_schema=False)
 async def list_courses(
     request: Request,
+    page: Page,
     department_id: str | None = None,
     include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
-    courses = await service.list_courses(department_id=department_id, tenant_id=context.tenant_id)
-    if not _lists_archived(context, include_archived):
-        courses = [course for course in courses if course.status is CourseStatus.ACTIVE]
+    courses, total = await service.list_courses(
+        tenant_id=context.tenant_id,
+        department_id=department_id,
+        active_only=not _lists_archived(context, include_archived),
+        limit=page.limit,
+        offset=page.offset,
+    )
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -146,7 +153,7 @@ async def list_courses(
                 for course in courses
             ],
             "error": None,
-            "meta": {"request_id": getattr(request.state, "request_id", None)},
+            "meta": {"request_id": getattr(request.state, "request_id", None), "pagination": page.meta(total)},
         },
     )
 

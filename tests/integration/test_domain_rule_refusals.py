@@ -83,4 +83,4 @@ async def test_a_missing_repository_is_a_wiring_fault_not_a_refusal():
     from app.application.catalogue.course_service import CourseService
 
     with pytest.raises(RuntimeError, match="repository is required"):
-        await CourseService().list_courses()
+        await CourseService().list_courses(tenant_id="tenant")

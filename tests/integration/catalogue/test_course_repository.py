@@ -120,5 +120,6 @@ async def test_course_repository_save_get_list(session):
     assert len(fetched.topics[0].learning_outcomes) == 1
     assert fetched.references[0].title.value == reference.title.value
 
-    all_courses = await repo.list_all(tenant_id=tenant_id)
-    assert any(c.id.value == course.id.value for c in all_courses)
+    courses, total = await repo.list_page(tenant_id=tenant_id)
+    assert total >= 1
+    assert any(c.id.value == course.id.value for c in courses)

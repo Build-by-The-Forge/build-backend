@@ -13,10 +13,14 @@ class CourseRepository(Protocol):
     async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         raise NotImplementedError
 
-    async def list_by_department(self, department_id: str, tenant_id: str | None = None) -> list[Course]:
-        raise NotImplementedError
-
-    async def list_all(self, tenant_id: str | None = None) -> list[Course]:
+    async def list_page(
+        self,
+        tenant_id: str,
+        department_id: str | None = None,
+        active_only: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Course], int]:
         raise NotImplementedError
 
     async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
