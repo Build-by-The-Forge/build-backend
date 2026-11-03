@@ -8,6 +8,9 @@ from fastapi import Depends, Query
 
 T = TypeVar("T")
 
+# Far past any real list, and well inside what the database can compare against.
+MAX_OFFSET = 2_147_483_647
+
 
 @dataclass(frozen=True, slots=True)
 class PageRequest:
@@ -24,7 +27,7 @@ class PageRequest:
 
 def _page_request(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=MAX_OFFSET)] = 0,
 ) -> PageRequest:
     return PageRequest(limit=limit, offset=offset)
 

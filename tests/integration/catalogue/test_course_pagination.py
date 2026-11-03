@@ -183,3 +183,18 @@ async def test_archived_courses_arent_counted_unless_asked_for(client):
     everything = client.get("/catalogue/courses?include_archived=true", headers=staff).json()["meta"]["pagination"]["total"]
 
     assert (default, everything) == (1, 2)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    ["/catalogue/courses", "/catalogue/faculties", "/catalogue/departments", "/catalogue/programmes"],
+)
+async def test_the_largest_offset_is_accepted_and_past_it_is_refused(client, path):
+    _, staff, _, _ = await tenant_with_courses(client)
+
+    assert client.get(f"{path}?offset=2147483647", headers=staff).status_code == 200
+    for offset in ("2147483648", "9223372036854775808", "99999999999999999999999999"):
+        refused = client.get(f"{path}?offset={offset}", headers=staff)
+        assert refused.status_code == 422, offset
+        assert refused.json()["error"]["code"] == "VALIDATION_FAILED", offset
