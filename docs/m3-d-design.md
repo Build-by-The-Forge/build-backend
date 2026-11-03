@@ -248,7 +248,30 @@ The contract's promise: once this succeeds, the document can't be listed, opened
 
 **Limit, stated plainly:** between steps 1 and 2 the chunks still exist. Before M4, the `personal` exclusion keeps them out of retrieval. After M4, the allow-list does. Neither depends on the delete having finished.
 
+**Past chat answers (ruling 9):** deleting a document can't erase text already copied into a conversation. M3-D provides, and M3-F defines what to do with it:
+
+- **M3-D:** an outbox event, `content.document.deleted`, carrying the tenant, the asset and source IDs, and nothing of the content. From that commit, the document can't be retrieved, newly cited or opened.
+- **M3-F must define, before integrating with documents:**
+  - Existing citations to a deleted document stop opening it.
+  - Stored excerpts and cached retrieved passages are removed or redacted.
+  - Messages that copied source material have a defined redaction.
+  - Audit records keep only metadata that's needed, never the deleted text.
+
 Memory is out of scope here: `GATE_OPEN` stays `False`, and L4 defines what memory does when a source goes away.
+
+## When an owner leaves
+
+**Ruling 8:** leaving a tenant isn't deleting one's content.
+
+When a membership ends, in the same transaction:
+
+- The former member can't reach any of the tenant's documents, their own included, since tenancy is checked on every request already.
+- Their publications are withdrawn, and any pending requests close.
+- Their documents can't be discovered or retrieved by anyone, and their personal chunks are already excluded.
+
+Their private records are **kept under a retention policy that doesn't exist yet**. That policy, and an account data export and deletion process, are a product and legal decision, recorded as open below. Nothing is deleted automatically until it exists. If they rejoin, their documents are theirs again and stay unpublished.
+
+**Coordination:** membership changes are also what L4's `memberships.generation` and shared lock concern. The withdrawal joins the transaction that ends the membership under that lock, rather than following it as a separate event. M3-D and L4 agree the hook before either merges it.
 
 ## Rights and provenance
 
