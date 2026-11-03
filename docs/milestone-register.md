@@ -143,6 +143,9 @@ Given by the reviewer on #79 at `06b433a`. It changes what's built first, not an
 | "Public" | Discoverable by authorized students of the same tenant, never the open internet |
 | AI knowledge eligibility | Separate from publication |
 | Provider eligibility | Separate from publication and from retrieval |
+| Classifying existing material | During the sprint, by an audited operator command, approved on `fe7742e` under seven conditions in `m3-d-design.md`: tenant authorization, evidence per document, institutional only, the same service as the staff route, a full audit record, dry runs and bounded idempotent batches, and no retrieval before the AI service acknowledges |
+| Reports on shelf documents | Three distinct, authorized students hide a document temporarily until the takedown contact restores it or takes it down. Approved on `fe7742e` with safeguards. Hiding changes no rights or AI eligibility |
+| Revoked sources | A document revoked while an answer is generated withholds the whole answer, cited or not, on every path. Ruled on `fe7742e` as release-blocking |
 
 **Not permitted by these decisions:** exposing a route before its own gates pass. A design approval isn't permission to expose a route, and `GATE_OPEN` stays `False`.
 
