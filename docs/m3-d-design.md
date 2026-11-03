@@ -232,6 +232,7 @@ status:   uploaded → quarantined ─(verdict: accepted)→ queued → processi
 - **It fails closed.** If the scanner is down or errors, the document stays `quarantined` and the worker retries with backoff. Nothing is accepted by default. The student sees that it's waiting for a security check.
 - **Rejected files aren't served to anyone**, their owner included. The student is told only that the file couldn't be accepted, with no signature name. They can delete it. Otherwise its object is removed after the grace period, and the record keeps only metadata.
 - **No one opens a document before it's accepted**, its owner included. Serving unscanned bytes to a device is the risk being closed.
+- **A verdict is fenced.** Each scan attempt takes a token from its scan row. The worker presents it when recording the verdict, and the database accepts it only if that attempt still holds the scan. A worker whose lease expired and was replaced can't overwrite the newer attempt's verdict, or queue ingestion twice.
 - **Each document is scanned itself.** A scan result isn't reused across identical bytes: an instant acceptance would reveal that someone else already uploaded the file. Each result records the scanner, its signature version and the time.
 - **Publication needs a clean scan at a current signature version.** Published documents are rescanned when signatures update, on a cadence the tenant sets.
 
@@ -504,7 +505,7 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Scope backfill | Every legacy chunk is `unknown` after the AI migration, and only a reviewed assignment makes one `institutional` |
 | Classification | An unclassified document is invisible to students and unretrieved. Classifying needs a staff decision with evidence |
 | One policy | Every `/content` route goes through it, staff routes included. Staff can't open a private document |
-| Scanning | An unscanned document is never dispatched or opened. EICAR is rejected. A stopped scanner keeps uploads quarantined. A rejected file is served to no one |
+| Scanning | An unscanned document is never dispatched or opened. EICAR is rejected. A stopped scanner keeps uploads quarantined. A rejected file is served to no one. A stale worker returning after its replacement records nothing, and ingestion is queued once |
 | Rights per document | Two documents of one student carry different rights. A source edit doesn't change an existing document |
 | Quotas | Uploads racing at the limit: exactly the allowed number succeed. The charge is logical bytes |
 | Publication | It needs consent, a declaration and staff approval. The switch off hides everything. Withdrawal and takedown apply at once |
