@@ -159,10 +159,10 @@ An upload can't lose its object: either it claimed first, so the sweeper skips t
 1. Stream, hash and validate as today. The type comes from the bytes.
 2. Find or create the student's personal source, safe under a race by the unique index.
 3. Claim the blob and write its object, as in [Physical storage](#physical-storage-and-its-races).
-4. **In one transaction:** reference the blob, insert the document and insert its job. Success means all of it committed, so nothing can be left unqueued.
+4. **In one transaction:** reference the blob, insert the document in `quarantined`, and insert its scan. Success means all of it committed, so nothing can be left unscanned or unqueued.
 5. A failure before the commit leaves no document. The object may stay. The orphan sweeper, which only parses the per-asset key form today, is extended to the blob form.
 
-The worker's existing due-job loop then picks the job up, so durable queuing reuses what P3-6 built.
+Once the scan accepts the file, its ingestion job is queued in the same transaction, and the worker's existing due-job loop picks it up. Durable queuing reuses what P3-6 built.
 
 - **Idempotency:** the asset ID derives from the personal source and the key, so two students' keys can't collide. A replayed key whose document was since deleted answers `IDEMPOTENCY_KEY_REUSED`: it must not bring a deleted document back.
 - **Chat uploads:** there's no second pipeline. A chat upload calls this same route, and a message then refers to the resulting `asset_id`. M3-F owns the reference and M3-D owns everything before it.
@@ -176,6 +176,37 @@ Decision D sets this by measurement, so no value is proposed here. Measured on a
 
 - `max_attempts` and `correlation_id` are removed from the job-creation request. The backend sets both.
 - Asset ordering becomes `created_at DESC, id DESC`, the contract's order.
+
+## Scanning
+
+**Ruling 7:** a private upload is no reason to process untrusted content unscanned. Every document is scanned before anything opens it.
+
+```text
+uploaded → quarantined → accepted → queued → processing → … → ready
+                       ↘ rejected
+```
+
+- **Nothing parses an unscanned file.** No OCR, extraction, chunking, embedding or AI dispatch happens until the scan accepts it. The backend refuses to dispatch, and the AI service only fetches what a signed dispatch names.
+- **It fails closed.** If the scanner is down or errors, the document stays `quarantined` and the worker retries with backoff. Nothing is accepted by default. The student sees that it's waiting for a security check.
+- **Rejected files aren't served to anyone**, their owner included. The student is told only that the file couldn't be accepted, with no signature name. They can delete it. Otherwise its object is removed after the grace period, and the record keeps only metadata.
+- **No one opens a document before it's accepted**, its owner included. Serving unscanned bytes to a device is the risk being closed.
+- **Each document is scanned itself.** A scan result isn't reused across identical bytes: an instant acceptance would reveal that someone else already uploaded the file. Each result records the scanner, its signature version and the time.
+- **Publication needs a clean scan at a current signature version.** Published documents are rescanned when signatures update, on a cadence the tenant sets.
+
+**Scanner:** ClamAV (`clamd`) is recommended, run as its own container in the deployment, in CI and in the boundary gate, with `freshclam` updating signatures. It's self-hosted, so no third party receives student files. The backend streams the stored object to it over `INSTREAM` from the worker, never from the API process.
+
+The implementation plan includes:
+
+- Its container, with network isolation.
+- A maximum scan size at or above the upload limit.
+- Timeouts.
+- An EICAR test file in CI that must be rejected.
+- A test with the scanner stopped, which must show uploads staying quarantined.
+- Measured worker capacity.
+
+The reviewer confirms the choice.
+
+**Contract:** the `Ingestion.status` enum gains `quarantined` and `rejected`, in the contract PR.
 
 ## Reading (G-13)
 
@@ -193,6 +224,8 @@ Decision D sets this by measurement, so no value is proposed here. Measured on a
 | Personal, published and clean | Yes | Yes | Yes | 404 |
 | Shared, rights verified for students | Yes | Yes | Yes | 404 |
 | Deleted, or revoked | 404 | 404 | 404 | 404 |
+
+A document the scan hasn't accepted isn't served to anyone: `DOCUMENT_NOT_AVAILABLE` (409) for its owner, and the usual 404 for anyone else.
 
 Staff can't read a student's private document. If support access is ever needed, it needs its own decision and audit trail, rather than a side effect of a content permission. **This differs from today's staff routes, which check only the tenant**, so those routes need the same rule or they're a bypass.
 
