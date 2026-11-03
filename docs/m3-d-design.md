@@ -408,24 +408,30 @@ This is the last PR. It can slip without weakening any guarantee, though the reg
 
 One concern per PR. Each has the required gates, and the drift gate moves with the code in the same commit.
 
-| # | Repo | PR | Closes |
+| # | Repo | PR | Closes or enables |
 |---|---|---|---|
 | 0 | Backend | This design | |
-| 1 | AI | `knowledge_scope`, fail-closed retrieval on every path | Unblocks everything, part of G-31 |
-| 2 | Backend | Contract PR for the additions above, after the decisions | |
-| 3 | Backend | Migration 0030 and domain changes, no route behaviour changes | |
-| 4 | AI, backend | The blob key form accepted, dispatch states the scope | |
-| 5 | Backend | Upload and queue, list and get, read rule on every route | G-01, G-02, G-25, G-38, G-23, G-07 |
-| 6 | Backend | Retry | G-12 |
-| 7 | Backend | Opening a document, with ranges | G-13 |
-| 8 | AI, backend | Signed delete, outbox, late chunks, blob sweep | G-32 |
-| 9 | Backend | Rights, provenance and backfill | G-30 |
-| 10 | Backend | Timeout measurement and value | G-11 |
-| 11 | Backend | My Shelf filters and form | |
-| 12 | Backend | Publication, Public view, report, tenant switch, scan gate | |
-| 13 | AI, backend | Reuse without reprocessing | |
+| 1 | AI | `knowledge_scope` with three values, every chunk `unknown`, fail-closed retrieval on every path, signed scope assignment | Unblocks everything, part of G-31 |
+| 2 | Backend | Contract PR: the additions above and the two new ingestion states | |
+| 3 | Backend | Migration 0030: classification, owner, blobs, rights, publication, quotas, the job index. No route behaviour changes | |
+| 4 | Backend | One read policy on every existing content route, staff routes included, with the route-coverage test | Ruling B, before any student route |
+| 5 | Backend | Classification and rights review for staff, and scope assignment from them | Existing material returns to answers once reviewed |
+| 6 | Deployment, backend | ClamAV in compose, CI and the boundary gate. The scan worker, with quarantine and rejection, failing closed | Ruling 7 |
+| 7 | AI, backend | The blob key form accepted, and every dispatch states its scope | |
+| 8 | Backend | Upload, scan and queue, list and get, quotas | G-01, G-02, G-25, G-38, G-23, G-07 |
+| 9 | Backend | Retry | G-12 |
+| 10 | Backend | Opening a document, with ranges | G-13 |
+| 11 | AI, backend | Signed delete, outbox, late chunks, blob sweep, the deletion event | G-32 |
+| 12 | Backend | Rights per document, from the owner | G-30 |
+| 13 | Backend | Timeout measurement and value | G-11 |
+| 14 | Backend | My Shelf filters and form | |
+| 15 | Backend | Publication requests, the review queue and runbook, reports, takedown, the tenant switch, off | Ruling 3 |
+| 16 | Backend | Membership end: withdraw and exclude, coordinated with L4 | Ruling 8 |
+| 17 | AI, backend | Reuse without reprocessing | |
 
-G-31 stays open until M4. **No student route is reachable in a deployment until PR 1 is deployed there**, and PR 5 refuses to dispatch to an AI service that doesn't state it supports the scope.
+- **No student route is reachable in a deployment until PRs 1, 4 and 6 are deployed there.** PR 8 refuses to dispatch to an AI service that doesn't state it supports the scope.
+- G-31 stays open until M4.
+- PR 5 can run before PR 1 in a deployment, so staff can review existing material before it drops out of answers.
 
 ## Acceptance tests
 
@@ -452,6 +458,17 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Consent | No route publishes without the declaration. Withdrawal removes it at that commit |
 | Public view | Published, clean, this tenant, with filters by level and course, paginated, no uploader named |
 | Bad input | The same PostgreSQL bounds M3-C added: NUL, oversized offsets, lengths past a column |
+| Scope backfill | Every legacy chunk is `unknown` after the AI migration, and only a reviewed assignment makes one `institutional` |
+| Classification | An unclassified document is invisible to students and unretrieved. Classifying needs a staff decision with evidence |
+| One policy | Every `/content` route goes through it, staff routes included. Staff can't open a private document |
+| Scanning | An unscanned document is never dispatched or opened. EICAR is rejected. A stopped scanner keeps uploads quarantined. A rejected file is served to no one |
+| Rights per document | Two documents of one student carry different rights. A source edit doesn't change an existing document |
+| Quotas | Uploads racing at the limit: exactly the allowed number succeed. The charge is logical bytes |
+| Publication | It needs consent, a declaration and staff approval. The switch off hides everything. Withdrawal and takedown apply at once |
+| Three permissions | An approved publication stays `personal` in the AI service |
+| Owner leaves | Publications are withdrawn and documents excluded in the membership's own transaction. Nothing is deleted |
+| Reuse | The new document keeps its own records. The source's removal requeues it, and deleting either never deletes the other |
+| Deletion event | It carries IDs only, no content |
 
 ## Coordination with the other lanes
 
@@ -463,10 +480,15 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | `contract_sha256` | Whichever PR merges first | The other rebases its hash. Conflicts here are expected and mechanical |
 | Alembic head | One migration PR at a time | M3-D's 0030 and L4's outbox can't both claim the next number, so whichever is second renumbers |
 | The AI service's chunk schema | M3-D | M4 builds on it |
+| `content.document.deleted` | M3-D emits it | M3-F defines what conversations do with it |
+| The transaction that ends a membership | L4 | M3-D's withdrawal joins it, agreed before either merges |
 
 ## What this design doesn't settle
 
-- **M4's allow-list**, including whether `chunk.attempt` is reliable. M3-D only ensures nothing personal is retrievable meanwhile.
+- **M4's allow-list**, including whether `chunk.attempt` is reliable. M3-D only ensures nothing personal or unknown is retrievable meanwhile.
+- **The retention policy** for a departed member's documents, and the account export and deletion process. These are product and legal decisions. Nothing is deleted automatically until they exist.
+- **The scanner**, which the reviewer confirms. ClamAV is recommended.
+- **Who reviews publications** in each tenant, and how quickly. The runbook gives a structure; the staffing is the tenant's.
+- **Break-glass support access** to private documents. Not provided; it would need its own decision.
 - **The legal position** on students sharing copyrighted material. A declaration is recorded, but no one has reviewed the wording. G-33 and G-34 stay open and separate.
-- **Which malware scanner.** Publication stays off until one is chosen.
 - **Real-world timing on a deployed stack.** The disclosure evidence is local, as registration's was, and needs repeating when a deployment exists.
