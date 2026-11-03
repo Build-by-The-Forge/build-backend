@@ -9,6 +9,7 @@ from app.application.catalogue.commands import (
     UpdateTopicCommand,
 )
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.errors import CatalogueParentArchivedError
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.topic import Topic
@@ -18,6 +19,7 @@ from app.domain.catalogue.value_objects import (
     CourseLevel,
     CourseSemester,
     CourseSlug,
+    CourseStatus,
     CourseTitle,
     DepartmentId,
     LearningOutcomeDescription,
@@ -28,10 +30,16 @@ from app.domain.catalogue.value_objects import (
     TopicDescription,
     TopicSequence,
     TopicSlug,
+    TopicStatus,
     TopicTitle,
 )
 from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.course import CourseRepository
+
+
+def _refuse_if_archived(course: Course, topic: Topic | None = None) -> None:
+    if course.status is CourseStatus.ARCHIVED or (topic is not None and topic.status is TopicStatus.ARCHIVED):
+        raise CatalogueParentArchivedError("the parent is archived")
 
 
 class CreateCourseHandler:
@@ -83,6 +91,7 @@ class CreateTopicHandler:
         course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
         if course is None:
             return None
+        _refuse_if_archived(course)
 
         topic = Topic.create(
             course_id=course.id,
@@ -132,6 +141,7 @@ class CreateLearningOutcomeHandler:
         )
         if topic is None:
             return None
+        _refuse_if_archived(course, topic)
         outcome = LearningOutcome.create(
             topic_id=topic.id,
             sequence=LearningOutcomeSequence(command.sequence),
@@ -170,8 +180,10 @@ class CreateReferenceMaterialHandler:
         course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
         if course is None:
             return None
-        if not any(topic.id.value == command.topic_id for topic in course.topics):
+        topic = next((item for item in course.topics if item.id.value == command.topic_id), None)
+        if topic is None:
             return None
+        _refuse_if_archived(course, topic)
         material = ReferenceMaterial.create(
             course_id=course.id,
             title=ReferenceMaterialTitle(command.title),

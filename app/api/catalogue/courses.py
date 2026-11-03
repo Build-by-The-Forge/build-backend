@@ -26,6 +26,7 @@ from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.errors import (
+    CatalogueParentArchivedError,
     CourseAlreadyArchivedError,
     LearningOutcomeAlreadyArchivedError,
     ReferenceMaterialAlreadyArchivedError,
@@ -70,6 +71,10 @@ def _answers_conflicts(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[
     async def answering(*args: P.args, **kwargs: P.kwargs) -> JSONResponse:
         try:
             return await route(*args, **kwargs)
+        except CatalogueParentArchivedError as exc:
+            raise ClientHTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="nothing new can be added to something archived"
+            ) from exc
         except (
             CourseAlreadyArchivedError,
             TopicAlreadyArchivedError,
