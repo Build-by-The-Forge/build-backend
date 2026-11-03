@@ -92,7 +92,8 @@ The rule from the register: **deduplicating a physical file must not merge owner
 |---|---|---|
 | `content_blobs` (new) | Tenant, SHA-256, size, detected type, object key | Any person, consent or permission |
 | `content_assets` | The document: ownership class, owner, display name, status, ingestion state, its blob | Bytes |
-| `content_sources` | Personal source per student, or a staff source; rights fields | |
+| `content_sources` | A personal source per student, or a staff source; descriptive fields only | Rights, which are per document |
+| `content_rights_assertions` (new) | Append-only: each declaration or review of one document's rights | |
 | `content_publications` (new) | Append-only consent: asset, who, what they declared, which declaration version, when, and any withdrawal | |
 
 ### Schema changes (migration 0030, reviewed on its own)
@@ -248,19 +249,29 @@ Memory is out of scope here: `GATE_OPEN` stays `False`, and L4 defines what memo
 
 ## Rights and provenance
 
-G-30 needs these recorded, and they must survive processing rather than sit beside it:
+**Ruling A:** rights belong to each document. One student can hold their own notes, a lecturer's PDF, a publisher-licensed reference and a public-domain text, and one source can't describe all four.
 
-| Field | On | Values |
-|---|---|---|
-| `rights_basis` | Source | `student_declared`, `institution_licensed`, `publisher_licensed`, `public_domain`, `unknown` |
-| `audience` | Source | `owner`, `tenant`, `faculty`, `department`, `programme`, `course` |
-| `redistribution` | Source | `none`, `tenant_only`, `permitted` |
-| `trust_class` | Asset | Set by the backend. A student's upload is `user_provided`, and no client can raise it |
-| `provenance` | Asset | Who, when, by which route, the SHA-256 at upload |
+**`content_rights_assertions`**, append-only, one row per declaration or review of one document:
 
-Existing rows backfill to `unknown` and `none`, so they fail closed and need staff to set them. **That makes existing shared material unavailable to students until it's reviewed**, which follows the contract's "verified for students" wording but is a real consequence to accept. `listSources` and `listSourceDocuments` show only rows with rights verified.
+| Field | Values |
+|---|---|
+| `asserted_by`, `role` | The owner declaring, or staff reviewing |
+| `rights_basis` | `own_work`, `lecturer_provided`, `institution_licensed`, `publisher_licensed`, `public_domain`, `unknown` |
+| `audience` | `owner`, `tenant`, `faculty`, `department`, `programme`, `course` |
+| `redistribution` | `none`, `tenant_only`, `permitted` |
+| `ai_use` | `not_permitted`, `permitted`; see [Three kinds of permission](#three-kinds-of-permission) |
+| `declaration_version` | The wording the person saw, for an owner's declaration |
+| `outcome`, `reason` | For a staff review: accepted or rejected, and why |
 
-The principle: **access to content isn't permission to share it.** `rights_basis` and consent are declarations, and the UI must not present them as legal clearance (PRD §91).
+- **Effective rights** are the latest staff review if there is one. Otherwise they're the owner's declaration, and a declaration on its own permits nothing beyond its owner.
+- **Publication consent** stays its own record, per document (see [Publication](#publication)).
+- **Staff sources** may carry a default, which each new document copies into its own assertion at upload, recorded as copied. A later edit to the source never silently changes an existing document.
+- **On the document:** `trust_class` is set by the backend. A student's upload is `user_provided`, and no client can raise it. `provenance` records who uploaded it, when, by which route, and the SHA-256 at upload.
+- **Rights survive processing.** No ingestion state or reprocess changes them, and that's tested.
+
+**Backfill:** existing documents have no assertion, so their effective rights are `unknown` and students can't read them until staff review them. That follows the contract's "verified for students" wording, and it's a real consequence for a deployment to plan around.
+
+The principle: **access to content isn't permission to share it.** A declaration is recorded as what someone said, and the UI must not present it as legal clearance (PRD §91).
 
 ## The shelf
 
