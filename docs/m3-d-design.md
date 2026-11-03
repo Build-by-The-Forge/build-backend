@@ -277,7 +277,7 @@ The reviewer confirms the choice.
 |---|---|---|---|---|
 | Personal, quarantined or rejected by the scan | Listed with its status; its bytes answer 409 `DOCUMENT_NOT_AVAILABLE` | 404 | 404 | 404 |
 | Personal, private | Yes | 404 | 404 | 404 |
-| Personal, publication approved and discoverable | Yes | Yes | Yes | 404 |
+| Personal, published and discoverable | Yes | Yes | Yes | 404 |
 | Shared, rights not reviewed for students | Not applicable | 404 | Yes | 404 |
 | Shared, rights reviewed for students | Not applicable | Yes | Yes | 404 |
 | Unclassified, from before M3-D | Not applicable | 404 | Classification queue only | 404 |
@@ -359,50 +359,67 @@ The principle: **access to content isn't permission to share it.** A declaration
 
 | Permission | Means | Decided by | Default |
 |---|---|---|---|
-| **Publication** | Other students in the tenant may discover and read the document | The owner's consent, then staff approval | No |
+| **Publication** | Other students in the tenant may discover and read the document | The owner's request, for eligible material during this sprint; staff approval in the later moderated mode | No |
 | **Knowledge eligibility** | BUILD may use the content in retrieval for anyone besides its owner, which is scope `institutional` | A staff rights review with `ai_use: permitted` and an audience | No |
 | **Provider eligibility** | Passages may be sent to an external model provider | Governance, through G-33 | Not decided |
 
-- **Approving a publication doesn't change scope.** A published personal document stays `personal`, used in no one else's answers.
+- **Publishing doesn't change scope.** A published personal document stays `personal`, used in no one else's answers.
 - **Becoming `institutional` needs its own review**, and changes the AI service's scope only through the backend's signed assignment.
 - **G-33 and G-34 stay separate release considerations.** Until G-33 is decided, no production provider receives content, whatever the other two say.
 
 ## The tenant shelf
 
-**Ruling 2: private-only stays the first-release rule.** The shelf is built, but it stays off until a tenant decides to enable it, and building it is no reason to turn it on.
-
 - **The audience is the tenant**, not the internet. The route is `/content/tenant-shelf`, every response states `audience: "tenant"`, and the UI says which institution can see a document. Nothing uses the word "public".
-- **The switch** is a per-tenant setting, off by default. Turning it on is a recorded decision by the tenant's owner, with conditions checked: a reviewer role is assigned, a report route and takedown exist, and the scanner is running. A deployment or merged code never turns it on.
 - **Uploads are private by default.** Nothing publishes as a side effect, and no default in any request means consent.
+- **The tenant setting `shelf_publication`** has three modes:
+  - `off`: the default.
+  - `own_work_automatic`: this sprint's mode.
+  - `moderated`: later.
 
-### Publication
+  Changing it is a recorded decision by the tenant's owner. A deployment or merged code never changes it. `own_work_automatic` needs a named takedown contact, the report route and a running scanner.
 
-**Ruling 3:** a student's declaration isn't proof of redistribution rights, so staff approve every publication.
+### Publication during this sprint
+
+**Product ruling on `06b433a`, replacing ruling 3 for this sprint only:** a student's explicit request publishes eligible material without waiting for staff approval. Lecturer, HOD and other staff workflows are paused while the student experience is finished. **This is a deliberate sprint exception, not the removal of governance:** [the moderated workflow](#later-moderated-publication) stays designed, and is needed before anything else can be published.
+
+**Eligible means all of these hold:**
+
+- The student's declaration for this document is `own_work`, with audience `tenant` and redistribution `tenant_only` or `permitted`.
+- The declaration's wording states what own work excludes: textbooks, lecturer material, past or upcoming examination papers, and anything copied from someone else.
+- The document is `ready`, scanned clean at a current signature version, not deleted, and its owner is still a member.
+- The tenant's mode is `own_work_automatic`.
+- Its SHA-256 isn't on the tenant's [takedown blocklist](#reports-and-takedown).
 
 ```text
-private → requested → pending_review → approved → discoverable
-                                     ↘ rejected
-approved or discoverable → withdrawn (by the owner) or taken_down (by staff)
+private → published                  (eligible: discoverable at that commit)
+private → requested                  (any other rights basis: stays private)
+published → withdrawn                (the owner, at once)
+published → taken_down               (the takedown contact, at once)
 ```
 
-1. The student requests publication. BUILD records the consent and a rights declaration for this document, each with the wording version they accepted.
-2. The publication waits in `pending_review`.
-3. Staff with a new `content.publication.review` permission review the document and its rights basis. They approve or reject, with a reason, and the decision is audited.
-4. An approved publication is **discoverable only while all of these hold:** the tenant switch is on, the latest scan is clean at a current signature version, the document isn't deleted, and its owner is still a member.
-5. **The owner can withdraw at any time**, and withdrawal takes effect at that commit. Staff can take down at any time, after approval included.
+1. The student asks to publish. BUILD records their consent and their rights declaration for this document, each with the wording version they accepted.
+2. **Eligible:** it's published at that commit. **Not eligible:** it's `requested` and stays private. The student is told this kind of material needs a review that isn't available yet. Nothing about another student is revealed either way.
+3. **The owner can withdraw at any time**, effective at that commit.
+4. **Discoverable only while every condition still holds.** If one stops, for example the mode is switched off or the owner leaves, it's hidden at that commit, without anyone acting.
 
-Approval permits discovery and reading only. **It doesn't make the document usable in anyone's answers** (see [Three kinds of permission](#three-kinds-of-permission)).
+Publication permits discovery and reading only. **It never makes a document usable in anyone's answers** (see [Three kinds of permission](#three-kinds-of-permission)).
 
-### Moderation as a workflow
+### Reports and takedown
 
-The ruling is explicit that report and takedown routes don't make a moderation process. Before a tenant can enable the switch, it needs:
+- **Reports:** any student who can see a published document can report it. Reasons include "not the uploader's own work", "examination material" and "inappropriate". Reports go to the tenant's takedown contact. The uploader is never told who reported.
+- **Hiding on reports** is a decision for the reviewer. Recommendation: three reports from different students hide the document until the contact acts. While staff workflows are paused, nobody may be reviewing reports promptly, and hiding stops the harm meanwhile. Reports from one student never count more than once.
+- **Takedown:** by the tenant's owner or admin, effective at that commit, with a reason recorded and the owner told the outcome.
+- **The blocklist:** a takedown adds the document's SHA-256 to the tenant's blocklist. The same bytes then can't be published automatically by anyone, so a removed exam paper can't come straight back under another student's name. A blocked request becomes `requested`, as for any ineligible document, and reveals nothing about who held the file.
 
-- **A review queue:** staff routes listing pending publications and open reports, oldest first, with each item's rights declaration and scan result.
-- **Decisions:** approve, reject, take down, dismiss a report. Each has a reason and is audited, and the student is told the outcome without the reporter's identity.
-- **A runbook** in this repository: who reviews, how quickly, what to check for rights and content, and how to escalate. The tenant names its reviewers when enabling the switch.
-- **Reports** that reach the queue at once, with a takedown available without waiting for the review.
+### Later: moderated publication
 
-These staff routes aren't in the mobile contract, since the first release is student-only.
+The staff-approval workflow from the previous revision is kept as the design for `moderated` mode, not built in this sprint:
+
+- Publication waits in `pending_review` until staff with a `content.publication.review` permission approve or reject it, with a reason, audited.
+- A review queue lists pending publications and open reports, oldest first, with each one's rights declaration and scan result.
+- A runbook in this repository says who reviews, how quickly, what to check, and how to escalate.
+
+**It's needed before any rights basis other than `own_work` can be published, and before the sprint exception ends.** A tenant moved from `own_work_automatic` to `moderated` keeps its existing publications, which join the review queue.
 
 ### Proposed contract additions
 
@@ -413,9 +430,9 @@ Not yet in `openapi.yaml`. They go in a contract PR of their own.
 | `GET /content/my-documents?level=&course_id=` | My Shelf: the existing list gains the two filters |
 | `GET /content/tenant-shelf?level=&course_id=` | Discoverable documents of this tenant, with `audience: "tenant"` |
 | `PATCH /content/my-documents/{id}` | The shelf form: title, course, level, semester, document type |
-| `POST /content/my-documents/{id}/publication-request` | Request publication, with the consent and declaration versions accepted. Refused unless `ready` |
+| `POST /content/my-documents/{id}/publication-request` | Ask to publish, with the consent and declaration versions accepted. Returns `published` or `requested`. Refused unless `ready` |
 | `DELETE /content/my-documents/{id}/publication` | Withdraw a request or a publication, at once |
-| `POST /content/tenant-shelf/{id}/report` | Report a document to the tenant's reviewers |
+| `POST /content/tenant-shelf/{id}/report` | Report a document, with a reason, to the tenant's takedown contact |
 
 - **Levels** are 100 to 500, with 600 refused unless the tenant has it. The tenant's `levels` table decides this, not a hardcoded list.
 - **`course_id`** must be an active course of the tenant, the same rule M3-C gave courses.
@@ -479,7 +496,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 | 12 | Backend | Rights per document, from the owner | G-30 |
 | 13 | Backend | Timeout measurement and value | G-11 |
 | 14 | Backend | My Shelf filters and form | |
-| 15 | Backend | Publication requests, the review queue and runbook, reports, takedown, the tenant switch, off | Ruling 3 |
+| 15 | Backend | Publication in `own_work_automatic` mode, reports, takedown and the blocklist, the tenant setting `off` | The sprint ruling. The moderated mode is a later PR |
 | 16 | Backend | Membership end: withdraw and exclude, coordinated with L4 | Ruling 8 |
 | 17 | AI, backend | Reuse without reprocessing | |
 
@@ -510,7 +527,7 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Rights survive | Scope, rights and trust class are unchanged after every ingestion state and a reprocess |
 | Trust can't be raised | No client input changes `trust_class`, `owner_user_id` or `knowledge_scope` |
 | Consent | No route publishes without the declaration. Withdrawal removes it at that commit |
-| Tenant shelf | Only approved, discoverable, clean documents of this tenant, with filters by level and course, paginated, no uploader named, `audience: "tenant"` |
+| Tenant shelf | Only published, discoverable, clean documents of this tenant, with filters by level and course, paginated, no uploader named, `audience: "tenant"` |
 | Bad input | The same PostgreSQL bounds M3-C added: NUL, oversized offsets, lengths past a column |
 | Scope backfill | Every legacy chunk is `unknown` after the AI migration, and only a reviewed assignment makes one `institutional` |
 | Classification | An unclassified document is invisible to students and unretrieved. Classifying needs a staff decision with evidence |
@@ -518,7 +535,8 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Scanning | An unscanned document is never dispatched or opened. EICAR is rejected. A stopped scanner keeps uploads quarantined. A rejected file is served to no one. A stale worker returning after its replacement records nothing, and ingestion is queued once |
 | Rights per document | Two documents of one student carry different rights. A source edit doesn't change an existing document |
 | Quotas | Uploads racing at the limit: exactly the allowed number succeed. The charge is logical bytes |
-| Publication | It needs consent, a declaration and staff approval. The switch off hides everything. Withdrawal and takedown apply at once |
+| Publication | Only an `own_work` declaration with tenant sharing publishes, at that commit. Every other basis stays `requested` and private. Mode `off` hides everything. Withdrawal and takedown apply at once. A blocklisted hash can't be published by anyone |
+| Reports | Three distinct students hide a document, if the reviewer accepts that rule. One student's repeated reports count once. Reporters are never revealed |
 | Three permissions | A published document stays `personal` in the AI service |
 | Immediate denial | Deleting, revoking or reclassifying an `institutional` document excludes it from the next request on every path, with the outbox stopped |
 | Owner leaves | Publications are withdrawn and documents excluded in the membership's own transaction. Nothing is deleted |
@@ -543,7 +561,8 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 - **M4's allow-list**, including whether `chunk.attempt` is reliable. M3-D only ensures nothing personal or unknown is retrievable meanwhile.
 - **The retention policy** for a departed member's documents, and the account export and deletion process. These are product and legal decisions. Nothing is deleted automatically until they exist.
 - **The scanner**, which the reviewer confirms. ClamAV is recommended.
-- **Who reviews publications** in each tenant, and how quickly. The runbook gives a structure; the staffing is the tenant's.
+- **The moderated workflow**, needed before other rights bases can be published and before the sprint exception ends. It's designed here, not scheduled.
+- **Who acts on reports** in each tenant while staff workflows are paused. The takedown contact is named when the mode is enabled.
 - **Break-glass support access** to private documents. Not provided; it would need its own decision.
 - **The legal position** on students sharing copyrighted material. A declaration is recorded, but no one has reviewed the wording. G-33 and G-34 stay open and separate.
 - **Real-world timing on a deployed stack.** The disclosure evidence is local, as registration's was, and needs repeating when a deployment exists.
