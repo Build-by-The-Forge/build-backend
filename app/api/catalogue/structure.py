@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.catalogue.courses import service
+from app.api.catalogue.schemas import IdFilter
 from app.api.pagination import Page, PageRequest
 from app.core.authorization import Permission
 from app.core.dependencies import require_permission
@@ -41,7 +42,7 @@ async def list_faculties(
 async def list_departments(
     request: Request,
     page: Page,
-    faculty_id: str | None = None,
+    faculty_id: IdFilter = None,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     entries, total = await service.list_departments(context.tenant_id, faculty_id, page.limit, page.offset)
@@ -52,7 +53,7 @@ async def list_departments(
 async def list_programmes(
     request: Request,
     page: Page,
-    department_id: str | None = None,
+    department_id: IdFilter = None,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
     entries, total = await service.list_programmes(context.tenant_id, department_id, page.limit, page.offset)

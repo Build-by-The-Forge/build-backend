@@ -12,6 +12,8 @@ from app.api.catalogue.schemas import (
     CreateLearningOutcomeRequest,
     CreateReferenceMaterialRequest,
     CreateTopicRequest,
+    IdFilter,
+    IdInPath,
     UpdateCourseRequest,
     UpdateLearningOutcomeRequest,
     UpdateReferenceMaterialRequest,
@@ -140,7 +142,7 @@ async def _readable_topic(topic_id: str, context: TenantContext) -> tuple[Course
 async def list_courses(
     request: Request,
     page: Page,
-    department_id: str | None = None,
+    department_id: IdFilter = None,
     include_archived: bool = False,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
@@ -179,7 +181,7 @@ async def list_courses(
 
 @router.get("/{course_id}", status_code=status.HTTP_200_OK)
 async def get_course(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_READ)),
 ) -> JSONResponse:
@@ -256,7 +258,7 @@ async def create_course(
 @_answers_refusals
 @_answers_conflicts
 async def update_course(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     payload: UpdateCourseRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
@@ -293,7 +295,7 @@ async def update_course(
 
 @router.post("/{course_id}/publish", status_code=status.HTTP_200_OK)
 async def publish_course(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_PUBLISH)),
 ) -> JSONResponse:
@@ -302,7 +304,7 @@ async def publish_course(
 
 @router.post("/{course_id}/archive", status_code=status.HTTP_200_OK)
 async def archive_course(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
@@ -311,7 +313,7 @@ async def archive_course(
 
 @_answers_conflicts
 async def _transition_course(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     context: TenantContext,
     transition: str,
@@ -337,7 +339,7 @@ async def _transition_course(
 @_answers_refusals
 @_answers_conflicts
 async def create_topic(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     payload: CreateTopicRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
@@ -374,7 +376,7 @@ async def create_topic(
 
 @router.get("/{course_id}/topics", status_code=status.HTTP_200_OK)
 async def list_topics(
-    course_id: str,
+    course_id: IdInPath,
     request: Request,
     page: Page,
     include_archived: bool = False,
@@ -412,7 +414,7 @@ async def list_topics(
 @_answers_refusals
 @_answers_conflicts
 async def update_topic(
-    topic_id: str,
+    topic_id: IdInPath,
     request: Request,
     payload: UpdateTopicRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
@@ -447,7 +449,7 @@ async def update_topic(
 @topic_router.post("/{topic_id}/archive", status_code=status.HTTP_200_OK)
 @_answers_conflicts
 async def archive_topic(
-    topic_id: str,
+    topic_id: IdInPath,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
@@ -469,7 +471,7 @@ async def archive_topic(
 @_answers_refusals
 @_answers_conflicts
 async def create_learning_outcome(
-    topic_id: str,
+    topic_id: IdInPath,
     request: Request,
     payload: CreateLearningOutcomeRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
@@ -501,7 +503,7 @@ async def create_learning_outcome(
 
 @topic_router.get("/{topic_id}/learning-outcomes", status_code=status.HTTP_200_OK)
 async def list_learning_outcomes(
-    topic_id: str,
+    topic_id: IdInPath,
     request: Request,
     page: Page,
     include_archived: bool = False,
@@ -537,7 +539,7 @@ async def list_learning_outcomes(
 @_answers_refusals
 @_answers_conflicts
 async def update_learning_outcome(
-    learning_outcome_id: str,
+    learning_outcome_id: IdInPath,
     request: Request,
     payload: UpdateLearningOutcomeRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
@@ -569,7 +571,7 @@ async def update_learning_outcome(
 @learning_outcome_router.post("/{learning_outcome_id}/archive", status_code=status.HTTP_200_OK)
 @_answers_conflicts
 async def archive_learning_outcome(
-    learning_outcome_id: str,
+    learning_outcome_id: IdInPath,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
@@ -591,7 +593,7 @@ async def archive_learning_outcome(
 @_answers_refusals
 @_answers_conflicts
 async def create_reference_material(
-    topic_id: str,
+    topic_id: IdInPath,
     request: Request,
     payload: CreateReferenceMaterialRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_CREATE)),
@@ -618,7 +620,7 @@ async def create_reference_material(
 
 @topic_router.get("/{topic_id}/reference-materials", status_code=status.HTTP_200_OK)
 async def list_reference_materials(
-    topic_id: str,
+    topic_id: IdInPath,
     request: Request,
     page: Page,
     include_archived: bool = False,
@@ -645,7 +647,7 @@ async def list_reference_materials(
 @_answers_refusals
 @_answers_conflicts
 async def update_reference_material(
-    reference_material_id: str,
+    reference_material_id: IdInPath,
     request: Request,
     payload: UpdateReferenceMaterialRequest,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_UPDATE)),
@@ -673,7 +675,7 @@ async def update_reference_material(
 @reference_router.post("/{reference_material_id}/archive", status_code=status.HTTP_200_OK)
 @_answers_conflicts
 async def archive_reference_material(
-    reference_material_id: str,
+    reference_material_id: IdInPath,
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.CATALOGUE_ARCHIVE)),
 ) -> JSONResponse:
