@@ -44,18 +44,45 @@ Still open, and listed in [What this design doesn't settle](#what-this-design-do
 
 ## The sequencing blocker
 
-The approved order puts M3-D before M4, and M4 is what limits retrieval to what a user may read. If M3-D ships as ordered, a student's private document reaches `ready` and is then returned in every other student's chat in that tenant. Being `private` in the backend wouldn't stop it, since the AI service never asks.
+The approved order puts M3-D before M4, and M4 is what limits retrieval to what a user may read. If M3-D shipped as ordered, a student's private document would reach `ready` and then be returned in every other student's chat in that tenant. Being `private` in the backend wouldn't stop it, since the AI service never asks.
 
-**Recommendation:** the first PR of this milestone is in the AI service, and no student route opens until it's merged.
+**Ruling:** the first PR of this milestone is in the AI service. No student route opens until it's merged and deployed.
 
-- `document_chunks` gets `knowledge_scope`, `NOT NULL`, with existing rows backfilled as `institutional`.
-- A signed ingestion dispatch must state the scope. A missing or unknown value is refused.
-- Every retrieval path returns `institutional` chunks only. That covers `retriever.evidence`, which serves chat, explain and question generation, and also `/v1/ai/retrieve`.
-- Each path has a test on real PostgreSQL proving a `personal` chunk can't come back.
+### Scope values
 
-This fails closed: personal documents can reach `ready` and be opened by their owner, while no answer can use them, including their owner's. M4 then opens them to their owner through its allow-list. **Until M4, the app must say that a personal document can't yet be used in answers.** That is a product limit the reviewer should accept knowingly.
+| Value | Meaning | Retrieved by default |
+|---|---|---|
+| `institutional` | The backend has verified it for tenant-wide use: ownership classified, rights and audience reviewed | Yes, tenant-wide. G-05's readiness rule still waits for M4 |
+| `personal` | A student's document | No. M4's allow-list opens it to its owner |
+| `unknown` | Ownership or eligibility not established | No, for anyone |
 
-It doesn't replace M4. Tenant-wide retrieval of `institutional` chunks that aren't `ready` stays open as G-05, for M4.
+### Who decides
+
+- **Only the backend sets scope**, on a signed call, computed from its own records: ownership classification and rights review. No student request carries a scope.
+- A staff request can't set `institutional` directly either. It follows from a completed rights review that permits AI use (see [Three kinds of permission](#three-kinds-of-permission)).
+- A dispatch with a missing scope, or one that isn't one of the three values, is refused.
+
+### Existing chunks
+
+- The AI service can't tell whose a chunk is, so its migration sets **every existing chunk to `unknown`**. It assumes nothing.
+- The backend then assigns scope through a new signed, idempotent call per (tenant, asset). It does so only for assets whose [classification](#schema-changes-migration-0030-reviewed-on-its-own) and [rights review](#rights-and-provenance) make them `institutional`. Each assignment records who reviewed it and when.
+- **Consequence:** existing staff material stops being used in answers from the moment the AI migration runs until staff finish those reviews. That's the cost of not assuming. A deployment can do the reviews before the migration runs; the order is in [Delivery](#delivery).
+
+### Retrieval paths
+
+The PR inventories every entry point **from the code**, not from this list. It includes at least `retriever.evidence`, which serves chat, explain and question generation, and `/v1/ai/retrieve`. A path found later that reads chunks gets the same filter, or the PR isn't complete.
+
+### Tests, on real PostgreSQL
+
+- `personal` and `unknown` chunks never come back, on each path.
+- Legacy rows are `unknown` after the migration.
+- A dispatch with a missing or malformed scope is refused.
+- No unsigned call can set or change a scope.
+- A scope assignment naming another tenant's asset is refused.
+
+**Accepted product limitation:** until M4's allow-list, students can open their own documents, but no answer can use them, not even their own.
+
+This doesn't replace M4. Tenant-wide retrieval of `institutional` chunks that aren't `ready` stays open as G-05.
 
 ## The ownership model
 
