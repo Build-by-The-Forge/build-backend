@@ -66,7 +66,7 @@ The approved order puts M3-D before M4, and M4 is what limits retrieval to what 
 
 - The AI service can't tell whose a chunk is, so its migration sets **every existing chunk to `unknown`**. It assumes nothing.
 - The backend then assigns scope through a new signed, idempotent call per (tenant, asset). It does so only for assets whose [classification](#schema-changes-migration-0030-reviewed-on-its-own) and [rights review](#rights-and-provenance) make them `institutional`. Each assignment records who reviewed it and when.
-- **Consequence:** existing staff material stops being used in answers from the moment the AI migration runs until staff finish those reviews. That's the cost of not assuming. A deployment can do the reviews before the migration runs; the order is in [Delivery](#delivery).
+- **Consequence:** existing staff material stops being used in answers from the moment the AI migration runs until its assignment arrives. That's the cost of not assuming. Staff can record their reviews before PR 1 is deployed, and the backend sends the assignments from an outbox once the AI service accepts them, so the gap can be short. The order is in [Delivery](#delivery).
 
 ### Retrieval paths
 
@@ -111,7 +111,7 @@ The rule from the register: **deduplicating a physical file must not merge owner
 - `content_sources.owner_user_id`, unique per `(tenant_id, owner_user_id)`. New `VisibilityScope.PRIVATE`, and a check that private and an owner go together.
 - New `AssetStatus.DELETED`.
 - A partial unique index on `content_ingestion_jobs (asset_id)` for active states, so that one asset can't have two active jobs. The migration reports existing violations rather than silently changing them.
-- New tables for blobs, rights, publication and quotas, described in their sections.
+- New tables for blobs, scans, rights, publication and quotas, described in their sections.
 
 ### Duplicate detection without disclosure (G-25)
 
@@ -120,7 +120,7 @@ Three ways a student could learn about a classmate's file, and how each closes:
 | Channel | Today | Designed |
 |---|---|---|
 | The response | 409 naming the existing asset | `DUPLICATE_CONTENT` only compares within the caller's own documents, so `existing_asset_id` only ever names their own |
-| Upload time | Would differ if the store were skipped for a known hash | The object is **always written**, to a key derived only from the content, so the work is the same whether or not the blob exists |
+| Upload time | Would differ if the store were skipped for a known hash | The object is **always written**, to the blob row's own key, so the work is the same whether or not the blob exists |
 | Processing time | A reused result is ready at once | Processed content is reused only from what the student can already see (decision 5). Otherwise the document is processed normally |
 
 **Physical key:** `tenants/{t}/blobs/{sha256}/{generation}`, described in the next section. The AI service's `storage_reference.py` and `managed_storage_key` must both accept this form as well as the existing one. The row's own tenant and hash still have to match, and the AI service fetches only the key the signed dispatch names.
@@ -137,7 +137,7 @@ A blob row is `pending`, `active` or `deleting`. At most one row per `(tenant_id
 
 1. **Claim**, in a short transaction: lock or create the blob row that isn't `deleting`, and set `claimed_until` to now plus the grace period.
 2. **Write** to that row's key, always, with the store verifying the SHA-256. Writing identical verified bytes to the same key is idempotent, and a checksum mismatch fails the upload.
-3. **Reference**, in a transaction: lock the blob row. If it's become `deleting`, start again from step 1, which gives a new generation and key. Otherwise insert the document and its job, and mark the blob `active`.
+3. **Reference**, in a transaction: lock the blob row. If it's become `deleting`, start again from step 1, which gives a new generation and key. Otherwise insert the document and its scan, and mark the blob `active`.
 
 **Sweeper:** it locks the row and acts only if no document references it and `claimed_until` has passed. It marks the row `deleting` and commits, deletes that generation's object, then deletes the row. A crash between those steps resumes from `deleting`.
 
@@ -167,7 +167,7 @@ Once the scan accepts the file, its ingestion job is queued in the same transact
 
 - **Idempotency:** the asset ID derives from the personal source and the key, so two students' keys can't collide. A replayed key whose document was since deleted answers `IDEMPOTENCY_KEY_REUSED`: it must not bring a deleted document back.
 - **Chat uploads:** there's no second pipeline. A chat upload calls this same route, and a message then refers to the resulting `asset_id`. M3-F owns the reference and M3-D owns everything before it.
-- **Staff routes** stay as they are, except G-07 below.
+- **Staff upload routes** keep their behaviour, except G-07 below. Their reads go through the one policy in [Reading](#reading-g-13).
 
 ### G-11: the read timeout
 
@@ -221,13 +221,13 @@ The reviewer confirms the choice.
 
 | Document | Owner | Another student, same tenant | Staff with content permission | Another tenant |
 |---|---|---|---|---|
-| Personal, not accepted by the scan | 409 `DOCUMENT_NOT_AVAILABLE` | 404 | 404 | 404 |
+| Personal, quarantined or rejected by the scan | Listed with its status; its bytes answer 409 `DOCUMENT_NOT_AVAILABLE` | 404 | 404 | 404 |
 | Personal, private | Yes | 404 | 404 | 404 |
 | Personal, publication approved and discoverable | Yes | Yes | Yes | 404 |
 | Shared, rights not reviewed for students | Not applicable | 404 | Yes | 404 |
 | Shared, rights reviewed for students | Not applicable | Yes | Yes | 404 |
 | Unclassified, from before M3-D | Not applicable | 404 | Classification queue only | 404 |
-| Deleted, revoked or rejected | 404 | 404 | 404 | 404 |
+| Deleted or revoked | 404 | 404 | 404 | 404 |
 
 - **A content permission manages shared material. It isn't access to every student's private documents.** If support access is ever needed, it's a separate later decision: its own permission, time-limited and audited, as break-glass.
 - **Lists** apply the same policy as a SQL predicate. A test checks that the SQL and the per-document check agree across every row of this table, so they can't drift apart.
@@ -431,7 +431,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 
 - **No student route is reachable in a deployment until PRs 1, 4 and 6 are deployed there.** PR 8 refuses to dispatch to an AI service that doesn't state it supports the scope.
 - G-31 stays open until M4.
-- PR 5 can run before PR 1 in a deployment, so staff can review existing material before it drops out of answers.
+- PR 5 records reviews before PR 1 is deployed, and sends their scope assignments once it is, so existing material is out of answers only briefly.
 
 ## Acceptance tests
 
@@ -447,7 +447,7 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Permissions aren't merged | A's publication doesn't let C open B's copy by ID |
 | No disclosure | Identical responses for a hash another student holds and one nobody holds, by status, body and headers; timing evidence within the stated noise floor |
 | Cross-student read | Every route gives the same `RESOURCE_NOT_FOUND` as a nonexistent ID, including staff routes |
-| Atomic queue | A failure at each step leaves either nothing or a document with its queued job, never a document without one |
+| Atomic queue | A failure at each step leaves either nothing or a quarantined document with its scan, and acceptance queues the job in the same transaction. Never a document that's stuck |
 | Upload races | The same key twice, the same bytes under two keys, two students with the same bytes |
 | Retry races | Two retries: one job. A retry when none is available: `INGESTION_NOT_RETRYABLE` |
 | Reading | Full, ranged, past the end, multi-range, wrong owner, deleted; no storage address in any response |
@@ -456,7 +456,7 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Rights survive | Scope, rights and trust class are unchanged after every ingestion state and a reprocess |
 | Trust can't be raised | No client input changes `trust_class`, `owner_user_id` or `knowledge_scope` |
 | Consent | No route publishes without the declaration. Withdrawal removes it at that commit |
-| Public view | Published, clean, this tenant, with filters by level and course, paginated, no uploader named |
+| Tenant shelf | Only approved, discoverable, clean documents of this tenant, with filters by level and course, paginated, no uploader named, `audience: "tenant"` |
 | Bad input | The same PostgreSQL bounds M3-C added: NUL, oversized offsets, lengths past a column |
 | Scope backfill | Every legacy chunk is `unknown` after the AI migration, and only a reviewed assignment makes one `institutional` |
 | Classification | An unclassified document is invisible to students and unretrieved. Classifying needs a staff decision with evidence |
