@@ -122,9 +122,35 @@ Three ways a student could learn about a classmate's file, and how each closes:
 | Upload time | Would differ if the store were skipped for a known hash | The object is **always written**, to a key derived only from the content, so the work is the same whether or not the blob exists |
 | Processing time | A reused result is ready at once | Processed content is reused only from what the student can already see (decision 5). Otherwise the document is processed normally |
 
-**Physical key:** `tenants/{t}/blobs/{sha256}`. A write can't corrupt another student's copy: the key is the hash of bytes verified on arrival. The AI service's `storage_reference.py` and `managed_storage_key` must both accept this form as well as the existing one, and the row's own tenant and hash still have to match.
+**Physical key:** `tenants/{t}/blobs/{sha256}/{generation}`, described in the next section. The AI service's `storage_reference.py` and `managed_storage_key` must both accept this form as well as the existing one. The row's own tenant and hash still have to match, and the AI service fetches only the key the signed dispatch names.
 
 **Timing evidence:** the same six-seed measurement method as registration (`scripts/measure_registration_timing.py`), comparing a known and an unknown hash from another owner. It reports its noise floor rather than claiming equality.
+
+### Physical storage and its races
+
+**Ruling C:** concurrent uploads must never overwrite unsafely, or leave a row pointing at a missing object.
+
+A blob row is `pending`, `active` or `deleting`. At most one row per `(tenant_id, content_sha256)` isn't `deleting`, enforced by a partial unique index. Each row has its own random `generation`, so its object key is never shared with an earlier row.
+
+**Upload:**
+
+1. **Claim**, in a short transaction: lock or create the blob row that isn't `deleting`, and set `claimed_until` to now plus the grace period.
+2. **Write** to that row's key, always, with the store verifying the SHA-256. Writing identical verified bytes to the same key is idempotent, and a checksum mismatch fails the upload.
+3. **Reference**, in a transaction: lock the blob row. If it's become `deleting`, start again from step 1, which gives a new generation and key. Otherwise insert the document and its job, and mark the blob `active`.
+
+**Sweeper:** it locks the row and acts only if no document references it and `claimed_until` has passed. It marks the row `deleting` and commits, deletes that generation's object, then deletes the row. A crash between those steps resumes from `deleting`.
+
+An upload can't lose its object: either it claimed first, so the sweeper skips the row, or it sees `deleting` and gets a fresh key of its own.
+
+**Tests**, keeping the existing orphan-sweeper and last-reference races:
+
+- Two owners upload the same bytes concurrently.
+- The last reference is deleted while the same bytes upload.
+- The sweeper crashes between marking and deleting.
+- The store reports a checksum mismatch.
+- A pending blob is abandoned and later swept.
+
+**Timing:** the claim is a lookup or an insert either way. It's part of the G-25 timing measurement, not assumed to be equal.
 
 ## Upload (G-01, G-02, G-38)
 
@@ -132,9 +158,9 @@ Three ways a student could learn about a classmate's file, and how each closes:
 
 1. Stream, hash and validate as today. The type comes from the bytes.
 2. Find or create the student's personal source, safe under a race by the unique index.
-3. Write the object to the blob key.
-4. **In one transaction:** get or create the blob row, insert the asset, insert its `queued` job. Success means all three committed, so nothing can be left unqueued.
-5. A failure before the commit leaves no document. The object may stay. The orphan sweeper, which only parses the per-asset key form today, is extended to remove a blob object no row references, after its grace period.
+3. Claim the blob and write its object, as in [Physical storage](#physical-storage-and-its-races).
+4. **In one transaction:** reference the blob, insert the document and insert its job. Success means all of it committed, so nothing can be left unqueued.
+5. A failure before the commit leaves no document. The object may stay. The orphan sweeper, which only parses the per-asset key form today, is extended to the blob form.
 
 The worker's existing due-job loop then picks the job up, so durable queuing reuses what P3-6 built.
 
