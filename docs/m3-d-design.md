@@ -106,7 +106,12 @@ The lowering assignments still go first in the dispatcher, with their own age al
 
 **Ruling on `fe7742e`:** a document can influence an answer without being cited. So the check covers every source that reached the model, not just the citations.
 
-- **The AI service reports `sources_used`** on every response that returns generated or retrieved content: every `(asset, run, attempt)` whose text was retrieved for the request, reached the model's input, or is returned directly. The list covers what was used, not only what was cited. This is part of AI PR 1. The field is required, and a response without it is treated as failed.
+- **The AI service reports `sources_used`** on every response that returns generated or retrieved content. This is part of AI PR 1. The field is required, and a response without it is treated as failed.
+- **The retrieval system builds it, never the model.** A request-scoped recorder in the AI service's orchestration records every `(asset, run, attempt)` the store returns for the request, after the scope and denial filters, and before any ranking or truncation. **It's the only source of passages for the prompt:** context assembly accepts passages from the recorder and from nowhere else, so text can't reach the model without being recorded.
+  - It isn't produced by the model, or inferred from the answer's citations.
+  - The model can't see it, omit from it or add to it.
+  - It includes every retrieved passage, cited or not, and passages retrieved but cut for length, since excluding them would rely on knowing what the model didn't use.
+  - It's attached to the response by the orchestration after generation, from the recorder alone.
 - **Before returning anything**, the backend checks the whole set against the caller's authorization **at that moment**, by the one read policy, and against the current `denied_assets`. Every source must be in the caller's tenant, readable by them now, not denied, and not deleted.
 - **If any source fails**, the backend withholds the entire result. It returns `ANSWER_WITHHELD`, a 503 with `Retry-After`, and stores nothing. M3-F's contract PR adds that code to the routes it owns. A retry retrieves afresh, and the revoked document is excluded at the start. The event is logged with IDs only.
 - **An asset ID from outside the caller's tenant**, or one the backend doesn't know, also withholds the result and raises an alert, since it means the AI service has broken its contract.
@@ -114,7 +119,7 @@ The lowering assignments still go first in the dispatcher, with their own age al
 - **It applies to every path** that returns generated or retrieved content: chat, explanations, question generation and `/v1/ai/retrieve`. Only chat is in the student release, but none of the others can be released without it.
 - **It isn't a substitute for denial at the start of a request.** It catches what changed while a request was running.
 
-**Trust:** the AI service reports what it used, and the backend can't observe the model directly. The backend's own `denied_assets` and the scope filter keep revoked material out at the start of every request. This check catches the remaining race, and treats any report that doesn't fit what the backend allowed as a failure.
+**Trust:** the AI service's orchestration reports what it retrieved, and the backend can't observe the model directly. The backend's own `denied_assets` and the scope filter keep revoked material out at the start of every request. This check catches the remaining race, and treats any report that doesn't fit what the backend allowed as a failure.
 
 Learning memory isn't a document source, and `GATE_OPEN` is `False`. If memory is ever opened, what it contributes must join this set before release.
 
@@ -170,6 +175,7 @@ The PR inventories every entry point **from the code**, not from this list. It i
 - Reprocessed chunks, and chunks written late by a job in flight, take the document's current scope.
 - A scope assignment naming another tenant's asset is refused.
 - **Provenance:** a request that used a document revoked while it ran is withheld whole on every path, including when the document was used and not cited. A response without `sources_used`, or naming an asset outside the tenant, is withheld.
+- **Provenance is the system's:** a retrieved passage that isn't cited is still in `sources_used`. A model told to name other assets, or to drop one, changes nothing in it. Context assembly rejects any passage that didn't come from the recorder.
 - **Immediate denial:** a document lowered with the dispatcher stopped is excluded from the next request on every path. A retrieving call without `denied_assets` is refused. A list past its limit fails closed. After acknowledgement, the document stays out through its stored scope.
 
 **Accepted product limitation:** until M4's allow-list, students can open their own documents, but no answer can use them, not even their own.
