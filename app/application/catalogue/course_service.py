@@ -112,6 +112,12 @@ class CourseService:
                 return await uow.courses.list_programmes(tenant_id, department_id, limit, offset)
         return await self._repository().list_programmes(tenant_id, department_id, limit, offset)
 
+    async def has_active_department(self, department_id: str, tenant_id: str) -> bool:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.has_active_department(department_id, tenant_id)
+        return await self._repository().has_active_department(department_id, tenant_id)
+
     async def get_course(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:

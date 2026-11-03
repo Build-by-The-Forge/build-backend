@@ -137,6 +137,7 @@ class SqlAlchemyCourseRepository(CourseRepository):
             conditions.append(CourseModel.department_id == department_id)
         if active_only:
             conditions.append(CourseModel.status == CourseStatus.ACTIVE.value)
+            conditions.append(CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))))
         total = await self._session.scalar(select(func.count()).select_from(CourseModel).where(*conditions))
         statement = (
             select(CourseModel)

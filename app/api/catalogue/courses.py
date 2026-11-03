@@ -98,9 +98,14 @@ def _lists_archived(context: TenantContext, include_archived: bool) -> bool:
     return include_archived
 
 
+async def _visible_to_readers(course: Course, tenant_id: str) -> bool:
+    """A course is out of reach if it's archived, or if the hierarchy above it is."""
+    return course.status is CourseStatus.ACTIVE and await service.has_active_department(course.department_id.value, tenant_id)
+
+
 async def _readable_course(course_id: str, context: TenantContext) -> Course:
     course = await service.get_course(course_id, tenant_id=context.tenant_id)
-    if course is None or not (_sees_archived(context) or course.status is CourseStatus.ACTIVE):
+    if course is None or not (_sees_archived(context) or await _visible_to_readers(course, context.tenant_id)):
         raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="course not found")
     return course
 
@@ -111,7 +116,9 @@ async def _readable_topic(topic_id: str, context: TenantContext) -> tuple[Course
     topic = next((item for item in course.topics if item.id.value == topic_id), None) if course else None
     if course is None or topic is None:
         raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="topic not found")
-    if not _sees_archived(context) and (course.status is not CourseStatus.ACTIVE or topic.status is not TopicStatus.ACTIVE):
+    if not _sees_archived(context) and (
+        topic.status is not TopicStatus.ACTIVE or not await _visible_to_readers(course, context.tenant_id)
+    ):
         raise ClientHTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="topic not found")
     return course, topic
 

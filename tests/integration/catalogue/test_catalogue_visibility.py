@@ -6,6 +6,9 @@ from uuid import uuid4
 
 import pytest
 
+from app.db.session import SessionLocal
+from app.infrastructure.db.models.catalogue import CourseModel
+from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel
 from tests.integration.assessment.test_attempt_api import add_membership
 from tests.integration.assessment.test_question_api import register_and_authenticate
 from tests.integration.catalogue.test_tenant_scoped_mutations import headers, seed_course_context
@@ -148,3 +151,42 @@ async def test_a_reader_doesnt_see_an_archived_reference_material(client):
     assert ids(client.get(f"/catalogue/topics/{topic_id}/reference-materials", headers=staff)) == [kept]
     path = f"/catalogue/topics/{topic_id}/reference-materials?include_archived=true"
     assert set(ids(client.get(path, headers=staff))) == {kept, archived}
+
+
+async def archive_above_the_course(course_id: str, level: str) -> None:
+    async with SessionLocal() as session:
+        course = await session.get(CourseModel, course_id)
+        department = await session.get(DepartmentModel, course.department_id)
+        target = department if level == "department" else await session.get(FacultyModel, department.faculty_id)
+        target.status = "archived"
+        await session.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("level", ["department", "faculty"])
+async def test_a_course_under_an_archived_department_or_faculty_is_out_of_a_readers_reach(client, level):
+    course_id, staff, student, add_topic = await catalogue(client)
+    topic_id = add_topic("Limits")
+    await archive_above_the_course(course_id, level)
+
+    listed = client.get("/catalogue/courses", headers=student)
+    assert ids(listed) == []
+    assert listed.json()["meta"]["pagination"]["total"] == 0
+    for path in (
+        f"/catalogue/courses/{course_id}",
+        f"/catalogue/courses/{course_id}/topics",
+        f"/catalogue/topics/{topic_id}/learning-outcomes",
+        f"/catalogue/topics/{topic_id}/reference-materials",
+    ):
+        assert client.get(path, headers=student).status_code == 404, path
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("level", ["department", "faculty"])
+async def test_staff_reach_a_course_under_an_archived_parent_only_when_they_ask(client, level):
+    course_id, staff, _, _ = await catalogue(client)
+    await archive_above_the_course(course_id, level)
+
+    assert course_id not in ids(client.get("/catalogue/courses", headers=staff))
+    assert course_id in ids(client.get("/catalogue/courses?include_archived=true", headers=staff))
+    assert client.get(f"/catalogue/courses/{course_id}", headers=staff).status_code == 200
