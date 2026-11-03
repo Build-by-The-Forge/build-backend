@@ -36,6 +36,7 @@ Decision A applies: the backend issues the IDs and owns persistence, authorizati
 | `conversations` | Tenant, owner, title, `created_at`, `updated_at`, `expires_at`, status |
 | `conversation_messages` | Conversation, a sequence number, role, content, `grounded`, `redacted`, `created_at` |
 | `conversation_citations` | Message, number, asset and source IDs, title, pages, excerpt |
+| `conversation_message_sources` | Message, asset, run and attempt: **every source in `sources_used`**, cited or not. IDs only, no text |
 | `conversation_turn_keys` | Conversation, idempotency key, the question's SHA-256, state (`pending` or `stored`), a lease, a `generation`, and the stored turn |
 
 - **Owned by one user in one tenant.** Anyone else, staff included, gets `RESOURCE_NOT_FOUND`. There's no staff route to read a student's conversations; that would need its own decision, as break-glass access to documents would.
@@ -59,7 +60,7 @@ Decision A applies: the backend issues the IDs and owns persistence, authorizati
    1. Lock the conversation. If it's been deleted, store nothing and return 404.
    2. Mark the key `stored` **only if it's still `pending` at this request's `generation`**: `UPDATE … WHERE state = 'pending' AND generation = :mine`. If that changes nothing, the request has lost its reservation (see [Fencing](#fencing)) and stores nothing.
    3. **Check every source again**, in this transaction, as described in [Revalidating at storage](#revalidating-at-storage). If any source is no longer eligible, roll the whole transaction back: no question, no answer, no citations, and the key keeps its `pending` state at this generation. Then free the key as in step 5, fenced, and return `ANSWER_WITHHELD`.
-   4. Insert the question, the answer and its citations with the next two sequence numbers, and update `updated_at` and the title if this is the first question.
+   4. Insert the question, the answer, its citations and **a source row for every entry in `sources_used`**, with the next two sequence numbers. Update `updated_at`, and the title if this is the first question.
 5. **On failure** at step 2, `AI_UPSTREAM_ERROR` or `AI_UNAVAILABLE`, or a withheld answer at step 3, the key is deleted and nothing is stored. A retry asks again, and retrieves afresh.
 
 ### Fencing
@@ -120,12 +121,22 @@ Each citation is also checked, after generation:
 
 - **Deleting a conversation** removes its messages, citations and keys in one transaction. A turn finishing afterwards stores nothing. A repeat answers `RESOURCE_NOT_FOUND`, as the contract says.
 - **A deleted document (ruling 9 on M3-D):** M3-D emits `content.document.deleted`, with IDs and no content. M3-F consumes it from the outbox and, in one transaction per message:
-  - Replaces every assistant message citing it with a fixed notice: "This answer cited a document that's no longer available."
+  - Replaces every assistant message **that used it, cited or not**, according to its source rows, with a fixed notice: "This answer used a document that's no longer available."
   - Sets `redacted: true` and deletes its citations, excerpts included.
   - Keeps the student's own question, which is their text, not the source's.
-- **Lost access without deletion** (decision 3) is applied when messages are read: a message citing anything the caller can no longer read is returned redacted the same way. So it follows the read policy immediately, without needing an event for every way access can end.
+- **Lost access without deletion** (decision 3) is applied when messages are read: a message **with any source** the caller can no longer read, cited or not, is returned redacted the same way. So it follows the read policy immediately, without needing an event for every way access can end.
 - **Audit records** keep message and asset IDs and the time of redaction, never the removed text.
 - **The AI service holds nothing** of a conversation: it's stateless per turn, and memory is gated off.
+
+### Every source, kept with the message
+
+A model can use a passage without citing it, so redaction can't work from citations alone.
+
+- **`conversation_message_sources` records the whole `sources_used` set** for each assistant message, kept separate from its citations: a source can shape an answer without appearing as one.
+- **Integrity:** the message is a foreign key that cascades with it. The asset is a foreign key to `content_assets`, whose rows are never hard-deleted. `(message, asset, run, attempt)` is unique, and there's exactly one row for every entry in `sources_used`. That includes a "not covered" answer whose retrieved passages didn't suffice, since those passages still reached the model. Only an answer with an empty `sources_used` has no rows.
+- **Redaction uses it, not citations.** A deletion event redacts every message with a source row for that asset. When messages are read, a message is redacted if **any** of its sources is no longer readable by the reader, cited or not. The read checks a page's sources in one query.
+- **A reprocess isn't lost access.** A later run or attempt of the same document doesn't redact anything: the document is still readable, and only its access decides.
+- **What redaction keeps:** the source rows stay, as IDs with no text, for audit. The message's answer text, its citations and their excerpts are removed, so no history retains source-derived content. The rows go with the conversation, under the retention policy.
 
 **Contract changes**, in M3-F's contract PR: `ConversationMessage` gains `redacted`, and `sendMessage` gains 409 `TURN_IN_PROGRESS` and 503 `ANSWER_WITHHELD`, retryable.
 
@@ -173,7 +184,8 @@ On migrated PostgreSQL, with the AI service's test providers in the boundary gat
 | Citations | Wrong tenant, unreadable, deleted or not `ready`: the answer is withheld. A citation outside `sources_used` is withheld and alerted (boundary) |
 | Excerpt | Matches the cited chunk's text, at most 500 characters, never model output |
 | No internals | No chunk IDs, storage paths, tenant IDs, `memory_used` or uncited context in any response |
-| Redaction | After a document's deletion, every message citing it is redacted, with no excerpt left in the database. After lost access, it's redacted when read |
+| Redaction | After a document's deletion, every message that used it is redacted, with no excerpt or answer text left in the database. After lost access, it's redacted when read |
+| Uncited sources | On PostgreSQL, a source that was used but not cited is revoked after the turn is stored: the message is redacted when read. The same source is deleted after storage: the message is redacted in place by the deletion event. Every `sources_used` entry has a source row, and a reprocess redacts nothing |
 | Logs | No message text in the logs during a turn |
 | Bad input | M3-C's PostgreSQL bounds: NUL, oversized offsets, a message past 4,000 characters |
 
