@@ -224,8 +224,8 @@ Decision D sets this by measurement, so no value is proposed here. Measured on a
 **Ruling 7:** a private upload is no reason to process untrusted content unscanned. Every document is scanned before anything opens it.
 
 ```text
-uploaded → quarantined → accepted → queued → processing → … → ready
-                       ↘ rejected
+status:   uploaded → quarantined ─(verdict: accepted)→ queued → processing → … → ready
+                                 └(verdict: rejected)→ rejected
 ```
 
 - **Nothing parses an unscanned file.** No OCR, extraction, chunking, embedding or AI dispatch happens until the scan accepts it. The backend refuses to dispatch, and the AI service only fetches what a signed dispatch names.
@@ -249,6 +249,8 @@ The implementation plan includes:
 The reviewer confirms the choice.
 
 **Contract:** the `Ingestion.status` enum gains `quarantined` and `rejected`, in the contract PR.
+
+**`accepted` is a scan verdict, not an ingestion status.** The scan records `accepted` or `rejected`. An accepted document moves from `quarantined` straight to `queued` in the same transaction, so no client ever sees `accepted`. A rejected one takes the status `rejected`. So the contract needs exactly those two new values.
 
 ## Reading (G-13)
 
