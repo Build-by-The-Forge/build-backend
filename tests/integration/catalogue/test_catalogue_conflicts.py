@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from tests.integration.catalogue.test_tenant_scoped_mutations import headers, seed_course_context
 
@@ -129,3 +130,46 @@ async def test_an_archived_course_refuses_children_of_its_active_topic_too(clien
             json={"title": "Handbook", "material_type": "book", "url": "https://example.com/handbook"},
         )
     )
+
+
+class DriverError(Exception):
+    def __init__(self, message: str, sqlstate: str | None = None) -> None:
+        super().__init__(message)
+        self.sqlstate = sqlstate
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("driver_error", "expected"),
+    [
+        (DriverError("duplicate key", "23505"), 409),
+        (DriverError("UNIQUE constraint failed: courses.code"), 409),
+        (DriverError("insert or update violates foreign key", "23503"), 500),
+        (DriverError("null value in column", "23502"), 500),
+        (DriverError("NOT NULL constraint failed: courses.code"), 500),
+    ],
+)
+async def test_only_a_taken_value_is_a_conflict(client, monkeypatch, driver_error, expected):
+    from app.api.catalogue import courses
+
+    staff, department_id, _ = await staff_context(client)
+
+    async def broken(**_):
+        raise IntegrityError("statement", {}, driver_error)
+
+    monkeypatch.setattr(courses.service, "create_course", broken)
+    response = client.post(
+        "/catalogue/courses/",
+        headers=staff,
+        json={
+            "department_id": department_id,
+            "code": "MTH101",
+            "title": "Calculus One",
+            "slug": "calculus-one",
+            "credit_units": 3,
+            "level": 100,
+            "semester": 1,
+        },
+    )
+
+    assert response.status_code == expected, response.text

@@ -63,6 +63,10 @@ def _answers_refusals(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[P
     return answering
 
 
+def _is_unique_violation(exc: IntegrityError) -> bool:
+    return getattr(exc.orig, "sqlstate", None) == "23505" or "UNIQUE constraint failed" in str(exc.orig)
+
+
 def _answers_conflicts(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[P, Awaitable[JSONResponse]]:
     """The request is fine but the catalogue's current state refuses it: already archived,
     or a code, slug or sequence that's taken. The database's constraints decide the second,
@@ -84,6 +88,8 @@ def _answers_conflicts(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[
         ) as exc:
             raise ClientHTTPException(status_code=status.HTTP_409_CONFLICT, detail="this is already archived") from exc
         except IntegrityError as exc:
+            if not _is_unique_violation(exc):
+                raise
             raise ClientHTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail="this conflicts with an existing catalogue record"
             ) from exc
