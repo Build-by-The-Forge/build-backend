@@ -5,7 +5,9 @@ from uuid import uuid4
 
 import pytest
 
+from app.db.session import SessionLocal
 from app.domain.client_safe import ClientSafeError
+from app.infrastructure.db.models.catalogue import CourseModel
 from tests.integration.catalogue.test_tenant_scoped_mutations import headers, seed_course_context
 
 
@@ -84,3 +86,36 @@ async def test_a_missing_repository_is_a_wiring_fault_not_a_refusal():
 
     with pytest.raises(RuntimeError, match="repository is required"):
         await CourseService().list_courses(tenant_id="tenant")
+
+
+async def break_stored_title(course_id: str) -> None:
+    async with SessionLocal() as session:
+        course = await session.get(CourseModel, course_id)
+        course.title = "x"
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_a_stored_row_breaking_a_rule_is_a_server_failure_on_every_route(client):
+    # The client's own input is fine on all of these: only what's stored is wrong.
+    staff, course_id, topic_id = await staff_and_topic(client)
+    await break_stored_title(course_id)
+
+    outcome = {"sequence": 1, "description": "Explains what a limit is"}
+    material = {"title": "Handbook", "material_type": "book", "url": "https://example.com/handbook"}
+    topic = {"title": "Series", "slug": "series", "sequence": 2}
+    for response in (
+        client.get(f"/catalogue/courses/{course_id}", headers=staff),
+        client.get("/catalogue/courses", headers=staff),
+        client.get(f"/catalogue/courses/{course_id}/topics", headers=staff),
+        client.patch(f"/catalogue/courses/{course_id}", headers=staff, json={"description": "Fine"}),
+        client.post(f"/catalogue/courses/{course_id}/topics", headers=staff, json=topic),
+        client.patch(f"/catalogue/topics/{topic_id}", headers=staff, json={"description": "Fine text"}),
+        client.post(f"/catalogue/topics/{topic_id}/learning-outcomes", headers=staff, json=outcome),
+        client.post(f"/catalogue/topics/{topic_id}/reference-materials", headers=staff, json=material),
+        client.post(f"/catalogue/topics/{topic_id}/archive", headers=staff),
+        client.post(f"/catalogue/courses/{course_id}/archive", headers=staff),
+    ):
+        assert response.status_code == 500, (response.request.method, response.request.url.path, response.text)
+        assert response.json()["error"]["code"] == "INTERNAL_ERROR"
+        assert "title" not in response.json()["error"]["message"]

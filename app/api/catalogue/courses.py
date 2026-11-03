@@ -49,8 +49,9 @@ P = ParamSpec("P")
 
 def _answers_refusals(route: Callable[P, Awaitable[JSONResponse]]) -> Callable[P, Awaitable[JSONResponse]]:
     """For a route that takes what a client wrote: a domain rule refusing it is the caller's
-    to fix. Only here, not globally, since a marked error from a stored row or an internal
-    invariant is still a server failure, and a read has no client input to blame."""
+    to fix. Only here, not globally, since a marked error can also come from an internal
+    invariant. A stored row breaking a rule arrives as StoredCourseInvalidError, not as a
+    marked error, so it stays a server failure here too."""
 
     @wraps(route)
     async def answering(*args: P.args, **kwargs: P.kwargs) -> JSONResponse:
