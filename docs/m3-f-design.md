@@ -54,9 +54,9 @@ Decision A applies: the backend issues the IDs and owns persistence, authorizati
    - `pending` past its lease: take it over by incrementing `generation` and renewing the lease.
    - The request keeps the `generation` it reserved with. That's its fencing token.
 2. **Ask the AI service**, outside any transaction, over the existing signed call.
-3. **Check every citation** (see [Citations](#citations)). If any fails, the answer becomes the fixed "not covered" reply with `grounded: false` and no citations, and the event is logged without content.
+3. **Check every source, then every citation** (see [Citations](#citations)). If any source the model used fails, the whole answer is withheld: `ANSWER_WITHHELD`, a 503 with `Retry-After`. Nothing is stored, the key is freed as in step 5, and the event is logged with IDs only.
 4. **Store**, in one transaction: lock the conversation. If it's been deleted, store nothing and return 404. Otherwise mark the key `stored` **only if it's still `pending` at this request's `generation`**: `UPDATE … WHERE state = 'pending' AND generation = :mine`. If that changes a row, insert the question, the answer and its citations with the next two sequence numbers, and update `updated_at` and the title if this is the first question. If it changes nothing, the request has lost its reservation (see [Fencing](#fencing)), and it stores nothing.
-5. **On failure** at step 2, `AI_UPSTREAM_ERROR` or `AI_UNAVAILABLE`, the key is deleted and nothing is stored. A retry asks again.
+5. **On failure** at step 2, `AI_UPSTREAM_ERROR` or `AI_UNAVAILABLE`, or a withheld answer at step 3, the key is deleted and nothing is stored. A retry asks again, and retrieves afresh.
 
 ### Fencing
 
@@ -81,7 +81,18 @@ A request can be slower than its lease: the AI call outlives it, another request
 
 ## Citations
 
-The boundary design requires that the backend never forwards model output blindly. For each citation, the backend checks, after generation:
+The boundary design requires that the backend never forwards model output blindly.
+
+**Every source, not only the cited ones.** This was amended after the M3-D ruling on `fe7742e`: a model can use a passage without citing it. The AI service reports `sources_used`, every `(asset, run, attempt)` whose text was retrieved for the request or reached the model. M3-D's AI PR 1 adds that field. Before anything is returned, the backend applies [M3-D's provenance check](m3-d-design.md#provenance-check) to the whole set:
+
+- Every source must be in the caller's tenant, readable by them now, not denied and not deleted.
+- **If any fails, the whole answer is withheld**, cited or not, rather than replaced with "not covered": the document may have shaped the text. A retry retrieves afresh without it.
+- A response without `sources_used`, a source outside the tenant, or a citation naming a source that isn't in `sources_used` is a broken contract. The answer is withheld and an alert raised.
+- **Nothing is streamed before this check passes.** The first release has no streaming.
+
+"Not covered", with `grounded: false`, remains the answer only when the AI service itself finds the material doesn't cover the question.
+
+Each citation is also checked, after generation:
 
 - **The document exists in this tenant and the caller may read it now**, by M3-D's one read policy.
 - **It isn't deleted, and its latest job is `ready`.** This catches a document that stopped being eligible while the answer was being generated.
@@ -102,7 +113,7 @@ The boundary design requires that the backend never forwards model output blindl
 - **Audit records** keep message and asset IDs and the time of redaction, never the removed text.
 - **The AI service holds nothing** of a conversation: it's stateless per turn, and memory is gated off.
 
-**Contract changes**, in M3-F's contract PR: `ConversationMessage` gains `redacted`, and `sendMessage` gains 409 `TURN_IN_PROGRESS`.
+**Contract changes**, in M3-F's contract PR: `ConversationMessage` gains `redacted`, and `sendMessage` gains 409 `TURN_IN_PROGRESS` and 503 `ANSWER_WITHHELD`, retryable.
 
 ## Before and after M3-D and M4
 
@@ -119,7 +130,7 @@ The boundary design requires that the backend never forwards model output blindl
 | # | Repo | PR | Closes |
 |---|---|---|---|
 | 0 | Backend | This design | |
-| 1 | AI | Citations carry their chunk's text, run and attempt | Enables real excerpts |
+| 1 | AI | Citations carry their chunk's text, run and attempt. `sources_used` comes from M3-D's AI PR 1, which this depends on | Enables real excerpts |
 | 2 | Backend | Contract: `redacted` and `TURN_IN_PROGRESS` | |
 | 3 | Backend | Migration: the four tables | |
 | 4 | Backend | Create, list, get and delete conversations, and list messages | Part of G-17 |
@@ -143,7 +154,8 @@ On migrated PostgreSQL, with the AI service's test providers in the boundary gat
 | Failure | AI down or erroring: nothing stored, the key freed |
 | Ordering | Questions and answers in sequence, even with equal timestamps and concurrent turns |
 | Deleted mid-turn | A conversation deleted during the AI call stores nothing |
-| Citations | Wrong tenant, unreadable, deleted, not `ready`, or made unavailable during generation: the whole answer becomes "not covered" (boundary) |
+| Sources | A document revoked while the answer was generated, whether it was cited or only used, withholds the whole answer: `ANSWER_WITHHELD`, nothing stored, the key freed (boundary) |
+| Citations | Wrong tenant, unreadable, deleted or not `ready`: the answer is withheld. A citation outside `sources_used` is withheld and alerted (boundary) |
 | Excerpt | Matches the cited chunk's text, at most 500 characters, never model output |
 | No internals | No chunk IDs, storage paths, tenant IDs, `memory_used` or uncited context in any response |
 | Redaction | After a document's deletion, every message citing it is redacted, with no excerpt left in the database. After lost access, it's redacted when read |
