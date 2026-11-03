@@ -1,6 +1,6 @@
 # M3-D design: student uploads and content rights
 
-**Status: revised after the reviewer's verdicts on `4340b24` and `06b433a` (changes requested). Nothing here is implemented, and M3-D stays Not started until this design is approved.** Written against backend `a16db6d` and ai-service `0553f35`.
+**Status: revised after the reviewer's verdicts on `4340b24`, `06b433a` and `fe7742e` (changes requested). Nothing here is implemented, and M3-D stays Not started until this design is approved.** Written against backend `a16db6d` and ai-service `0553f35`.
 
 **Summary:** today, a student's upload would be searchable by every student in the tenant. M3-D therefore starts by closing that in the AI service. It then separates who owns a document from where its bytes live, and scans every file before anything parses it. Only after that does it open private uploads. The shelf is built behind a tenant setting that stays off. During this sprint, a student can publish their own work without staff approval, and anything else stays private.
 
@@ -24,11 +24,9 @@ Given on `4340b24`, with the product ruling on `06b433a`. Each is reflected in t
 | C | Physical blob writes | Safe writes and references, with the orphan and last-reference race tests kept | [Physical storage and its races](#physical-storage-and-its-races) |
 | D | Legacy ownership | Classified explicitly; unknown stays restricted | [Schema changes](#schema-changes-migration-0030-reviewed-on-its-own) |
 | E | Lowering scope (on `06b433a`) | Revocation must be immediate and fail closed, not wait for the outbox | [Immediate denial](#immediate-denial) |
-
-**Needs a ruling now:**
-
-- Recording legacy classifications through an operator command line while staff workflows are paused. See [Order of events](#order-of-events).
-- Whether three reports from different students hide a document. See [Reports and takedown](#reports-and-takedown).
+| F | Running requests (on `fe7742e`) | Check every source that reached the model, not only citations, and withhold the whole result | [Provenance check](#provenance-check) |
+| G | Legacy classification while staff workflows are paused (on `fe7742e`) | An operator command, approved under seven strict conditions | [Operator classification](#operator-classification-while-staff-workflows-are-paused) |
+| H | Hiding after reports (on `fe7742e`) | Three distinct authorized students hide a document temporarily, with safeguards | [Reports and takedown](#reports-and-takedown) |
 
 Still open, and listed in [What this design doesn't settle](#what-this-design-doesnt-settle): the retention policy, the scanner's confirmation, the moderated workflow, and any break-glass access.
 
