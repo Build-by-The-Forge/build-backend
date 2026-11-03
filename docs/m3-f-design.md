@@ -55,7 +55,11 @@ Decision A applies: the backend issues the IDs and owns persistence, authorizati
    - The request keeps the `generation` it reserved with. That's its fencing token.
 2. **Ask the AI service**, outside any transaction, over the existing signed call.
 3. **Check every source, then every citation** (see [Citations](#citations)). If any source the model used fails, the whole answer is withheld: `ANSWER_WITHHELD`, a 503 with `Retry-After`. Nothing is stored, the key is freed as in step 5, and the event is logged with IDs only.
-4. **Store**, in one transaction: lock the conversation. If it's been deleted, store nothing and return 404. Otherwise mark the key `stored` **only if it's still `pending` at this request's `generation`**: `UPDATE … WHERE state = 'pending' AND generation = :mine`. If that changes a row, insert the question, the answer and its citations with the next two sequence numbers, and update `updated_at` and the title if this is the first question. If it changes nothing, the request has lost its reservation (see [Fencing](#fencing)), and it stores nothing.
+4. **Store**, in one transaction, in this order:
+   1. Lock the conversation. If it's been deleted, store nothing and return 404.
+   2. Mark the key `stored` **only if it's still `pending` at this request's `generation`**: `UPDATE … WHERE state = 'pending' AND generation = :mine`. If that changes nothing, the request has lost its reservation (see [Fencing](#fencing)) and stores nothing.
+   3. **Check every source again**, in this transaction, as described in [Revalidating at storage](#revalidating-at-storage). If any source is no longer eligible, roll the whole transaction back: no question, no answer, no citations, and the key keeps its `pending` state at this generation. Then free the key as in step 5, fenced, and return `ANSWER_WITHHELD`.
+   4. Insert the question, the answer and its citations with the next two sequence numbers, and update `updated_at` and the title if this is the first question.
 5. **On failure** at step 2, `AI_UPSTREAM_ERROR` or `AI_UNAVAILABLE`, or a withheld answer at step 3, the key is deleted and nothing is stored. A retry asks again, and retrieves afresh.
 
 ### Fencing
@@ -73,6 +77,16 @@ A request can be slower than its lease: the AI call outlives it, another request
 - **The lease** is longer than the AI timeout plus the time to store, so a takeover normally happens only after the first request has died. The generation is what makes the rare overlap safe, not the lease's length.
 - **Duplicate AI calls** are possible only in that overlap, and they're the accepted cost: at most one answer is stored, and the other is discarded.
 - **Deleting the key** after an AI failure (step 5) is fenced the same way, so a stale request's failure can't free a key a newer request holds.
+
+### Revalidating at storage
+
+The check after generation protects the response. **The check at storage protects the history.** A document revoked between the two would otherwise be stored in a conversation.
+
+- **The same source set is checked again inside the storing transaction**, against the one read policy and the current `denied_assets`, before anything is inserted.
+- **It reads with share locks.** It locks every row the read policy reads for each source, `FOR SHARE`: the document, its publication and its rights record. **Every revocation path in M3-D writes at least one of those rows**: deletion, revocation, withdrawal, takedown, report hiding, a rights change and reclassification. So a revocation either commits first, and this check sees it, or waits until the turn has committed.
+- **A revocation that commits just after the turn** is handled by [lost access](#deletion-and-lost-access). The stored message is redacted when read, and on deletion it's redacted in place. Stored history is therefore never shown with a source the reader can no longer see, whichever way the race falls.
+- **Generation first, sources second**, both in the same transaction. A stale request fails on its generation before anything else, and can't store even if its sources are still eligible. A current request whose sources have lapsed stores nothing, and frees only its own generation's key.
+- **The caller's own membership** is checked on every request already. A membership ending mid-turn is L4's transaction, which takes the shared membership lock. The storing transaction reads the caller's membership under that lock too, so the turn can't land after the member is gone.
 
 - **An uncertain timeout**, where the AI service may have answered but the backend didn't hear back, stores nothing. The retry asks again, which costs a call but can't leave a half-stored turn.
 - **Two different keys at once** in one conversation are both answered. The conversation lock only orders their storage.
