@@ -115,6 +115,8 @@ The lowering assignments still go first in the dispatcher, with their own age al
 
 No student route opens before E2, whichever order is used.
 
+**While staff workflows are paused:** E1 needs someone to record classifications and rights reviews, and the sprint pauses staff workflows. Without that, existing institutional material stays `unknown`, out of every answer, for the whole sprint. Recommendation: in the sprint, an operator command line records them. It's run by the platform operator with the tenant's written agreement, audited exactly like the staff route, and it uses the same backend code and rules, so nothing about the invariant changes. The staff route follows when staff workflows resume. **This needs the reviewer's ruling.** The alternative is accepting that answers draw on no existing material until then.
+
 ### Retrieval paths
 
 The PR inventories every entry point **from the code**, not from this list. It includes at least `retriever.evidence`, which serves chat, explain and question generation, and `/v1/ai/retrieve`. A path found later that reads chunks gets the same filter, or the PR isn't complete.
@@ -486,7 +488,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 | 2 | Backend | Contract PR: the additions above and the two new ingestion states | |
 | 3 | Backend | Migration 0030: classification, owner, blobs, rights, publication, quotas, the job index. No route behaviour changes | |
 | 4 | Backend | One read policy on every existing content route, staff routes included, with the route-coverage test | Ruling B, before any student route |
-| 5 | Backend | Classification and rights review for staff, the assignment outbox and its dispatcher | E1. Existing material returns once its assignment is accepted |
+| 5 | Backend | Classification and rights review, through an operator command line in the sprint and staff routes later, with the assignment outbox and its dispatcher | E1. Existing material returns once its assignment is accepted |
 | 6 | Deployment, backend | ClamAV in compose, CI and the boundary gate. The scan worker, with quarantine and rejection, failing closed | Ruling 7 |
 | 7 | AI, backend | The blob key form accepted, and every dispatch states its scope | |
 | 8 | Backend | Upload, scan and queue, list and get, quotas | G-01, G-02, G-25, G-38, G-23, G-07 |
