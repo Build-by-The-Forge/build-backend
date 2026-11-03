@@ -7,6 +7,7 @@ from app.api.catalogue import (
     courses_router,
     learning_outcome_router,
     reference_router,
+    structure_router,
     topic_router,
 )
 from app.api.content import router as content_router
@@ -18,6 +19,7 @@ from app.api.curriculum import (
 
 router = APIRouter()
 router.include_router(courses_router)
+router.include_router(structure_router)
 router.include_router(topic_router)
 router.include_router(learning_outcome_router)
 router.include_router(reference_router)

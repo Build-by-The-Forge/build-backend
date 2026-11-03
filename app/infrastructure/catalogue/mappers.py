@@ -170,7 +170,19 @@ def reference_material_model_to_domain(
     )
 
 
+class StoredCourseInvalidError(RuntimeError):
+    """A stored course no longer satisfies a domain rule. That's a server failure whoever
+    asked, so it must not reach a route as an error written for clients."""
+
+
 def course_to_domain(model: CourseModel) -> Course:
+    try:
+        return _course_to_domain(model)
+    except ValueError as exc:
+        raise StoredCourseInvalidError(f"stored course {model.id} breaks a domain rule") from exc
+
+
+def _course_to_domain(model: CourseModel) -> Course:
     return Course(
         id=CourseId(model.id),
         department_id=DepartmentId(model.department_id),

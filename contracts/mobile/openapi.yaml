@@ -536,7 +536,7 @@ paths:
     get:
       tags: [catalogue]
       operationId: listReferenceMaterials
-      summary: Active reference materials of a topic
+      summary: Active reference materials of a topic's course
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
         - $ref: '#/components/parameters/TopicId'
@@ -1316,7 +1316,7 @@ components:
     Offset:
       name: offset
       in: query
-      schema: { type: integer, minimum: 0, default: 0 }
+      schema: { type: integer, minimum: 0, maximum: 2147483647, default: 0 }
     CourseId:
       name: course_id
       in: path

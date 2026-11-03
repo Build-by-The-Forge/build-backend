@@ -9,6 +9,7 @@ from app.application.catalogue.commands import (
     UpdateTopicCommand,
 )
 from app.domain.catalogue.course import Course
+from app.domain.catalogue.errors import CatalogueParentArchivedError
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
 from app.domain.catalogue.topic import Topic
@@ -18,6 +19,7 @@ from app.domain.catalogue.value_objects import (
     CourseLevel,
     CourseSemester,
     CourseSlug,
+    CourseStatus,
     CourseTitle,
     DepartmentId,
     LearningOutcomeDescription,
@@ -28,9 +30,16 @@ from app.domain.catalogue.value_objects import (
     TopicDescription,
     TopicSequence,
     TopicSlug,
+    TopicStatus,
     TopicTitle,
 )
+from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.course import CourseRepository
+
+
+def _refuse_if_archived(course: Course, topic: Topic | None = None) -> None:
+    if course.status is CourseStatus.ARCHIVED or (topic is not None and topic.status is TopicStatus.ARCHIVED):
+        raise CatalogueParentArchivedError("the parent is archived")
 
 
 class CreateCourseHandler:
@@ -38,6 +47,12 @@ class CreateCourseHandler:
         self.repository = repository
 
     async def handle(self, command: CreateCourseCommand) -> Course:
+        # The database's foreign key can't see tenants: only this keeps a course out of
+        # another institution's department.
+        if command.tenant_id is not None and not await self.repository.has_active_department(
+            command.department_id, command.tenant_id
+        ):
+            raise ClientSafeError("department not found")
         course = Course.create(
             department_id=DepartmentId(command.department_id),
             code=CourseCode(command.code),
@@ -55,10 +70,17 @@ class ListCoursesHandler:
     def __init__(self, repository: CourseRepository) -> None:
         self.repository = repository
 
-    async def handle(self, department_id: str | None = None, tenant_id: str | None = None) -> list[Course]:
-        if department_id:
-            return await self.repository.list_by_department(department_id, tenant_id=tenant_id)
-        return await self.repository.list_all(tenant_id=tenant_id)
+    async def handle(
+        self,
+        tenant_id: str,
+        department_id: str | None = None,
+        active_only: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Course], int]:
+        return await self.repository.list_page(
+            tenant_id, department_id=department_id, active_only=active_only, limit=limit, offset=offset
+        )
 
 
 class CreateTopicHandler:
@@ -69,6 +91,7 @@ class CreateTopicHandler:
         course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
         if course is None:
             return None
+        _refuse_if_archived(course)
 
         topic = Topic.create(
             course_id=course.id,
@@ -118,6 +141,7 @@ class CreateLearningOutcomeHandler:
         )
         if topic is None:
             return None
+        _refuse_if_archived(course, topic)
         outcome = LearningOutcome.create(
             topic_id=topic.id,
             sequence=LearningOutcomeSequence(command.sequence),
@@ -156,8 +180,10 @@ class CreateReferenceMaterialHandler:
         course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
         if course is None:
             return None
-        if not any(topic.id.value == command.topic_id for topic in course.topics):
+        topic = next((item for item in course.topics if item.id.value == command.topic_id), None)
+        if topic is None:
             return None
+        _refuse_if_archived(course, topic)
         material = ReferenceMaterial.create(
             course_id=course.id,
             title=ReferenceMaterialTitle(command.title),

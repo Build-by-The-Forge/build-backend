@@ -24,8 +24,8 @@ from app.application.common.uow import CourseUnitOfWorkFactory
 from app.domain.catalogue.course import Course
 from app.domain.catalogue.learning_outcome import LearningOutcome
 from app.domain.catalogue.reference_material import ReferenceMaterial
+from app.domain.catalogue.structure import DepartmentEntry, FacultyEntry, ProgrammeEntry
 from app.domain.catalogue.topic import Topic
-from app.domain.client_safe import ClientSafeError
 from app.domain.repositories.course import CourseRepository
 
 
@@ -40,7 +40,7 @@ class CourseService:
 
     def _repository(self) -> CourseRepository:
         if self.repository is None:
-            raise ClientSafeError("repository is required")
+            raise RuntimeError("repository is required")
         return self.repository
 
     async def create_course(
@@ -74,14 +74,49 @@ class CourseService:
         handler = CreateCourseHandler(repository=self._repository())
         return await handler.handle(command)
 
-    async def list_courses(self, department_id: str | None = None, tenant_id: str | None = None) -> list[Course]:
+    async def list_courses(
+        self,
+        tenant_id: str,
+        department_id: str | None = None,
+        active_only: bool = True,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Course], int]:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
                 handler = ListCoursesHandler(repository=uow.courses)
-                return await handler.handle(department_id=department_id, tenant_id=tenant_id)
+                return await handler.handle(tenant_id, department_id, active_only, limit, offset)
 
         handler = ListCoursesHandler(repository=self._repository())
-        return await handler.handle(department_id=department_id, tenant_id=tenant_id)
+        return await handler.handle(tenant_id, department_id, active_only, limit, offset)
+
+    async def list_faculties(self, tenant_id: str, limit: int, offset: int) -> tuple[list[FacultyEntry], int]:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.list_faculties(tenant_id, limit, offset)
+        return await self._repository().list_faculties(tenant_id, limit, offset)
+
+    async def list_departments(
+        self, tenant_id: str, faculty_id: str | None, limit: int, offset: int
+    ) -> tuple[list[DepartmentEntry], int]:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.list_departments(tenant_id, faculty_id, limit, offset)
+        return await self._repository().list_departments(tenant_id, faculty_id, limit, offset)
+
+    async def list_programmes(
+        self, tenant_id: str, department_id: str | None, limit: int, offset: int
+    ) -> tuple[list[ProgrammeEntry], int]:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.list_programmes(tenant_id, department_id, limit, offset)
+        return await self._repository().list_programmes(tenant_id, department_id, limit, offset)
+
+    async def has_active_department(self, department_id: str, tenant_id: str) -> bool:
+        if self.uow_factory is not None:
+            async with self.uow_factory() as uow:
+                return await uow.courses.has_active_department(department_id, tenant_id)
+        return await self._repository().has_active_department(department_id, tenant_id)
 
     async def get_course(self, course_id: str, tenant_id: str | None = None) -> Course | None:
         if self.uow_factory is not None:

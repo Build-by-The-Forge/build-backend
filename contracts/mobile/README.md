@@ -209,3 +209,10 @@ The product side asked for these to be fixed now, separately from this contract.
 | G-03 draft exposure, G-35 answer key | Fixed and merged in #53, which also removes questions from students' assessment responses |
 | G-27 time limit, G-15 repeat submit | Fixed and merged in #54, with the deadline policy this contract states. #55 adds ownership and answer-key tests over HTTP |
 | G-29 retakes, G-36 feedback, G-37 finalization | Not started. They need this contract approved first |
+
+## Staff extensions outside this contract
+
+The backend serves a few things for staff that the mobile client doesn't use, so they aren't in `openapi.yaml`. A client generated from the contract never sends them, and the contract's guarantees hold without them.
+
+- **`include_archived=true`** on `GET /catalogue/courses`, `/catalogue/courses/{course_id}/topics`, `/catalogue/topics/{topic_id}/learning-outcomes` and `/catalogue/topics/{topic_id}/reference-materials`. It adds archived items, and courses under an archived department or faculty, to the list. It needs `CATALOGUE_UPDATE`; anyone else gets 403. Without it, a list holds only what's active, for staff too.
+- **Opening an archived item directly.** `GET /catalogue/courses/{course_id}` and the child lists answer staff with `CATALOGUE_UPDATE`, where a reader gets 404, or they couldn't restore or audit it.

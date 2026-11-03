@@ -1,3 +1,7 @@
+class CatalogueParentArchivedError(Exception):
+    """Something new can't join a course or topic that's archived."""
+
+
 class CourseAlreadyArchivedError(Exception):
     pass
 

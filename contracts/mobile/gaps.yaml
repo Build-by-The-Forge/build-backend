@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: ef5f17736ad32d003a54aebe0aff7a72e931dac1698495b66e80141afc5e36e0
+contract_sha256: cbb9e1edc78284b2c110c9956bfbf5058bc81e07c66e21ecc6fa1a38f41e39ae
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -11,22 +11,13 @@ contract_gaps:
   evidence: Read from job_schemas.py.
 - id: G-10
   severity: Medium
-  summary: Catalogue, assessment and attempt lists aren't paginated, and the course list needs a trailing slash
-  closes_in: M3-C, M3-E
+  summary: Assessment and attempt lists aren't paginated
+  closes_in: M3-E
   findings:
   - missing_query_parameter GET /assessment/assessments limit
   - missing_query_parameter GET /assessment/assessments offset
   - missing_query_parameter GET /assessment/attempts limit
   - missing_query_parameter GET /assessment/attempts offset
-  - missing_query_parameter GET /catalogue/courses limit
-  - missing_query_parameter GET /catalogue/courses offset
-  - missing_query_parameter GET /catalogue/courses/{course_id}/topics limit
-  - missing_query_parameter GET /catalogue/courses/{course_id}/topics offset
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/learning-outcomes limit
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/learning-outcomes offset
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials limit
-  - missing_query_parameter GET /catalogue/topics/{topic_id}/reference-materials offset
-  - trailing_slash GET /catalogue/courses
 - id: G-18
   severity: Medium
   summary: Chat returns raw context passages, including uncited ones
@@ -89,14 +80,6 @@ implementation_gaps:
   summary: Retrieval isn't limited to ready documents or to what this user may read
   closes_in: M4
   evidence: Phase 3 release record; ai-service retrieval.py.
-- id: G-09
-  severity: Medium
-  summary: No read routes for faculties, departments or programmes
-  closes_in: M3-C
-  findings:
-  - missing_route GET /catalogue/departments
-  - missing_route GET /catalogue/faculties
-  - missing_route GET /catalogue/programmes
 - id: G-11
   severity: Medium
   summary: The 60-second read limit makes large uploads fail on slower connections
@@ -167,6 +150,9 @@ implementation_gaps:
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
 closed:
+- id: G-09
+  summary: No read routes for faculties, departments or programmes
+  proof: tests/integration/catalogue/test_academic_structure.py::test_a_futa_shaped_hierarchy_comes_back_as_it_is
 - id: G-14
   summary: Identity bodies were untyped, so the contract couldn't describe them
   proof: tests/integration/auth/test_identity_bodies.py::test_a_malformed_body_is_a_validation_failure
