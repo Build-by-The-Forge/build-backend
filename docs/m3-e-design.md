@@ -8,8 +8,8 @@
 
 | # | Decision | Recommendation |
 |---|---|---|
-| 1 | Staff see drafts in `listAssessments`, though the contract says drafts never appear | Default to published for everyone, as M3-C did for archived courses. Staff pass `include_drafts=true`, documented as a staff extension outside the mobile contract |
-| 2 | Staff get every question in list and detail responses, though the contract says questions are only available through an attempt | The mobile routes never return questions, to anyone. Staff read them through a staff route outside the mobile contract |
+| 1 | Staff see drafts in `listAssessments`, though the contract says drafts never appear | The mobile routes behave the same for staff and students: published and visible only, by list or by ID. Staff reach drafts only through separate staff routes |
+| 2 | Staff get every question in list and detail responses, though the contract says questions are only available through an attempt | The mobile routes never return questions, to anyone. Staff read them only through the staff routes |
 | 3 | An assessment of a course that's archived, or that sits under an archived department or faculty | Hidden from students, the same as the course, and no new attempt can start |
 | 4 | An attempt already in progress when its course is archived | It can still be answered and submitted, and finalization still runs, so no student loses work they started. Only new attempts are refused |
 | 5 | `attempts_used` on the list | Computed for the page's assessments only, in the same query or one more, not for every assessment the student ever took |
@@ -25,14 +25,28 @@
 
 ## Visibility
 
-The same rule as M3-C, so a student can't reach an assessment through a course they can't see:
+The same rule as M3-C, so a student can't reach an assessment through a course they can't see. **Two separate route sets, with no overlap:**
 
-| Assessment | Student | Staff, default | Staff, `include_drafts=true` |
+| | Mobile routes | Staff routes |
+|---|---|---|
+| Paths | `GET /assessment/assessments` and `GET /assessment/assessments/{id}`, in the contract | `GET /assessment/staff/assessments` and `GET /assessment/staff/assessments/{id}`, new, outside the contract |
+| Who | Anyone with `assessment.read`, staff and students alike | Only `assessment.update`, in the caller's tenant |
+| Drafts | Never, by list or by ID | Listed and opened |
+| Hidden courses | Never | Listed and opened |
+| Questions | Never, to anyone | With correct answers, for authoring |
+| Parameters | The contract's only. No `include_drafts` | Status and course filters, paged like the mobile list |
+
+| Assessment | Mobile route, anyone | Staff route, `assessment.update` | Staff route, without it |
 |---|---|---|---|
-| Published, course visible | Listed and opened | Listed | Listed |
-| Draft | 404 | Not listed, can open | Listed |
-| Published, course archived or hidden by its department or faculty | 404 | Not listed, can open | Listed |
-| Another tenant's | 404 | 404 | 404 |
+| Published, course visible | Listed and opened, no questions | Yes, with questions | 403 |
+| Draft | 404, by list or by ID | Yes | 403 |
+| Published, course hidden | 404, by list or by ID | Yes | 403 |
+| Another tenant's | 404 | 404 | 403 |
+
+- **Knowing an ID changes nothing.** A draft or hidden assessment's ID gives `RESOURCE_NOT_FOUND` on a mobile route whoever asks, exactly as a nonexistent one does.
+- **Starting an attempt** through the mobile route on a draft or hidden assessment is refused for everyone, staff included.
+- **The existing staff writes** (create, update, publish, release, results) keep their paths and their `assessment.update` and related permissions. Only the reads that returned drafts and questions move.
+- **This differs from M3-C's `include_archived`**, which kept staff reads on the catalogue's mobile routes. Assessments carry correct answers, so their staff reads get a route of their own rather than a parameter.
 
 - **The course filter** follows M3-C's rules: an unknown or hidden `course_id` gives an empty page, not everything. A NUL or an offset past the maximum is refused with 422.
 - **Starting an attempt** checks the same visibility inside the transaction that L1 already uses for the attempt limit. L1's advisory lock doesn't cover the course, so that transaction also reads the course, department and faculty `FOR SHARE`. An archive then waits for it, and an attempt starts either before the archive commits, continuing as decision 4 says, or not at all.
@@ -56,7 +70,7 @@ Each M3-E PR runs those on migrated PostgreSQL, and the PR states that it did.
 | # | PR | Closes |
 |---|---|---|
 | 0 | This design | |
-| 1 | Visibility: published by default, `include_drafts`, no questions on mobile routes, hidden courses | Decisions 1 to 4 |
+| 1 | The staff routes, then the mobile routes limited to published and visible, with no questions, for everyone | Decisions 1 to 4 |
 | 2 | Pagination and order on both lists, in SQL, with `attempts_used` for the page | G-10's remaining findings |
 | 3 | Fields removed from the twelve responses, and the gap entries closed | G-39 |
 | 4 | PostgreSQL tests: visibility under a concurrent archive, paging past the generic-plan threshold, the L1 to L3 suites | |
@@ -68,8 +82,10 @@ G-10 and G-39 close in the PRs that remove their findings, with the drift gate i
 | Requirement | Test must show |
 |---|---|
 | Pagination | Pages cover everything once, in contract order, with the true total. Boundaries as in M3-C: limit 0, 101, a negative or huge offset, NUL |
-| Drafts | No student or default staff list contains one; `include_drafts` needs staff; a student asking is refused |
-| Questions | No mobile route returns questions to anyone |
+| Drafts on mobile routes | No list contains one, and opening one by ID is 404, for a student and for staff with every permission |
+| Questions on mobile routes | None in any response, to anyone, staff included |
+| Staff routes | Need `assessment.update`: a student gets 403. Another tenant's ID is 404. Drafts and hidden assessments are listed and opened, with questions |
+| Starting a draft | Refused on the mobile route for everyone |
 | Hidden course | Its assessments are unlisted and unopenable for students, and starting an attempt is refused, including when the archive races the start |
 | Work in progress | An attempt started before its course was archived can be answered, submitted and finalized |
 | Fields | No response on a mobile route contains `tenant_id` or `user_id`, checked by the drift gate |
