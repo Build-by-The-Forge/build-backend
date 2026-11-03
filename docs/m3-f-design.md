@@ -36,7 +36,7 @@ Decision A applies: the backend issues the IDs and owns persistence, authorizati
 | `conversations` | Tenant, owner, title, `created_at`, `updated_at`, `expires_at`, status |
 | `conversation_messages` | Conversation, a sequence number, role, content, `grounded`, `redacted`, `created_at` |
 | `conversation_citations` | Message, number, asset and source IDs, title, pages, excerpt |
-| `conversation_turn_keys` | Conversation, idempotency key, the question's SHA-256, state (`pending` or `stored`), a lease, and the stored turn |
+| `conversation_turn_keys` | Conversation, idempotency key, the question's SHA-256, state (`pending` or `stored`), a lease, a `generation`, and the stored turn |
 
 - **Owned by one user in one tenant.** Anyone else, staff included, gets `RESOURCE_NOT_FOUND`. There's no staff route to read a student's conversations; that would need its own decision, as break-glass access to documents would.
 - **Order:** conversations by `updated_at DESC, id DESC`, and messages by their sequence number, so a question and its answer never swap even when their timestamps are equal.
@@ -47,15 +47,32 @@ Decision A applies: the backend issues the IDs and owns persistence, authorizati
 
 `POST /ai/conversations/{id}/messages` with an `Idempotency-Key`:
 
-1. **Reserve**, in a short transaction: lock the conversation, then insert the turn key as `pending` with a lease, or find it.
+1. **Reserve**, in a short transaction: lock the conversation, then insert the turn key as `pending` with a lease and `generation` 1, or find it.
    - Already `stored` with the same question: return the stored turn, with no AI call.
    - The same key with a different question: `IDEMPOTENCY_KEY_REUSED`.
    - `pending` within its lease: 409 `TURN_IN_PROGRESS` with `Retry-After` (decision 1).
-   - `pending` past its lease: take it over, since the earlier request died.
+   - `pending` past its lease: take it over by incrementing `generation` and renewing the lease.
+   - The request keeps the `generation` it reserved with. That's its fencing token.
 2. **Ask the AI service**, outside any transaction, over the existing signed call.
 3. **Check every citation** (see [Citations](#citations)). If any fails, the answer becomes the fixed "not covered" reply with `grounded: false` and no citations, and the event is logged without content.
-4. **Store**, in one transaction: lock the conversation. If it's been deleted, store nothing and return 404. Otherwise insert the question, the answer and its citations with the next two sequence numbers, mark the key `stored`, and update `updated_at` and the title if this is the first question.
+4. **Store**, in one transaction: lock the conversation. If it's been deleted, store nothing and return 404. Otherwise mark the key `stored` **only if it's still `pending` at this request's `generation`**: `UPDATE … WHERE state = 'pending' AND generation = :mine`. If that changes a row, insert the question, the answer and its citations with the next two sequence numbers, and update `updated_at` and the title if this is the first question. If it changes nothing, the request has lost its reservation (see [Fencing](#fencing)), and it stores nothing.
 5. **On failure** at step 2, `AI_UPSTREAM_ERROR` or `AI_UNAVAILABLE`, the key is deleted and nothing is stored. A retry asks again.
+
+### Fencing
+
+A request can be slower than its lease: the AI call outlives it, another request takes the key over, and both get answers. The conversation lock orders their storage, but only the generation says which one still owns the key.
+
+**The invariant:** a turn is stored only by the request holding the key's current generation, and a stored turn is never replaced.
+
+| Sequence | Outcome |
+|---|---|
+| A reserves (generation 1). Its lease expires. B takes over (generation 2). **B stores first**, then A returns | B's turn is authoritative. A's update matches nothing, so A stores nothing and returns B's stored turn, since the question is the same |
+| As above, but **A returns first**, while B is still waiting | A's update matches nothing, since the key is at generation 2. A stores nothing and answers `TURN_IN_PROGRESS`. B then stores |
+| A's lease expires, and no one takes over before A returns | A still holds generation 1, so A stores. The lease decides only when a takeover is *allowed* |
+
+- **The lease** is longer than the AI timeout plus the time to store, so a takeover normally happens only after the first request has died. The generation is what makes the rare overlap safe, not the lease's length.
+- **Duplicate AI calls** are possible only in that overlap, and they're the accepted cost: at most one answer is stored, and the other is discarded.
+- **Deleting the key** after an AI failure (step 5) is fenced the same way, so a stale request's failure can't free a key a newer request holds.
 
 - **An uncertain timeout**, where the AI service may have answered but the backend didn't hear back, stores nothing. The retry asks again, which costs a call but can't leave a half-stored turn.
 - **Two different keys at once** in one conversation are both answered. The conversation lock only orders their storage.
@@ -122,6 +139,7 @@ On migrated PostgreSQL, with the AI service's test providers in the boundary gat
 | Ownership | Another student, staff, another tenant: `RESOURCE_NOT_FOUND` on every route |
 | Idempotency | The same key and question: one AI call, the same turn. A different question: `IDEMPOTENCY_KEY_REUSED`. Concurrent repeats: one call, the rest `TURN_IN_PROGRESS` |
 | Abandoned turn | A request killed during the AI call: its lease expires, and a retry with the same key asks again and stores once |
+| Fencing | On PostgreSQL, with the AI step held open: A's lease expires, B takes over, and each of the three orders in [Fencing](#fencing) ends with exactly one stored turn, B's where B finished first. A stale failure doesn't free B's key |
 | Failure | AI down or erroring: nothing stored, the key freed |
 | Ordering | Questions and answers in sequence, even with equal timestamps and concurrent turns |
 | Deleted mid-turn | A conversation deleted during the AI call stores nothing |
