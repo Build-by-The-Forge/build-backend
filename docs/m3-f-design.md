@@ -205,3 +205,4 @@ On migrated PostgreSQL, with the AI service's test providers in the boundary gat
 - **Retention**, which blocks release to students.
 - **Follow-up questions** that understand earlier turns. That's an AI contract change, not in this contract version.
 - **Staff access** to a student's conversations, which is not provided.
+- **Offline conversations.** An answer generated offline stays provisional, under M3-D's offline contract, and joins a conversation only after reconnect validation passes. Its source rows are recorded then, the same as online.
