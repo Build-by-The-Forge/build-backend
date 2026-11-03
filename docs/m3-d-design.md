@@ -108,7 +108,7 @@ The lowering assignments still go first in the dispatcher, with their own age al
 
 - **The AI service reports `sources_used`** on every response that returns generated or retrieved content: every `(asset, run, attempt)` whose text was retrieved for the request, reached the model's input, or is returned directly. The list covers what was used, not only what was cited. This is part of AI PR 1. The field is required, and a response without it is treated as failed.
 - **Before returning anything**, the backend checks the whole set against the caller's authorization **at that moment**, by the one read policy, and against the current `denied_assets`. Every source must be in the caller's tenant, readable by them now, not denied, and not deleted.
-- **If any source fails**, the backend withholds the entire result. It returns `ANSWER_WITHHELD`, a 503 with `Retry-After`, and stores nothing. A retry retrieves afresh, and the revoked document is excluded at the start. The event is logged with IDs only.
+- **If any source fails**, the backend withholds the entire result. It returns `ANSWER_WITHHELD`, a 503 with `Retry-After`, and stores nothing. M3-F's contract PR adds that code to the routes it owns. A retry retrieves afresh, and the revoked document is excluded at the start. The event is logged with IDs only.
 - **An asset ID from outside the caller's tenant**, or one the backend doesn't know, also withholds the result and raises an alert, since it means the AI service has broken its contract.
 - **Nothing is streamed before the check passes.** The first release has no streaming. If streaming is added, it buffers the whole result until the check passes, or it doesn't ship.
 - **It applies to every path** that returns generated or retrieved content: chat, explanations, question generation and `/v1/ai/retrieve`. Only chat is in the student release, but none of the others can be released without it.
@@ -130,8 +130,8 @@ Learning memory isn't a document source, and `GATE_OPEN` is `False`. If memory i
 
 **Both deployment orders keep the invariant.** Only how long existing material is out of answers changes:
 
-- **E1 first:** staff review existing material while the AI service still answers as it does today. Their assignments wait in the outbox, with the dispatcher retrying against a route that doesn't exist yet. When E2 and E3 deploy, every existing document becomes `unknown` and returns as its queued assignment is accepted, at the dispatcher's next attempt.
-- **E2 and E3 first:** every existing document is `unknown` until staff review it after E1 deploys. That's the longer gap.
+- **E1 first:** existing material is reviewed, by the [operator command](#operator-classification-while-staff-workflows-are-paused) during the sprint, while the AI service still answers as it does today. Their assignments wait in the outbox, with the dispatcher retrying against a route that doesn't exist yet. When E2 and E3 deploy, every existing document becomes `unknown` and returns as its queued assignment is accepted, at the dispatcher's next attempt.
+- **E2 and E3 first:** every existing document is `unknown` until it's reviewed after E1 deploys. That's the longer gap.
 
 No student route opens before E2, whichever order is used.
 
