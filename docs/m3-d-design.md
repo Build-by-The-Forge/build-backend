@@ -616,11 +616,17 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 
 ## Offline AI
 
-BUILD implements the complete AI capability set, including Offline AI, and **offline execution must take part in the same guarantees** as the AI service. It mustn't become a route around them. M3-D doesn't design offline execution, but it sets what that design has to meet:
+BUILD implements the complete AI capability set, including Offline AI, and **offline execution must take part in the same guarantees** as the AI service. It mustn't become a route around them. M3-D doesn't design offline execution, but it sets what that design has to meet.
 
-- **A device holds only what its user may read now**, under the one read policy: their own documents, and published or institutional material they're eligible for.
-- **Revocation reaches the device.** A deletion, withdrawal, takedown, rights change or lost membership removes the document, its extracted text and any local index entries at the next sync. A device that can't sync within a set period stops using synced material, rather than keeping it indefinitely.
-- **Offline answers carry provenance** built the same way, from what local retrieval actually supplied. They're checked against the current read policy and denial state when the device reconnects, before anything they produced syncs to the server.
+**What's technically possible offline, stated honestly:** a device that's disconnected can't learn about a revocation that happens meanwhile. So the guarantee is a bounded one, never "authorized now".
+
+- **A device holds what its user was authorized for at its last successful authorization sync**, under the one read policy: their own documents, and published or institutional material they were eligible for then.
+- **An authorization lease bounds that.** Each sync issues a signed lease with an expiry, which starts at 72 hours, as a setting to be confirmed by the offline design. When it expires, protected offline access and offline generation over synced documents **fail closed** until a sync renews it. That includes opening a synced document, searching its text and answering from it. The device's clock isn't trusted to extend a lease: the expiry is checked against the time of the last sync plus the lease length, and a clock moved backwards ends it.
+- **At each sync, revocation reaches the device.** A deletion, withdrawal, takedown, rights change or lost membership removes the document, its extracted text and its local index entries before the new lease is issued.
+- **Offline answers are provisional.** They carry provenance built the same way as online, from what local retrieval actually supplied, by a recorder the local model can't alter.
+  - A provisional answer is shown to its own user, marked as provisional. It isn't uploaded, shared, synced into a conversation, or treated as authoritative until reconnect validation passes.
+  - **On reconnect**, the server checks its complete provenance against the current read policy and denial state, before anything it produced syncs.
+  - **If validation fails**, the answer is withheld from sync and redacted on the device. Its provenance, the IDs only, is kept for audit.
 - **Scanning comes first.** Nothing unscanned is ever delivered to a device for processing.
 - **Scope, rights and publication** mean the same offline as online, so a document never has wider use on a device than on the server.
 
