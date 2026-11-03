@@ -1,18 +1,18 @@
 # M3-D design: student uploads and content rights
 
-**Status: revised after the reviewer's verdict on `4340b24` (changes requested). Nothing here is implemented, and M3-D stays Not started until this design is approved.** Written against backend `a16db6d` and ai-service `0553f35`.
+**Status: revised after the reviewer's verdicts on `4340b24` and `06b433a` (changes requested). Nothing here is implemented, and M3-D stays Not started until this design is approved.** Written against backend `a16db6d` and ai-service `0553f35`.
 
-**Summary:** today, a student's upload would be searchable by every student in the tenant. M3-D therefore starts by closing that in the AI service. It then separates who owns a document from where its bytes live, and scans every file before anything parses it. Only after that does it open private uploads. The shelf is built behind a switch that stays off, and publishing needs staff approval.
+**Summary:** today, a student's upload would be searchable by every student in the tenant. M3-D therefore starts by closing that in the AI service. It then separates who owns a document from where its bytes live, and scans every file before anything parses it. Only after that does it open private uploads. The shelf is built behind a tenant setting that stays off. During this sprint, a student can publish their own work without staff approval, and anything else stays private.
 
 ## The reviewer's rulings
 
-Given on `4340b24`. Each is reflected in the section named.
+Given on `4340b24`, with the product ruling on `06b433a`. Each is reflected in the section named.
 
 | # | Question | Ruling | Section |
 |---|---|---|---|
 | 1 | Personal chunks are searchable tenant-wide before M4 | Approved with changes: fail closed, with three scope values and no blanket `institutional` backfill | [The sequencing blocker](#the-sequencing-blocker) |
 | 2 | Decision B against the Public view | Staged: private-only stays the first-release rule. The shelf is built behind a per-tenant switch, off by default, and building it doesn't enable it | [The tenant shelf](#the-tenant-shelf) |
-| 3 | Staff approval before publication | Required | [Publication](#publication) |
+| 3 | Staff approval before publication | Required on `4340b24`. **Replaced for this sprint on `06b433a`:** own work publishes on the student's request, and anything else stays private until the moderated workflow exists | [Publication during this sprint](#publication-during-this-sprint) |
 | 4 | Publication and AI answers | Approved: publication, knowledge eligibility and provider eligibility are separate | [Three kinds of permission](#three-kinds-of-permission) |
 | 5 | Reusing processed content | Approved with conditions | [Reuse without reprocessing](#reuse-without-reprocessing) |
 | 6 | Student quotas | Provisionally approved: configurable, atomic, non-disclosing | [Abuse limits](#abuse-limits) |
@@ -23,8 +23,14 @@ Given on `4340b24`. Each is reflected in the section named.
 | B | Staff routes | One authorization policy for every read route, staff routes included. No staff access to private documents; break-glass would be a later, audited decision | [Reading](#reading-g-13) |
 | C | Physical blob writes | Safe writes and references, with the orphan and last-reference race tests kept | [Physical storage and its races](#physical-storage-and-its-races) |
 | D | Legacy ownership | Classified explicitly; unknown stays restricted | [Schema changes](#schema-changes-migration-0030-reviewed-on-its-own) |
+| E | Lowering scope (on `06b433a`) | Revocation must be immediate and fail closed, not wait for the outbox | [Immediate denial](#immediate-denial) |
 
-Still open, and listed in [What this design doesn't settle](#what-this-design-doesnt-settle): the retention policy, the scanner's confirmation, staffing for review, and any break-glass access.
+**Needs a ruling now:**
+
+- Recording legacy classifications through an operator command line while staff workflows are paused. See [Order of events](#order-of-events).
+- Whether three reports from different students hide a document. See [Reports and takedown](#reports-and-takedown).
+
+Still open, and listed in [What this design doesn't settle](#what-this-design-doesnt-settle): the retention policy, the scanner's confirmation, the moderated workflow, and any break-glass access.
 
 ## What exists today
 
