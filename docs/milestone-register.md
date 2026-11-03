@@ -19,9 +19,9 @@ There are two tracks, and neither one's progress counts for the other:
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
 | M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete:** G-14 closed; registration's durable, non-enumerating 202; G-39's membership finding closed, the rest with M3-E | #75 `4faca25`, #76 `604f8b1` (merges) |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Complete:** G-09 closed; G-10's catalogue findings closed, its assessment and attempt findings wait for M3-E | #77 `418fbd5` (merge) |
-| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Not started** | |
-| M3-E | Assessment contract | M3-A, L1 to L3 | The rest of G-10 and G-39 closed; M3-C and M3-B closed their other parts. Lifecycle gaps are already closed | HTTP, drift gate | **Partly done** by L1 to L3 | |
-| M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Not started** | |
+| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Design in review** (#79). Implementation not started; its first PR, the AI scope filter, waits on the design | |
+| M3-E | Assessment contract | M3-A, L1 to L3 | The rest of G-10 and G-39 closed; M3-C and M3-B closed their other parts. Lifecycle gaps are already closed | HTTP, drift gate | **Design approved**, implementation not started. Partly done by L1 to L3 | #80 `f4ce131` (design) |
+| M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Design approved**, implementation not started. No conversation reaches students until retention is decided | #81 `e0057ad` (design) |
 | M4 | Retrieval eligibility and citation authorization | M3-D, M3-F | G-05 closed; G-04 and G-31 closed; the boundary doc's measurements taken | Boundary, both repositories | **Specified** in `mobile-m0-boundary.md` | |
 | M5 | Typed client, auth and session, error handling | M3-A, M3-B | Generated client passes contract-drift checks; secure token storage | Client against the contract | **Not started** | |
 | M6 | Student workflows and screens | M5, M3-C to M3-F | Screens use the generated client only; G-26 closed; device tests | Device, end to end | **Not started** | |
@@ -128,6 +128,23 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 13. M7 on pinned SHAs. Its test design can start at any time.
 
 **L-track, independently:** AI-1 and M3-A are merged, so L4 can start, then memory activation under its own approval once every gate condition is implemented and verified.
+
+## Product direction for this sprint
+
+Given by the reviewer on #79 at `06b433a`. It changes what's built first, not any security, authorization or deployment gate.
+
+| Area | Decision |
+|---|---|
+| Users | Students. The first release is the Student Adoption Release, and a normal login is a student's |
+| Other roles | Lecturer, HOD, faculty and university workflows are paused. They stay in the architecture |
+| Student Shelf | The central academic document library |
+| Upload privacy | Private by default |
+| Student publication | Opt-in. During this sprint, a student's own work with tenant sharing publishes on their request, without staff approval. Any other rights basis stays private until the moderated workflow exists. This is a deliberate sprint exception, not the removal of governance |
+| "Public" | Discoverable by authorized students of the same tenant, never the open internet |
+| AI knowledge eligibility | Separate from publication |
+| Provider eligibility | Separate from publication and from retrieval |
+
+**Not permitted by these decisions:** exposing a route before its own gates pass. A design approval isn't permission to expose a route, and `GATE_OPEN` stays `False`.
 
 ## Open incidents
 
