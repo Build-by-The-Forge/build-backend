@@ -129,6 +129,23 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 
 **L-track, independently:** AI-1 and M3-A are merged, so L4 can start, then memory activation under its own approval once every gate condition is implemented and verified.
 
+## Product direction for this sprint
+
+Given by the reviewer on #79 at `06b433a`. It changes what's built first, not any security, authorization or deployment gate.
+
+| Area | Decision |
+|---|---|
+| Users | Students. The first release is the Student Adoption Release, and a normal login is a student's |
+| Other roles | Lecturer, HOD, faculty and university workflows are paused. They stay in the architecture |
+| Student Shelf | The central academic document library |
+| Upload privacy | Private by default |
+| Student publication | Opt-in. During this sprint, a student's own work with tenant sharing publishes on their request, without staff approval. Any other rights basis stays private until the moderated workflow exists. This is a deliberate sprint exception, not the removal of governance |
+| "Public" | Discoverable by authorized students of the same tenant, never the open internet |
+| AI knowledge eligibility | Separate from publication |
+| Provider eligibility | Separate from publication and from retrieval |
+
+**Not permitted by these decisions:** exposing a route before its own gates pass. A design approval isn't permission to expose a route, and `GATE_OPEN` stays `False`.
+
 ## Open incidents
 
 | Incident | Status | Closes when |
