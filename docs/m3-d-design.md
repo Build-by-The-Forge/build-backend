@@ -313,7 +313,20 @@ For a document already `ready`, one from the student's own account or one publis
 
 ## Abuse limits
 
-Proposed starting values, each a setting, each to be confirmed by measurement: 50 uploads per student per day, 500 MiB stored per student per tenant, 10 retries per document per day. Over a limit is `RATE_LIMITED` or a new `QUOTA_EXCEEDED`. The count is per owner, so it reveals nothing about anyone else. Physical deduplication doesn't reduce a student's quota, or the quota itself would reveal that a classmate holds the file.
+**Ruling 6, provisional:** these are starting values, each a setting rather than a rule in code, to be revisited against real upload sizes, storage, AI cost and observed abuse.
+
+| Setting | Starting value |
+|---|---|
+| `content_student_uploads_per_day` | 50 |
+| `content_student_stored_bytes` | 500 MiB per student per tenant |
+| `content_document_retries_per_day` | 10 |
+
+- **Atomic:** a usage row per (tenant, owner) is checked and charged by a conditional `UPDATE` in the same transaction that references the blob. Two uploads racing at the limit can't both pass, and a refused upload leaves no document.
+- **Logical bytes:** a student is charged for their own document's size, never less because someone else holds the same bytes. A smaller charge would reveal that a classmate holds the file.
+- **Non-disclosing:** a refusal is `QUOTA_EXCEEDED`, decided only by the caller's own usage.
+- **Released on deletion:** deleting a document returns its bytes at that commit.
+- **Retries** are counted per document per day, in the transaction that creates the retry job.
+- **Tested** on PostgreSQL with uploads racing at the limit, so that exactly the allowed number succeeds.
 
 ## Delivery
 
