@@ -86,7 +86,7 @@ G-10 and G-39 close in the PRs that remove their findings, with the drift gate i
 | Questions on mobile routes | None in any response, to anyone, staff included |
 | Staff routes | Need `assessment.update`: a student gets 403. Another tenant's ID is 404. Drafts and hidden assessments are listed and opened, with questions |
 | Starting a draft | Refused on the mobile route for everyone |
-| Hidden course | Its assessments are unlisted and unopenable for students, and starting an attempt is refused, including when the archive races the start |
+| Hidden course | On the mobile routes its assessments are unlisted and unopenable for everyone, staff included, and starting an attempt is refused, including when the archive races the start |
 | Work in progress | An attempt started before its course was archived can be answered, submitted and finalized |
 | Fields | No response on a mobile route contains `tenant_id` or `user_id`, checked by the drift gate |
 | Ownership | Another student's attempt is a 404 before and after the change |
