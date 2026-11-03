@@ -83,11 +83,20 @@ This refines the first revision's per-chunk `knowledge_scope` column. The guaran
 
 **The invariant:** no chunk becomes institutionally retrievable until its document's classification and rights review are recorded in the backend, and the AI service has accepted the signed assignment that follows from them.
 
-**Lowering has a window, and it's stated.** When a document stops being `institutional`, its chunks stay retrievable until the AI service accepts the lowering assignment:
+### Immediate denial
 
-- The dispatcher sends lowering assignments before any raising ones, and their age has its own alert.
-- Until M4, the window is the outbox's delivery delay, normally the next dispatch.
-- M4 closes it: the backend's per-request allow-list excludes the document at once, whatever the AI service has stored.
+The outbox makes a lowering reliable, but it can be slow. A document that's withdrawn from `institutional`, by deletion, revocation, a rights change or reclassification, must stop being served at the backend's commit, not at the AI service's acknowledgement. **The outbox isn't what protects it in between.**
+
+**Why the backend can do this:** every path to retrieved text is a call the backend signs. Mobile never calls the AI service, and nothing in the AI service retrieves on its own. So the backend's commit is the point every later request can see.
+
+- **Every retrieving call carries `denied_assets`:** the documents the backend has lowered whose lowering the AI service hasn't acknowledged. The pending outbox row is written in the same transaction as the lowering, so from that commit every request the backend signs carries the document.
+- **The AI service excludes them before ranking**, whatever scope it has stored. Denial only ever removes. It can't raise anything.
+- **The field is required on every retrieving call.** A call without it is refused, because absence never means "none". If the backend can't read the list, it makes no AI call and answers `AI_UNAVAILABLE`.
+- **It stays small.** A document leaves the list once its lowering is acknowledged, after which its stored scope keeps it out. If a tenant's list passes a configured size, starting at 1,000, the backend refuses that tenant's retrieving calls and alerts, rather than sending part of it.
+- **A request already running at the commit** is caught after generation. M3-F's citation check rejects any citation to a document the caller can't read now. Every other path that returns retrieved text, explain, question generation and `/v1/ai/retrieve`, gets the same check before it responds, though none of them is in the student release.
+- **M4 replaces this list** with its allow-list, which excludes everything not explicitly eligible. Until then, this is what makes revocation immediate.
+
+The lowering assignments still go first in the dispatcher, with their own age alert, because a short list is what keeps calls small.
 
 ### Order of events
 
@@ -120,6 +129,7 @@ The PR inventories every entry point **from the code**, not from this list. It i
 - A document whose assignment failed or is still queued stays `unknown`, or at its last accepted scope.
 - Reprocessed chunks, and chunks written late by a job in flight, take the document's current scope.
 - A scope assignment naming another tenant's asset is refused.
+- **Immediate denial:** a document lowered with the dispatcher stopped is excluded from the next request on every path. A retrieving call without `denied_assets` is refused. A list past its limit fails closed. After acknowledgement, the document stays out through its stored scope.
 
 **Accepted product limitation:** until M4's allow-list, students can open their own documents, but no answer can use them, not even their own.
 
@@ -509,7 +519,8 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Rights per document | Two documents of one student carry different rights. A source edit doesn't change an existing document |
 | Quotas | Uploads racing at the limit: exactly the allowed number succeed. The charge is logical bytes |
 | Publication | It needs consent, a declaration and staff approval. The switch off hides everything. Withdrawal and takedown apply at once |
-| Three permissions | An approved publication stays `personal` in the AI service |
+| Three permissions | A published document stays `personal` in the AI service |
+| Immediate denial | Deleting, revoking or reclassifying an `institutional` document excludes it from the next request on every path, with the outbox stopped |
 | Owner leaves | Publications are withdrawn and documents excluded in the membership's own transaction. Nothing is deleted |
 | Reuse | The new document keeps its own records. The source's removal requeues it, and deleting either never deletes the other |
 | Deletion event | It carries IDs only, no content |
