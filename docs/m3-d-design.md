@@ -1,22 +1,30 @@
 # M3-D design: student uploads and content rights
 
-**Status: proposed, for the reviewer. Nothing here is implemented.** Written against backend `a16db6d` and ai-service `0553f35`.
+**Status: revised after the reviewer's verdict on `4340b24` (changes requested). Nothing here is implemented, and M3-D stays Not started until this design is approved.** Written against backend `a16db6d` and ai-service `0553f35`.
 
-**Summary:** today, a student's upload would be searchable by every student in the tenant. M3-D therefore starts by closing that in the AI service, then separates who owns a document from where its bytes live. Only after that does it open uploads, then rights, then the public shelf.
+**Summary:** today, a student's upload would be searchable by every student in the tenant. M3-D therefore starts by closing that in the AI service. It then separates who owns a document from where its bytes live, and scans every file before anything parses it. Only after that does it open private uploads. The shelf is built behind a switch that stays off, and publishing needs staff approval.
 
-## Decisions for the reviewer
+## The reviewer's rulings
 
-| # | Decision | Recommendation |
-|---|---|---|
-| 1 | Personal chunks are searchable by the whole tenant until M4 | Before any student upload exists, make retrieval exclude them by default, in the AI service. See [the sequencing blocker](#the-sequencing-blocker) |
-| 2 | Decision B says uploads stay private in the first release, and that sharing needs moderation that doesn't exist. The M3 exit checklist requires a Public view | Treat the checklist as superseding Decision B only once these exist: a per-tenant switch, off by default, a staff takedown and a student report route. See [Decision B and the Public view](#decision-b-and-the-public-view) |
-| 3 | Is a published document subject to staff approval first? | No approval queue in this release. Publishing is the owner's declared consent, staff can take it down, and the tenant switch stays off until a tenant accepts that |
-| 4 | Does publishing a document make it usable in other students' answers? | No. Publication covers opening and reading. Its `knowledge_scope` stays `personal` until staff verify its rights, which is separate |
-| 5 | Reusing processed content | Only from content the student could already see: their own, or published. Never from another student's private document, because a fast `ready` would reveal it exists |
-| 6 | Student quotas | Set limits on documents and stored bytes per student per tenant. Values are proposed in [Abuse limits](#abuse-limits) |
-| 7 | Malware scanning | Required before a document can be published, not before private upload. A provider isn't chosen, so publication stays off until one is |
-| 8 | What happens to a published document when its owner leaves the tenant | It's unpublished, and stays private for 30 days pending their return, then is deleted. Needs the reviewer's view on retention |
-| 9 | Excerpts already stored in past chat answers when the source is deleted | M3-D makes the document impossible to newly cite. Old excerpts are M3-F's to define, and that dependency is recorded here so it isn't lost |
+Given on `4340b24`. Each is reflected in the section named.
+
+| # | Question | Ruling | Section |
+|---|---|---|---|
+| 1 | Personal chunks are searchable tenant-wide before M4 | Approved with changes: fail closed, with three scope values and no blanket `institutional` backfill | [The sequencing blocker](#the-sequencing-blocker) |
+| 2 | Decision B against the Public view | Staged: private-only stays the first-release rule. The shelf is built behind a per-tenant switch, off by default, and building it doesn't enable it | [The tenant shelf](#the-tenant-shelf) |
+| 3 | Staff approval before publication | Required | [Publication](#publication) |
+| 4 | Publication and AI answers | Approved: publication, knowledge eligibility and provider eligibility are separate | [Three kinds of permission](#three-kinds-of-permission) |
+| 5 | Reusing processed content | Approved with conditions | [Reuse without reprocessing](#reuse-without-reprocessing) |
+| 6 | Student quotas | Provisionally approved: configurable, atomic, non-disclosing | [Abuse limits](#abuse-limits) |
+| 7 | Malware scanning | Changed: before anything processes a file, failing closed | [Scanning](#scanning) |
+| 8 | An owner leaves the tenant | Changed: revoke, unpublish and exclude at once; keep under a retention policy; no 30-day deletion | [When an owner leaves](#when-an-owner-leaves) |
+| 9 | Excerpts in past chat answers | M3-F defines the behaviour; M3-D provides the deletion event and source identity | [Deletion](#deletion-g-32) |
+| A | Where rights live | Per document, not per source | [Rights and provenance](#rights-and-provenance) |
+| B | Staff routes | One authorization policy for every read route, staff routes included. No staff access to private documents; break-glass would be a later, audited decision | [Reading](#reading-g-13) |
+| C | Physical blob writes | Safe writes and references, with the orphan and last-reference race tests kept | [Physical storage and its races](#physical-storage-and-its-races) |
+| D | Legacy ownership | Classified explicitly; unknown stays restricted | [Schema changes](#schema-changes-migration-0030-reviewed-on-its-own) |
+
+Still open, and listed in [What this design doesn't settle](#what-this-design-doesnt-settle): the retention policy, the scanner's confirmation, staffing for review, and any break-glass access.
 
 ## What exists today
 
