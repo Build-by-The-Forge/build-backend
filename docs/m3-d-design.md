@@ -91,22 +91,26 @@ The rule from the register: **deduplicating a physical file must not merge owner
 | Record | Holds | Doesn't hold |
 |---|---|---|
 | `content_blobs` (new) | Tenant, SHA-256, size, detected type, object key | Any person, consent or permission |
-| `content_assets` | The document: owner, display name, status, ingestion state, its blob | Bytes |
+| `content_assets` | The document: ownership class, owner, display name, status, ingestion state, its blob | Bytes |
 | `content_sources` | Personal source per student, or a staff source; rights fields | |
 | `content_publications` (new) | Append-only consent: asset, who, what they declared, which declaration version, when, and any withdrawal | |
 
 ### Schema changes (migration 0030, reviewed on its own)
 
-- `content_assets.owner_user_id`: null for staff material, set for a student's.
+**Existing records are classified, not assumed (ruling D).**
+
+- `content_assets.ownership_class`: `institutional`, `personal` or `unclassified`, with `owner_user_id` set only for `personal`.
+- **Every existing row is backfilled as `unclassified`.** An unclassified document is readable by no student and retrieved by nobody, and staff see it only in a classification queue.
+- **Classification is a recorded staff decision per asset**, in a new append-only `content_ownership_classifications`: the asset, the class, who decided, when, and the evidence they relied on. A migration report lists what needs classifying, per tenant.
+- **Evidence isn't proof.** G-01 shows students never held upload permission, so every existing asset came through a staff route. That makes `institutional` likely, but roles change and accounts are shared, so it's recorded as evidence for a person to accept, not applied as a default.
 - `content_assets.blob_id`: null for existing rows, which keep their per-asset object.
 - Drop `uq_content_assets_tenant_hash`. It's replaced by two partial unique indexes, so staff behaviour doesn't change:
-  - `(tenant_id, content_sha256)` where `owner_user_id IS NULL`.
-  - `(tenant_id, owner_user_id, content_sha256)` where `owner_user_id IS NOT NULL AND status <> 'deleted'`.
-- `content_blobs`: unique `(tenant_id, content_sha256)`.
+  - `(tenant_id, content_sha256)` where `ownership_class <> 'personal'`.
+  - `(tenant_id, owner_user_id, content_sha256)` where `ownership_class = 'personal' AND status <> 'deleted'`.
 - `content_sources.owner_user_id`, unique per `(tenant_id, owner_user_id)`. New `VisibilityScope.PRIVATE`, and a check that private and an owner go together.
 - New `AssetStatus.DELETED`.
-- A partial unique index on `content_ingestion_jobs (asset_id)` for active states, so that one asset can't have two active jobs. The migration has to report existing violations rather than silently alter them.
-- Rights columns: see [Rights](#rights-and-provenance).
+- A partial unique index on `content_ingestion_jobs (asset_id)` for active states, so that one asset can't have two active jobs. The migration reports existing violations rather than silently changing them.
+- New tables for blobs, rights, publication and quotas, described in their sections.
 
 ### Duplicate detection without disclosure (G-25)
 
