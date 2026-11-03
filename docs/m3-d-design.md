@@ -276,32 +276,63 @@ Memory is out of scope here: `GATE_OPEN` stays `False`, and L4 defines what memo
 
 The principle: **access to content isn't permission to share it.** A declaration is recorded as what someone said, and the UI must not present it as legal clearance (PRD §91).
 
-## The shelf
+## The tenant shelf
 
-### Decision B and the Public view
+**Ruling 2: private-only stays the first-release rule.** The shelf is built, but it stays off until a tenant decides to enable it, and building it is no reason to turn it on.
 
-Decision B approved private-only for the first release, because sharing needs moderation that doesn't exist. The M3 exit checklist later requires a Public view with explicit consent to publish. These conflict, and the later instruction doesn't say it supersedes the earlier one, so **this needs the reviewer's explicit ruling**. Recommendation: build it, keep it behind the per-tenant switch, off by default, and turn it on only with a takedown and report route in place.
+- **The audience is the tenant**, not the internet. The route is `/content/tenant-shelf`, every response states `audience: "tenant"`, and the UI says which institution can see a document. Nothing uses the word "public".
+- **The switch** is a per-tenant setting, off by default. Turning it on is a recorded decision by the tenant's owner, with conditions checked: a reviewer role is assigned, a report route and takedown exist, and the scanner is running. A deployment or merged code never turns it on.
+- **Uploads are private by default.** Nothing publishes as a side effect, and no default in any request means consent.
+
+### Publication
+
+**Ruling 3:** a student's declaration isn't proof of redistribution rights, so staff approve every publication.
+
+```text
+private → requested → pending_review → approved → discoverable
+                                     ↘ rejected
+approved or discoverable → withdrawn (by the owner) or taken_down (by staff)
+```
+
+1. The student requests publication. BUILD records the consent and a rights declaration for this document, each with the wording version they accepted.
+2. The publication waits in `pending_review`.
+3. Staff with a new `content.publication.review` permission review the document and its rights basis. They approve or reject, with a reason, and the decision is audited.
+4. An approved publication is **discoverable only while all of these hold:** the tenant switch is on, the latest scan is clean at a current signature version, the document isn't deleted, and its owner is still a member.
+5. **The owner can withdraw at any time**, and withdrawal takes effect at that commit. Staff can take down at any time, after approval included.
+
+Approval permits discovery and reading only. **It doesn't make the document usable in anyone's answers** (see [Three kinds of permission](#three-kinds-of-permission)).
+
+### Moderation as a workflow
+
+The ruling is explicit that report and takedown routes don't make a moderation process. Before a tenant can enable the switch, it needs:
+
+- **A review queue:** staff routes listing pending publications and open reports, oldest first, with each item's rights declaration and scan result.
+- **Decisions:** approve, reject, take down, dismiss a report. Each has a reason and is audited, and the student is told the outcome without the reporter's identity.
+- **A runbook** in this repository: who reviews, how quickly, what to check for rights and content, and how to escalate. The tenant names its reviewers when enabling the switch.
+- **Reports** that reach the queue at once, with a takedown available without waiting for the review.
+
+These staff routes aren't in the mobile contract, since the first release is student-only.
 
 ### Proposed contract additions
 
-Not yet in `openapi.yaml`. They go in a contract PR of their own, once these decisions are made.
+Not yet in `openapi.yaml`. They go in a contract PR of their own.
 
 | Route | Purpose |
 |---|---|
-| `GET /content/my-documents?level=&course_id=` | My Shelf, with the existing list adding the two filters |
-| `GET /content/shelf?level=&course_id=` | The Public view: published, clean, not deleted, this tenant only |
+| `GET /content/my-documents?level=&course_id=` | My Shelf: the existing list gains the two filters |
+| `GET /content/tenant-shelf?level=&course_id=` | Discoverable documents of this tenant, with `audience: "tenant"` |
 | `PATCH /content/my-documents/{id}` | The shelf form: title, course, level, semester, document type |
-| `PUT /content/my-documents/{id}/publication` | Publish, with the declaration version the student accepted. Refused unless `ready` and scanned clean |
-| `DELETE /content/my-documents/{id}/publication` | Withdraw. The public document disappears at that commit |
-| `POST /content/shelf/{id}/report` | Report a public document. Staff then take it down with the existing revoke |
+| `POST /content/my-documents/{id}/publication-request` | Request publication, with the consent and declaration versions accepted. Refused unless `ready` |
+| `DELETE /content/my-documents/{id}/publication` | Withdraw a request or a publication, at once |
+| `POST /content/tenant-shelf/{id}/report` | Report a document to the tenant's reviewers |
 
-- `level` is 100 to 500, with 600 refused unless the tenant has it: `levels` is per tenant, so that table decides rather than a hardcoded list. `course_id` must be an active course of the tenant, the same rule M3-C gave courses.
-- Public listings show the title, course and level. **They never show the uploader**, unless the reviewer decides otherwise, because consent to share a file isn't consent to be named.
-- Uploads are private by default. Nothing publishes as a side effect, and no default in any request means consent.
+- **Levels** are 100 to 500, with 600 refused unless the tenant has it. The tenant's `levels` table decides this, not a hardcoded list.
+- **`course_id`** must be an active course of the tenant, the same rule M3-C gave courses.
+- **Shelf listings never show the uploader** unless the reviewer decides otherwise, because consent to share a file isn't consent to be named.
 
 ### Prefilled forms
 
-The acceptance criterion says prefilled only when classification is confident enough. **No classifier for course or level exists**, so this is a new AI capability, not a wiring task. Recommendation: the first release has an empty form, and `suggestions` joins the contract when a classifier exists, with a threshold set from measurement on the evaluation set. Inventing a confidence score isn't an option (PRD §90). If the reviewer treats prefill as required for M3-D, it needs its own scoped AI work.
+The acceptance criterion says prefilled only when classification is confident enough. **No classifier for course or level exists**, so this is a new AI capability, not a wiring task. The first release has an empty form. `suggestions` joins the contract when a classifier exists, with a threshold set from measurement. Inventing a confidence score isn't an option (PRD §90).
 
 ### Reuse without reprocessing
 
