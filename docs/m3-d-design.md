@@ -99,10 +99,26 @@ The outbox makes a lowering reliable, but it can be slow. A document that's with
 - **The AI service excludes them before ranking**, whatever scope it has stored. Denial only ever removes. It can't raise anything.
 - **The field is required on every retrieving call.** A call without it is refused, because absence never means "none". If the backend can't read the list, it makes no AI call and answers `AI_UNAVAILABLE`.
 - **It stays small.** A document leaves the list once its lowering is acknowledged, after which its stored scope keeps it out. If a tenant's list passes a configured size, starting at 1,000, the backend refuses that tenant's retrieving calls and alerts, rather than sending part of it.
-- **A request already running at the commit** is caught after generation. M3-F's citation check rejects any citation to a document the caller can't read now. Every other path that returns retrieved text, explain, question generation and `/v1/ai/retrieve`, gets the same check before it responds, though none of them is in the student release.
+- **A request already running at the commit** is caught by the [provenance check](#provenance-check) before anything is returned. Checking citations isn't enough, since a model can use a passage without citing it.
 - **M4 replaces this list** with its allow-list, which excludes everything not explicitly eligible. Until then, this is what makes revocation immediate.
 
 The lowering assignments still go first in the dispatcher, with their own age alert, because a short list is what keeps calls small.
+
+### Provenance check
+
+**Ruling on `fe7742e`:** a document can influence an answer without being cited. So the check covers every source that reached the model, not just the citations.
+
+- **The AI service reports `sources_used`** on every response that returns generated or retrieved content: every `(asset, run, attempt)` whose text was retrieved for the request, reached the model's input, or is returned directly. The list covers what was used, not only what was cited. This is part of AI PR 1. The field is required, and a response without it is treated as failed.
+- **Before returning anything**, the backend checks the whole set against the caller's authorization **at that moment**, by the one read policy, and against the current `denied_assets`. Every source must be in the caller's tenant, readable by them now, not denied, and not deleted.
+- **If any source fails**, the backend withholds the entire result. It returns `ANSWER_WITHHELD`, a 503 with `Retry-After`, and stores nothing. A retry retrieves afresh, and the revoked document is excluded at the start. The event is logged with IDs only.
+- **An asset ID from outside the caller's tenant**, or one the backend doesn't know, also withholds the result and raises an alert, since it means the AI service has broken its contract.
+- **Nothing is streamed before the check passes.** The first release has no streaming. If streaming is added, it buffers the whole result until the check passes, or it doesn't ship.
+- **It applies to every path** that returns generated or retrieved content: chat, explanations, question generation and `/v1/ai/retrieve`. Only chat is in the student release, but none of the others can be released without it.
+- **It isn't a substitute for denial at the start of a request.** It catches what changed while a request was running.
+
+**Trust:** the AI service reports what it used, and the backend can't observe the model directly. The backend's own `denied_assets` and the scope filter keep revoked material out at the start of every request. This check catches the remaining race, and treats any report that doesn't fit what the backend allowed as a failure.
+
+Learning memory isn't a document source, and `GATE_OPEN` is `False`. If memory is ever opened, what it contributes must join this set before release.
 
 ### Order of events
 
@@ -137,6 +153,7 @@ The PR inventories every entry point **from the code**, not from this list. It i
 - A document whose assignment failed or is still queued stays `unknown`, or at its last accepted scope.
 - Reprocessed chunks, and chunks written late by a job in flight, take the document's current scope.
 - A scope assignment naming another tenant's asset is refused.
+- **Provenance:** a request that used a document revoked while it ran is withheld whole on every path, including when the document was used and not cited. A response without `sources_used`, or naming an asset outside the tenant, is withheld.
 - **Immediate denial:** a document lowered with the dispatcher stopped is excluded from the next request on every path. A retrieving call without `denied_assets` is refused. A list past its limit fails closed. After acknowledgement, the document stays out through its stored scope.
 
 **Accepted product limitation:** until M4's allow-list, students can open their own documents, but no answer can use them, not even their own.
@@ -490,7 +507,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 | # | Repo | PR | Closes or enables |
 |---|---|---|---|
 | 0 | Backend | This design | |
-| 1 | AI | Scope per document with versions, every existing document `unknown`, fail-closed retrieval on every path, signed versioned assignments | E2 and E3. Unblocks everything, part of G-31 |
+| 1 | AI | Scope per document with versions, every existing document `unknown`, fail-closed retrieval on every path, signed versioned assignments, `denied_assets` required, `sources_used` on every response | E2 and E3. Unblocks everything, part of G-31 |
 | 2 | Backend | Contract PR: the additions above and the two new ingestion states | |
 | 3 | Backend | Migration 0030: classification, owner, blobs, rights, publication, quotas, the job index. No route behaviour changes | |
 | 4 | Backend | One read policy on every existing content route, staff routes included, with the route-coverage test | Ruling B, before any student route |
@@ -547,6 +564,7 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Reports | Three distinct students hide a document, if the reviewer accepts that rule. One student's repeated reports count once. Reporters are never revealed |
 | Three permissions | A published document stays `personal` in the AI service |
 | Immediate denial | Deleting, revoking or reclassifying an `institutional` document excludes it from the next request on every path, with the outbox stopped |
+| Provenance | A document revoked during a request withholds the whole result on every path, cited or not. Nothing is streamed or stored first |
 | Owner leaves | Publications are withdrawn and documents excluded in the membership's own transaction. Nothing is deleted |
 | Reuse | The new document keeps its own records. The source's removal requeues it, and deleting either never deletes the other |
 | Deletion event | It carries IDs only, no content |
