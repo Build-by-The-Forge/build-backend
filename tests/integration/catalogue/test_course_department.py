@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.infrastructure.db.models.catalogue import CourseModel
-from app.infrastructure.db.models.tenant_core import DepartmentModel
+from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel
 from tests.integration.catalogue.test_tenant_scoped_mutations import headers, seed_course_context
 
 
@@ -72,3 +72,18 @@ async def test_a_department_of_ones_own_is_accepted(client):
 
     assert created.status_code == 201, created.text
     assert len(await stored("OWN101", tenant_id)) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_active_department_under_an_archived_faculty_takes_no_new_courses(client):
+    # Readers can't see this department, so a course must not be able to join it.
+    tenant_id, slug, department_id, _, token = await seed_course_context(client, "admin")
+    async with SessionLocal() as session:
+        department = await session.get(DepartmentModel, department_id)
+        assert department.status == "active"
+        faculty = await session.get(FacultyModel, department.faculty_id)
+        faculty.status = "archived"
+        await session.commit()
+
+    assert_department_refused(new_course(client, headers(token, slug), department_id, "PAR101"))
+    assert await stored("PAR101", tenant_id) == []

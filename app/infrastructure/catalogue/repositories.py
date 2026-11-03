@@ -61,11 +61,7 @@ class SqlAlchemyCourseRepository(CourseRepository):
 
     async def has_active_department(self, department_id: str, tenant_id: str) -> bool:
         found = await self._session.scalar(
-            select(DepartmentModel.id).where(
-                DepartmentModel.id == department_id,
-                DepartmentModel.tenant_id == tenant_id,
-                DepartmentModel.status == "active",
-            )
+            select(DepartmentModel.id).where(DepartmentModel.id == department_id, *_active_department(tenant_id))
         )
         return found is not None
 
