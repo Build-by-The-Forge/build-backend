@@ -112,6 +112,7 @@ The lowering assignments still go first in the dispatcher, with their own age al
   - The model can't see it, omit from it or add to it.
   - It includes every retrieved passage, cited or not, and passages retrieved but cut for length, since excluding them would rely on knowing what the model didn't use.
   - It's attached to the response by the orchestration after generation, from the recorder alone.
+- **It arrives in a protected envelope.** AI service responses aren't signed today: the AI-to-backend key signs only the AI service's callbacks. AI PR 1 adds a response signature to Service Signature v1. It covers the request's signed ID, the SHA-256 of the response body and a timestamp, under the AI-to-backend secret. The backend verifies it before reading `sources_used`. A missing, invalid or expired signature, or one bound to a different request, withholds the result. So a response can't be altered in transit, or replayed onto another request. It doesn't protect against a compromised AI service, which is outside what any envelope can establish.
 - **Before returning anything**, the backend checks the whole set against the caller's authorization **at that moment**, by the one read policy, and against the current `denied_assets`. Every source must be in the caller's tenant, readable by them now, not denied, and not deleted.
 - **If any source fails**, the backend withholds the entire result. It returns `ANSWER_WITHHELD`, a 503 with `Retry-After`, and stores nothing. M3-F's contract PR adds that code to the routes it owns. A retry retrieves afresh, and the revoked document is excluded at the start. The event is logged with IDs only.
 - **An asset ID from outside the caller's tenant**, or one the backend doesn't know, also withholds the result and raises an alert, since it means the AI service has broken its contract.
@@ -175,6 +176,7 @@ The PR inventories every entry point **from the code**, not from this list. It i
 - Reprocessed chunks, and chunks written late by a job in flight, take the document's current scope.
 - A scope assignment naming another tenant's asset is refused.
 - **Provenance:** a request that used a document revoked while it ran is withheld whole on every path, including when the document was used and not cited. A response without `sources_used`, or naming an asset outside the tenant, is withheld.
+- **The envelope:** a response with its body changed, its signature removed, or replayed from another request is withheld.
 - **Provenance is the system's:** a retrieved passage that isn't cited is still in `sources_used`. A model told to name other assets, or to drop one, changes nothing in it. Context assembly rejects any passage that didn't come from the recorder.
 - **Immediate denial:** a document lowered with the dispatcher stopped is excluded from the next request on every path. A retrieving call without `denied_assets` is refused. A list past its limit fails closed. After acknowledgement, the document stays out through its stored scope.
 
@@ -536,7 +538,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 | # | Repo | PR | Closes or enables |
 |---|---|---|---|
 | 0 | Backend | This design | |
-| 1 | AI | Scope per document with versions, every existing document `unknown`, fail-closed retrieval on every path, signed versioned assignments, `denied_assets` required, `sources_used` on every response | E2 and E3. Unblocks everything, part of G-31 |
+| 1 | AI | Scope per document with versions, every existing document `unknown`, fail-closed retrieval on every path, signed versioned assignments, `denied_assets` required, `sources_used` from the retrieval recorder in a signed response | E2 and E3. Unblocks everything, part of G-31 |
 | 2 | Backend | Contract PR: the additions above and the two new ingestion states | |
 | 3 | Backend | Migration 0030: classification, owner, blobs, rights, publication, quotas, the job index. No route behaviour changes | |
 | 4 | Backend | One read policy on every existing content route, staff routes included, with the route-coverage test | Ruling B, before any student route |
