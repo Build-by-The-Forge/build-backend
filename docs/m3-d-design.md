@@ -137,7 +137,25 @@ Learning memory isn't a document source, and `GATE_OPEN` is `False`. If memory i
 
 No student route opens before E2, whichever order is used.
 
-**While staff workflows are paused:** E1 needs someone to record classifications and rights reviews, and the sprint pauses staff workflows. Without that, existing institutional material stays `unknown`, out of every answer, for the whole sprint. Recommendation: in the sprint, an operator command line records them. It's run by the platform operator with the tenant's written agreement, audited exactly like the staff route, and it uses the same backend code and rules, so nothing about the invariant changes. The staff route follows when staff workflows resume. **This needs the reviewer's ruling.** The alternative is accepting that answers draw on no existing material until then.
+### Operator classification while staff workflows are paused
+
+**Ruling on `fe7742e`: approved with strict conditions.** E1 needs someone to record classifications and rights reviews, and staff workflows are paused for the sprint. An operator command records them instead. **It's an administrative substitute for the paused interface, never a weaker standard.**
+
+1. **The tenant's authority:** the command refuses to run for a tenant without a recorded written authorization from that tenant's authority. The record holds who gave it, when, what it covers, and a reference to the document. It's checked on every run.
+2. **Evidence for each document:** the operator records, per asset, the evidence relied on and the decision. Nothing is classified in bulk because an asset came through a staff upload route. That's one piece of evidence, never the decision.
+3. **Narrow scope:** it can classify existing documents as `institutional` only, from `unclassified` in a staff source. It refuses any document in a personal source or with an owner, and it can never make a student's material institutional.
+4. **The same rules:** it calls the same application service and domain rules as the future staff route, and goes through the same authorization check, acting as the operator. There's no direct database update, no raw SQL and no separate permission logic. A test runs the same cases through both and requires the same results.
+5. **The audit record:** operator identity, tenant, asset, the previous and new classification, the evidence reference, the decision time and a run identifier, written in the same transaction as the decision.
+6. **Safe operation:**
+   - A dry run, which is the default, prints what would change.
+   - The tenant is named explicitly; there's no "all tenants".
+   - Batches are bounded, with a configured maximum per run.
+   - It's idempotent, so repeating a decision changes nothing.
+   - Each run writes a reviewable report.
+   - A document that fails validation, or whose evidence is ambiguous, stays `unclassified` and `unknown`, and is listed in the report.
+7. **No promotion by the command itself:** classification only queues a scope assignment. A document becomes institutionally retrievable only when the AI service has accepted its signed, versioned assignment, by [the invariant](#scope-assignments).
+
+The staff route replaces it when staff workflows resume, using the same service.
 
 ### Retrieval paths
 
@@ -511,7 +529,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 | 2 | Backend | Contract PR: the additions above and the two new ingestion states | |
 | 3 | Backend | Migration 0030: classification, owner, blobs, rights, publication, quotas, the job index. No route behaviour changes | |
 | 4 | Backend | One read policy on every existing content route, staff routes included, with the route-coverage test | Ruling B, before any student route |
-| 5 | Backend | Classification and rights review, through an operator command line in the sprint and staff routes later, with the assignment outbox and its dispatcher | E1. Existing material returns once its assignment is accepted |
+| 5 | Backend | Classification and rights review through the [operator command](#operator-classification-while-staff-workflows-are-paused) in the sprint, with tenant authorization records, the assignment outbox and its dispatcher. Staff routes later, on the same service | E1. Existing material returns once its assignment is accepted |
 | 6 | Deployment, backend | ClamAV in compose, CI and the boundary gate. The scan worker, with quarantine and rejection, failing closed | Ruling 7 |
 | 7 | AI, backend | The blob key form accepted, and every dispatch states its scope | |
 | 8 | Backend | Upload, scan and queue, list and get, quotas | G-01, G-02, G-25, G-38, G-23, G-07 |
@@ -555,7 +573,8 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Tenant shelf | Only published, discoverable, clean documents of this tenant, with filters by level and course, paginated, no uploader named, `audience: "tenant"` |
 | Bad input | The same PostgreSQL bounds M3-C added: NUL, oversized offsets, lengths past a column |
 | Scope backfill | Every legacy chunk is `unknown` after the AI migration, and only a reviewed assignment makes one `institutional` |
-| Classification | An unclassified document is invisible to students and unretrieved. Classifying needs a staff decision with evidence |
+| Classification | An unclassified document is invisible to students and unretrieved. Classifying needs a decision with evidence |
+| Operator command | It refuses a tenant without written authorization and refuses any personal-source or owned document. A dry run changes nothing. Repeating it changes nothing. Ambiguous documents stay `unclassified`. It gives the same results as the staff route's service on the same cases. Nothing becomes retrievable before the AI service acknowledges it |
 | One policy | Every `/content` route goes through it, staff routes included. Staff can't open a private document |
 | Scanning | An unscanned document is never dispatched or opened. EICAR is rejected. A stopped scanner keeps uploads quarantined. A rejected file is served to no one. A stale worker returning after its replacement records nothing, and ingestion is queued once |
 | Rights per document | Two documents of one student carry different rights. A source edit doesn't change an existing document |
