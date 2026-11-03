@@ -137,6 +137,11 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 
 ## Deferred risks
 
+**From M3-C's audit, outside its scope, not yet scheduled:**
+
+- About 20 `"... repository is required"` errors in the assessment, content and curriculum services are marked as written for clients, though they're wiring faults. They should be `RuntimeError`, as the catalogue's now is.
+- M3-C refused input PostgreSQL can't hold (a NUL in text or an ID, an integer past its column) on catalogue routes only. Other routes haven't been audited for the same 500.
+
 | Risk | Accepted on | Closes in |
 |---|---|---|
 | Release is permanent, so the staff interface must make that unmistakable, and the action must be auditable | #63 | M6 and any staff interface |
