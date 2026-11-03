@@ -348,13 +348,21 @@ Not yet in `openapi.yaml`. They go in a contract PR of their own.
 
 The acceptance criterion says prefilled only when classification is confident enough. **No classifier for course or level exists**, so this is a new AI capability, not a wiring task. The first release has an empty form. `suggestions` joins the contract when a classifier exists, with a threshold set from measurement. Inventing a confidence score isn't an option (PRD §90).
 
-### Reuse without reprocessing
+## Reuse without reprocessing
 
-For a document already `ready`, one from the student's own account or one published in the tenant, a new upload with the same bytes shares its chunks instead of being processed again:
+**Ruling 5:** reuse is an optimization, and the new document never inherits an authorization boundary from the one it reuses.
 
-- The new asset records `indexed_from_asset_id` and its own run. The M4 allow-list resolves it to the chunks' real asset, and a citation is reported against the document the caller holds.
-- When the source of those chunks is deleted or withdrawn, the dependent asset goes back to `queued` and is processed on its own, so one student's deletion never takes away another's document.
-- This is the last PR. It's an optimization with real edge cases, so it can slip without weakening any guarantee, except the register's "without needless reprocessing" line, which the reviewer would need to accept deferring.
+**When:** a new upload has the same bytes as a document that's `ready` and that the student could already see: their own, or one discoverable on the tenant shelf. It never reuses another student's private document, because a fast `ready` would reveal that document exists. The new document is still scanned itself.
+
+**What it shares:** only the chunks. It keeps its own owner, asset ID, publication consent, audience, rights assertions, trust class and provenance, all recorded as for any upload. `indexed_from_asset_id` names the source of the chunks.
+
+**What it doesn't keep:**
+
+- The source must stay eligible. When it's deleted, withdrawn, taken down or loses its rights, each dependent document goes back to `queued` and is processed on its own, in the same transaction as that change.
+- Until it's reprocessed, it isn't retrievable from the source's chunks. M4's allow-list includes a dependent document only while its source is eligible.
+- **Deleting one student's document never deletes another student's copy**, reused or not. That's tested.
+
+This is the last PR. It can slip without weakening any guarantee, though the register's "without needless reprocessing" line would then need the reviewer to accept deferring it.
 
 ## Abuse limits
 
