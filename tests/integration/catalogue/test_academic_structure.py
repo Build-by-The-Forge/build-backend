@@ -263,3 +263,17 @@ async def test_limits_and_offsets_at_their_boundaries(client, path):
     empty = client.get(f"{path}?offset=1000", headers=reader)
     assert empty.json()["data"] == []
     assert empty.json()["meta"]["pagination"] == {"total": 0, "limit": 50, "offset": 1000}
+
+
+@pytest.mark.asyncio
+async def test_a_programme_whose_faculty_and_department_disagree_isnt_served(client):
+    futa, reader = await institution(client)
+    computing, sciences = await futa.school("School of Computing"), await futa.school("School of Sciences")
+    software = await futa.department(computing, "Department of Software Engineering")
+    await futa.programme(computing, software, "Consistent")
+    await futa.programme(sciences, software, "Contradictory")
+
+    listed = client.get("/catalogue/programmes", headers=reader)
+
+    assert names(listed) == ["Consistent"]
+    assert listed.json()["meta"]["pagination"]["total"] == 1

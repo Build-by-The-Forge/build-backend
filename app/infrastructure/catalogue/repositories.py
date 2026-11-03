@@ -93,8 +93,14 @@ class SqlAlchemyCourseRepository(CourseRepository):
         conditions: list[ColumnElement[bool]] = [
             ProgrammeModel.tenant_id == tenant_id,
             ProgrammeModel.status == "active",
-            ProgrammeModel.faculty_id.in_(select(FacultyModel.id).where(*_active_faculty(tenant_id))),
-            ProgrammeModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
+            # The department's own faculty must be the programme's: nothing in the schema says so.
+            select(DepartmentModel.id)
+            .where(
+                DepartmentModel.id == ProgrammeModel.department_id,
+                DepartmentModel.faculty_id == ProgrammeModel.faculty_id,
+                *_active_department(tenant_id),
+            )
+            .exists(),
         ]
         if department_id is not None:
             conditions.append(ProgrammeModel.department_id == department_id)
