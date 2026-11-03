@@ -169,6 +169,7 @@ On migrated PostgreSQL, with the AI service's test providers in the boundary gat
 | Ordering | Questions and answers in sequence, even with equal timestamps and concurrent turns |
 | Deleted mid-turn | A conversation deleted during the AI call stores nothing |
 | Sources | A document revoked while the answer was generated, whether it was cited or only used, withholds the whole answer: `ANSWER_WITHHELD`, nothing stored, the key freed (boundary) |
+| Revalidation at storage | On PostgreSQL, with the turn held between the post-generation check and its commit, revoke a source by each M3-D path. The turn stores nothing: no question, answer or citations. It returns `ANSWER_WITHHELD`, and the key is free for a retry. With the revocation racing the commit instead, the outcome is either withheld, or stored and then redacted when read, never shown unredacted. A stale generation stores nothing even with every source still eligible |
 | Citations | Wrong tenant, unreadable, deleted or not `ready`: the answer is withheld. A citation outside `sources_used` is withheld and alerted (boundary) |
 | Excerpt | Matches the cited chunk's text, at most 500 characters, never model output |
 | No internals | No chunk IDs, storage paths, tenant IDs, `memory_used` or uncited context in any response |
