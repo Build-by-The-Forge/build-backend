@@ -614,6 +614,16 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | `content.document.deleted` | M3-D emits it | M3-F defines what conversations do with it |
 | The transaction that ends a membership | L4 | M3-D's withdrawal joins it, agreed before either merges |
 
+## Offline AI
+
+BUILD implements the complete AI capability set, including Offline AI, and **offline execution must take part in the same guarantees** as the AI service. It mustn't become a route around them. M3-D doesn't design offline execution, but it sets what that design has to meet:
+
+- **A device holds only what its user may read now**, under the one read policy: their own documents, and published or institutional material they're eligible for.
+- **Revocation reaches the device.** A deletion, withdrawal, takedown, rights change or lost membership removes the document, its extracted text and any local index entries at the next sync. A device that can't sync within a set period stops using synced material, rather than keeping it indefinitely.
+- **Offline answers carry provenance** built the same way, from what local retrieval actually supplied. They're checked against the current read policy and denial state when the device reconnects, before anything they produced syncs to the server.
+- **Scanning comes first.** Nothing unscanned is ever delivered to a device for processing.
+- **Scope, rights and publication** mean the same offline as online, so a document never has wider use on a device than on the server.
+
 ## What this design doesn't settle
 
 - **M4's allow-list**, including whether `chunk.attempt` is reliable. M3-D only ensures nothing personal or unknown is retrievable meanwhile.
