@@ -62,11 +62,49 @@ The approved order puts M3-D before M4, and M4 is what limits retrieval to what 
 - A staff request can't set `institutional` directly either. It follows from a completed rights review that permits AI use (see [Three kinds of permission](#three-kinds-of-permission)).
 - A dispatch with a missing scope, or one that isn't one of the three values, is refused.
 
-### Existing chunks
+### Where scope lives
 
-- The AI service can't tell whose a chunk is, so its migration sets **every existing chunk to `unknown`**. It assumes nothing.
-- The backend then assigns scope through a new signed, idempotent call per (tenant, asset). It does so only for assets whose [classification](#schema-changes-migration-0030-reviewed-on-its-own) and [rights review](#rights-and-provenance) make them `institutional`. Each assignment records who reviewed it and when.
-- **Consequence:** existing staff material stops being used in answers from the moment the AI migration runs until its assignment arrives. That's the cost of not assuming. Staff can record their reviews before PR 1 is deployed, and the backend sends the assignments from an outbox once the AI service accepts them, so the gap can be short. The order is in [Delivery](#delivery).
+Scope is held **once per document** in the AI service, not copied onto each chunk: a new `asset_scopes` table maps `(tenant_id, asset_id)` to a scope and a version. Retrieval joins chunks to it, and **a chunk whose document has no row is `unknown`**.
+
+- A reprocess, or chunks a job in flight writes late, can't carry an older scope than its document's.
+- Changing a document's scope is one row.
+- **Existing documents have no row, so they're all `unknown` from the moment the AI migration runs.** It assumes nothing.
+
+This refines the first revision's per-chunk `knowledge_scope` column. The guarantee is the same, without stale copies.
+
+### Scope assignments
+
+- **An assignment** is `(tenant, asset, scope, version)`. The backend sets the version, and it only increases per document.
+- **The AI service applies one only if its version is higher than the stored one.** A replay, or an older one arriving late, changes nothing and is still acknowledged, so the sender stops.
+- **The backend writes each assignment to an outbox** in the same transaction as the decision behind it. That's a [classification](#schema-changes-migration-0030-reviewed-on-its-own) and [rights review](#rights-and-provenance) making a document `institutional`, or anything taking that away: rights withdrawn, the document revoked, deleted or reclassified. Each records who decided and when.
+- **A dispatcher sends pending rows with backoff.** A row is done only when the AI service acknowledges that version. A failure or a delay leaves it pending and retried, and rows past an age threshold raise an alert. Nothing is assumed delivered.
+- **Until acknowledged, a document keeps the scope the AI service last accepted**, which for anything never assigned is `unknown`.
+- **An ingestion dispatch carries the document's current scope and version**, applied by the same rule, so a dispatch can't move scope out of order.
+
+**The invariant:** no chunk becomes institutionally retrievable until its document's classification and rights review are recorded in the backend, and the AI service has accepted the signed assignment that follows from them.
+
+**Lowering has a window, and it's stated.** When a document stops being `institutional`, its chunks stay retrievable until the AI service accepts the lowering assignment:
+
+- The dispatcher sends lowering assignments before any raising ones, and their age has its own alert.
+- Until M4, the window is the outbox's delivery delay, normally the next dispatch.
+- M4 closes it: the backend's per-request allow-list excludes the document at once, whatever the AI service has stored.
+
+### Order of events
+
+| Event | Comes from | Depends on |
+|---|---|---|
+| **E1.** The backend can record classifications and rights reviews, and queue assignments | Backend PRs 3 and 5, deployed | Nothing in the AI service |
+| **E2.** The AI service filters by scope, with every existing document `unknown` | AI PR 1, deployed | Nothing in the backend |
+| **E3.** The AI service accepts signed assignments | AI PR 1, deployed, with E2 | |
+| **E4.** Queued assignments are delivered and acknowledged | The backend's dispatcher | E1 and E3 |
+| **E5.** A document is institutionally retrievable again | Its own acknowledgement in E4 | Per document |
+
+**Both deployment orders keep the invariant.** Only how long existing material is out of answers changes:
+
+- **E1 first:** staff review existing material while the AI service still answers as it does today. Their assignments wait in the outbox, with the dispatcher retrying against a route that doesn't exist yet. When E2 and E3 deploy, every existing document becomes `unknown` and returns as its queued assignment is accepted, at the dispatcher's next attempt.
+- **E2 and E3 first:** every existing document is `unknown` until staff review it after E1 deploys. That's the longer gap.
+
+No student route opens before E2, whichever order is used.
 
 ### Retrieval paths
 
@@ -78,6 +116,9 @@ The PR inventories every entry point **from the code**, not from this list. It i
 - Legacy rows are `unknown` after the migration.
 - A dispatch with a missing or malformed scope is refused.
 - No unsigned call can set or change a scope.
+- A replayed assignment, or an older version arriving after a newer one, changes nothing.
+- A document whose assignment failed or is still queued stays `unknown`, or at its last accepted scope.
+- Reprocessed chunks, and chunks written late by a job in flight, take the document's current scope.
 - A scope assignment naming another tenant's asset is refused.
 
 **Accepted product limitation:** until M4's allow-list, students can open their own documents, but no answer can use them, not even their own.
@@ -411,11 +452,11 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 | # | Repo | PR | Closes or enables |
 |---|---|---|---|
 | 0 | Backend | This design | |
-| 1 | AI | `knowledge_scope` with three values, every chunk `unknown`, fail-closed retrieval on every path, signed scope assignment | Unblocks everything, part of G-31 |
+| 1 | AI | Scope per document with versions, every existing document `unknown`, fail-closed retrieval on every path, signed versioned assignments | E2 and E3. Unblocks everything, part of G-31 |
 | 2 | Backend | Contract PR: the additions above and the two new ingestion states | |
 | 3 | Backend | Migration 0030: classification, owner, blobs, rights, publication, quotas, the job index. No route behaviour changes | |
 | 4 | Backend | One read policy on every existing content route, staff routes included, with the route-coverage test | Ruling B, before any student route |
-| 5 | Backend | Classification and rights review for staff, and scope assignment from them | Existing material returns to answers once reviewed |
+| 5 | Backend | Classification and rights review for staff, the assignment outbox and its dispatcher | E1. Existing material returns once its assignment is accepted |
 | 6 | Deployment, backend | ClamAV in compose, CI and the boundary gate. The scan worker, with quarantine and rejection, failing closed | Ruling 7 |
 | 7 | AI, backend | The blob key form accepted, and every dispatch states its scope | |
 | 8 | Backend | Upload, scan and queue, list and get, quotas | G-01, G-02, G-25, G-38, G-23, G-07 |
@@ -431,7 +472,7 @@ One concern per PR. Each has the required gates, and the drift gate moves with t
 
 - **No student route is reachable in a deployment until PRs 1, 4 and 6 are deployed there.** PR 8 refuses to dispatch to an AI service that doesn't state it supports the scope.
 - G-31 stays open until M4.
-- PR 5 records reviews before PR 1 is deployed, and sends their scope assignments once it is, so existing material is out of answers only briefly.
+- PRs 3 and 5 can be deployed before PR 1, so staff review existing material first and it's out of answers only briefly. Either order keeps the invariant: see [Order of events](#order-of-events).
 
 ## Acceptance tests
 
