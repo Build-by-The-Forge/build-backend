@@ -351,7 +351,7 @@ Their private records are **kept under a retention policy that doesn't exist yet
 | `declaration_version` | The wording the person saw, for an owner's declaration |
 | `outcome`, `reason` | For a staff review: accepted or rejected, and why |
 
-- **Effective rights** are the latest staff review if there is one. Otherwise they're the owner's declaration, and a declaration on its own permits nothing beyond its owner.
+- **Effective rights** are the latest staff review if there is one. Otherwise they're the owner's declaration. On its own, a declaration permits nothing beyond its owner, with one exception: during this sprint, an `own_work` declaration with tenant sharing lets the owner publish it (see [Publication during this sprint](#publication-during-this-sprint)). It still never makes the document `institutional`.
 - **Publication consent** stays its own record, per document (see [Publication](#publication)).
 - **Staff sources** may carry a default, which each new document copies into its own assertion at upload, recorded as copied. A later edit to the source never silently changes an existing document.
 - **On the document:** `trust_class` is set by the backend. A student's upload is `user_provided`, and no client can raise it. `provenance` records who uploaded it, when, by which route, and the SHA-256 at upload.
