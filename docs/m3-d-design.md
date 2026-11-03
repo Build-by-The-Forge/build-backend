@@ -450,7 +450,14 @@ Publication permits discovery and reading only. **It never makes a document usab
 ### Reports and takedown
 
 - **Reports:** any student who can see a published document can report it. Reasons include "not the uploader's own work", "examination material" and "inappropriate". Reports go to the tenant's takedown contact. The uploader is never told who reported.
-- **Hiding on reports** is a decision for the reviewer. Recommendation: three reports from different students hide the document until the contact acts. While staff workflows are paused, nobody may be reviewing reports promptly, and hiding stops the harm meanwhile. Reports from one student never count more than once.
+- **Hiding on reports.** Ruling on `fe7742e`: approved with safeguards.
+  - **Three reports from distinct students** hide a published document temporarily.
+  - **Only reports that count:** they come from authenticated members of the tenant who were allowed to see the publication when they reported.
+  - **One active report per account per document.** Report submission is rate limited per account, and every report is audited.
+  - **Hiding is temporary.** It isn't a takedown, a deletion, a rights finding or a change to AI eligibility.
+  - **The owner keeps their own document**, under the normal read policy, and sees that it's hidden pending review.
+  - **The takedown contact is notified at once.** The document stays hidden until they review it, then either restore it or take it down formally with a recorded reason. The owner can ask for a review, which reaches the same contact.
+  - **Reporters are never revealed** to the uploader.
 - **Takedown:** by the tenant's owner or admin, effective at that commit, with a reason recorded and the owner told the outcome.
 - **The blocklist:** a takedown adds the document's SHA-256 to the tenant's blocklist. The same bytes then can't be published automatically by anyone, so a removed exam paper can't come straight back under another student's name. A blocked request becomes `requested`, as for any ineligible document, and reveals nothing about who held the file.
 
@@ -580,7 +587,7 @@ Run on migrated PostgreSQL unless marked. Statements repeat past five runs where
 | Rights per document | Two documents of one student carry different rights. A source edit doesn't change an existing document |
 | Quotas | Uploads racing at the limit: exactly the allowed number succeed. The charge is logical bytes |
 | Publication | Only an `own_work` declaration with tenant sharing publishes, at that commit. Every other basis stays `requested` and private. Mode `off` hides everything. Withdrawal and takedown apply at once. A blocklisted hash can't be published by anyone |
-| Reports | Three distinct students hide a document, if the reviewer accepts that rule. One student's repeated reports count once. Reporters are never revealed |
+| Reports | Three distinct, authorized tenant members hide a document. A repeat by one account counts once. Reports from someone who couldn't see it don't count. Hiding changes no rights, deletion or AI eligibility, and the owner still opens it. Only the contact restores it or takes it down. Reporters are never revealed |
 | Three permissions | A published document stays `personal` in the AI service |
 | Immediate denial | Deleting, revoking or reclassifying an `institutional` document excludes it from the next request on every path, with the outbox stopped |
 | Provenance | A document revoked during a request withholds the whole result on every path, cited or not. Nothing is streamed or stored first |
