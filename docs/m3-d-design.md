@@ -276,6 +276,20 @@ Memory is out of scope here: `GATE_OPEN` stays `False`, and L4 defines what memo
 
 The principle: **access to content isn't permission to share it.** A declaration is recorded as what someone said, and the UI must not present it as legal clearance (PRD §91).
 
+## Three kinds of permission
+
+**Ruling 4:** none of these implies another.
+
+| Permission | Means | Decided by | Default |
+|---|---|---|---|
+| **Publication** | Other students in the tenant may discover and read the document | The owner's consent, then staff approval | No |
+| **Knowledge eligibility** | BUILD may use the content in retrieval for anyone besides its owner, which is scope `institutional` | A staff rights review with `ai_use: permitted` and an audience | No |
+| **Provider eligibility** | Passages may be sent to an external model provider | Governance, through G-33 | Not decided |
+
+- **Approving a publication doesn't change scope.** A published personal document stays `personal`, used in no one else's answers.
+- **Becoming `institutional` needs its own review**, and changes the AI service's scope only through the backend's signed assignment.
+- **G-33 and G-34 stay separate release considerations.** Until G-33 is decided, no production provider receives content, whatever the other two say.
+
 ## The tenant shelf
 
 **Ruling 2: private-only stays the first-release rule.** The shelf is built, but it stays off until a tenant decides to enable it, and building it is no reason to turn it on.
