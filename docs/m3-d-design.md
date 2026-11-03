@@ -217,18 +217,21 @@ The reviewer confirms the choice.
 - The port gains a streaming read with a byte range, so a 25 MiB file isn't held in memory per request.
 - One range per request. A multi-range request gets the whole document, and a range past the end gets `RANGE_NOT_SATISFIABLE`.
 - `ETag` from the SHA-256. `X-Content-Type-Options: nosniff`, the stored type rather than anything from the client, and `Content-Disposition` with a sanitized name, so a filename can't inject a header.
-- **Who may read:** the one rule, in one function, used by every read route:
+- **Who may read**, by **ruling B**: one policy, in one function in the application layer, used by every route that lists, returns or streams a document or its job. **That includes the existing staff routes**: `/content/assets`, `/content/sources/{id}/assets`, the job routes and reprocess, which check only the tenant today.
 
 | Document | Owner | Another student, same tenant | Staff with content permission | Another tenant |
 |---|---|---|---|---|
-| Personal, unpublished | Yes | 404 | 404 | 404 |
-| Personal, published and clean | Yes | Yes | Yes | 404 |
-| Shared, rights verified for students | Yes | Yes | Yes | 404 |
-| Deleted, or revoked | 404 | 404 | 404 | 404 |
+| Personal, not accepted by the scan | 409 `DOCUMENT_NOT_AVAILABLE` | 404 | 404 | 404 |
+| Personal, private | Yes | 404 | 404 | 404 |
+| Personal, publication approved and discoverable | Yes | Yes | Yes | 404 |
+| Shared, rights not reviewed for students | Not applicable | 404 | Yes | 404 |
+| Shared, rights reviewed for students | Not applicable | Yes | Yes | 404 |
+| Unclassified, from before M3-D | Not applicable | 404 | Classification queue only | 404 |
+| Deleted, revoked or rejected | 404 | 404 | 404 | 404 |
 
-A document the scan hasn't accepted isn't served to anyone: `DOCUMENT_NOT_AVAILABLE` (409) for its owner, and the usual 404 for anyone else.
-
-Staff can't read a student's private document. If support access is ever needed, it needs its own decision and audit trail, rather than a side effect of a content permission. **This differs from today's staff routes, which check only the tenant**, so those routes need the same rule or they're a bypass.
+- **A content permission manages shared material. It isn't access to every student's private documents.** If support access is ever needed, it's a separate later decision: its own permission, time-limited and audited, as break-glass.
+- **Lists** apply the same policy as a SQL predicate. A test checks that the SQL and the per-document check agree across every row of this table, so they can't drift apart.
+- **No route can skip it.** A test enumerates every route under `/content` from the running app and fails on any that doesn't go through the policy, the way the drift gate checks routes against the contract.
 
 ## Retry (G-12)
 
