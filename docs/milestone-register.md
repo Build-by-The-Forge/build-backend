@@ -18,9 +18,9 @@ There are two tracks, and neither one's progress counts for the other:
 | M2 | Drift gate against the contract | M1 | Every known gap is listed, and a closed gap stays closed | `test_mobile_contract_drift.py` | **Merged** | `16a5227` (merge) |
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
 | M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete:** G-14 closed; registration's durable, non-enumerating 202; G-39's membership finding closed, the rest with M3-E | #75 `4faca25`, #76 `604f8b1` (merges) |
-| M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **In review:** G-09 closed; G-10's catalogue findings closed, its assessment and attempt findings wait for M3-E | |
+| M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Complete:** G-09 closed; G-10's catalogue findings closed, its assessment and attempt findings wait for M3-E | #77 `418fbd5` (merge) |
 | M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Not started** | |
-| M3-E | Assessment contract | M3-A, L1 to L3 | G-10 and G-39 with their partners. Lifecycle gaps are already closed | HTTP, drift gate | **Partly done** by L1 to L3 | |
+| M3-E | Assessment contract | M3-A, L1 to L3 | The rest of G-10 and G-39 closed; M3-C and M3-B closed their other parts. Lifecycle gaps are already closed | HTTP, drift gate | **Partly done** by L1 to L3 | |
 | M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Not started** | |
 | M4 | Retrieval eligibility and citation authorization | M3-D, M3-F | G-05 closed; G-04 and G-31 closed; the boundary doc's measurements taken | Boundary, both repositories | **Specified** in `mobile-m0-boundary.md` | |
 | M5 | Typed client, auth and session, error handling | M3-A, M3-B | Generated client passes contract-drift checks; secure token storage | Client against the contract | **Not started** | |
@@ -29,7 +29,7 @@ There are two tracks, and neither one's progress counts for the other:
 
 ### M3 position
 
-M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A and M3-B are the only merged slices whose gaps are closed. M3-C is in review. M3-D to M3-F haven't started, apart from the lifecycle work in M3-E.
+M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A, M3-B and M3-C are the only slices whose gaps are closed, and G-10 stays open for M3-E. M3-D to M3-F haven't started, apart from the lifecycle work in M3-E.
 
 | | Count | IDs |
 |---|---|---|
@@ -118,16 +118,16 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 **M-track**
 
 5. M3-B: complete (#75, #76).
-6. M3-C, now, with M3-D's design prepared alongside.
-7. M3-D, the largest slice, which holds the two blockers.
-8. M3-E, which can run alongside M3-C.
+6. M3-C: complete (#77).
+7. M3-D, now, the largest slice, which holds the two blockers. It starts from its own design and acceptance criteria: the catalogue work is not evidence that document ingestion is solved.
+8. M3-E, which can run alongside M3-D.
 9. M3-F, its design alongside M3-D, tested against the completed authorization rules.
 10. M4.
-11. M5. Its scaffolding can start once M3-A's error shape is merged.
+11. M5. Its scaffolding can start: M3-A's error shape is merged.
 12. M6, against the generated client. Screen design can start earlier.
 13. M7 on pinned SHAs. Its test design can start at any time.
 
-**L-track, independently:** AI-1, then L4 after M3-A, then memory activation under its own approval once every gate condition is implemented and verified.
+**L-track, independently:** AI-1 and M3-A are merged, so L4 can start, then memory activation under its own approval once every gate condition is implemented and verified.
 
 ## Open incidents
 
@@ -137,10 +137,12 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 
 ## Deferred risks
 
-**From M3-C's audit, outside its scope, not yet scheduled:**
+**From M3-C's audit, accepted by the reviewer as non-blocking on `2c5c0cd`, not yet scheduled:**
 
 - About 20 `"... repository is required"` errors in the assessment, content and curriculum services are marked as written for clients, though they're wiring faults. They should be `RuntimeError`, as the catalogue's now is.
-- M3-C refused input PostgreSQL can't hold (a NUL in text or an ID, an integer past its column) on catalogue routes only. Other routes haven't been audited for the same 500.
+- M3-C refused input PostgreSQL can't hold (a NUL in text or an ID, an integer past its column) on catalogue routes only. Other routes haven't been audited for the same 500. M3-E's lists get the shared `offset` maximum when they adopt it.
+- A write route would answer 422 for the internal parent-ID checks in `add_topic`, `add_reference` and `add_learning_outcome`. The handlers build each child from its parent, so an ordinary request can't reach them.
+- `be8165c` and `07ef8e0` fail the drift gate on their own; `506025c` turns it green. The history was kept rather than rewritten, so bisecting across them can stop on that gate.
 
 | Risk | Accepted on | Closes in |
 |---|---|---|
