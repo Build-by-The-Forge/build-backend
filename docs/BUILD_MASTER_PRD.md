@@ -4,8 +4,8 @@
 
 **Product:** BUILD — AI Academic Intelligence Platform
 **Document:** Master Product & Technical PRD
-**Version:** 2.0
-**Status:** Draft — Consolidated Product & Architecture Baseline
+**Version:** 2.1
+**Status:** Draft — Consolidated Product & Architecture Baseline, with the production direction of 2026-11-04 (§0)
 **Primary Launch Institution:** Federal University of Technology, Akure (FUTA)
 **Initial Academic Session:** 2025/2026
 **Architecture Strategy:** Multi-tenant, FUTA-first
@@ -13,8 +13,101 @@
 **Backend:** FastAPI
 **Primary Database:** PostgreSQL
 **AI Platform:** BUILD AI Service
-**Initial Foundation Model:** Meta Muse Glimmer 30B through Together AI
+**Online AI:** Gemini SDK, behind the Model Gateway. Free models for development and testing; Gemini 3.8 Flash as the production target, once its exact model identifier and availability are verified (§0.2)
+**Offline AI:** A portfolio of small local models, benchmarked per task (§146.3)
 **Model Strategy:** Provider-agnostic Model Gateway
+
+---
+
+# 0. Production Direction (2026-11-04)
+
+This section records the decisions agreed for the production push. **Where any later section of this document conflicts with it, this section governs** until that section is revised. Each decision is also reflected in the section it changes.
+
+## 0.1 What "production" means for the first release
+
+**One fully working student application, powered by a production-ready AI intelligence layer.** A FUTA student can register, configure their academic context, upload material, learn with it, practise with it, use it offline, and return to it, with no fake results and no misleading AI success messages.
+
+The student journey the release must complete:
+
+1. Registration and authentication, with an authenticated session.
+2. Academic onboarding: institution, programme, department, level, semester and courses.
+3. A personal academic dashboard.
+4. The academic upload assistant: classification, missing information, ownership and permissions.
+5. Document ingestion: upload, storage, extraction and OCR, normalization, chunking, embedding, indexing, ready. Success is never announced before the pipeline has completed.
+6. The AI Tutor: grounded explanations, citations, follow-up questions, and abstention when the material doesn't support an answer.
+7. Learning: Read Mode, explanations of concepts, and relevant academic resources.
+8. CBT and assessment: practice, generated questions, submission, and authoritative results with explanations.
+9. Progress and remediation: performance, weak topics, and what to study next.
+10. Offline continuity: downloaded materials, local AI assistance and available CBT without internet, with controlled synchronization afterwards.
+
+## 0.2 Intelligence architecture
+
+BUILD has three connected intelligence capabilities, behind one orchestration layer:
+
+| Capability | Role |
+|---|---|
+| **Online intelligence** | The Gemini SDK for inline AI: conversation, document and image understanding, OCR assistance, explanation, summarization, question generation and structured output. Free models for development and testing. **Gemini 3.8 Flash is the production target**, subject to verifying its exact model identifier and availability before implementation depends on it |
+| **Grounded academic intelligence** | BUILD's own evidence layer: document processing, OCR, chunking, embeddings, retrieval, evidence validation, provenance and access control. **It is provider-independent and mandatory** |
+| **Offline intelligence** | A portfolio of small local models on the student's device (§146.3) |
+
+- **The Model Gateway stays provider-agnostic.** Using the Gemini SDK doesn't couple workflows to Gemini; models can change without rewriting the AI service.
+- **Gemini doesn't replace grounding.** Its ability to read a document doesn't establish which authorized material supports an answer, whether that material belongs to the student or an authorized source, whether retrieved passages actually answer the question, or whether the system should abstain. The grounding layer establishes all of these.
+- **The governing principle: the model generates intelligence; the grounding system establishes what that intelligence is allowed to claim.**
+
+## 0.3 Naive RAG and Agentic RAG
+
+**Naive RAG is the default** for straightforward, well-scoped requests: definitions, summaries, explanations from the student's material, and question generation from a chapter. It understands the question, retrieves, reranks and filters the evidence, generates from it, and validates citations and grounding.
+
+**Agentic RAG is reserved** for work that needs multiple retrieval steps, planning or tools: comparing how sources explain a concept, finding contradictions across materials, multi-source research, or a revision plan from weak areas. It plans, retrieves iteratively, checks whether the evidence is sufficient, synthesizes and verifies. **It always runs within bounded permissions, budgets, iteration limits and retrieval scope**, and never gains unrestricted access to student materials. Routing between the two is an explicit policy (§26.1).
+
+## 0.4 Execution order
+
+1. Complete the remaining M paths: contracts, migrations, security boundaries, callbacks and their gates.
+2. Stabilize the core backend: authentication, student identity, academic context, ownership, courses, content, assessments and student permissions.
+3. Subscription and entitlement infrastructure (§84 to §86).
+4. The AI foundation: the Gemini SDK in the Model Gateway, routing, grounded retrieval, OCR, ingestion, evaluation and observability.
+5. Naive RAG, then bounded Agentic RAG, with evaluation.
+6. Offline AI: benchmark and integrate the local model portfolio, offline retrieval, local inference and synchronization.
+7. Deployment, update delivery and monitoring (§105).
+8. **Frontend Student Intelligence, last:** the complete student journey integrated against real, tested backend and AI contracts. Lightweight contract tests and integration fixtures run earlier, so interface mismatches aren't discovered at the end.
+
+## 0.5 Paused for the first release
+
+To protect the student experience, these leave the current production critical path. They stay in the architecture:
+
+* lecturer and academic-contributor workflows;
+* administrative and owner dashboards;
+* social groups and leaderboards;
+* subscription payment experiences (the entitlement infrastructure stays in scope);
+* advanced campus GIS and routing;
+* advanced institutional analytics;
+* lecturer-facing video and content-management workflows.
+
+Student is the default login. Lecturer access requires admin authorization. Student uploads are private by default, and publication is an explicit action for eligible student-owned work.
+
+## 0.6 Production acceptance for the AI service
+
+Green tests aren't enough. The AI service must demonstrate:
+
+1. **Model Gateway:** a real online provider integration, provider abstraction, timeouts, failure handling and fallback.
+2. **Document intelligence:** real PDF and image extraction, OCR, classification, normalization and meaningful ingestion states.
+3. **RAG:** durable indexing, tenant isolation, source provenance, retrieval evaluation, and **acceptable performance on real course materials**. The controlled evaluation set reaches 94.6% hybrid recall@5, but real first-semester FUTA material reached 62.5% (25 of 40), and 1,459 scanned pages still need OCR. The controlled figure isn't evidence of student-facing quality.
+4. **AI Tutor:** contextual help, citations, insufficient-evidence handling and safe conversation persistence.
+5. **Question intelligence:** structured generation, answer validation, source attribution, and generated questions kept separate from official ones.
+6. **Agent capabilities:** bounded tools, permission enforcement, budgets and auditability.
+7. **Offline AI:** a local generative model, local retrieval, offline CBT, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.**
+8. **Operations:** cost, latency, errors, provider availability and model performance, measured.
+
+**Learning Memory stays disabled** until its production gate's conditions are implemented and verified. `GATE_OPEN` stays `False`.
+
+## 0.7 Platform and distribution
+
+* **Subscriptions:** free-first, with Free, Plus, Pro and Campus levels, and the backend as the only authority (§81, §84.1).
+* **The app and its updates:** direct APK distribution first, then Google Play. Updates install in place, driven by backend update metadata (§105.2).
+* **Hosting:** Google Cloud (§105.1).
+* **The Platform Operations Layer:** subscription and entitlement management, usage metering and AI cost accounting, app versions and mandatory-update policy, feature flags, model configuration and routing policy, service health, and release history with rollback. These are platform capabilities, not frontend responsibilities.
+
+The implementation reference for this section is the **BUILD Production Architecture & Operations Blueprint**, `docs/build-production-blueprint.md` in build-backend. It covers the topology, the Gemini adapter, the grounding gaps, RAG routing, the offline benchmark, the entitlement schema, the update contract and the release gates.
 
 ---
 
@@ -1003,6 +1096,32 @@ Search should combine:
 * user context;
 * potentially graph relationships.
 
+## 26.1 Naive and Agentic RAG routing
+
+The orchestration layer decides, per request, which retrieval strategy runs (§0.3).
+
+| Request | Strategy |
+|---|---|
+| Define a concept | Naive RAG |
+| Summarize a lecture note | Naive RAG |
+| Explain a concept using the student's uploaded material | Naive RAG |
+| Generate questions from a chapter | Naive RAG |
+| Compare how two sources explain a concept | Agentic RAG |
+| Find contradictions across materials | Agentic RAG |
+| Research a topic across several authorized sources | Agentic RAG |
+| Build a revision plan from weak areas and course materials | Agentic RAG, with controlled tools and student-approved context |
+
+**Naive RAG**, the default: understand the question, form the retrieval query, retrieve, rerank and filter the evidence, generate from it, and validate citations and grounding.
+
+**Agentic RAG**, when the task needs it: decompose the task, choose authorized tools and sources, retrieve iteratively, judge whether the evidence suffices, continue only when necessary, synthesize, and verify the final response.
+
+Rules for both:
+
+* The same access control applies: the knowledge scope, the backend's denial list, and the provenance check on every source used.
+* Agentic runs are bounded by permissions, budgets, iteration limits and retrieval scope (§22 to §25), and are audited.
+* The routing policy is configuration owned by the Platform Operations Layer, evaluated for cost, latency and answer quality, and never a reason to skip grounding.
+* Higher Agentic RAG allowances are a subscription capability (§80), never a requirement for essential learning.
+
 ---
 
 # 27. Academic Search
@@ -1218,7 +1337,9 @@ Conflicting sources should remain preserved as provenance.
 
 AI service shall support OCR for academic documents.
 
-Initial strategy may use OpenVINO + PaddleOCR.
+The dedicated OCR pipeline (OpenVINO + PaddleOCR) stays in place. **Gemini-assisted extraction** complements it for documents the dedicated pipeline handles poorly, such as complex layouts, handwriting and images. Documents are routed by their characteristics. Every extraction is validated, and page-level provenance is preserved whichever engine produced it. Gemini's reading of a document is extracted text to be grounded, never an answer.
+
+Scanned pages that haven't been OCRed aren't retrievable, so OCR coverage is a release metric (§0.6).
 
 OCR pipeline should support:
 
@@ -1239,9 +1360,15 @@ OCR output must feed downstream ingestion rather than remaining isolated.
 
 BUILD shall implement a provider-agnostic Model Gateway.
 
-The initial production foundation model shall be:
+**Online models (§0.2):**
 
-**Meta Muse Glimmer 30B accessed through Together AI.**
+| Environment | Model |
+|---|---|
+| Development and testing | Free models and free-tier access, through the Gemini SDK where available |
+| Production | **Gemini 3.8 Flash**, the agreed target. Its exact model identifier and availability must be verified before implementation depends on it |
+| Offline | The local model portfolio (§146.3), through the gateway's local provider |
+
+The Gemini SDK is the primary online integration. It replaces the earlier plan of Meta Muse Glimmer 30B through Together AI.
 
 The AI service must not couple:
 
@@ -1253,9 +1380,9 @@ The AI service must not couple:
 * evaluation;
 * or orchestration
 
-directly to Together or Glimmer-specific APIs.
+directly to the Gemini SDK or any other provider-specific API.
 
-Gemini and other foundation models shall remain pluggable.
+Other foundation models, and the local models, shall remain pluggable behind the same interface. Gemini output is never a source of academic truth on its own: answers about academic material pass through the grounding layer (§0.2, §29).
 
 ---
 
@@ -1264,9 +1391,11 @@ Gemini and other foundation models shall remain pluggable.
 Conceptually:
 
 ```text
-MODEL_PROVIDER=together
-MODEL_NAME=meta-models/Muse-Glimmer-30B
+MODEL_PROVIDER=gemini
+MODEL_NAME=<verified production identifier for the Gemini 3.8 Flash target>
 ```
+
+Development and test environments name a free model instead. The deterministic provider remains for offline tests and is refused in staging and production.
 
 The actual provider configuration should be externalized.
 
@@ -1837,7 +1966,7 @@ AI Service
       ↓
 Model Gateway
       ↓
-Together / Glimmer
+Gemini SDK (online)  ·  Local models (offline)
       ↓
 Other Providers
 ```
@@ -2164,17 +2293,25 @@ Premium should feel like **more intelligence**, not permission to learn.
 
 The platform may eventually support:
 
-### BUILD Free
+The agreed levels (2026-11-04). These are feature boundaries, not prices: prices follow measured Gemini, document-processing, storage, bandwidth and infrastructure costs.
 
-Core academic companion.
+### BUILD Free (default, ₦0)
+
+For every student: the academic dashboard and learning resources, CBT participation and history, the Study Shelf and personal materials within reasonable storage limits, Read Mode and essential tools, basic AI assistance with a modest allowance, and offline access to downloaded materials and available local AI.
 
 ### BUILD Plus
 
-Affordable student intelligence tier.
+For regular AI study: a higher AI allowance, more document and image processing, deeper explanations and summaries, more generated practice questions, more storage and more sync capacity.
 
-### BUILD Pro / Power Student
+### BUILD Pro
 
-High-usage advanced AI tier.
+For intensive examination preparation: the highest individual AI allowance, advanced Agentic RAG workflows, deeper comparisons across authorized materials, personalized revision and study planning, advanced examination analysis, higher processing and storage allowances, and priority processing where infrastructure permits.
+
+### BUILD Campus
+
+Institution-sponsored access: institution-funded entitlements, configurable allowances, approved institutional resources, institution-level enrolment and entitlement management, and optional sponsored access for students who can't afford a subscription.
+
+**Never paid:** a student's own uploaded notes, basic CBT participation, and essential learning functionality.
 
 ---
 
@@ -2228,6 +2365,29 @@ The backend should own:
 The AI service should consume scoped entitlements.
 
 It must not independently decide whether a student is Premium.
+
+## 84.1 Tamper resistance
+
+The app is distributed as an APK, which can be inspected, modified and repackaged. Obfuscation, hidden buttons and local flags aren't protection. **The backend is the only authority on a student's plan.**
+
+1. The client never decides whether a user is entitled to anything. It displays plans and starts purchases.
+2. Subscription state and entitlements live in the backend's PostgreSQL.
+3. Every protected request checks the user's current entitlement on the server.
+4. AI requests carry server-enforced usage budgets.
+5. Usage is metered on the server, never from client counters.
+6. Expiry, cancellation, refunds and revocation remove entitlements according to the actual billing state.
+7. The AI service never trusts a plan name or quota from the client. It receives scoped budgets only from the backend, on signed calls.
+8. Administrative overrides are audited.
+
+A modified APK that shows "BUILD Pro" still gets Free behaviour from the backend if that's the user's real plan.
+
+**Purchase verification.** The purchase provider sits behind a provider-independent Subscription and Entitlement Service:
+
+1. On Google Play, the student subscribes through Google Play Billing, and the app sends the purchase token to the backend.
+2. The backend verifies the token with the Google Play Developer API, records the verified subscription, and grants entitlements.
+3. Renewals, cancellations, expiry and refunds update the entitlement state.
+4. Direct APK distribution uses a separate, server-verified payment adapter.
+5. Google Play's billing policies apply once BUILD is distributed there.
 
 ---
 
@@ -2328,7 +2488,8 @@ BUILD may notify users about:
 * group activity;
 * academic calendar events;
 * subscription status;
-* AI usage.
+* AI usage;
+* a new app release (§105.2), once per release, never repeatedly for the same optional update.
 
 Notifications must be configurable and non-abusive.
 
@@ -2662,6 +2823,52 @@ Production deployment must support:
 
 Application containers must not depend on development-only schema creation.
 
+## 105.1 Hosting (2026-11-04)
+
+The first production target is **Google Cloud**, alongside the Gemini integration:
+
+| Component | Hosting |
+|---|---|
+| `build-backend` | Cloud Run |
+| `ai-service` | Cloud Run |
+| Ingestion, OCR and indexing workers | Cloud Run jobs or worker pools initially |
+| PostgreSQL | Cloud SQL |
+| Redis | A managed Redis-compatible service |
+| Academic documents, images and APK releases | Cloud Storage, with a CDN for APKs |
+| Monitoring, logs and secrets | Cloud Monitoring, Cloud Logging and Secret Manager |
+| Landing website | Firebase Hosting or Cloudflare Pages |
+
+Constraints before committing:
+
+* **Cloud SQL must support PostgreSQL 17 with pgvector** as the AI index requires.
+* **The managed Redis must meet BUILD's Redis 8 requirement.** The requirement isn't weakened to fit a service.
+* **Region:** benchmark `africa-south1`, `europe-west1` and `europe-west4` for real latency from Nigeria, and for cost. The API and the database share a region.
+* **Heavier compute:** if OCR or other inference later needs GPUs or sustained compute, those workloads move to suitable compute without moving the backend.
+
+**The mobile app itself isn't hosted.** It's installed on the device and calls the hosted backend. What's hosted: the backend, the AI service, the landing site, APK files during direct distribution, and update metadata, which is part of the backend.
+
+**iOS** is built from the same React Native/Expo codebase, using EAS Build in the cloud, so no Mac is required for the build itself. It needs an Apple Developer account, signing credentials, App Store Connect, testing on simulators and devices, and TestFlight before release.
+
+## 105.2 App distribution and updates
+
+**Updates install in place:** a student doesn't uninstall the previous APK. Android treats a new APK as an update when:
+
+1. it has the same application ID;
+2. it's signed with the same signing certificate;
+3. its `versionCode` is higher than the installed one.
+
+**The signing key is a production secret.** Losing it, or changing the signing identity, breaks in-place updates. Its ownership, storage and backup are settled before the first public APK.
+
+**The update service:**
+
+* The backend exposes update metadata: platform, latest version and `versionCode`, minimum supported `versionCode`, whether the update is mandatory, release notes, the download destination, and the file's SHA-256.
+* APK files are served from Cloud Storage behind a CDN.
+* **After login,** the app checks the metadata. If there's a newer release the student hasn't already been told about, it shows the version, the notes, **Update now**, and **Later** for optional updates only. The same optional release isn't announced again.
+* **Below the minimum supported version,** the update is mandatory and the old version can't continue.
+* **Moving to Google Play** changes only the destination the metadata returns, from the landing page's APK to the Play listing. The contract stays the same, and Android's in-app updates can be used there.
+
+**Over-the-air updates:** Expo EAS Update delivers compatible JavaScript and asset changes without a new APK, guarded by runtime versions. Native changes always need a new APK: new native libraries, permissions or native configuration, and React Native or native SDK upgrades.
+
 ---
 
 # 106. CI/CD
@@ -2975,8 +3182,8 @@ The agent should remain constrained by permissions and explicit tool boundaries.
                       │
              ┌────────┴────────┐
              ▼                 ▼
-         Glimmer             Gemini
-          /Together         /Provider
+          Gemini           Local models
+        (online SDK)        (offline)
 ```
 
 Around all components:
@@ -3119,16 +3326,12 @@ V1 should prioritize:
 * provenance;
 * processing.
 
-### Social
+### Offline
 
-* groups;
-* leaderboard.
-
-### Campus
-
-* core map;
-* campus locations;
-* search.
+* downloaded academic materials;
+* local AI assistance from the local model portfolio (§146.3);
+* available CBT offline;
+* controlled synchronization.
 
 ### Analytics
 
@@ -3143,20 +3346,30 @@ V1 should prioritize:
 * usage metering;
 * premium architecture.
 
+### Platform
+
+* backend-authoritative entitlements (§84.1);
+* app update metadata and in-place updates (§105.2).
+
+### Paused for the first release (§0.5)
+
+Social groups and leaderboards, the campus map, lecturer and contributor workflows, admin and owner dashboards, payment experiences, and advanced institutional analytics remain in the architecture but aren't on the first release's critical path.
+
 ---
 
 # 124. V1 Explicit Non-Goals
 
 The following should not become uncontrolled V1 scope:
 
-* full offline AI;
+* offline AI that only stores files or embeddings: offline generative AI is in scope (§0.6), but its exact model configuration is decided by benchmarks;
 * full multi-university rollout;
 * advanced ML personalization;
 * unrestricted autonomous agents;
 * turn-by-turn campus navigation;
 * uncontrolled textbook scraping;
 * automatic publication of AI-generated official questions;
-* complex payment ecosystem before usage data exists.
+* complex payment ecosystem before usage data exists;
+* any frontend check standing in for a server-side entitlement (§84.1).
 
 ---
 
@@ -3646,7 +3859,7 @@ BUILD shall provide students with an integrated Learn/Study experience composed 
 
 BUILD shall treat documents, videos, questions, curriculum, concepts, learning objectives, and student performance as interconnected academic knowledge rather than isolated records.
 
-BUILD shall use a provider-agnostic Model Gateway, with Meta Muse Glimmer 30B through Together AI serving as the initial foundation model while preserving the ability to integrate Gemini and future models.
+BUILD shall use a provider-agnostic Model Gateway, with the Gemini SDK as the online provider (Gemini 3.8 Flash as the production target, once verified) and a portfolio of small local models offline, while preserving the ability to integrate future models.
 
 BUILD shall maintain academic provenance, curriculum versioning, confidence-aware processing, human governance, duplicate prevention, academic integrity controls, and source-aware AI responses.
 
@@ -3717,15 +3930,20 @@ Therefore, BUILD shall select its offline model configuration through evidence-b
 
 BUILD shall investigate supporting a **pool of compact local language models** rather than assuming that a single model must perform every offline task.
 
-The initial evaluation pool shall include candidates such as:
+The agreed starting portfolio (2026-11-04) is one general-purpose language model plus specialized models, rather than one model for everything:
 
-* Glimmer 2B;
-* Qwen3-1.7B;
-* Gemma 3 1B;
-* SmolLM2-1.7B-Instruct;
-* one additional mobile/on-device-oriented candidate selected during technical evaluation.
+| Local capability | First candidate | Notes |
+|---|---|---|
+| General conversation, explanation and simple reasoning | **Qwen3-1.7B** | The first choice to benchmark |
+| Low-memory fallback | **Qwen3-0.6B** | For devices that can't run the 1.7B model |
+| Alternative general model | Glimmer 2B | Benchmarked alongside Qwen if its weights, licence, inference compatibility and quality allow |
+| Local semantic retrieval | A small embedding model | Matches the online index's embedding space where feasible |
+| Retrieval relevance | A compact reranker | Optional, by device capability |
+| OCR | A PaddleOCR / OpenVINO-class model | Where the device supports it |
+| Classification | Document and academic-content classification | May share a model |
+| Speech | Speech-to-text | Optional |
 
-The exact models used in production shall be determined after benchmarking.
+Gemma 3 1B and SmolLM2-1.7B-Instruct remain benchmark comparisons. **More models aren't automatically better:** each is chosen by task, memory requirement, latency, quality and device compatibility, and one model may serve several capabilities. The production configuration is decided by the benchmarks below and on real Android devices.
 
 The architecture shall permit:
 
@@ -4438,7 +4656,9 @@ The implementation shall proceed in the following order:
 
 **Production local model: Not yet selected**
 
-**Initial candidates: Under evaluation**
+**Initial candidates: Qwen3-1.7B first, Qwen3-0.6B as the fallback, Glimmer 2B benchmarked alongside (2026-11-04)**
+
+**Not sufficient on its own: local storage and local embeddings are not offline generative AI (§0.6)**
 
 **Cloud AI: Remains part of the core architecture**
 
@@ -4476,4 +4696,4 @@ implementation plan.
 
 ---
 
-**End of Master PRD — V2.0**
+**End of Master PRD — V2.1**
