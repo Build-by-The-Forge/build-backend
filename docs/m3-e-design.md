@@ -1,6 +1,6 @@
 # M3-E design: the assessment contract
 
-**Status: proposed, for the reviewer. Nothing here is implemented.** Written against backend `a16db6d`. M3-E runs alongside M3-D and owns `/assessment` in `openapi.yaml`.
+**Status: approved by the reviewer at `0e2ff25`, merged in #80 (`f4ce131`). Nothing here is implemented yet.** Written against backend `a16db6d`. M3-E runs alongside M3-D and owns `/assessment` in `openapi.yaml`.
 
 **Summary:** M3-E closes G-10's assessment and attempt findings and the rest of G-39. Most of that is mechanical. Two things aren't: the same staff-visibility defect M3-C found in the catalogue exists here, and assessments can outlive their course. Everything L1 to L3 guarantee must still hold afterwards, and the existing PostgreSQL race tests are how that's shown.
 

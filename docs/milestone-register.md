@@ -19,9 +19,9 @@ There are two tracks, and neither one's progress counts for the other:
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
 | M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete:** G-14 closed; registration's durable, non-enumerating 202; G-39's membership finding closed, the rest with M3-E | #75 `4faca25`, #76 `604f8b1` (merges) |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Complete:** G-09 closed; G-10's catalogue findings closed, its assessment and attempt findings wait for M3-E | #77 `418fbd5` (merge) |
-| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Design in review** (#79). Implementation not started; its first PR, the AI scope filter, waits on the design | |
+| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Implementation started.** PR 2, the contract, is merged. PR 1, the AI scope filter, is in review as a pair: ai-service #43 with backend #86. No gap closed yet. No student route opens until PRs 1, 4 and 6 are deployed | #79 `fef4cfa` (design), #87 `63b4e93` (contract) |
 | M3-E | Assessment contract | M3-A, L1 to L3 | The rest of G-10 and G-39 closed; M3-C and M3-B closed their other parts. Lifecycle gaps are already closed | HTTP, drift gate | **Design approved**, implementation not started. Partly done by L1 to L3 | #80 `f4ce131` (design) |
-| M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Design approved**, implementation not started. No conversation reaches students until retention is decided | #81 `e0057ad` (design) |
+| M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Design approved**, implementation not started. No conversation reaches students until retention is decided | #81 `e0057ad` (design), #83 `bcbbde8` (provenance amendment) |
 | M4 | Retrieval eligibility and citation authorization | M3-D, M3-F | G-05 closed; G-04 and G-31 closed; the boundary doc's measurements taken | Boundary, both repositories | **Specified** in `mobile-m0-boundary.md` | |
 | M5 | Typed client, auth and session, error handling | M3-A, M3-B | Generated client passes contract-drift checks; secure token storage | Client against the contract | **Not started** | |
 | M6 | Student workflows and screens | M5, M3-C to M3-F | Screens use the generated client only; G-26 closed; device tests | Device, end to end | **Not started** | |
@@ -29,7 +29,7 @@ There are two tracks, and neither one's progress counts for the other:
 
 ### M3 position
 
-M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A, M3-B and M3-C are the only slices whose gaps are closed, and G-10 stays open for M3-E. M3-D to M3-F haven't started, apart from the lifecycle work in M3-E.
+M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A, M3-B and M3-C are the only slices whose gaps are closed, and G-10 stays open for M3-E. **M3-D implementation has started:** its contract PR is merged (#87), and its first implementation pair, ai-service #43 with backend #86, is in review. M3-E and M3-F implementation haven't started, apart from the lifecycle work in M3-E. **No gap has been closed by M3-D's work so far:** the first pair closes none, and the contract PR added G-40 to G-43. All three designs are approved, which is permission to implement them in order, not evidence that any of their gaps are closed.
 
 | | Count | IDs |
 |---|---|---|
@@ -119,9 +119,9 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 
 5. M3-B: complete (#75, #76).
 6. M3-C: complete (#77).
-7. M3-D, now, the largest slice, which holds the two blockers. It starts from its own design and acceptance criteria: the catalogue work is not evidence that document ingestion is solved.
+7. M3-D, now, the largest slice, which holds the two blockers. Its design is approved (#79), and implementation follows the order in `m3-d-design.md`, starting with the AI scope filter. The catalogue work is not evidence that document ingestion is solved.
 8. M3-E, which can run alongside M3-D.
-9. M3-F, its design alongside M3-D, tested against the completed authorization rules.
+9. M3-F, its design approved (#81, amended in #83), behind M3-D's provenance and contract work, and tested against the completed authorization rules.
 10. M4.
 11. M5. Its scaffolding can start: M3-A's error shape is merged.
 12. M6, against the generated client. Screen design can start earlier.
@@ -147,8 +147,21 @@ Given by the reviewer on #79 at `06b433a`. It changes what's built first, not an
 | Classifying existing material | During the sprint, by an audited operator command, approved on `fe7742e` under seven conditions in `m3-d-design.md`: tenant authorization, evidence per document, institutional only, the same service as the staff route, a full audit record, dry runs and bounded idempotent batches, and no retrieval before the AI service acknowledges |
 | Reports on shelf documents | Three distinct, authorized students hide a document temporarily until the takedown contact restores it or takes it down. Approved on `fe7742e` with safeguards. Hiding changes no rights or AI eligibility |
 | Revoked sources | A document revoked while an answer is generated withholds the whole answer, cited or not, on every path. Ruled on `fe7742e` as release-blocking |
+| Offline authorization | A device holds what its user was authorized for at its last sync, under a signed lease that starts at 72 hours. The lease runs on monotonic elapsed time and boot identity: a reboot ends it, missing or inconsistent trusted time fails closed, and the wall clock can only shorten it. It doesn't hold on a rooted or jailbroken device. Offline answers stay provisional until reconnect validation passes. Approved with M3-D's design at `ab09d2c` |
 
 **Not permitted by these decisions:** exposing a route before its own gates pass. A design approval isn't permission to expose a route, and `GATE_OPEN` stays `False`.
+
+## M3-D implementation rulings
+
+Given by the reviewer on the first implementation pair (ai-service #43 and backend #86), before review. They bind later PRs, not just this pair.
+
+| Topic | Ruling | Binds |
+|---|---|---|
+| Scope on the ingestion dispatch | Deferred to PR 7. An ingested document stays `unknown`, and out of retrieval, until a signed assignment | PR 7 adds the requirement without any window in which unclassified documents become accessible |
+| `denied_assets` limit | 1,000 entries, a **shared contract limit**. The AI service refuses a longer list, and the backend never sends one: it refuses the tenant's retrieving calls instead of truncating. Published in the AI OpenAPI contract and in the boundary design's A.6 | Any change moves in both repositories and is tested together. Neither side configures its own |
+| `sources_used` against the read policy | Deferred to PR 4. Until then the backend verifies the signature, the exact request, the unconsumed nonce, and the structure of `sources_used`, and withholds anything else | A signature doesn't prove the AI service retrieved only authorized sources: PR 4's provenance check closes that |
+| Merging the pair | Coordinated: neither merges alone, and each needs its own exact-SHA verdict. The AI PR merges first, then the backend's `boundary-gate` is re-run on its unchanged head | Every later pair that changes the AI request contract |
+| The contract's values (#87, approved at `274ad24`) | Levels 100 to 600, with the tenant's configuration deciding 600. Semesters 1 to 3, validated against the selected course's actual configuration. No examination-paper document type. Publication and withdrawal states as proposed. Rights declarations are a student's assertions, not legal clearance. Three distinct eligible reports hide a document temporarily. `DOCUMENT_NOT_READY` and `SHELF_PUBLICATION_OFF` stay 409 | The PRs implementing the shelf form (PR 14) and publication and reports (PR 15). The approval covers the contract, not the routes |
 
 ## Open incidents
 
