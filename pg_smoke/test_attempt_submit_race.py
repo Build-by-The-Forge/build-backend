@@ -40,7 +40,7 @@ async def _published_assessment() -> tuple[str, str]:
             credit_units=3,
             level=100,
             semester=1,
-            status="published",
+            status="active",
             created_at=now,
             updated_at=now,
         ),
