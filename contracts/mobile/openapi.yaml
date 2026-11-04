@@ -837,6 +837,13 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: >
+            DOCUMENT_NOT_AVAILABLE: the owner's document is quarantined or rejected by its
+            security scan, so its bytes aren't served, to its owner included
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '416':
           description: RANGE_NOT_SATISFIABLE
           content:
@@ -1560,6 +1567,7 @@ components:
         - UPLOAD_TOO_LARGE
         - UNSUPPORTED_MEDIA_TYPE
         - RANGE_NOT_SATISFIABLE
+        - DOCUMENT_NOT_AVAILABLE
         - VALIDATION_FAILED
         - RATE_LIMITED
         - INTERNAL_ERROR
@@ -1792,8 +1800,13 @@ components:
       properties:
         status:
           type: string
-          enum: [uploaded, queued, processing, extracted, chunked, indexed, ready, failed]
-          description: Only ready means the document can be used in answers.
+          enum: [uploaded, quarantined, rejected, queued, processing, extracted, chunked, indexed, ready, failed]
+          description: >
+            Only ready means the document can be used in answers. quarantined: waiting for its
+            security scan; nothing opens or processes it until the scan accepts it, and an
+            accepted document moves straight to queued. rejected: the scan refused the file;
+            it's never served or processed, and the owner can only delete it. The scan's
+            findings are never shown.
         retry_available:
           type: boolean
           description: The student can call retry now.
