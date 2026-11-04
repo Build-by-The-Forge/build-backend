@@ -795,6 +795,68 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /content/tenant-shelf:
+    get:
+      tags: [content]
+      operationId: listTenantShelf
+      summary: Documents published to this tenant's shelf
+      description: >
+        Discoverable only by authorized students of this tenant, never the open internet.
+        A document leaves the shelf at the commit any publication condition stops holding.
+        No item names its uploader. Open one through /content/assets/{asset_id}.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/ShelfLevel'
+        - $ref: '#/components/parameters/ShelfCourseId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Published documents, newest publication first, then by id
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PageEnvelope'
+                  - properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ShelfDocument' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/tenant-shelf/{asset_id}/report:
+    post:
+      tags: [content]
+      operationId: reportShelfDocument
+      summary: Report a published document to the tenant's takedown contact
+      description: >
+        Only a student who can see the document can report it. One active report per account
+        per document: a repeat changes nothing. The uploader is never told who reported.
+        Three reports from distinct students hide the document until the takedown contact
+        reviews it; hiding is not a takedown and changes no rights or AI eligibility.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShelfReport' }
+      responses:
+        '200': { $ref: '#/components/responses/EmptySuccess' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
   /content/sources:
     get:
       tags: [content]
@@ -1922,6 +1984,32 @@ components:
           type: [string, 'null']
           enum: [tenant, null]
           description: tenant whenever status is published or hidden; never the open internet
+    ShelfDocument:
+      type: object
+      description: A published document as other students see it. It never names the uploader.
+      required: [id, title, mime_type, size_bytes, course_id, level, semester, document_type, audience, published_at]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        mime_type:
+          type: string
+          enum: [application/pdf, image/png, image/jpeg]
+        size_bytes: { type: integer, minimum: 1 }
+        course_id: { type: [string, 'null'] }
+        level: { $ref: '#/components/schemas/Level' }
+        semester: { $ref: '#/components/schemas/Semester' }
+        document_type: { $ref: '#/components/schemas/DocumentType' }
+        audience: { type: string, enum: [tenant] }
+        published_at: { type: string, format: date-time }
+    ShelfReport:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          enum: [not_own_work, examination_material, inappropriate, other]
+        detail: { type: string, maxLength: 1000 }
     PublicationRequest:
       type: object
       additionalProperties: false
