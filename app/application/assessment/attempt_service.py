@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 from app.application.assessment.attempt_commands import (
     AttemptQuestionSnapshot,
     GetAttemptCommand,
@@ -57,12 +59,12 @@ class AttemptService:
             raise AttemptLimitReachedError("ATTEMPT_LIMIT_REACHED")
         return attempt
 
-    async def attempts_used(self, tenant_id: str, user_id: str) -> dict[str, int]:
-        """The attempts this user has started, by assessment, finalized or not."""
+    async def attempts_used(self, tenant_id: str, user_id: str, assessment_ids: Collection[str]) -> dict[str, int]:
+        """The attempts this user has started on these assessments, finalized or not."""
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await uow.attempts.counts_by_assessment(user_id, tenant_id)
-        return await self._required_repository().counts_by_assessment(user_id, tenant_id)
+                return await uow.attempts.counts_by_assessment(user_id, tenant_id, assessment_ids)
+        return await self._required_repository().counts_by_assessment(user_id, tenant_id, assessment_ids)
 
     async def get_attempt(self, attempt_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt | None:
         command = GetAttemptCommand(attempt_id, tenant_id, user_id)

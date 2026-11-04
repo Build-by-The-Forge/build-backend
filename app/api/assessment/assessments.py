@@ -58,7 +58,7 @@ async def list_assessments(
     # in a visible course, and never with questions. Staff read drafts, hidden
     # courses and questions on /assessment/staff/assessments.
     assessments = await service.list_readable_assessments(context.tenant_id or "", course_id)
-    used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
+    used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id, [item.id for item, _ in assessments])
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
@@ -84,7 +84,7 @@ async def get_assessment(
     if readable is None:
         raise ClientHTTPException(status_code=404, detail="assessment not found")
     assessment, count = readable
-    used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
+    used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id, [assessment.id])
     return _response(request, assessment, attempts_used=used.get(assessment.id, 0), question_count=count)
 
 

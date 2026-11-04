@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select, text
@@ -381,10 +382,18 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         )
         return (await self._session.execute(statement)).scalar_one()
 
-    async def counts_by_assessment(self, user_id: str, tenant_id: str) -> dict[str, int]:
+    async def counts_by_assessment(self, user_id: str, tenant_id: str, assessment_ids: Collection[str]) -> dict[str, int]:
+        # Only the assessments asked about: a page's, never the whole history
+        # (M3-E decision 5).
+        if not assessment_ids:
+            return {}
         statement = (
             select(AssessmentAttemptModel.assessment_id, func.count())
-            .where(AssessmentAttemptModel.user_id == user_id, AssessmentAttemptModel.tenant_id == tenant_id)
+            .where(
+                AssessmentAttemptModel.user_id == user_id,
+                AssessmentAttemptModel.tenant_id == tenant_id,
+                AssessmentAttemptModel.assessment_id.in_(list(assessment_ids)),
+            )
             .group_by(AssessmentAttemptModel.assessment_id)
         )
         return {assessment_id: count for assessment_id, count in (await self._session.execute(statement)).all()}
