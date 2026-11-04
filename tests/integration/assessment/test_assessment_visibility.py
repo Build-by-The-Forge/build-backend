@@ -101,6 +101,9 @@ async def test_a_student_sees_a_published_assessment_without_its_questions(clien
     listed = client.get("/assessment/assessments", headers=student)
     assert assessment_id in listed.text
     assert "SECRET" not in listed.text
+    # Counted in SQL: the question rows aren't loaded for a mobile read.
+    [item] = [a for a in listed.json()["data"] if a["id"] == assessment_id]
+    assert (item["question_count"], item["questions"]) == (1, [])
 
 
 @pytest.mark.asyncio

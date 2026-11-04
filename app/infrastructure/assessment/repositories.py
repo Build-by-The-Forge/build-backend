@@ -4,7 +4,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import noload, selectinload
 
 from app.domain.assessment.assessment import Assessment, AssessmentQuestion
 from app.domain.assessment.attempt import AssessmentAttempt, AttemptStatus
@@ -174,9 +174,15 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
 
     def _readable(self, tenant_id: str):
         # Published, in an active course whose department and faculty are
-        # active: M3-C's rule for the course, applied in SQL.
+        # active: M3-C's rule for the course, applied in SQL. The questions
+        # are counted, never loaded: the mobile routes don't return them.
+        question_count = (
+            select(func.count(AssessmentQuestionModel.id))
+            .where(AssessmentQuestionModel.assessment_id == AssessmentModel.id)
+            .scalar_subquery()
+        )
         return (
-            select(AssessmentModel)
+            select(AssessmentModel, question_count)
             .join(CourseModel, CourseModel.id == AssessmentModel.course_id)
             .where(
                 AssessmentModel.tenant_id == tenant_id,
@@ -185,19 +191,19 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
                 CourseModel.status == "active",
                 CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
             )
-            .options(selectinload(AssessmentModel.questions))
+            .options(noload(AssessmentModel.questions))
         )
 
-    async def list_readable(self, tenant_id: str, course_id: str | None = None) -> list[Assessment]:
+    async def list_readable(self, tenant_id: str, course_id: str | None = None) -> list[tuple[Assessment, int]]:
         statement = self._readable(tenant_id)
         if course_id is not None:
             statement = statement.where(AssessmentModel.course_id == course_id)
-        models = (await self._session.scalars(statement)).all()
-        return [assessment_model_to_domain(model) for model in models]
+        rows = (await self._session.execute(statement)).all()
+        return [(assessment_model_to_domain(model), int(count)) for model, count in rows]
 
-    async def get_readable(self, assessment_id: str, tenant_id: str) -> Assessment | None:
-        model = (await self._session.scalars(self._readable(tenant_id).where(AssessmentModel.id == assessment_id))).first()
-        return assessment_model_to_domain(model) if model is not None else None
+    async def get_readable(self, assessment_id: str, tenant_id: str) -> tuple[Assessment, int] | None:
+        row = (await self._session.execute(self._readable(tenant_id).where(AssessmentModel.id == assessment_id))).first()
+        return (assessment_model_to_domain(row[0]), int(row[1])) if row is not None else None
 
     async def list_question_snapshots(self, assessment_id: str, tenant_id: str) -> list[AssessmentQuestion]:
         statement = (

@@ -63,7 +63,9 @@ async def list_assessments(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": [_assessment_payload(item, with_questions=False, attempts_used=used.get(item.id, 0)) for item in assessments],
+            "data": [
+                _assessment_payload(item, attempts_used=used.get(item.id, 0), question_count=count) for item, count in assessments
+            ],
             "error": None,
             "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
@@ -78,11 +80,12 @@ async def get_assessment(
 ) -> JSONResponse:
     # A draft or hidden assessment is the same 404 as one that doesn't exist,
     # whoever asks and whatever they hold.
-    assessment = await service.get_readable_assessment(assessment_id, context.tenant_id or "")
-    if assessment is None:
+    readable = await service.get_readable_assessment(assessment_id, context.tenant_id or "")
+    if readable is None:
         raise ClientHTTPException(status_code=404, detail="assessment not found")
+    assessment, count = readable
     used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
-    return _response(request, assessment, with_questions=False, attempts_used=used.get(assessment.id, 0))
+    return _response(request, assessment, attempts_used=used.get(assessment.id, 0), question_count=count)
 
 
 @router.patch("/{assessment_id}", status_code=status.HTTP_200_OK)
@@ -222,7 +225,13 @@ async def get_assessment_results(
     )
 
 
-def _assessment_payload(assessment: Assessment, *, with_questions: bool = True, attempts_used: int = 0) -> dict[str, object]:
+def _assessment_payload(
+    assessment: Assessment, *, with_questions: bool = True, attempts_used: int = 0, question_count: int | None = None
+) -> dict[str, object]:
+    # A mobile read passes question_count from SQL and loads no questions;
+    # without one, the questions are loaded and counted.
+    if question_count is not None and assessment.questions:
+        raise RuntimeError("a counted assessment must not carry its questions")
     return AssessmentResponse(
         id=assessment.id,
         tenant_id=assessment.tenant_id,
@@ -232,7 +241,7 @@ def _assessment_payload(assessment: Assessment, *, with_questions: bool = True, 
         duration_minutes=assessment.duration_minutes,
         passing_score=assessment.passing_score,
         status=assessment.status.value,
-        question_count=assessment.question_count,
+        question_count=assessment.question_count if question_count is None else question_count,
         attempt_policy=AttemptPolicyBody.from_domain(assessment.attempt_policy),
         attempts_used=attempts_used,
         questions=[
@@ -243,7 +252,7 @@ def _assessment_payload(assessment: Assessment, *, with_questions: bool = True, 
                 options=item.options,
                 marks=item.marks,
             )
-            for item in (assessment.questions if with_questions else [])
+            for item in (assessment.questions if with_questions and question_count is None else [])
         ],
         created_at=assessment.created_at.isoformat(),
         updated_at=assessment.updated_at.isoformat(),
@@ -257,12 +266,15 @@ def _response(
     status_code: int = status.HTTP_200_OK,
     with_questions: bool = True,
     attempts_used: int = 0,
+    question_count: int | None = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={
             "success": True,
-            "data": _assessment_payload(assessment, with_questions=with_questions, attempts_used=attempts_used),
+            "data": _assessment_payload(
+                assessment, with_questions=with_questions, attempts_used=attempts_used, question_count=question_count
+            ),
             "error": None,
             "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
