@@ -1330,9 +1330,15 @@ OCR output must feed downstream ingestion rather than remaining isolated.
 
 BUILD shall implement a provider-agnostic Model Gateway.
 
-The initial production foundation model shall be:
+**Online models (§0.2):**
 
-**Meta Muse Glimmer 30B accessed through Together AI.**
+| Environment | Model |
+|---|---|
+| Development and testing | Free models and free-tier access, through the Gemini SDK where available |
+| Production | **Gemini 3.8 Flash**, the agreed target. Its exact model identifier and availability must be verified before implementation depends on it |
+| Offline | The local model portfolio (§146.3), through the gateway's local provider |
+
+The Gemini SDK is the primary online integration. It replaces the earlier plan of Meta Muse Glimmer 30B through Together AI.
 
 The AI service must not couple:
 
@@ -1344,9 +1350,9 @@ The AI service must not couple:
 * evaluation;
 * or orchestration
 
-directly to Together or Glimmer-specific APIs.
+directly to the Gemini SDK or any other provider-specific API.
 
-Gemini and other foundation models shall remain pluggable.
+Other foundation models, and the local models, shall remain pluggable behind the same interface. Gemini output is never a source of academic truth on its own: answers about academic material pass through the grounding layer (§0.2, §29).
 
 ---
 
@@ -1355,9 +1361,11 @@ Gemini and other foundation models shall remain pluggable.
 Conceptually:
 
 ```text
-MODEL_PROVIDER=together
-MODEL_NAME=meta-models/Muse-Glimmer-30B
+MODEL_PROVIDER=gemini
+MODEL_NAME=<verified production identifier for the Gemini 3.8 Flash target>
 ```
+
+Development and test environments name a free model instead. The deterministic provider remains for offline tests and is refused in staging and production.
 
 The actual provider configuration should be externalized.
 
@@ -1928,7 +1936,7 @@ AI Service
       ↓
 Model Gateway
       ↓
-Together / Glimmer
+Gemini SDK (online)  ·  Local models (offline)
       ↓
 Other Providers
 ```
@@ -3066,8 +3074,8 @@ The agent should remain constrained by permissions and explicit tool boundaries.
                       │
              ┌────────┴────────┐
              ▼                 ▼
-         Glimmer             Gemini
-          /Together         /Provider
+          Gemini           Local models
+        (online SDK)        (offline)
 ```
 
 Around all components:
@@ -3737,7 +3745,7 @@ BUILD shall provide students with an integrated Learn/Study experience composed 
 
 BUILD shall treat documents, videos, questions, curriculum, concepts, learning objectives, and student performance as interconnected academic knowledge rather than isolated records.
 
-BUILD shall use a provider-agnostic Model Gateway, with Meta Muse Glimmer 30B through Together AI serving as the initial foundation model while preserving the ability to integrate Gemini and future models.
+BUILD shall use a provider-agnostic Model Gateway, with the Gemini SDK as the online provider (Gemini 3.8 Flash as the production target, once verified) and a portfolio of small local models offline, while preserving the ability to integrate future models.
 
 BUILD shall maintain academic provenance, curriculum versioning, confidence-aware processing, human governance, duplicate prevention, academic integrity controls, and source-aware AI responses.
 
