@@ -2245,13 +2245,21 @@ components:
         message: { type: string, minLength: 1, maxLength: 4000 }
     ConversationMessage:
       type: object
-      required: [id, role, content, grounded, citations, created_at]
+      required: [id, role, content, grounded, citations, redacted, created_at]
       properties:
         id: { type: string }
         role:
           type: string
           enum: [student, assistant]
-        content: { type: string }
+        content:
+          type: string
+          description: A redacted answer holds a fixed notice instead of its text.
+        redacted:
+          type: boolean
+          description: >
+            True when the answer used a document, cited or not, that was since deleted or that
+            this student can no longer read. Its text and citations are then gone, and
+            citations is empty. Always false for a student's message.
         grounded:
           type: [boolean, 'null']
           description: Null for a student's message.
