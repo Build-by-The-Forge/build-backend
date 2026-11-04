@@ -20,6 +20,7 @@ from boundary.conftest import (
     BACKEND_ID,
     canonical_json,
     jbytes,
+    retrieving,
     sign,
     system_context,
     to_ai,
@@ -32,10 +33,10 @@ CHAT = "/v1/ai/chat"
 DISPATCH = "/v1/ingest/dispatch"
 
 AI_ROUTES = [
-    ("/v1/ai/chat", "ai.use", {"message": "What is osmosis?"}),
-    ("/v1/ai/explain", "ai.use", {"subject": "osmosis"}),
-    ("/v1/ai/generate-questions", "ai.questions.generate", {"topic": "cells", "count": 2}),
-    ("/v1/ai/retrieve", "ai.use", {"query": "osmosis"}),
+    ("/v1/ai/chat", "ai.use", retrieving({"message": "What is osmosis?"})),
+    ("/v1/ai/explain", "ai.use", retrieving({"subject": "osmosis"})),
+    ("/v1/ai/generate-questions", "ai.questions.generate", retrieving({"topic": "cells", "count": 2})),
+    ("/v1/ai/retrieve", "ai.use", retrieving({"query": "osmosis"})),
     ("/v1/ai/tree/generate", "ai.use", {"course_title": "Biology", "topics": ["Cells"]}),
     ("/v1/ai/read/start", "ai.use", {"root": {"id": "c", "title": "C", "level": 0}}),
 ]
@@ -60,7 +61,7 @@ def dispatch_body(**extra) -> dict:
 
 
 def chat_call(**kw):
-    body = jbytes({"message": "hello"})
+    body = jbytes(retrieving({"message": "hello"}))
     ctx = user_context(TENANT, USER, ["ai.use"])
     return body, to_ai("POST", CHAT, body, ctx, **kw)
 
@@ -108,13 +109,13 @@ def test_c5_a_query_added_after_signing_is_401(ai):
 
 
 def test_c5_a_signed_query_must_match(ai):
-    body = jbytes({"message": "hello"})
+    body = jbytes(retrieving({"message": "hello"}))
     headers = to_ai("POST", CHAT + "?lang=en", body, user_context(TENANT, USER, ["ai.use"]))
     assert ai.post(CHAT + "?lang=EN", content=body, headers=headers).status_code == 401
 
 
 def test_c6_a_request_claiming_to_come_from_ai_service_is_401(ai):
-    body = jbytes({"message": "hello"})
+    body = jbytes(retrieving({"message": "hello"}))
     headers = sign(
         sender=AI_ID, secret=B2A, method="POST", target=CHAT, body=body, context=user_context(TENANT, USER, ["ai.use"])
     )
@@ -122,7 +123,7 @@ def test_c6_a_request_claiming_to_come_from_ai_service_is_401(ai):
 
 
 def test_c7_a_request_signed_with_the_other_directions_secret_is_401(ai):
-    body = jbytes({"message": "hello"})
+    body = jbytes(retrieving({"message": "hello"}))
     headers = sign(
         sender=BACKEND_ID, secret=A2B, method="POST", target=CHAT, body=body, context=user_context(TENANT, USER, ["ai.use"])
     )
@@ -163,7 +164,7 @@ def test_c10_a_context_that_is_not_base64url_is_401(ai):
 
 
 def signed_with_raw_context(raw: bytes) -> tuple[bytes, dict[str, str]]:
-    body = jbytes({"message": "hello"})
+    body = jbytes(retrieving({"message": "hello"}))
     return body, sign(sender=BACKEND_ID, secret=B2A, method="POST", target=CHAT, body=body, context_raw=raw)
 
 

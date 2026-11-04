@@ -335,3 +335,51 @@ def verify_request(
     """A.5 steps 1-5 and 7 for an already-hashed body."""
     checked = check_headers(direction=direction, headers=headers, now=now)
     return check_signature(checked, keys=keys, method=method, target=target, body_sha256=body_sha256)
+
+
+# ---- Signed responses (M3-D provenance) ------------------------------------------------
+#
+# AI-service signs each response with generated or retrieved content: the
+# request's signed id, the single-use nonce the backend put in the signed body,
+# a timestamp and the SHA-256 of the exact response bytes, under the
+# AI-to-backend secret. The response test vector, not shared code, proves both
+# sides compute the same signature.
+
+HEADER_RESPONSE_TIMESTAMP = "X-BUILD-Response-Timestamp"
+HEADER_RESPONSE_SIGNATURE = "X-BUILD-Response-Signature"
+
+
+def canonical_response(*, service: str, request_id: str, nonce: str, timestamp: str, body_sha256: str) -> bytes:
+    return "\n".join((VERSION, "response", service, request_id, nonce, timestamp, body_sha256)).encode("utf-8")
+
+
+def verify_response(
+    *,
+    direction: Direction,
+    keys: ServiceKeys,
+    request_id: str,
+    nonce: str,
+    headers: Mapping[str, str],
+    body: bytes,
+    now: int,
+) -> None:
+    """Accept a response only if it is signed by ``direction``'s sender for
+    this request and nonce, over these exact bytes, within the window."""
+    lookup = {name.lower(): value for name, value in headers.items()}
+    signature = lookup.get(HEADER_RESPONSE_SIGNATURE.lower())
+    timestamp = lookup.get(HEADER_RESPONSE_TIMESTAMP.lower())
+    if signature is None or not _SIGNATURE_RE.fullmatch(signature):
+        raise ServiceAuthError("missing or malformed response signature")
+    if timestamp is None or not _TIMESTAMP_RE.fullmatch(timestamp):
+        raise ServiceAuthError("missing or malformed response timestamp")
+    if abs(now - int(timestamp)) > TIMESTAMP_WINDOW_SECONDS:
+        raise ServiceAuthError("response timestamp outside window")
+    canonical = canonical_response(
+        service=direction.sender,
+        request_id=request_id,
+        nonce=nonce,
+        timestamp=timestamp,
+        body_sha256=sha256_hex(body),
+    )
+    if not any(hmac.compare_digest(compute_signature(secret, canonical), signature) for secret in keys.verification_secrets):
+        raise ServiceAuthError("response signature mismatch")
