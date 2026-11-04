@@ -57,6 +57,8 @@ class CourseModel(Base):
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "code", name="uq_courses_tenant_code"),
+        # Target of tenant-consistent references (M3-D migration 0030).
+        UniqueConstraint("tenant_id", "id", name="uq_courses_tenant_id_id"),
         UniqueConstraint("tenant_id", "slug", name="uq_courses_tenant_slug"),
         Index("ix_courses_department_id", "department_id"),
         Index("ix_courses_tenant_id", "tenant_id"),
