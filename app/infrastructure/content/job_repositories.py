@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.ingestion_event import IngestionEventRecord
@@ -17,6 +18,10 @@ from app.infrastructure.db.models.content import (
     ContentIngestionEventModel,
     ContentIngestionJobModel,
 )
+
+# Statuses in which a job is finished. Any other is active, and a document
+# has at most one active job (ux_content_ingestion_jobs_active_asset).
+INACTIVE_JOB_STATUSES = (IngestionStatus.READY.value, IngestionStatus.FAILED.value)
 
 
 class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
@@ -119,12 +124,24 @@ class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
         return content_job_model_to_domain(model) if model else None
 
     async def claim_next_retryable_failure(self, excluded_ids: set[str]) -> ContentIngestionJob | None:
+        # A failure whose document already has an active run (a reprocess,
+        # say) isn't retried: a document has one active job at a time.
+        other = aliased(ContentIngestionJobModel)
+        active_run = (
+            select(other.id)
+            .where(
+                other.asset_id == ContentIngestionJobModel.asset_id,
+                other.status.not_in(INACTIVE_JOB_STATUSES),
+            )
+            .exists()
+        )
         stmt = (
             select(ContentIngestionJobModel)
             .where(
                 ContentIngestionJobModel.status == IngestionStatus.FAILED.value,
                 ContentIngestionJobModel.is_retryable.is_(True),
                 ContentIngestionJobModel.attempt_count < ContentIngestionJobModel.max_attempts,
+                ~active_run,
             )
             .order_by(ContentIngestionJobModel.updated_at.asc(), ContentIngestionJobModel.id.asc())
             .limit(1)
