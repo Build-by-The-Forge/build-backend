@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: c42b3a087ee522ae783059621c2b507adb3ed64c87a88708b6b1f2722bd4618d
+contract_sha256: 98b110221b45c00292535a214e233783ac3c977db5521ec5cf7c2a54f3dedc00
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -154,6 +154,12 @@ implementation_gaps:
   summary: Uploads aren't scanned, so no document is ever quarantined or rejected before processing
   closes_in: M3-D
   evidence: No scanner exists (M3-D ruling 7); read from app/application/content/upload.py.
+- id: G-41
+  severity: Medium
+  summary: Students can't describe their documents with the shelf form
+  closes_in: M3-D
+  findings:
+  - missing_route PATCH /content/my-documents/{asset_id}
 closed:
 - id: G-09
   summary: No read routes for faculties, departments or programmes

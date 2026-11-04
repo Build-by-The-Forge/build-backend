@@ -686,6 +686,31 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
+    patch:
+      tags: [content]
+      operationId: updateMyDocument
+      summary: Fill in the shelf form for one of this student's documents
+      description: >
+        Sets only the fields sent; null clears one. course_id must be an active course of
+        this tenant, and level one the tenant offers. Nothing here publishes the document or
+        changes who can read it.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DocumentForm' }
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
 
   /content/my-documents/{asset_id}/retry:
     post:
@@ -1769,7 +1794,7 @@ components:
         source_url: { type: [string, 'null'] }
     Document:
       type: object
-      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, knowledge_scope, ingestion, created_at, updated_at]
+      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, knowledge_scope, ingestion, course_id, level, semester, document_type, created_at, updated_at]
       properties:
         id: { type: string }
         source_id: { type: string }
@@ -1792,8 +1817,35 @@ components:
             Whose answers its extracted content may support. Separate from ownership: being
             indexed never makes a personal document available to anyone else.
         ingestion: { $ref: '#/components/schemas/Ingestion' }
+        course_id: { type: [string, 'null'], description: From the shelf form }
+        level: { $ref: '#/components/schemas/Level' }
+        semester: { $ref: '#/components/schemas/Semester' }
+        document_type: { $ref: '#/components/schemas/DocumentType' }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    Level:
+      type: [integer, 'null']
+      enum: [100, 200, 300, 400, 500, 600, null]
+      description: The study level. 600 only where the tenant offers it; the tenant's levels decide, not this list.
+    Semester:
+      type: [integer, 'null']
+      enum: [1, 2, 3, null]
+    DocumentType:
+      type: [string, 'null']
+      enum: [lecture_notes, summary, assignment, project_report, slides, other, null]
+      description: >
+        The student's own description of their file. Past or upcoming examination papers
+        aren't a type: they're never a student's own work.
+    DocumentForm:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+        course_id: { type: [string, 'null'] }
+        level: { $ref: '#/components/schemas/Level' }
+        semester: { $ref: '#/components/schemas/Semester' }
+        document_type: { $ref: '#/components/schemas/DocumentType' }
     Ingestion:
       type: object
       required: [status, retry_available, failure_code, failure_message]
