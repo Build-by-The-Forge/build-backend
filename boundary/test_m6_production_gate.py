@@ -15,14 +15,14 @@ import uuid
 import asyncpg
 import pytest
 
-from boundary.conftest import A2B, B2A, BACKEND_ID, canonical_json, jbytes, sign, to_ai, user_context
+from boundary.conftest import A2B, B2A, BACKEND_ID, canonical_json, jbytes, retrieving, sign, to_ai, user_context
 
 BACKEND_APP_DSN = os.environ.get("BOUNDARY_BACKEND_APP_DSN", "")
 CHAT = "/v1/ai/chat"
 
 
 def signed_chat(context, **kw):
-    raw = jbytes({"message": "hello"})
+    raw = jbytes(retrieving({"message": "hello"}))
     return raw, to_ai("POST", CHAT, raw, context, **kw)
 
 
@@ -97,7 +97,7 @@ def test_replayed_request_is_refused(ai):
 
 @pytest.mark.parametrize("secret", [A2B, "build-internal-service-secret", "x" * 48])
 def test_wrong_service_secret_is_refused(ai, secret):
-    raw = jbytes({"message": "hello"})
+    raw = jbytes(retrieving({"message": "hello"}))
     headers = sign(
         sender=BACKEND_ID,
         secret=secret,
@@ -212,6 +212,8 @@ def test_every_table_belongs_to_exactly_one_service():
         "learning_memory",
         "session_memory",
         "ai_service_alembic_version",
+        # M3-D: each document's knowledge scope (AI PR 1).
+        "asset_scopes",
     }
     # AI-1 adds exactly these two. Both forms are allowed only while the two
     # repositories merge in order; L4 removes the first.

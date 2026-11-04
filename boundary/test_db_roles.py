@@ -103,3 +103,21 @@ def test_c25_ai_service_can_use_its_chunk_index():
     )
     assert row["distance"] == 0 and row["matches"] is True
     run("DELETE FROM document_chunks WHERE tenant_id = $1", tenant)
+
+
+def test_c25_ai_service_can_use_its_scope_table():
+    # asset_scopes (ai-service M3-D): the runtime role applies an assignment
+    # only above the stored version, and reads it.
+    tenant = str(uuid.uuid4())
+    for scope, version in (("institutional", 2), ("unknown", 1)):
+        run(
+            "INSERT INTO asset_scopes (tenant_id, asset_id, scope, version) VALUES ($1, 'c25', $2, $3)"
+            " ON CONFLICT (tenant_id, asset_id) DO UPDATE SET scope = EXCLUDED.scope, version = EXCLUDED.version"
+            " WHERE EXCLUDED.version > asset_scopes.version",
+            tenant,
+            scope,
+            version,
+        )
+    [row] = run("SELECT scope, version FROM asset_scopes WHERE tenant_id = $1 AND asset_id = 'c25'", tenant)
+    assert (row["scope"], row["version"]) == ("institutional", 2)  # the older assignment changed nothing
+    run("DELETE FROM asset_scopes WHERE tenant_id = $1", tenant)
