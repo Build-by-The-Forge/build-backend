@@ -1094,6 +1094,32 @@ Search should combine:
 * user context;
 * potentially graph relationships.
 
+## 26.1 Naive and Agentic RAG routing
+
+The orchestration layer decides, per request, which retrieval strategy runs (§0.3).
+
+| Request | Strategy |
+|---|---|
+| Define a concept | Naive RAG |
+| Summarize a lecture note | Naive RAG |
+| Explain a concept using the student's uploaded material | Naive RAG |
+| Generate questions from a chapter | Naive RAG |
+| Compare how two sources explain a concept | Agentic RAG |
+| Find contradictions across materials | Agentic RAG |
+| Research a topic across several authorized sources | Agentic RAG |
+| Build a revision plan from weak areas and course materials | Agentic RAG, with controlled tools and student-approved context |
+
+**Naive RAG**, the default: understand the question, form the retrieval query, retrieve, rerank and filter the evidence, generate from it, and validate citations and grounding.
+
+**Agentic RAG**, when the task needs it: decompose the task, choose authorized tools and sources, retrieve iteratively, judge whether the evidence suffices, continue only when necessary, synthesize, and verify the final response.
+
+Rules for both:
+
+* The same access control applies: the knowledge scope, the backend's denial list, and the provenance check on every source used.
+* Agentic runs are bounded by permissions, budgets, iteration limits and retrieval scope (§22 to §25), and are audited.
+* The routing policy is configuration owned by the Platform Operations Layer, evaluated for cost, latency and answer quality, and never a reason to skip grounding.
+* Higher Agentic RAG allowances are a subscription capability (§80), never a requirement for essential learning.
+
 ---
 
 # 27. Academic Search
@@ -1309,7 +1335,9 @@ Conflicting sources should remain preserved as provenance.
 
 AI service shall support OCR for academic documents.
 
-Initial strategy may use OpenVINO + PaddleOCR.
+The dedicated OCR pipeline (OpenVINO + PaddleOCR) stays in place. **Gemini-assisted extraction** complements it for documents the dedicated pipeline handles poorly, such as complex layouts, handwriting and images. Documents are routed by their characteristics. Every extraction is validated, and page-level provenance is preserved whichever engine produced it. Gemini's reading of a document is extracted text to be grounded, never an answer.
+
+Scanned pages that haven't been OCRed aren't retrievable, so OCR coverage is a release metric (§0.6).
 
 OCR pipeline should support:
 
