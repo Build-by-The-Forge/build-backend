@@ -740,6 +740,61 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /content/my-documents/{asset_id}/publication-request:
+    post:
+      tags: [content]
+      operationId: requestPublication
+      summary: Ask to publish one of this student's documents to the tenant shelf
+      description: >
+        Records the student's consent and rights declaration, each with the wording version
+        they accepted. While the tenant's mode is own_work_automatic, an own_work declaration
+        shared with the tenant publishes at once, if the document is ready, scanned clean and
+        its bytes aren't on the tenant's takedown blocklist. Anything else becomes requested
+        and stays private. The answer reveals nothing about any other student. Publishing
+        never makes a document usable in anyone's answers. A repeat returns the current state.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PublicationRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: DOCUMENT_NOT_READY, or SHELF_PUBLICATION_OFF while the tenant's shelf is off
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /content/my-documents/{asset_id}/publication:
+    delete:
+      tags: [content]
+      operationId: withdrawPublication
+      summary: Withdraw a publication or a pending request
+      description: >
+        Effective at once: the document leaves the shelf at this commit. A repeat, or a
+        document that was never published, returns the current state.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/AssetId'
+      responses:
+        '200': { $ref: '#/components/responses/DocumentResult' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
   /content/sources:
     get:
       tags: [content]
@@ -1604,6 +1659,8 @@ components:
         - UNSUPPORTED_MEDIA_TYPE
         - RANGE_NOT_SATISFIABLE
         - DOCUMENT_NOT_AVAILABLE
+        - DOCUMENT_NOT_READY
+        - SHELF_PUBLICATION_OFF
         - VALIDATION_FAILED
         - RATE_LIMITED
         - INTERNAL_ERROR
@@ -1805,7 +1862,7 @@ components:
         source_url: { type: [string, 'null'] }
     Document:
       type: object
-      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, knowledge_scope, ingestion, course_id, level, semester, document_type, created_at, updated_at]
+      required: [id, source_id, title, mime_type, size_bytes, content_sha256, ownership, knowledge_scope, ingestion, course_id, level, semester, document_type, publication, created_at, updated_at]
       properties:
         id: { type: string }
         source_id: { type: string }
@@ -1832,6 +1889,7 @@ components:
         level: { $ref: '#/components/schemas/Level' }
         semester: { $ref: '#/components/schemas/Semester' }
         document_type: { $ref: '#/components/schemas/DocumentType' }
+        publication: { $ref: '#/components/schemas/Publication' }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     Level:
@@ -1847,6 +1905,44 @@ components:
       description: >
         The student's own description of their file. Past or upcoming examination papers
         aren't a type: they're never a student's own work.
+    Publication:
+      type: object
+      required: [status, audience]
+      description: >
+        private is the default. published: discoverable by authorized students of this
+        tenant only. requested: waiting for a review that isn't available yet, still private.
+        hidden: three distinct students reported it, so it's off the shelf until the
+        tenant's takedown contact reviews it. withdrawn by the owner, or taken_down by the
+        tenant. None of these changes the document's knowledge_scope.
+      properties:
+        status:
+          type: string
+          enum: [private, requested, published, hidden, withdrawn, taken_down]
+        audience:
+          type: [string, 'null']
+          enum: [tenant, null]
+          description: tenant whenever status is published or hidden; never the open internet
+    PublicationRequest:
+      type: object
+      additionalProperties: false
+      required: [consent_version, declaration]
+      properties:
+        consent_version: { type: string, minLength: 1, maxLength: 64, description: The consent wording the student accepted }
+        declaration: { $ref: '#/components/schemas/RightsDeclaration' }
+    RightsDeclaration:
+      type: object
+      additionalProperties: false
+      description: >
+        What the student says about this document's rights. Recorded as what they said, not
+        as legal clearance. Only own_work, shared with the tenant, can publish without review.
+      required: [rights_basis, audience, redistribution, declaration_version]
+      properties:
+        rights_basis:
+          type: string
+          enum: [own_work, lecturer_provided, institution_licensed, publisher_licensed, public_domain, unknown]
+        audience: { type: string, enum: [tenant] }
+        redistribution: { type: string, enum: [tenant_only, permitted] }
+        declaration_version: { type: string, minLength: 1, maxLength: 64, description: The declaration wording the student accepted }
     DocumentForm:
       type: object
       additionalProperties: false

@@ -29,7 +29,7 @@ from tests.integration.mobile_contract_audit import (
 )
 
 GAPS_PATH = ROOT / "contracts" / "mobile" / "gaps.yaml"
-HIGHEST_GAP = 41
+HIGHEST_GAP = 42
 # Checks that mean behaviour is absent or wrong; the rest are shape differences.
 IMPLEMENTATION_CHECKS = {"missing_route", "student_refused", "server_error"}
 

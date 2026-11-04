@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: 71db3ce398ba7619255689e4bb4e8c248661a62b0acda634f5085d7030e1dc89
+contract_sha256: 3eb1e880440f010c949fe8ee5f8ad6c4fab8b1ab494ff53328324df19c2106c9
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -160,6 +160,13 @@ implementation_gaps:
   closes_in: M3-D
   findings:
   - missing_route PATCH /content/my-documents/{asset_id}
+- id: G-42
+  severity: High
+  summary: Students can't publish their own work to the tenant shelf, or withdraw it
+  closes_in: M3-D
+  findings:
+  - missing_route DELETE /content/my-documents/{asset_id}/publication
+  - missing_route POST /content/my-documents/{asset_id}/publication-request
 closed:
 - id: G-09
   summary: No read routes for faculties, departments or programmes
