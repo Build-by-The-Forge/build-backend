@@ -4,14 +4,27 @@ Each request is signed with BUILD Service Signature v1 and a user context
 carrying exactly the permission the backend checked. The body has no
 identity fields. Redirects are never followed. AI-service's error detail is
 logged, never returned to the client.
+
+Retrieving calls (chat, explain, question generation) follow M3-D:
+
+- the body carries ``denied_assets``, the documents the backend has lowered
+  and AI-service hasn't acknowledged, and a fresh single-use
+  ``response_nonce``;
+- the response is accepted only if AI-service signed it for this request
+  and nonce, over the exact bytes received, within the window; the nonce
+  is then consumed in the replay store, so a second response for it is
+  refused;
+- it must carry ``sources_used``. Anything else is withheld.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import secrets
 import time
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol
 
 import httpx
 
@@ -28,10 +41,39 @@ from app.domain.ai.assistant import (
     MemoryObservation,
     parse_generated_question,
 )
+from app.infrastructure.security.replay_store import ReplayStoreUnavailable
 from app.infrastructure.security.service_context import ServiceContext
-from app.infrastructure.security.service_signature import Direction, ServiceKeys, sign_request
+from app.infrastructure.security.service_signature import (
+    HEADER_REQUEST_ID,
+    Direction,
+    ServiceAuthError,
+    ServiceKeys,
+    sign_request,
+    verify_response,
+)
 
 logger = logging.getLogger(__name__)
+
+# Consumed response nonces share the request replay store, in their own namespace.
+RESPONSE_NONCE_RECEIVER = "build-backend:response"
+# The most denied assets one call may carry. A contract limit shared with
+# AI-service, which refuses a longer list: a change moves in both repositories,
+# tested together. Past it, the tenant's retrieving calls are refused, never
+# sent with part of the list.
+MAX_DENIED_ASSETS = 1000
+
+
+class NonceStore(Protocol):
+    async def claim(self, receiver: str, sender: str, request_id: str) -> bool: ...
+
+
+async def nothing_lowered_yet(tenant_id: str) -> frozenset[str]:
+    """The tenant's lowered, unacknowledged documents (M3-D immediate denial).
+
+    Only the scope-assignment outbox (M3-D PR 5) lowers a document, and
+    until it exists nothing can be raised to institutional either, so
+    the list is empty. PR 5 replaces this with a read of its pending rows."""
+    return frozenset()
 
 
 class HttpAIAssistantGateway(AIAssistantGateway):
@@ -41,11 +83,17 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         timeout_seconds: float | None = None,
         client: httpx.AsyncClient | None = None,
         keys: ServiceKeys | None = None,
+        response_keys: ServiceKeys | None = None,
+        nonce_store: NonceStore | None = None,
+        denied_assets: Callable[[str], Awaitable[frozenset[str]]] = nothing_lowered_yet,
     ) -> None:
         self._base_url = (base_url or settings.ai_service_url).rstrip("/")
         self._timeout = float(timeout_seconds or settings.ai_service_timeout_seconds)
         self._client = client
         self._keys_override = keys
+        self._response_keys_override = response_keys
+        self._nonce_store = nonce_store
+        self._denied_assets = denied_assets
 
     def _keys(self) -> ServiceKeys:
         if self._keys_override is not None:
@@ -58,8 +106,20 @@ class HttpAIAssistantGateway(AIAssistantGateway):
             )
         return ServiceKeys(current=settings.backend_to_ai_secret)
 
+    def _response_keys(self) -> ServiceKeys:
+        if self._response_keys_override is not None:
+            return self._response_keys_override
+        secrets_ = settings.ai_to_backend_verification_secrets
+        if not secrets_:
+            raise AIAssistantError(
+                "AI_TO_BACKEND_SECRET is not configured",
+                error_code="AI_SERVICE_NOT_CONFIGURED",
+                unavailable=True,
+            )
+        return ServiceKeys(current=secrets_[0], previous=secrets_[1] if len(secrets_) > 1 else None)
+
     async def chat(self, actor: AIActor, message: str) -> ChatAnswer:
-        data = await self._post("/v1/ai/chat", {"message": message}, actor)
+        data = await self._post_retrieving("/v1/ai/chat", {"message": message}, actor)
         answer = data.get("answer")
         context = data.get("context_used", [])
         if not isinstance(answer, str) or not isinstance(context, list):
@@ -68,7 +128,7 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         return ChatAnswer(answer=answer, context=texts)
 
     async def explain(self, actor: AIActor, subject: str) -> Explanation:
-        data = await self._post("/v1/ai/explain", {"subject": subject}, actor)
+        data = await self._post_retrieving("/v1/ai/explain", {"subject": subject}, actor)
         explanation = data.get("explanation")
         if not isinstance(explanation, str):
             raise _bad_response("explain")
@@ -77,7 +137,7 @@ class HttpAIAssistantGateway(AIAssistantGateway):
     async def generate_questions(
         self, actor: AIActor, topic: str, count: int, difficulty: str, question_type: str
     ) -> GeneratedQuestions:
-        data = await self._post(
+        data = await self._post_retrieving(
             "/v1/ai/generate-questions",
             {"topic": topic, "count": count, "difficulty": difficulty, "question_type": question_type},
             actor,
@@ -99,14 +159,71 @@ class HttpAIAssistantGateway(AIAssistantGateway):
     async def query_memory(self, actor: AIActor, topics: list[str] | None = None) -> list[MemoryItem]:
         _require_gate_open("read")
         payload: dict[str, Any] = {} if topics is None else {"topics": topics}
-        return _memory_items(await self._post("/v1/ai/memory/query", payload, actor))
+        return _memory_items(await self._post_data("/v1/ai/memory/query", payload, actor))
 
     async def record_memory(self, actor: AIActor, observations: list[MemoryObservation]) -> list[MemoryItem]:
         _require_gate_open("write")
         payload = {"observations": [{"topic": o.topic, "correct": o.correct} for o in observations]}
-        return _memory_items(await self._post("/v1/ai/memory/upsert", payload, actor))
+        return _memory_items(await self._post_data("/v1/ai/memory/upsert", payload, actor))
 
-    async def _post(self, path: str, payload: dict[str, Any], actor: AIActor) -> dict[str, Any]:
+    async def _post_data(self, path: str, payload: dict[str, Any], actor: AIActor) -> dict[str, Any]:
+        response, _ = await self._post(path, payload, actor)
+        return _data_of(_envelope(response, path), path)
+
+    async def _post_retrieving(self, path: str, payload: dict[str, Any], actor: AIActor) -> dict[str, Any]:
+        try:
+            denied = await self._denied_assets(actor.tenant_id)
+        except Exception as exc:
+            # No list, no call: absence never means none.
+            logger.warning("denied assets unreadable for %s: %s", path, type(exc).__name__)
+            raise AIAssistantError("denied assets unavailable", error_code="AI_SERVICE_UNAVAILABLE", unavailable=True) from exc
+        if len(denied) > MAX_DENIED_ASSETS:
+            logger.error(
+                "denied assets for tenant %s exceed the shared limit (%s > %s): retrieving calls refused",
+                actor.tenant_id,
+                len(denied),
+                MAX_DENIED_ASSETS,
+            )
+            raise AIAssistantError("too many denied assets", error_code="AI_SERVICE_UNAVAILABLE", unavailable=True)
+        nonce = secrets.token_urlsafe(32)
+        payload = {**payload, "denied_assets": sorted(denied), "response_nonce": nonce}
+        response, request_id = await self._post(path, payload, actor)
+        try:
+            verify_response(
+                direction=Direction.AI_TO_BACKEND,
+                keys=self._response_keys(),
+                request_id=request_id,
+                nonce=nonce,
+                headers=response.headers,
+                body=response.content,
+                now=int(time.time()),
+            )
+        except ServiceAuthError as exc:
+            logger.warning("AI-service %s response withheld: %s", path, exc.reason)
+            raise _bad_response(path) from exc
+        await self._consume(nonce, path)
+        envelope = _envelope(response, path)
+        if not _valid_sources(envelope.get("sources_used")):
+            logger.warning("AI-service %s response withheld: no valid sources_used", path)
+            raise _bad_response(path)
+        return _data_of(envelope, path)
+
+    async def _consume(self, nonce: str, path: str) -> None:
+        """Accept one response per nonce, once."""
+        store = self._nonce_store
+        if store is None:
+            raise AIAssistantError(
+                "no replay store for response nonces", error_code="AI_SERVICE_NOT_CONFIGURED", unavailable=True
+            )
+        try:
+            fresh = await store.claim(RESPONSE_NONCE_RECEIVER, Direction.AI_TO_BACKEND.sender, nonce)
+        except ReplayStoreUnavailable as exc:
+            raise AIAssistantError("replay store unavailable", error_code="AI_SERVICE_UNAVAILABLE", unavailable=True) from exc
+        if not fresh:
+            logger.warning("AI-service %s response withheld: nonce already used", path)
+            raise _bad_response(path)
+
+    async def _post(self, path: str, payload: dict[str, Any], actor: AIActor) -> tuple[httpx.Response, str]:
         keys = self._keys()
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         url = httpx.URL(f"{self._base_url}{path}")
@@ -127,6 +244,7 @@ class HttpAIAssistantGateway(AIAssistantGateway):
             timestamp=int(time.time()),
         )
         headers["Content-Type"] = "application/json"
+        request_id = headers[HEADER_REQUEST_ID]
 
         client = self._client or httpx.AsyncClient(timeout=self._timeout)
         try:
@@ -157,14 +275,41 @@ class HttpAIAssistantGateway(AIAssistantGateway):
                 unavailable=response.status_code in (502, 503, 504),
             )
 
-        try:
-            envelope = response.json()
-        except ValueError as exc:
-            raise _bad_response(path) from exc
-        data = envelope.get("data") if isinstance(envelope, dict) else None
-        if not isinstance(data, dict):
-            raise _bad_response(path)
-        return data
+        return response, request_id
+
+
+def _envelope(response: httpx.Response, path: str) -> dict[str, Any]:
+    try:
+        envelope = response.json()
+    except ValueError as exc:
+        raise _bad_response(path) from exc
+    if not isinstance(envelope, dict):
+        raise _bad_response(path)
+    return envelope
+
+
+def _data_of(envelope: dict[str, Any], path: str) -> dict[str, Any]:
+    data = envelope.get("data")
+    if not isinstance(data, dict):
+        raise _bad_response(path)
+    return data
+
+
+def _valid_sources(sources: Any) -> bool:
+    """sources_used is required: a list of (asset, run, attempt).
+
+    Checking each source against the caller's read policy is the
+    provenance check, which needs M3-D's one read policy (PR 4)."""
+    if not isinstance(sources, list):
+        return False
+    for source in sources:
+        if not isinstance(source, dict) or not isinstance(source.get("asset_id"), str):
+            return False
+        for key in ("run_number", "attempt"):
+            value = source.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                return False
+    return True
 
 
 def _bad_response(operation: str) -> AIAssistantError:
