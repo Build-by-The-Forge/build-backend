@@ -20,6 +20,15 @@ class AssessmentRepository(Protocol):
     async def list_all(self, tenant_id: str | None = None) -> list[Assessment]:
         raise NotImplementedError
 
+    async def list_readable(self, tenant_id: str, course_id: str | None = None) -> list[Assessment]:
+        """Published assessments whose course, department and faculty are all
+        active: what the mobile routes show, to everyone (M3-E)."""
+        raise NotImplementedError
+
+    async def get_readable(self, assessment_id: str, tenant_id: str) -> Assessment | None:
+        """The assessment if list_readable would include it, else None."""
+        raise NotImplementedError
+
     async def list_question_snapshots(self, assessment_id: str, tenant_id: str) -> list[AssessmentQuestion]:
         raise NotImplementedError
 
