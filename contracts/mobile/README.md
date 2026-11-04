@@ -132,6 +132,10 @@ These go beyond M0's route list. Each needs the reviewer's agreement.
 | `POST /ai/conversations`, then `POST .../messages` | `POST /ai/chat` | Decision A. `/ai/chat` is not part of this contract |
 | `POST /identity/users` answers a bodyless 202 | 201 with the user | M0 says registration doesn't reveal whether an account exists. A 201 with an ID can't meet that. M3-B must also keep the response time from revealing it |
 | Attempts have `expires_at`, and late answers get `ATTEMPT_EXPIRED` | No deadline | See new gap G-27 |
+| `PATCH /content/my-documents/{id}`: the shelf form, and My Shelf's `level` and `course_id` filters | Nothing | The Student Shelf needs documents described by course and level. M3-D design, approved at `ab09d2c`. Gap G-41 |
+| `POST /content/my-documents/{id}/publication-request` and `DELETE .../publication` | Nothing | The sprint ruling on `06b433a`: a student's own work publishes on request, anything else stays private as `requested`. Gap G-42 |
+| `GET /content/tenant-shelf` and `POST /content/tenant-shelf/{id}/report` | Nothing | "Public" means this tenant only, with reports, hiding and takedown (rulings on `fe7742e`). Gap G-43 |
+| `quarantined` and `rejected` ingestion statuses, and `DOCUMENT_NOT_AVAILABLE` | Nothing | Ruling 7: every document is scanned before anything opens it. Gap G-40 |
 
 ## Durable queuing
 
