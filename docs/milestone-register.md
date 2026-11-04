@@ -19,7 +19,7 @@ There are two tracks, and neither one's progress counts for the other:
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
 | M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete:** G-14 closed; registration's durable, non-enumerating 202; G-39's membership finding closed, the rest with M3-E | #75 `4faca25`, #76 `604f8b1` (merges) |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Complete:** G-09 closed; G-10's catalogue findings closed, its assessment and attempt findings wait for M3-E | #77 `418fbd5` (merge) |
-| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Design approved**, implementation not started. Its first PR, the AI scope filter, is next. No student route opens until PRs 1, 4 and 6 are deployed | #79 `fef4cfa` (design) |
+| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Design approved**. Its first PR, the AI scope filter, is in review as a pair: ai-service #43 with backend #86. No student route opens until PRs 1, 4 and 6 are deployed | #79 `fef4cfa` (design) |
 | M3-E | Assessment contract | M3-A, L1 to L3 | The rest of G-10 and G-39 closed; M3-C and M3-B closed their other parts. Lifecycle gaps are already closed | HTTP, drift gate | **Design approved**, implementation not started. Partly done by L1 to L3 | #80 `f4ce131` (design) |
 | M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Design approved**, implementation not started. No conversation reaches students until retention is decided | #81 `e0057ad` (design), #83 `bcbbde8` (provenance amendment) |
 | M4 | Retrieval eligibility and citation authorization | M3-D, M3-F | G-05 closed; G-04 and G-31 closed; the boundary doc's measurements taken | Boundary, both repositories | **Specified** in `mobile-m0-boundary.md` | |
@@ -150,6 +150,17 @@ Given by the reviewer on #79 at `06b433a`. It changes what's built first, not an
 | Offline authorization | A device holds what its user was authorized for at its last sync, under a signed lease that starts at 72 hours. The lease runs on monotonic elapsed time and boot identity: a reboot ends it, missing or inconsistent trusted time fails closed, and the wall clock can only shorten it. It doesn't hold on a rooted or jailbroken device. Offline answers stay provisional until reconnect validation passes. Approved with M3-D's design at `ab09d2c` |
 
 **Not permitted by these decisions:** exposing a route before its own gates pass. A design approval isn't permission to expose a route, and `GATE_OPEN` stays `False`.
+
+## M3-D implementation rulings
+
+Given by the reviewer on the first implementation pair (ai-service #43 and backend #86), before review. They bind later PRs, not just this pair.
+
+| Topic | Ruling | Binds |
+|---|---|---|
+| Scope on the ingestion dispatch | Deferred to PR 7. An ingested document stays `unknown`, and out of retrieval, until a signed assignment | PR 7 adds the requirement without any window in which unclassified documents become accessible |
+| `denied_assets` limit | 1,000 entries, a **shared contract limit**. The AI service refuses a longer list, and the backend never sends one: it refuses the tenant's retrieving calls instead of truncating. Published in the AI OpenAPI contract and in the boundary design's A.6 | Any change moves in both repositories and is tested together. Neither side configures its own |
+| `sources_used` against the read policy | Deferred to PR 4. Until then the backend verifies the signature, the exact request, the unconsumed nonce, and the structure of `sources_used`, and withholds anything else | A signature doesn't prove the AI service retrieved only authorized sources: PR 4's provenance check closes that |
+| Merging the pair | Coordinated: neither merges alone, and each needs its own exact-SHA verdict. The AI PR merges first, then the backend's `boundary-gate` is re-run on its unchanged head | Every later pair that changes the AI request contract |
 
 ## Open incidents
 
