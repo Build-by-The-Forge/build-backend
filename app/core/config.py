@@ -217,8 +217,10 @@ class Settings(BaseSettings):
                 raise ValueError(f"AI_SERVICE_URL is required when app_environment is {self.app_environment!r}")
             self.ai_service_url = DEVELOPMENT_AI_SERVICE_URL
         parts = urlsplit(self.ai_service_url)
-        # Requests are signed but responses are not (ruling E.4): outside
-        # development the boundary must run over TLS.
+        # Requests are signed, and since M3-D so are responses that carry
+        # generated or retrieved content (boundary design A.6). Signing isn't
+        # encryption, and other responses aren't signed, so outside development
+        # the boundary must still run over TLS (ruling E.4).
         allowed = {"https"} if strict else {"http", "https"}
         if parts.scheme not in allowed or not parts.hostname:
             raise ValueError(f"AI_SERVICE_URL must be an absolute {' or '.join(sorted(allowed))} URL")
