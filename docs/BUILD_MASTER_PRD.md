@@ -3324,16 +3324,12 @@ V1 should prioritize:
 * provenance;
 * processing.
 
-### Social
+### Offline
 
-* groups;
-* leaderboard.
-
-### Campus
-
-* core map;
-* campus locations;
-* search.
+* downloaded academic materials;
+* local AI assistance from the local model portfolio (§146.3);
+* available CBT offline;
+* controlled synchronization.
 
 ### Analytics
 
@@ -3348,20 +3344,30 @@ V1 should prioritize:
 * usage metering;
 * premium architecture.
 
+### Platform
+
+* backend-authoritative entitlements (§84.1);
+* app update metadata and in-place updates (§105.2).
+
+### Paused for the first release (§0.5)
+
+Social groups and leaderboards, the campus map, lecturer and contributor workflows, admin and owner dashboards, payment experiences, and advanced institutional analytics remain in the architecture but aren't on the first release's critical path.
+
 ---
 
 # 124. V1 Explicit Non-Goals
 
 The following should not become uncontrolled V1 scope:
 
-* full offline AI;
+* offline AI that only stores files or embeddings: offline generative AI is in scope (§0.6), but its exact model configuration is decided by benchmarks;
 * full multi-university rollout;
 * advanced ML personalization;
 * unrestricted autonomous agents;
 * turn-by-turn campus navigation;
 * uncontrolled textbook scraping;
 * automatic publication of AI-generated official questions;
-* complex payment ecosystem before usage data exists.
+* complex payment ecosystem before usage data exists;
+* any frontend check standing in for a server-side entitlement (§84.1).
 
 ---
 
