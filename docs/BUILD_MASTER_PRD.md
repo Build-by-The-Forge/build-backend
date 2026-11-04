@@ -2291,17 +2291,25 @@ Premium should feel like **more intelligence**, not permission to learn.
 
 The platform may eventually support:
 
-### BUILD Free
+The agreed levels (2026-11-04). These are feature boundaries, not prices: prices follow measured Gemini, document-processing, storage, bandwidth and infrastructure costs.
 
-Core academic companion.
+### BUILD Free (default, ₦0)
+
+For every student: the academic dashboard and learning resources, CBT participation and history, the Study Shelf and personal materials within reasonable storage limits, Read Mode and essential tools, basic AI assistance with a modest allowance, and offline access to downloaded materials and available local AI.
 
 ### BUILD Plus
 
-Affordable student intelligence tier.
+For regular AI study: a higher AI allowance, more document and image processing, deeper explanations and summaries, more generated practice questions, more storage and more sync capacity.
 
-### BUILD Pro / Power Student
+### BUILD Pro
 
-High-usage advanced AI tier.
+For intensive examination preparation: the highest individual AI allowance, advanced Agentic RAG workflows, deeper comparisons across authorized materials, personalized revision and study planning, advanced examination analysis, higher processing and storage allowances, and priority processing where infrastructure permits.
+
+### BUILD Campus
+
+Institution-sponsored access: institution-funded entitlements, configurable allowances, approved institutional resources, institution-level enrolment and entitlement management, and optional sponsored access for students who can't afford a subscription.
+
+**Never paid:** a student's own uploaded notes, basic CBT participation, and essential learning functionality.
 
 ---
 
@@ -2355,6 +2363,29 @@ The backend should own:
 The AI service should consume scoped entitlements.
 
 It must not independently decide whether a student is Premium.
+
+## 84.1 Tamper resistance
+
+The app is distributed as an APK, which can be inspected, modified and repackaged. Obfuscation, hidden buttons and local flags aren't protection. **The backend is the only authority on a student's plan.**
+
+1. The client never decides whether a user is entitled to anything. It displays plans and starts purchases.
+2. Subscription state and entitlements live in the backend's PostgreSQL.
+3. Every protected request checks the user's current entitlement on the server.
+4. AI requests carry server-enforced usage budgets.
+5. Usage is metered on the server, never from client counters.
+6. Expiry, cancellation, refunds and revocation remove entitlements according to the actual billing state.
+7. The AI service never trusts a plan name or quota from the client. It receives scoped budgets only from the backend, on signed calls.
+8. Administrative overrides are audited.
+
+A modified APK that shows "BUILD Pro" still gets Free behaviour from the backend if that's the user's real plan.
+
+**Purchase verification.** The purchase provider sits behind a provider-independent Subscription and Entitlement Service:
+
+1. On Google Play, the student subscribes through Google Play Billing, and the app sends the purchase token to the backend.
+2. The backend verifies the token with the Google Play Developer API, records the verified subscription, and grants entitlements.
+3. Renewals, cancellations, expiry and refunds update the entitlement state.
+4. Direct APK distribution uses a separate, server-verified payment adapter.
+5. Google Play's billing policies apply once BUILD is distributed there.
 
 ---
 
