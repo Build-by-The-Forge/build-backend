@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -148,6 +149,29 @@ def to_ai(method: str, target: str, body: bytes, context: dict[str, Any], **kw: 
 
 def to_backend(target: str, body: bytes, context: dict[str, Any], **kw: Any) -> dict[str, str]:
     return sign(sender=AI_ID, secret=A2B, method="POST", target=target, body=body, context=context, **kw)
+
+
+SCOPE_ASSIGNMENTS = "/v1/ingest/scope-assignments"
+
+
+def retrieving(body: dict[str, Any]) -> dict[str, Any]:
+    """A retrieving call's body as the backend sends it (M3-D): the denial
+    list, empty while nothing has been lowered, and a fresh single-use
+    response nonce."""
+    return {**body, "denied_assets": [], "response_nonce": secrets.token_urlsafe(32)}
+
+
+def assign_scope(
+    ai: httpx.Client, tenant_id: str, asset_id: str, scope: str = "institutional", version: int = 1
+) -> dict[str, Any]:
+    """Assign a document's knowledge scope as the backend's assignment
+    dispatcher (M3-D PR 5) will: a signed system call. Until then nothing
+    in the backend sends one, and every document is `unknown` to the AI
+    service."""
+    raw = jbytes({"asset_id": asset_id, "scope": scope, "version": version})
+    response = ai.post(SCOPE_ASSIGNMENTS, content=raw, headers=to_ai("POST", SCOPE_ASSIGNMENTS, raw, system_context(tenant_id)))
+    assert response.status_code == 200, response.text
+    return response.json()
 
 
 def jbytes(value: dict[str, Any]) -> bytes:

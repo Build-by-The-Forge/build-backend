@@ -10,6 +10,8 @@ from app.infrastructure.security.service_signature import (
     EMPTY_BODY_SHA256,
     HEADER_CONTEXT,
     HEADER_REQUEST_ID,
+    HEADER_RESPONSE_SIGNATURE,
+    HEADER_RESPONSE_TIMESTAMP,
     HEADER_SERVICE,
     HEADER_SIGNATURE,
     HEADER_TIMESTAMP,
@@ -19,6 +21,7 @@ from app.infrastructure.security.service_signature import (
     ServiceKeys,
     canonical_context_bytes,
     canonical_request,
+    canonical_response,
     compute_signature,
     decode_context,
     encode_context,
@@ -26,6 +29,7 @@ from app.infrastructure.security.service_signature import (
     sha256_hex,
     sign_request,
     verify_request,
+    verify_response,
 )
 
 # --- Test vector A.7 (docs/phase1-m3-boundary-design.md), verbatim. ---
@@ -506,3 +510,80 @@ def test_percent_encoding_is_part_of_the_signed_target() -> None:
 def test_empty_body_hash() -> None:
     assert EMPTY_BODY_SHA256 == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     assert sha256_hex(b"") == EMPTY_BODY_SHA256
+
+
+# ---- Signed responses (M3-D): the response test vector, as AI-service computes it ----
+
+RESPONSE_VECTOR = {
+    "secret": "test-vector-ai-to-backend-secret-0123456789",
+    "request_id": "4f1c2a7e-4b3d-4c8e-9a1f-2d3e4f5a6b7c",
+    "nonce": "Zt3m0VbqO9aX1yR4kLw2pQ8sHn6uJc5d",
+    "timestamp": "1767225600",
+    "body": (
+        b'{"success":true,"message":"Chat response generated","sources_used":'
+        b'[{"asset_id":"a1","run_number":1,"attempt":2}],"data":{}}'
+    ),
+    "body_sha256": "a91ea3da217dda3d1ddee30233d2849b3510acb173f6799298b6b55476508468",
+    "signature": "v1=8beebb6dbbcfd7168ed73ea5c5ca74b5da85717128ea028974a7bdb98c4d3e7d",
+}
+RESPONSE_KEYS = ServiceKeys(current=RESPONSE_VECTOR["secret"])
+
+
+def response_headers(**changes: str) -> dict[str, str]:
+    headers = {
+        HEADER_RESPONSE_TIMESTAMP: RESPONSE_VECTOR["timestamp"],
+        HEADER_RESPONSE_SIGNATURE: RESPONSE_VECTOR["signature"],
+    }
+    return {**headers, **changes}
+
+
+def verify_vector(**changes):
+    args = {
+        "direction": Direction.AI_TO_BACKEND,
+        "keys": RESPONSE_KEYS,
+        "request_id": RESPONSE_VECTOR["request_id"],
+        "nonce": RESPONSE_VECTOR["nonce"],
+        "headers": response_headers(),
+        "body": RESPONSE_VECTOR["body"],
+        "now": int(RESPONSE_VECTOR["timestamp"]),
+    }
+    verify_response(**{**args, **changes})
+
+
+def test_the_response_vector_verifies():
+    assert sha256_hex(RESPONSE_VECTOR["body"]) == RESPONSE_VECTOR["body_sha256"]
+    canonical = canonical_response(
+        service="ai-service",
+        request_id=RESPONSE_VECTOR["request_id"],
+        nonce=RESPONSE_VECTOR["nonce"],
+        timestamp=RESPONSE_VECTOR["timestamp"],
+        body_sha256=RESPONSE_VECTOR["body_sha256"],
+    )
+    assert compute_signature(RESPONSE_VECTOR["secret"], canonical) == RESPONSE_VECTOR["signature"]
+    verify_vector()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"request_id": "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a"},
+        {"nonce": "Zt3m0VbqO9aX1yR4kLw2pQ8sHn6uJc5e"},
+        {"body": RESPONSE_VECTOR["body"] + b" "},
+        {"keys": ServiceKeys(current="another-ai-to-backend-secret-0000000000000")},
+        {"direction": Direction.BACKEND_TO_AI},
+        {"headers": {}},
+        {"headers": {HEADER_RESPONSE_TIMESTAMP: RESPONSE_VECTOR["timestamp"]}},
+        {"headers": response_headers(**{HEADER_RESPONSE_SIGNATURE: "v1=" + "0" * 64})},
+        {"headers": response_headers(**{HEADER_RESPONSE_TIMESTAMP: "1767225601"})},
+        {"now": int(RESPONSE_VECTOR["timestamp"]) + 61},
+    ],
+    ids=["request", "nonce", "body", "secret", "sender", "no-headers", "no-signature", "wrong-signature", "timestamp", "stale"],
+)
+def test_a_response_not_signed_for_exactly_this_is_refused(changes):
+    with pytest.raises(ServiceAuthError):
+        verify_vector(**changes)
+
+
+def test_the_previous_secret_verifies_during_rotation():
+    rotating = ServiceKeys(current="the-new-ai-to-backend-secret-0123456789abcd", previous=RESPONSE_VECTOR["secret"])
+    verify_vector(keys=rotating)

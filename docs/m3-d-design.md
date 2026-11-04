@@ -1,6 +1,6 @@
 # M3-D design: student uploads and content rights
 
-**Status: revised after the reviewer's verdicts on `4340b24`, `06b433a` and `fe7742e` (changes requested). Nothing here is implemented, and M3-D stays Not started until this design is approved.** Written against backend `a16db6d` and ai-service `0553f35`.
+**Status: approved by the reviewer at `ab09d2c`, merged in #79 (`fef4cfa`). Nothing here is implemented yet. Implementation follows the order in [Delivery](#delivery), starting with the AI scope filter. The approval is of the design: each PR still needs its own review, and no route opens before its gates pass.** Written against backend `a16db6d` and ai-service `0553f35`.
 
 **Summary:** today, a student's upload would be searchable by every student in the tenant. M3-D therefore starts by closing that in the AI service. It then separates who owns a document from where its bytes live, and scans every file before anything parses it. Only after that does it open private uploads. The shelf is built behind a tenant setting that stays off. During this sprint, a student can publish their own work without staff approval, and anything else stays private.
 

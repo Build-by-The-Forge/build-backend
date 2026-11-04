@@ -108,6 +108,8 @@ jobs:
       - name: Start SeaweedFS with generated identities
         run: scripts/seaweedfs_test_storage.sh start "$GITHUB_ENV"
       - name: Object storage against the real service (required, none skipped)
+        # pipefail: pytest's exit code must survive the pipe into tee.
+        shell: bash
         env:
           OBJECT_STORAGE_TESTS_REQUIRED: '1'
         run: |

@@ -14,7 +14,15 @@ import uuid
 import asyncpg
 import pytest
 
-from boundary.conftest import AI_APP_DSN, create_asset, create_job_for, pdf_document, wait_for_status
+from boundary.conftest import (
+    AI_APP_DSN,
+    assign_scope,
+    create_asset,
+    create_job_for,
+    pdf_document,
+    retrieving,
+    wait_for_status,
+)
 
 # Ingestion of a one-page PDF takes seconds; the worker is shared with
 # every other test, so allow for a queue.
@@ -22,12 +30,14 @@ READY_TIMEOUT = 180
 
 
 @pytest.fixture(scope="module")
-def documents(backend, tenant_a, tenant_b) -> dict[str, str]:
-    """One ready document per tenant, each with its own marker."""
+def documents(ai, backend, tenant_a, tenant_b) -> dict[str, str]:
+    """One ready, institutional document per tenant, each with its own marker."""
     markers = {}
     for tenant in (tenant_a, tenant_b):
         marker = uuid.uuid4().hex
-        job = create_job_for(backend, tenant, create_asset(backend, tenant, pdf_document(marker)))
+        asset = create_asset(backend, tenant, pdf_document(marker))
+        assign_scope(ai, tenant.tenant_id, asset["id"])
+        job = create_job_for(backend, tenant, asset)
         final = wait_for_status(backend, tenant, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)
         assert final["status"] == "ready", final
         markers[tenant.tenant_id] = marker
@@ -128,7 +138,7 @@ def test_c29_ai_service_reads_memory_only_for_the_signed_user_and_tenant(ai, ten
 
     own, marker = memories
     student = tenant_a.members["student"]
-    raw = jbytes({"message": "What do I know?"})
+    raw = jbytes(retrieving({"message": "What do I know?"}))
     context = user_context(tenant_a.tenant_id, student.user_id, ["ai.use"], membership_id=student.membership_id, role="student")
     response = ai.post("/v1/ai/chat", content=raw, headers=to_ai("POST", "/v1/ai/chat", raw, context))
     assert response.status_code == 200, response.text
