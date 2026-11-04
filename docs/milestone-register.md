@@ -34,7 +34,7 @@ M3 is **not close to done**. The fixes merged so far closed security and lifecyc
 | | Count | IDs |
 |---|---|---|
 | Closed | 16 | G-03, G-06, G-08, G-09, G-14, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-29, G-35, G-36, G-37 |
-| Open | 23 | 7 contract, 16 implementation, listed in `contracts/mobile/gaps.yaml` |
+| Open | 27 | 7 contract, 20 implementation, listed in `contracts/mobile/gaps.yaml`. M3-D's contract PR added G-40 to G-43: the scan, the shelf form, publication and the tenant shelf |
 | Open and blocking | 2 | G-01, G-02: students can't upload or start ingestion |
 
 `contracts/mobile/gaps.yaml` stays the source of truth for individual gaps. This table is a snapshot of it. Don't reopen a closed gap without new evidence.

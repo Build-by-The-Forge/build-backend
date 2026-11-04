@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: cbb9e1edc78284b2c110c9956bfbf5058bc81e07c66e21ecc6fa1a38f41e39ae
+contract_sha256: f2911dea3966ef3e5182b7e84a25a62c2a25e7bbc615fd13e5fda9bb2f3f88e8
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -149,6 +149,31 @@ implementation_gaps:
   summary: Upload creates no job, so durable queuing doesn't exist yet
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
+- id: G-40
+  severity: High
+  summary: Uploads aren't scanned, so no document is ever quarantined or rejected before processing
+  closes_in: M3-D
+  evidence: No scanner exists (M3-D ruling 7); read from app/application/content/upload.py.
+- id: G-41
+  severity: Medium
+  summary: Students can't describe their documents with the shelf form
+  closes_in: M3-D
+  findings:
+  - missing_route PATCH /content/my-documents/{asset_id}
+- id: G-42
+  severity: High
+  summary: Students can't publish their own work to the tenant shelf, or withdraw it
+  closes_in: M3-D
+  findings:
+  - missing_route DELETE /content/my-documents/{asset_id}/publication
+  - missing_route POST /content/my-documents/{asset_id}/publication-request
+- id: G-43
+  severity: High
+  summary: There's no tenant shelf to discover published documents on, and no way to report one
+  closes_in: M3-D
+  findings:
+  - missing_route GET /content/tenant-shelf
+  - missing_route POST /content/tenant-shelf/{asset_id}/report
 closed:
 - id: G-09
   summary: No read routes for faculties, departments or programmes
