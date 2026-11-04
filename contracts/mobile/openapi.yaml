@@ -567,8 +567,11 @@ paths:
       tags: [content]
       operationId: listMyDocuments
       summary: Documents this student uploaded in this tenant
+      description: My Shelf. The filters match the shelf form's values; an unfilled document matches no filter.
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
+        - $ref: '#/components/parameters/ShelfLevel'
+        - $ref: '#/components/parameters/ShelfCourseId'
         - $ref: '#/components/parameters/Limit'
         - $ref: '#/components/parameters/Offset'
       responses:
@@ -1341,6 +1344,14 @@ components:
       in: header
       required: true
       schema: { type: string, minLength: 1, maxLength: 255 }
+    ShelfLevel:
+      name: level
+      in: query
+      schema: { type: integer, enum: [100, 200, 300, 400, 500, 600] }
+    ShelfCourseId:
+      name: course_id
+      in: query
+      schema: { type: string, maxLength: 64 }
     Limit:
       name: limit
       in: query
