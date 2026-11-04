@@ -1,6 +1,6 @@
 # M3-F design: conversations and cited chat
 
-**Status: proposed, for the reviewer. Nothing here is implemented.** Written against backend `a16db6d` and ai-service `0553f35`. M3-F owns `/ai/conversations` in `openapi.yaml`.
+**Status: approved by the reviewer at `8b3cf1d`, merged in #81 (`e0057ad`). The provenance amendment was approved at `189376d`, merged in #83 (`bcbbde8`). Nothing here is implemented yet.** Written against backend `a16db6d` and ai-service `0553f35`. M3-F owns `/ai/conversations` in `openapi.yaml`.
 
 **Summary:** students get conversations the backend owns, with answers stored only once the AI step succeeds, and only with citations the backend has checked. The persistence and routes can be built now. What an answer may draw on waits for M3-D's scope filter and then M4. M3-F also defines what happens to past answers when a document they cite is deleted, as the reviewer ruled on M3-D.
 
