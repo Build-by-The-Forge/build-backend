@@ -44,6 +44,12 @@ class AttemptRepository(Protocol):
         """One start at a time for this student and assessment, until the transaction ends."""
         raise NotImplementedError
 
+    async def lock_course_open(self, course_id: str, tenant_id: str) -> bool:
+        """Whether the course and the department and faculty above it are all
+        active, holding their rows shared until the transaction ends, so an
+        archive waits for this start rather than racing it (M3-E)."""
+        raise NotImplementedError
+
     async def count_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> int:
         raise NotImplementedError
 

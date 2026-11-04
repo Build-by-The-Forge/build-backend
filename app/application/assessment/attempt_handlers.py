@@ -121,6 +121,12 @@ class StartAttemptHandler:
             raise ClientSafeError("assessment not found")
         if assessment.status != AssessmentStatus.PUBLISHED:
             raise ClientSafeError("assessment is not available for attempts")
+        # An assessment of a hidden course takes no new attempt, for anyone
+        # (M3-E decision 3). The course rows stay shared-locked, so an archive
+        # can't commit between this check and the insert. An attempt already
+        # in progress is never affected (decision 4).
+        if not await self.attempts.lock_course_open(assessment.course_id, command.tenant_id):
+            raise ClientSafeError("assessment is not available for attempts")
 
         # What protects the limit. Without it a slow start can count attempts,
         # then wait while a faster one starts and submits: nothing is in

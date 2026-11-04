@@ -40,6 +40,8 @@ from app.infrastructure.db.models.assessment import (
     AttemptAnswerModel,
     QuestionModel,
 )
+from app.infrastructure.db.models.catalogue import CourseModel
+from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel
 
 
 class SqlAlchemyQuestionRepository(QuestionRepository):
@@ -304,6 +306,38 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
             return
         key = f"assessment-start:{tenant_id}:{assessment_id}:{user_id}"
         await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
+
+    async def lock_course_open(self, course_id: str, tenant_id: str) -> bool:
+        # FOR SHARE on each row, top-down from the course: an archive's UPDATE
+        # waits for this transaction, so a start either commits before the
+        # archive or sees it. SQLite has no row locks; the PostgreSQL gate
+        # proves the race.
+        course = (
+            await self._session.execute(
+                select(CourseModel.department_id, CourseModel.status)
+                .where(CourseModel.id == course_id, CourseModel.tenant_id == tenant_id)
+                .with_for_update(read=True)
+            )
+        ).first()
+        if course is None or course.status != "active":
+            return False
+        department = (
+            await self._session.execute(
+                select(DepartmentModel.faculty_id, DepartmentModel.status)
+                .where(DepartmentModel.id == course.department_id, DepartmentModel.tenant_id == tenant_id)
+                .with_for_update(read=True)
+            )
+        ).first()
+        if department is None or department.status != "active":
+            return False
+        faculty = (
+            await self._session.execute(
+                select(FacultyModel.status)
+                .where(FacultyModel.id == department.faculty_id, FacultyModel.tenant_id == tenant_id)
+                .with_for_update(read=True)
+            )
+        ).first()
+        return faculty is not None and faculty.status == "active"
 
     async def count_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> int:
         statement = select(func.count()).where(
