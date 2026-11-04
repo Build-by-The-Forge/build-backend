@@ -9,15 +9,6 @@ contract_gaps:
   summary: Clients can set max_attempts and correlation_id when creating a job
   closes_in: M3-D
   evidence: Read from job_schemas.py.
-- id: G-10
-  severity: Medium
-  summary: Assessment and attempt lists aren't paginated
-  closes_in: M3-E
-  findings:
-  - missing_query_parameter GET /assessment/assessments limit
-  - missing_query_parameter GET /assessment/assessments offset
-  - missing_query_parameter GET /assessment/attempts limit
-  - missing_query_parameter GET /assessment/attempts offset
 - id: G-18
   severity: Medium
   summary: Chat returns raw context passages, including uncited ones
@@ -205,6 +196,9 @@ closed:
 - id: G-37
   summary: Expired attempts waited for the student to submit
   proof: tests/integration/assessment/test_attempt_finalization.py::test_the_worker_finalizes_an_expired_attempt_with_no_client
+- id: G-10
+  summary: Assessment and attempt lists weren't paginated
+  proof: tests/integration/assessment/test_assessment_pagination.py::test_assessment_pages_cover_everything_once_in_contract_order_with_the_true_total
 - id: G-24
   summary: OpenAPI was only generated with docs on. The gate reads app.openapi(), which doesn't need them
   proof: tests/integration/test_mobile_contract_drift.py::test_observed_behaviour_matches_the_gap_allowlist

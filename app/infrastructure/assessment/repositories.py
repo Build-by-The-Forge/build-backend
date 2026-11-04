@@ -173,10 +173,21 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         result = await self._session.scalars(statement)
         return [assessment_model_to_domain(item) for item in result.all()]
 
-    def _readable(self, tenant_id: str):
+    @staticmethod
+    def _readable_where(tenant_id: str) -> tuple:
         # Published, in an active course whose department and faculty are
-        # active: M3-C's rule for the course, applied in SQL. The questions
-        # are counted, never loaded: the mobile routes don't return them.
+        # active: M3-C's rule for the course, applied in SQL.
+        return (
+            AssessmentModel.tenant_id == tenant_id,
+            AssessmentModel.status == "published",
+            CourseModel.tenant_id == tenant_id,
+            CourseModel.status == "active",
+            CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
+        )
+
+    def _readable(self, tenant_id: str):
+        # The questions are counted, never loaded: the mobile routes don't
+        # return them.
         question_count = (
             select(func.count(AssessmentQuestionModel.id))
             .where(AssessmentQuestionModel.assessment_id == AssessmentModel.id)
@@ -185,22 +196,28 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         return (
             select(AssessmentModel, question_count)
             .join(CourseModel, CourseModel.id == AssessmentModel.course_id)
-            .where(
-                AssessmentModel.tenant_id == tenant_id,
-                AssessmentModel.status == "published",
-                CourseModel.tenant_id == tenant_id,
-                CourseModel.status == "active",
-                CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
-            )
+            .where(*self._readable_where(tenant_id))
             .options(noload(AssessmentModel.questions))
         )
 
-    async def list_readable(self, tenant_id: str, course_id: str | None = None) -> list[tuple[Assessment, int]]:
+    async def list_readable(
+        self, tenant_id: str, course_id: str | None = None, *, limit: int, offset: int
+    ) -> tuple[list[tuple[Assessment, int]], int]:
         statement = self._readable(tenant_id)
+        counting = (
+            select(func.count(AssessmentModel.id))
+            .join(CourseModel, CourseModel.id == AssessmentModel.course_id)
+            .where(*self._readable_where(tenant_id))
+        )
         if course_id is not None:
             statement = statement.where(AssessmentModel.course_id == course_id)
-        rows = (await self._session.execute(statement)).all()
-        return [(assessment_model_to_domain(model), int(count)) for model, count in rows]
+            counting = counting.where(AssessmentModel.course_id == course_id)
+        # The contract's order: newest first, then by id, so a page boundary
+        # never splits or repeats rows that share a timestamp.
+        statement = statement.order_by(AssessmentModel.created_at.desc(), AssessmentModel.id.desc())
+        rows = (await self._session.execute(statement.limit(limit).offset(offset))).all()
+        total = (await self._session.execute(counting)).scalar_one()
+        return [(assessment_model_to_domain(model), int(count)) for model, count in rows], int(total)
 
     async def get_readable(self, assessment_id: str, tenant_id: str) -> tuple[Assessment, int] | None:
         row = (await self._session.execute(self._readable(tenant_id).where(AssessmentModel.id == assessment_id))).first()
@@ -418,13 +435,18 @@ class SqlAlchemyAttemptRepository(AttemptRepository):
         )
         return (await self._session.execute(statement)).first() is not None
 
-    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
-        statement = select(AssessmentAttemptModel).where(
-            AssessmentAttemptModel.user_id == user_id,
-            AssessmentAttemptModel.tenant_id == tenant_id,
+    async def list_by_user(self, user_id: str, tenant_id: str, *, limit: int, offset: int) -> tuple[list[AssessmentAttempt], int]:
+        mine = (AssessmentAttemptModel.user_id == user_id, AssessmentAttemptModel.tenant_id == tenant_id)
+        statement = (
+            select(AssessmentAttemptModel)
+            .where(*mine)
+            .order_by(AssessmentAttemptModel.created_at.desc(), AssessmentAttemptModel.id.desc())
+            .limit(limit)
+            .offset(offset)
         )
         result = await self._session.scalars(statement)
-        return [attempt_model_to_domain(item) for item in result.all()]
+        total = (await self._session.execute(select(func.count(AssessmentAttemptModel.id)).where(*mine))).scalar_one()
+        return [attempt_model_to_domain(item) for item in result.all()], int(total)
 
     async def update(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         model = await self._find(attempt.id, tenant_id=tenant_id)

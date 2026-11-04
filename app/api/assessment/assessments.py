@@ -11,6 +11,8 @@ from app.api.assessment.schemas import (
     CreateAssessmentRequest,
     UpdateAssessmentRequest,
 )
+from app.api.catalogue.schemas import IdFilter
+from app.api.pagination import Page
 from app.application.assessment.assessment_service import AssessmentService
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
@@ -51,13 +53,17 @@ async def create_assessment(
 @router.get("", status_code=status.HTTP_200_OK)
 async def list_assessments(
     request: Request,
-    course_id: str | None = None,
+    page: Page,
+    course_id: IdFilter = None,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
     # The same for everyone, staff included (M3-E decisions 1 to 3): published,
     # in a visible course, and never with questions. Staff read drafts, hidden
     # courses and questions on /assessment/staff/assessments.
-    assessments = await service.list_readable_assessments(context.tenant_id or "", course_id)
+    # An unknown or hidden course gives an empty page, never everything (M3-C).
+    assessments, total = await service.list_readable_assessments(
+        context.tenant_id or "", course_id, limit=page.limit, offset=page.offset
+    )
     used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id, [item.id for item, _ in assessments])
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -67,7 +73,7 @@ async def list_assessments(
                 _assessment_payload(item, attempts_used=used.get(item.id, 0), question_count=count) for item, count in assessments
             ],
             "error": None,
-            "meta": {"request_id": getattr(request.state, "request_id", None)},
+            "meta": {"request_id": getattr(request.state, "request_id", None), "pagination": page.meta(total)},
         },
     )
 
