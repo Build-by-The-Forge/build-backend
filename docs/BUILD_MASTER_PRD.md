@@ -2486,7 +2486,8 @@ BUILD may notify users about:
 * group activity;
 * academic calendar events;
 * subscription status;
-* AI usage.
+* AI usage;
+* a new app release (§105.2), once per release, never repeatedly for the same optional update.
 
 Notifications must be configurable and non-abusive.
 
@@ -2819,6 +2820,52 @@ Production deployment must support:
 * monitoring.
 
 Application containers must not depend on development-only schema creation.
+
+## 105.1 Hosting (2026-11-04)
+
+The first production target is **Google Cloud**, alongside the Gemini integration:
+
+| Component | Hosting |
+|---|---|
+| `build-backend` | Cloud Run |
+| `ai-service` | Cloud Run |
+| Ingestion, OCR and indexing workers | Cloud Run jobs or worker pools initially |
+| PostgreSQL | Cloud SQL |
+| Redis | A managed Redis-compatible service |
+| Academic documents, images and APK releases | Cloud Storage, with a CDN for APKs |
+| Monitoring, logs and secrets | Cloud Monitoring, Cloud Logging and Secret Manager |
+| Landing website | Firebase Hosting or Cloudflare Pages |
+
+Constraints before committing:
+
+* **Cloud SQL must support PostgreSQL 17 with pgvector** as the AI index requires.
+* **The managed Redis must meet BUILD's Redis 8 requirement.** The requirement isn't weakened to fit a service.
+* **Region:** benchmark `africa-south1`, `europe-west1` and `europe-west4` for real latency from Nigeria, and for cost. The API and the database share a region.
+* **Heavier compute:** if OCR or other inference later needs GPUs or sustained compute, those workloads move to suitable compute without moving the backend.
+
+**The mobile app itself isn't hosted.** It's installed on the device and calls the hosted backend. What's hosted: the backend, the AI service, the landing site, APK files during direct distribution, and update metadata, which is part of the backend.
+
+**iOS** is built from the same React Native/Expo codebase, using EAS Build in the cloud, so no Mac is required for the build itself. It needs an Apple Developer account, signing credentials, App Store Connect, testing on simulators and devices, and TestFlight before release.
+
+## 105.2 App distribution and updates
+
+**Updates install in place:** a student doesn't uninstall the previous APK. Android treats a new APK as an update when:
+
+1. it has the same application ID;
+2. it's signed with the same signing certificate;
+3. its `versionCode` is higher than the installed one.
+
+**The signing key is a production secret.** Losing it, or changing the signing identity, breaks in-place updates. Its ownership, storage and backup are settled before the first public APK.
+
+**The update service:**
+
+* The backend exposes update metadata: platform, latest version and `versionCode`, minimum supported `versionCode`, whether the update is mandatory, release notes, the download destination, and the file's SHA-256.
+* APK files are served from Cloud Storage behind a CDN.
+* **After login,** the app checks the metadata. If there's a newer release the student hasn't already been told about, it shows the version, the notes, **Update now**, and **Later** for optional updates only. The same optional release isn't announced again.
+* **Below the minimum supported version,** the update is mandatory and the old version can't continue.
+* **Moving to Google Play** changes only the destination the metadata returns, from the landing page's APK to the Play listing. The contract stays the same, and Android's in-app updates can be used there.
+
+**Over-the-air updates:** Expo EAS Update delivers compatible JavaScript and asset changes without a new APK, guarded by runtime versions. Native changes always need a new APK: new native libraries, permissions or native configuration, and React Native or native SDK upgrades.
 
 ---
 
