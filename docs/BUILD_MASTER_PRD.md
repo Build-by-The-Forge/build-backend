@@ -3844,15 +3844,20 @@ Therefore, BUILD shall select its offline model configuration through evidence-b
 
 BUILD shall investigate supporting a **pool of compact local language models** rather than assuming that a single model must perform every offline task.
 
-The initial evaluation pool shall include candidates such as:
+The agreed starting portfolio (2026-11-04) is one general-purpose language model plus specialized models, rather than one model for everything:
 
-* Glimmer 2B;
-* Qwen3-1.7B;
-* Gemma 3 1B;
-* SmolLM2-1.7B-Instruct;
-* one additional mobile/on-device-oriented candidate selected during technical evaluation.
+| Local capability | First candidate | Notes |
+|---|---|---|
+| General conversation, explanation and simple reasoning | **Qwen3-1.7B** | The first choice to benchmark |
+| Low-memory fallback | **Qwen3-0.6B** | For devices that can't run the 1.7B model |
+| Alternative general model | Glimmer 2B | Benchmarked alongside Qwen if its weights, licence, inference compatibility and quality allow |
+| Local semantic retrieval | A small embedding model | Matches the online index's embedding space where feasible |
+| Retrieval relevance | A compact reranker | Optional, by device capability |
+| OCR | A PaddleOCR / OpenVINO-class model | Where the device supports it |
+| Classification | Document and academic-content classification | May share a model |
+| Speech | Speech-to-text | Optional |
 
-The exact models used in production shall be determined after benchmarking.
+Gemma 3 1B and SmolLM2-1.7B-Instruct remain benchmark comparisons. **More models aren't automatically better:** each is chosen by task, memory requirement, latency, quality and device compatibility, and one model may serve several capabilities. The production configuration is decided by the benchmarks below and on real Android devices.
 
 The architecture shall permit:
 
@@ -4565,7 +4570,9 @@ The implementation shall proceed in the following order:
 
 **Production local model: Not yet selected**
 
-**Initial candidates: Under evaluation**
+**Initial candidates: Qwen3-1.7B first, Qwen3-0.6B as the fallback, Glimmer 2B benchmarked alongside (2026-11-04)**
+
+**Not sufficient on its own: local storage and local embeddings are not offline generative AI (§0.6)**
 
 **Cloud AI: Remains part of the core architecture**
 
