@@ -19,9 +19,9 @@ There are two tracks, and neither one's progress counts for the other:
 | M3-A | One error shape and stable codes | M2 | G-20, G-22, G-08 closed | HTTP, drift gate | **Complete:** all three gaps closed, drift gate enforcing them | #72 `1c6cb7f`, #73 `0826bc8` (merges) |
 | M3-B | Typed identity bodies, device handling | M3-A | G-14 closed; G-39 with M3-E | HTTP, drift gate | **Complete:** G-14 closed; registration's durable, non-enumerating 202; G-39's membership finding closed, the rest with M3-E | #75 `4faca25`, #76 `604f8b1` (merges) |
 | M3-C | Academic structure reads, pagination | M3-A | G-09 closed; G-10 with M3-E | HTTP, drift gate | **Complete:** G-09 closed; G-10's catalogue findings closed, its assessment and attempt findings wait for M3-E | #77 `418fbd5` (merge) |
-| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Design in review** (#79). Implementation not started; its first PR, the AI scope filter, waits on the design | |
+| M3-D | Student uploads, content rights | M3-A | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-07, G-23 closed; G-31 with M4 | HTTP, object storage, PostgreSQL, boundary | **Design approved**, implementation not started. Its first PR, the AI scope filter, is next. No student route opens until PRs 1, 4 and 6 are deployed | #79 `fef4cfa` (design) |
 | M3-E | Assessment contract | M3-A, L1 to L3 | The rest of G-10 and G-39 closed; M3-C and M3-B closed their other parts. Lifecycle gaps are already closed | HTTP, drift gate | **Design approved**, implementation not started. Partly done by L1 to L3 | #80 `f4ce131` (design) |
-| M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Design approved**, implementation not started. No conversation reaches students until retention is decided | #81 `e0057ad` (design) |
+| M3-F | Conversations, cited chat | M3-A | G-17, G-18 closed; G-04 with M4 | HTTP, boundary | **Design approved**, implementation not started. No conversation reaches students until retention is decided | #81 `e0057ad` (design), #83 `bcbbde8` (provenance amendment) |
 | M4 | Retrieval eligibility and citation authorization | M3-D, M3-F | G-05 closed; G-04 and G-31 closed; the boundary doc's measurements taken | Boundary, both repositories | **Specified** in `mobile-m0-boundary.md` | |
 | M5 | Typed client, auth and session, error handling | M3-A, M3-B | Generated client passes contract-drift checks; secure token storage | Client against the contract | **Not started** | |
 | M6 | Student workflows and screens | M5, M3-C to M3-F | Screens use the generated client only; G-26 closed; device tests | Device, end to end | **Not started** | |
@@ -29,7 +29,7 @@ There are two tracks, and neither one's progress counts for the other:
 
 ### M3 position
 
-M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A, M3-B and M3-C are the only slices whose gaps are closed, and G-10 stays open for M3-E. M3-D to M3-F haven't started, apart from the lifecycle work in M3-E.
+M3 is **not close to done**. The fixes merged so far closed security and lifecycle gaps early, ahead of their slices. M3-A, M3-B and M3-C are the only slices whose gaps are closed, and G-10 stays open for M3-E. M3-D to M3-F haven't started, apart from the lifecycle work in M3-E. All three designs are approved, which is permission to implement them in order, not evidence that any of their gaps are closed.
 
 | | Count | IDs |
 |---|---|---|
@@ -119,9 +119,9 @@ Passing this gate allows M3-A to proceed. It doesn't bypass any remaining milest
 
 5. M3-B: complete (#75, #76).
 6. M3-C: complete (#77).
-7. M3-D, now, the largest slice, which holds the two blockers. It starts from its own design and acceptance criteria: the catalogue work is not evidence that document ingestion is solved.
+7. M3-D, now, the largest slice, which holds the two blockers. Its design is approved (#79), and implementation follows the order in `m3-d-design.md`, starting with the AI scope filter. The catalogue work is not evidence that document ingestion is solved.
 8. M3-E, which can run alongside M3-D.
-9. M3-F, its design alongside M3-D, tested against the completed authorization rules.
+9. M3-F, its design approved (#81, amended in #83), behind M3-D's provenance and contract work, and tested against the completed authorization rules.
 10. M4.
 11. M5. Its scaffolding can start: M3-A's error shape is merged.
 12. M6, against the generated client. Screen design can start earlier.
