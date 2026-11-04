@@ -1,6 +1,6 @@
 # M3-D migration 0030: the schema, for review before it's written
 
-**Status: revised after the review of `166bbd1` (changes requested).** This is M3-D PR 3, from the design approved at `ab09d2c` (#79) and the contract merged in #87. It's written against Alembic head `0029`. Once this document is approved, the migration and its PostgreSQL tests follow it exactly in one PR, and no other migration PR is open meanwhile.
+**Status: revised after the reviews of `166bbd1` and `df9278f` (changes requested).** This is M3-D PR 3, from the design approved at `ab09d2c` (#79) and the contract merged in #87. It's written against Alembic head `0029`. Once this document is approved, the migration and its PostgreSQL tests follow it exactly in one PR, and no other migration PR is open meanwhile.
 
 **It changes no route behaviour.** It adds columns, tables, constraints and indexes, and backfills nothing beyond defaults. Every existing row keeps working as today. The read policy that uses these columns is PR 4.
 
@@ -39,7 +39,7 @@
 | `owner_user_id` | `varchar(36)` | `NULL` | References `users.id ON DELETE RESTRICT`. `CHECK ((ownership_class = 'personal') = (owner_user_id IS NOT NULL))`. Both sides are never `NULL`, since `ownership_class` is `NOT NULL` and `IS NOT NULL` is boolean |
 | `blob_id` | `varchar(36)` | `NULL` | Composite FK `(tenant_id, blob_id)` → `content_blobs (tenant_id, id) ON DELETE RESTRICT`. `CHECK (blob_id IS NULL OR tenant_id IS NOT NULL)`, since `content_assets.tenant_id` is nullable and a composite key with a `NULL` part isn't checked. Null for existing rows, which keep their per-asset object |
 | `trust_class` | `varchar(20)` | `NULL` | `CHECK (trust_class IS NULL OR trust_class IN ('user_provided', 'staff_provided'))`. Null only for rows from before 0030; every new row is set by the backend |
-| `course_id` | `varchar(36)` | `NULL` | Composite FK `(tenant_id, course_id)` → `courses (tenant_id, id) ON DELETE SET NULL (course_id)`. The column list keeps `tenant_id` |
+| `course_id` | `varchar(36)` | `NULL` | Composite FK `(tenant_id, course_id)` → `courses (tenant_id, id) ON DELETE SET NULL (course_id)`. The column list keeps `tenant_id`. **`CHECK (course_id IS NULL OR tenant_id IS NOT NULL)`**, for the same reason as `blob_id`: a composite key with a `NULL` part isn't checked |
 | `level` | `smallint` | `NULL` | `CHECK (level IS NULL OR level IN (100, 200, 300, 400, 500, 600))`. Whether 600 is allowed is the tenant's to decide, enforced by the application (ruling on #87) |
 | `semester` | `smallint` | `NULL` | `CHECK (semester IS NULL OR semester BETWEEN 1 AND 3)`. Checked against the selected course by the application (ruling on #87) |
 | `document_type` | `varchar(30)` | `NULL` | `CHECK (document_type IS NULL OR document_type IN ('lecture_notes', 'summary', 'assignment', 'project_report', 'slides', 'other'))` |
@@ -100,7 +100,7 @@ Index `(tenant_id, asset_id, decided_at DESC)`. This is the audit record for ope
 | `generation` | `varchar(36)` | `NOT NULL` | Random per row |
 | `object_key` | `varchar(1024)` | `NOT NULL` | Unique. `tenants/{tenant}/blobs/{sha256}/{generation}` |
 | `state` | `varchar(10)` | `NOT NULL DEFAULT 'pending'` | `CHECK IN ('pending', 'active', 'deleting')` |
-| `claimed_until` | `timestamptz` | `NULL` | Null once the row is `active`; required while `pending`: `CHECK (state <> 'pending' OR claimed_until IS NOT NULL)` |
+| `claimed_until` | `timestamptz` | `NULL` | Required while `pending`, and null once `active`: `CHECK (state <> 'pending' OR claimed_until IS NOT NULL)` and **`CHECK (state <> 'active' OR claimed_until IS NULL)`**. A `deleting` row may keep its last claim, which the sweeper reads |
 | `created_at`, `updated_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 
 Indexes:
@@ -214,10 +214,11 @@ Statements repeat past five runs where a partial index or a plan could differ, w
 |---|---|
 | Upgrade, downgrade and upgrade again, with data | Every existing asset is `unclassified` with no owner. Staff upload and duplicate detection behave exactly as before. Downgrade restores `uq_content_assets_tenant_hash` |
 | No `NULL` passes a required check | For each column above marked required, by `NOT NULL` or by a conditional `CHECK`, an insert with `NULL` is refused. That includes a staff review with no outcome, or with a blank reason |
-| Tenant consistency | For each composite reference, a row pointing at another tenant's asset, blob, course or declaration is refused. So is a publication naming a declaration of another document in the same tenant |
+| Tenant consistency | For each composite reference, a row pointing at another tenant's asset, blob, course or declaration is refused. So is a publication naming a declaration of another document in the same tenant. **A document with no tenant can't carry a `blob_id` or a `course_id`:** both checks refuse it, since the composite keys alone wouldn't |
 | The hash indexes and deletion | Two students may hold the same bytes; one student can't hold them twice. Shared material stays unique per tenant. **After a document is `deleted`, the same bytes upload again, personal or shared.** `revoked` and `superseded` still block, as before |
 | One personal source per student | Two concurrent creations end with one row |
 | One live blob per bytes | A second live row is refused; a `deleting` row doesn't block a new one |
+| The blob claim | A `pending` row without `claimed_until` is refused, and so is an `active` row with one. Moving a row to `active` without clearing it is refused |
 | The scan fence | A stale token's verdict changes nothing, past five runs. A verdict without scanner, signature version and time is refused |
 | Append-only, and audit retention | `UPDATE` and `DELETE` on classifications and rights assertions are refused. A tenant's cascade still removes them. **Deleting a user referenced by any audit or append-only row is refused** |
 | Publication | One live publication per document under a race. Disallowed transitions, consent edits, and a takedown without a reason are refused |
