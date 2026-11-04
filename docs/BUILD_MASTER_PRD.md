@@ -107,6 +107,8 @@ Green tests aren't enough. The AI service must demonstrate:
 * **Hosting:** Google Cloud (§105.1).
 * **The Platform Operations Layer:** subscription and entitlement management, usage metering and AI cost accounting, app versions and mandatory-update policy, feature flags, model configuration and routing policy, service health, and release history with rollback. These are platform capabilities, not frontend responsibilities.
 
+The implementation reference for this section is the **BUILD Production Architecture & Operations Blueprint**, `docs/build-production-blueprint.md` in build-backend. It covers the topology, the Gemini adapter, the grounding gaps, RAG routing, the offline benchmark, the entitlement schema, the update contract and the release gates.
+
 ---
 
 # 1. Document Purpose
