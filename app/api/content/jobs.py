@@ -4,6 +4,7 @@ import structlog
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from app.api.content.callback_schemas import (
     AICallbackRequest,
@@ -36,6 +37,7 @@ from app.domain.content.job import (
     RetryNotDue,
 )
 from app.infrastructure.content.ai_gateway import AIServiceGatewayError
+from app.infrastructure.content.job_repositories import is_active_job_conflict
 from app.infrastructure.security.service_context import ACTOR_SYSTEM
 from app.infrastructure.security.service_signature import VerifiedServiceRequest
 from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
@@ -43,6 +45,20 @@ from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
 logger = structlog.get_logger(__name__)
 service = build_container().get(ContentIngestionJobService)
+
+
+def _active_job_exists() -> JSONResponse:
+    # The database allows one active job per document (migration 0030), so a
+    # request racing another, or retrying beside a reprocess, gets this.
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            "error": {
+                "code": "ACTIVE_JOB_EXISTS",
+                "message": "this document already has an active ingestion job",
+            }
+        },
+    )
 
 
 @router.post(
@@ -69,6 +85,10 @@ async def trigger_ingestion_job(
             status_code=status.HTTP_409_CONFLICT,
             content={"error": {"code": exc.code, "message": public_message(exc)}},
         )
+    except IntegrityError as exc:
+        if not is_active_job_conflict(exc):
+            raise
+        return _active_job_exists()
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
@@ -196,6 +216,10 @@ async def retry_job(
             status_code=status.HTTP_409_CONFLICT,
             content={"error": {"code": "TRANSITION_NOT_ALLOWED", "message": public_message(exc)}},
         )
+    except IntegrityError as exc:
+        if not is_active_job_conflict(exc):
+            raise
+        return _active_job_exists()
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST
@@ -230,6 +254,10 @@ async def reprocess_asset(
             status_code=status.HTTP_409_CONFLICT,
             content={"error": {"code": exc.code, "message": public_message(exc)}},
         )
+    except IntegrityError as exc:
+        if not is_active_job_conflict(exc):
+            raise
+        return _active_job_exists()
     except ValueError as exc:
         msg = str(exc).lower()
         status_code = status.HTTP_404_NOT_FOUND if "does not exist" in msg else status.HTTP_400_BAD_REQUEST

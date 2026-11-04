@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -22,6 +23,16 @@ from app.infrastructure.db.models.content import (
 # Statuses in which a job is finished. Any other is active, and a document
 # has at most one active job (ux_content_ingestion_jobs_active_asset).
 INACTIVE_JOB_STATUSES = (IngestionStatus.READY.value, IngestionStatus.FAILED.value)
+
+
+def is_active_job_conflict(exc: IntegrityError) -> bool:
+    """True when a write was refused because the document already has an
+    active job: the index on PostgreSQL, its column on SQLite."""
+    message = str(exc.orig)
+    return (
+        "ux_content_ingestion_jobs_active_asset" in message
+        or message.strip() == "UNIQUE constraint failed: content_ingestion_jobs.asset_id"
+    )
 
 
 class SqlAlchemyContentIngestionJobRepository(ContentIngestionJobRepository):
