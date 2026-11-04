@@ -31,6 +31,7 @@ from app.infrastructure.assessment.mappers import (
     question_model_to_domain,
     question_to_model,
 )
+from app.infrastructure.catalogue.repositories import _active_department
 from app.infrastructure.db.models.assessment import (
     AssessmentAttemptModel,
     AssessmentAttemptResultModel,
@@ -170,6 +171,33 @@ class SqlAlchemyAssessmentRepository(AssessmentRepository):
         statement = statement.options(selectinload(AssessmentModel.questions))
         result = await self._session.scalars(statement)
         return [assessment_model_to_domain(item) for item in result.all()]
+
+    def _readable(self, tenant_id: str):
+        # Published, in an active course whose department and faculty are
+        # active: M3-C's rule for the course, applied in SQL.
+        return (
+            select(AssessmentModel)
+            .join(CourseModel, CourseModel.id == AssessmentModel.course_id)
+            .where(
+                AssessmentModel.tenant_id == tenant_id,
+                AssessmentModel.status == "published",
+                CourseModel.tenant_id == tenant_id,
+                CourseModel.status == "active",
+                CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
+            )
+            .options(selectinload(AssessmentModel.questions))
+        )
+
+    async def list_readable(self, tenant_id: str, course_id: str | None = None) -> list[Assessment]:
+        statement = self._readable(tenant_id)
+        if course_id is not None:
+            statement = statement.where(AssessmentModel.course_id == course_id)
+        models = (await self._session.scalars(statement)).all()
+        return [assessment_model_to_domain(model) for model in models]
+
+    async def get_readable(self, assessment_id: str, tenant_id: str) -> Assessment | None:
+        model = (await self._session.scalars(self._readable(tenant_id).where(AssessmentModel.id == assessment_id))).first()
+        return assessment_model_to_domain(model) if model is not None else None
 
     async def list_question_snapshots(self, assessment_id: str, tenant_id: str) -> list[AssessmentQuestion]:
         statement = (

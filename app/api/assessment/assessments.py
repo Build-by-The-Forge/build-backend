@@ -14,22 +14,16 @@ from app.api.assessment.schemas import (
 from app.application.assessment.assessment_service import AssessmentService
 from app.application.assessment.attempt_service import AttemptService
 from app.bootstrap.container import build_container
-from app.core.authorization import Permission, authorization
+from app.core.authorization import Permission
 from app.core.dependencies import require_permission
 from app.core.exceptions import ClientHTTPException, public_message
 from app.core.tenant_context import TenantContext
-from app.domain.assessment.assessment import Assessment, AssessmentStatus
+from app.domain.assessment.assessment import Assessment
 from app.domain.assessment.errors import AttemptPolicyLockedError
 
 router = APIRouter(prefix="/assessment/assessments", tags=["assessment"])
 service = build_container().get(AssessmentService)
 attempt_service = build_container().get(AttemptService)
-
-
-def _is_staff(context: TenantContext) -> bool:
-    """Staff manage assessments, so they see drafts and questions. Anyone else
-    sees only what is published, and gets questions only through an attempt."""
-    return authorization.can(context, Permission.ASSESSMENT_UPDATE)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -60,18 +54,16 @@ async def list_assessments(
     course_id: str | None = None,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
-    assessments = await service.list_assessments(tenant_id=context.tenant_id or "", course_id=course_id)
-    staff = _is_staff(context)
+    # The same for everyone, staff included (M3-E decisions 1 to 3): published,
+    # in a visible course, and never with questions. Staff read drafts, hidden
+    # courses and questions on /assessment/staff/assessments.
+    assessments = await service.list_readable_assessments(context.tenant_id or "", course_id)
     used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
-            "data": [
-                _assessment_payload(item, with_questions=staff, attempts_used=used.get(item.id, 0))
-                for item in assessments
-                if staff or item.status == AssessmentStatus.PUBLISHED
-            ],
+            "data": [_assessment_payload(item, with_questions=False, attempts_used=used.get(item.id, 0)) for item in assessments],
             "error": None,
             "meta": {"request_id": getattr(request.state, "request_id", None)},
         },
@@ -84,12 +76,13 @@ async def get_assessment(
     request: Request,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_READ)),
 ) -> JSONResponse:
-    assessment = await service.get_assessment(assessment_id, tenant_id=context.tenant_id or "")
-    staff = _is_staff(context)
-    if assessment is None or not (staff or assessment.status == AssessmentStatus.PUBLISHED):
+    # A draft or hidden assessment is the same 404 as one that doesn't exist,
+    # whoever asks and whatever they hold.
+    assessment = await service.get_readable_assessment(assessment_id, context.tenant_id or "")
+    if assessment is None:
         raise ClientHTTPException(status_code=404, detail="assessment not found")
     used = await attempt_service.attempts_used(context.tenant_id or "", context.user_id)
-    return _response(request, assessment, with_questions=staff, attempts_used=used.get(assessment.id, 0))
+    return _response(request, assessment, with_questions=False, attempts_used=used.get(assessment.id, 0))
 
 
 @router.patch("/{assessment_id}", status_code=status.HTTP_200_OK)

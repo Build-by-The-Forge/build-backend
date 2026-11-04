@@ -63,13 +63,15 @@ async def test_a_student_list_excludes_drafts(client):
     assert listed.status_code == 200
     assert draft_id not in listed.text
     assert "SECRET-PROMPT" not in listed.text
-    assert draft_id in client.get("/assessment/assessments", headers=lecturer).text
+    # M3-E decision 1: staff don't see it on the mobile route either, only on theirs.
+    assert draft_id not in client.get("/assessment/assessments", headers=lecturer).text
+    assert draft_id in client.get("/assessment/staff/assessments", headers=lecturer).text
 
 
 @pytest.mark.asyncio
 async def test_a_student_list_by_course_excludes_drafts(client):
     lecturer, student, draft_id, _ = await assessment_with_question(client, published=False)
-    course_id = client.get(f"/assessment/assessments/{draft_id}", headers=lecturer).json()["data"]["course_id"]
+    course_id = client.get(f"/assessment/staff/assessments/{draft_id}", headers=lecturer).json()["data"]["course_id"]
     listed = client.get("/assessment/assessments", headers=student, params={"course_id": course_id})
     assert listed.status_code == 200
     assert draft_id not in listed.text
@@ -84,7 +86,8 @@ async def test_a_draft_by_direct_id_looks_like_it_does_not_exist(client):
     assert draft.json()["error"]["code"] == missing.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
     assert draft.json()["error"] == missing.json()["error"]
     assert "SECRET" not in draft.text
-    assert client.get(f"/assessment/assessments/{draft_id}", headers=lecturer).json()["data"]["status"] == "draft"
+    assert client.get(f"/assessment/assessments/{draft_id}", headers=lecturer).status_code == 404
+    assert client.get(f"/assessment/staff/assessments/{draft_id}", headers=lecturer).json()["data"]["status"] == "draft"
 
 
 @pytest.mark.asyncio
@@ -101,9 +104,12 @@ async def test_a_student_sees_a_published_assessment_without_its_questions(clien
 
 
 @pytest.mark.asyncio
-async def test_staff_still_see_the_questions(client):
+async def test_staff_see_the_questions_only_on_their_own_route(client):
+    # M3-E decision 2: the mobile routes never return questions, to anyone.
     lecturer, _, assessment_id, _ = await assessment_with_question(client, published=True)
-    detail = client.get(f"/assessment/assessments/{assessment_id}", headers=lecturer)
+    mobile = client.get(f"/assessment/assessments/{assessment_id}", headers=lecturer)
+    assert mobile.json()["data"]["questions"] == [] and "SECRET" not in mobile.text
+    detail = client.get(f"/assessment/staff/assessments/{assessment_id}", headers=lecturer)
     assert detail.json()["data"]["questions"][0]["prompt"] == "SECRET-PROMPT"
 
 
@@ -148,3 +154,75 @@ async def test_staff_can_still_read_a_question(client):
     question = client.get(f"/assessment/questions/{question_id}", headers=lecturer)
     assert question.status_code == 200
     assert question.json()["data"]["options"][1]["is_correct"] is True
+
+
+# --- M3-E: staff routes, and hidden courses ---------------------------------------------
+
+
+async def hide(level: str, assessment_id: str, client, lecturer) -> None:
+    """Archive the assessment's course, or the department or faculty above it."""
+    from sqlalchemy import select, update
+
+    from app.db.session import SessionLocal
+    from app.infrastructure.db.models.catalogue import CourseModel
+    from app.infrastructure.db.models.tenant_core import DepartmentModel
+
+    course_id = client.get(f"/assessment/staff/assessments/{assessment_id}", headers=lecturer).json()["data"]["course_id"]
+    async with SessionLocal() as session, session.begin():
+        if level == "course":
+            await session.execute(update(CourseModel).where(CourseModel.id == course_id).values(status="archived"))
+            return
+        department_id = await session.scalar(select(CourseModel.department_id).where(CourseModel.id == course_id))
+        if level == "department":
+            await session.execute(update(DepartmentModel).where(DepartmentModel.id == department_id).values(status="archived"))
+            return
+        from app.infrastructure.db.models.tenant_core import FacultyModel
+
+        faculty_id = await session.scalar(select(DepartmentModel.faculty_id).where(DepartmentModel.id == department_id))
+        await session.execute(update(FacultyModel).where(FacultyModel.id == faculty_id).values(status="archived"))
+
+
+@pytest.mark.asyncio
+async def test_the_staff_routes_need_assessment_update(client):
+    lecturer, student, assessment_id, _ = await assessment_with_question(client, published=False)
+    assert client.get("/assessment/staff/assessments", headers=student).status_code == 403
+    assert client.get(f"/assessment/staff/assessments/{assessment_id}", headers=student).status_code == 403
+    assert client.get(f"/assessment/staff/assessments/{uuid4()}", headers=lecturer).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_the_staff_list_filters_by_status(client):
+    lecturer, _, draft_id, _ = await assessment_with_question(client, published=False)
+    drafts = client.get("/assessment/staff/assessments", headers=lecturer, params={"status": "draft"})
+    published = client.get("/assessment/staff/assessments", headers=lecturer, params={"status": "published"})
+    assert draft_id in drafts.text and draft_id not in published.text
+    assert client.get("/assessment/staff/assessments", headers=lecturer, params={"status": "nonsense"}).status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("level", ["course", "department", "faculty"])
+async def test_a_hidden_course_hides_its_assessments_and_refuses_new_attempts_for_everyone(client, level):
+    lecturer, student, assessment_id, _ = await assessment_with_question(client, published=True)
+    await hide(level, assessment_id, client, lecturer)
+    for caller in (student, lecturer):
+        assert assessment_id not in client.get("/assessment/assessments", headers=caller).text
+        assert client.get(f"/assessment/assessments/{assessment_id}", headers=caller).status_code == 404
+    started = client.post(f"/assessment/assessments/{assessment_id}/attempts", headers=student)
+    # The same refusal as a draft: not available for attempts.
+    assert started.status_code == 409, started.text
+    # Staff still find it on their own route, for authoring.
+    assert client.get(f"/assessment/staff/assessments/{assessment_id}", headers=lecturer).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_an_attempt_in_progress_survives_its_course_being_archived(client):
+    lecturer, student, assessment_id, _ = await assessment_with_question(client, published=True)
+    started = client.post(f"/assessment/assessments/{assessment_id}/attempts", headers=student)
+    assert started.status_code == 201, started.text
+    attempt_id = started.json()["data"]["id"]
+    await hide("course", assessment_id, client, lecturer)
+    # Decision 4: no student loses work they started.
+    assert client.get(f"/assessment/attempts/{attempt_id}", headers=student).status_code == 200
+    submitted = client.post(f"/assessment/attempts/{attempt_id}/submit", headers=student)
+    assert submitted.status_code == 200, submitted.text
+    assert attempt_id in client.get("/assessment/attempts", headers=student).text

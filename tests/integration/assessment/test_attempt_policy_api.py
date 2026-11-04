@@ -85,7 +85,8 @@ def submit(client, h, attempt_id):
 
 async def test_an_assessment_without_a_policy_gets_the_practice_defaults(client):
     h, _, _, assessment_id = await lecturer_and_draft(client)
-    data = client.get(f"/assessment/assessments/{assessment_id}", headers=h).json()["data"]
+    # A draft: read on the staff route (M3-E decision 1).
+    data = client.get(f"/assessment/staff/assessments/{assessment_id}", headers=h).json()["data"]
     assert data["attempt_policy"] == PRACTICE_DEFAULTS
 
 

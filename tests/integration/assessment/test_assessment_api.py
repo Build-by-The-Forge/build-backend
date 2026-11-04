@@ -75,11 +75,18 @@ async def test_assessment_definition_lifecycle_over_http(client):
     assert added.status_code == 200, added.text
     assert added.json()["data"]["question_count"] == 1
 
+    # M3-E decision 1: a draft never appears on the mobile routes, staff
+    # included; staff read it on their own routes.
     listed = client.get(f"/assessment/assessments?course_id={course_id}", headers=request_headers)
     assert listed.status_code == 200
-    assert [item["id"] for item in listed.json()["data"]] == [assessment_id]
+    assert listed.json()["data"] == []
+    assert client.get(f"/assessment/assessments/{assessment_id}", headers=request_headers).status_code == 404
 
-    retrieved = client.get(f"/assessment/assessments/{assessment_id}", headers=request_headers)
+    staff_listed = client.get(f"/assessment/staff/assessments?course_id={course_id}", headers=request_headers)
+    assert staff_listed.status_code == 200
+    assert [item["id"] for item in staff_listed.json()["data"]] == [assessment_id]
+
+    retrieved = client.get(f"/assessment/staff/assessments/{assessment_id}", headers=request_headers)
     assert retrieved.status_code == 200
     assert retrieved.json()["data"]["title"] == "Midterm Assessment"
 
