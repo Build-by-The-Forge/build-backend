@@ -44,7 +44,7 @@ def run(statement: str, *args):
         "SELECT * FROM content_blobs LIMIT 1",
         "SELECT * FROM content_rights_assertions LIMIT 1",
         "SELECT * FROM content_publications LIMIT 1",
-        "UPDATE content_ownership_classifications SET outcome = 'x'",
+        "UPDATE content_ownership_classifications SET new_class = 'x'",
         "DELETE FROM security_events",
         "SELECT * FROM alembic_version",
     ],
