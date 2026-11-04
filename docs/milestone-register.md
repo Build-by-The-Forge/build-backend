@@ -147,6 +147,7 @@ Given by the reviewer on #79 at `06b433a`. It changes what's built first, not an
 | Classifying existing material | During the sprint, by an audited operator command, approved on `fe7742e` under seven conditions in `m3-d-design.md`: tenant authorization, evidence per document, institutional only, the same service as the staff route, a full audit record, dry runs and bounded idempotent batches, and no retrieval before the AI service acknowledges |
 | Reports on shelf documents | Three distinct, authorized students hide a document temporarily until the takedown contact restores it or takes it down. Approved on `fe7742e` with safeguards. Hiding changes no rights or AI eligibility |
 | Revoked sources | A document revoked while an answer is generated withholds the whole answer, cited or not, on every path. Ruled on `fe7742e` as release-blocking |
+| Offline authorization | A device holds what its user was authorized for at its last sync, under a signed lease that starts at 72 hours. The lease runs on monotonic elapsed time and boot identity: a reboot ends it, missing or inconsistent trusted time fails closed, and the wall clock can only shorten it. It doesn't hold on a rooted or jailbroken device. Offline answers stay provisional until reconnect validation passes. Approved with M3-D's design at `ab09d2c` |
 
 **Not permitted by these decisions:** exposing a route before its own gates pass. A design approval isn't permission to expose a route, and `GATE_OPEN` stays `False`.
 
