@@ -16,10 +16,12 @@ import asyncpg
 
 from boundary.conftest import (
     AI_APP_DSN,
+    assign_scope,
     create_asset,
     create_job_for,
     jbytes,
     pdf_document,
+    retrieving,
     to_ai,
     user_context,
     wait_for_status,
@@ -39,7 +41,7 @@ EXPECTED_SPAN = "first measured by Robert Millikan"
 
 def retrieve_as(ai, tenant, role: str, question: str) -> list[dict]:
     member = tenant.members[role]
-    raw = jbytes({"query": question})
+    raw = jbytes(retrieving({"query": question}))
     context = user_context(tenant.tenant_id, member.user_id, ["ai.use"], membership_id=member.membership_id, role=role)
     response = ai.post(RETRIEVE, content=raw, headers=to_ai("POST", RETRIEVE, raw, context))
     assert response.status_code == 200, response.text
@@ -78,9 +80,14 @@ def test_c22_automatic_worker_ingestion_is_retrievable_only_by_the_right_tenant(
     assert set(chunks) == {attempt} and chunks[attempt] == final["metrics"]["indexed_chunks"], (chunks, final)
     assert fenced is not None and (fenced["run_number"], fenced["attempt"]) == attempt, (fenced, final)
 
+    # Ready is not retrievable: the document is `unknown` until the
+    # backend's signed assignment makes it institutional (M3-D).
+    source = f"asset:{asset['id']}"
+    assert not [r for r in retrieve_as(ai, tenant_a, "student", QUESTION) if r["provenance"]["source_uri"] == source]
+    assign_scope(ai, tenant_a.tenant_id, asset["id"])
+
     results = retrieve_as(ai, tenant_a, "student", QUESTION)[:5]
 
-    source = f"asset:{asset['id']}"
     evidence = [r for r in results if r["provenance"]["source_uri"] == source and EXPECTED_SPAN in r["text"]]
     assert evidence, [(r["provenance"], r["text"][:80]) for r in results]
     assert evidence[0]["provenance"]["page_number"] == 1

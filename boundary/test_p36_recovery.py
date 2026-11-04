@@ -40,10 +40,12 @@ from redis import Redis
 from boundary.conftest import (
     AI_APP_DSN,
     CALLBACK_PATH,
+    assign_scope,
     create_asset,
     create_job_for,
     jbytes,
     pdf_document,
+    retrieving,
     system_context,
     to_ai,
     to_backend,
@@ -227,7 +229,7 @@ def assert_ready_on_attempt_2_only(job_id: str, tenant_id: str, asset_id: str) -
 
 def retrieve(ai, tenant, role: str) -> list[dict]:
     member = tenant.members[role]
-    raw = jbytes({"query": QUESTION})
+    raw = jbytes(retrieving({"query": QUESTION}))
     context = user_context(tenant.tenant_id, member.user_id, ["ai.use"], membership_id=member.membership_id, role=role)
     response = ai.post("/v1/ai/retrieve", content=raw, headers=to_ai("POST", "/v1/ai/retrieve", raw, context))
     assert response.status_code == 200, response.text
@@ -235,6 +237,8 @@ def retrieve(ai, tenant, role: str) -> list[dict]:
 
 
 def assert_tenant_isolated(ai, tenant_a, tenant_b, asset_id: str) -> None:
+    # Made institutional as the backend's dispatcher will (M3-D).
+    assign_scope(ai, tenant_a.tenant_id, asset_id)
     source = f"asset:{asset_id}"
     own = [r for r in retrieve(ai, tenant_a, "student") if r["provenance"]["source_uri"] == source]
     assert own, "the ready document is retrievable by its own tenant"
