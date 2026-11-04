@@ -1430,8 +1430,10 @@ paths:
         '409':
           description: >
             IDEMPOTENCY_KEY_REUSED with a different message, or TURN_IN_PROGRESS while this
-            key's earlier request is still being answered. Retry the same key later; it
-            returns the stored turn once there is one
+            key's earlier request is still being answered. Retry the same key after
+            Retry-After seconds; it returns the stored turn once there is one
+          headers:
+            Retry-After: { schema: { type: integer } }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
