@@ -20,7 +20,7 @@ from app.domain.client_safe import ClientSafeError
 from app.infrastructure.assessment.repositories import SqlAlchemyAssessmentRepository, SqlAlchemyAttemptRepository
 from app.infrastructure.db.models.assessment import AssessmentAttemptModel, AssessmentModel
 from app.infrastructure.db.models.catalogue import CourseModel
-from app.infrastructure.db.models.tenant_core import DepartmentModel
+from app.infrastructure.db.models.tenant_core import DepartmentModel, FacultyModel
 from pg_smoke.test_attempt_policy_race import _assessment
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -33,16 +33,24 @@ async def _course_and_department(assessment_id: str) -> tuple[str, str]:
     return course_id, department_id
 
 
-def _archive(level: str, course_id: str, department_id: str):
+async def _faculty(department_id: str) -> str:
+    async with SessionLocal() as session:
+        return await session.scalar(select(DepartmentModel.faculty_id).where(DepartmentModel.id == department_id))
+
+
+def _archive(level: str, course_id: str, department_id: str, faculty_id: str | None = None):
     if level == "course":
         return update(CourseModel).where(CourseModel.id == course_id).values(status="archived")
+    if level == "faculty":
+        return update(FacultyModel).where(FacultyModel.id == faculty_id).values(status="archived")
     return update(DepartmentModel).where(DepartmentModel.id == department_id).values(status="archived")
 
 
-@pytest.mark.parametrize("level", ["course", "department"])
+@pytest.mark.parametrize("level", ["course", "department", "faculty"])
 async def test_an_archive_waits_for_a_start_holding_the_course(level):
     tenant_id, assessment_id = await _assessment()
     course_id, department_id = await _course_and_department(assessment_id)
+    faculty_id = await _faculty(department_id)
     async with SessionLocal() as starting, starting.begin():
         assert await SqlAlchemyAttemptRepository(starting).lock_course_open(course_id, tenant_id)
         # The start's transaction is still open: the archive can't commit.
@@ -50,16 +58,17 @@ async def test_an_archive_waits_for_a_start_holding_the_course(level):
             with pytest.raises(DBAPIError, match="lock timeout|lock_not_available|canceling statement"):
                 async with archiving.begin():
                     await archiving.execute(text("SET LOCAL lock_timeout = '300ms'"))
-                    await archiving.execute(_archive(level, course_id, department_id))
+                    await archiving.execute(_archive(level, course_id, department_id, faculty_id))
 
 
-@pytest.mark.parametrize("level", ["course", "department"])
+@pytest.mark.parametrize("level", ["course", "department", "faculty"])
 async def test_a_start_waiting_on_an_archive_sees_it_and_takes_no_attempt(level):
     tenant_id, assessment_id = await _assessment()
     course_id, department_id = await _course_and_department(assessment_id)
+    faculty_id = await _faculty(department_id)
     async with SessionLocal() as archiving:
         await archiving.begin()
-        await archiving.execute(_archive(level, course_id, department_id))  # uncommitted
+        await archiving.execute(_archive(level, course_id, department_id, faculty_id))  # uncommitted
 
         async def start() -> bool:
             async with SessionLocal() as starting, starting.begin():
