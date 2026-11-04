@@ -8,13 +8,13 @@ import uuid
 
 import pytest
 
-from boundary.conftest import CALLBACK_PATH, jbytes, system_context, to_ai, to_backend, user_context
+from boundary.conftest import CALLBACK_PATH, jbytes, retrieving, system_context, to_ai, to_backend, user_context
 
 pytestmark = pytest.mark.redis_down
 
 
 def test_c11_ai_service_refuses_with_503_when_its_replay_store_is_down(ai):
-    raw = jbytes({"message": "hello"})
+    raw = jbytes(retrieving({"message": "hello"}))
     context = user_context(str(uuid.uuid4()), str(uuid.uuid4()), ["ai.use"])
     response = ai.post("/v1/ai/chat", content=raw, headers=to_ai("POST", "/v1/ai/chat", raw, context))
     assert response.status_code == 503

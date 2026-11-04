@@ -1,4 +1,5 @@
 import json
+import time
 from dataclasses import replace
 
 import httpx
@@ -6,11 +7,16 @@ import pytest
 
 from app.core.config import settings
 from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
-from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
+from app.infrastructure.ai.assistant_gateway import RESPONSE_NONCE_RECEIVER, HttpAIAssistantGateway
+from app.infrastructure.security.replay_store import ReplayStoreUnavailable
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
+    HEADER_RESPONSE_SIGNATURE,
+    HEADER_RESPONSE_TIMESTAMP,
     Direction,
     ServiceKeys,
+    canonical_response,
+    compute_signature,
     sha256_hex,
     verify_request,
 )
@@ -35,18 +41,70 @@ MCQ = {
     "difficulty": "medium",
 }
 KEYS = ServiceKeys(current="test-backend-to-ai-secret-for-assistant-tests-01")
+RESPONSE_KEYS = ServiceKeys(current="test-ai-to-backend-secret-for-assistant-tests-02")
+SOURCE = {"asset_id": "asset-1", "run_number": 1, "attempt": 1}
 
 
-def gateway(handler) -> HttpAIAssistantGateway:
+class Nonces:
+    """The replay store, in memory: each nonce is accepted once."""
+
+    def __init__(self) -> None:
+        self.claimed: list[tuple[str, str, str]] = []
+
+    async def claim(self, receiver: str, sender: str, request_id: str) -> bool:
+        fresh = (receiver, sender, request_id) not in self.claimed
+        self.claimed.append((receiver, sender, request_id))
+        return fresh
+
+
+def sign(request: httpx.Request, response: httpx.Response, *, nonce: str | None = None, request_id: str | None = None):
+    """Sign a response as AI-service does: for the request's id and the nonce
+    in its signed body, over the exact bytes."""
+    timestamp = str(int(time.time()))
+    canonical = canonical_response(
+        service="ai-service",
+        request_id=request_id or request.headers["x-build-request-id"],
+        nonce=nonce or json.loads(request.content)["response_nonce"],
+        timestamp=timestamp,
+        body_sha256=sha256_hex(response.content),
+    )
+    headers = {
+        **response.headers,
+        HEADER_RESPONSE_TIMESTAMP: timestamp,
+        HEADER_RESPONSE_SIGNATURE: compute_signature(RESPONSE_KEYS.current, canonical),
+    }
+    return httpx.Response(response.status_code, content=response.content, headers=headers)
+
+
+def signing(handler):
+    """AI-service's side: a retrieving call's 200 is signed for its nonce."""
+
+    async def wrapped(request: httpx.Request) -> httpx.Response:
+        response = await handler(request)
+        nonce = json.loads(request.content).get("response_nonce") if request.content else None
+        if response.status_code == 200 and nonce and "x-build-response-signature" not in response.headers:
+            return sign(request, response)
+        return response
+
+    return wrapped
+
+
+def gateway(handler, *, nonces: Nonces | None = None, denied_assets=None, signed: bool = True) -> HttpAIAssistantGateway:
+    extra = {} if denied_assets is None else {"denied_assets": denied_assets}
     return HttpAIAssistantGateway(
         base_url="http://ai-service.internal",
-        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(signing(handler) if signed else handler)),
         keys=KEYS,
+        response_keys=RESPONSE_KEYS,
+        nonce_store=nonces if nonces is not None else Nonces(),
+        **extra,
     )
 
 
-def ok(data: dict) -> httpx.Response:
-    return httpx.Response(200, json={"success": True, "data": data, "message": ""})
+def ok(data: dict, sources: list | None = None) -> httpx.Response:
+    return httpx.Response(
+        200, json={"success": True, "data": data, "message": "", "sources_used": [SOURCE] if sources is None else sources}
+    )
 
 
 def verified_context(request: httpx.Request) -> ServiceContext:
@@ -73,7 +131,9 @@ async def test_chat_is_signed_with_only_the_checked_permission():
     assert (answer.answer, answer.context) == ("A", ["c1"])
     [request] = seen
     assert request.url.path == "/v1/ai/chat"
-    assert json.loads(request.content) == {"message": "What is osmosis?"}
+    body = json.loads(request.content)
+    assert len(body.pop("response_nonce")) == 43  # a fresh token_urlsafe(32)
+    assert body == {"message": "What is osmosis?", "denied_assets": []}
     assert "authorization" not in request.headers
     assert verified_context(request) == ServiceContext.for_user(
         tenant_id=TENANT,
@@ -89,7 +149,9 @@ async def test_explain_and_question_bodies_name_no_identity():
     bodies: dict[str, dict] = {}
 
     async def handler(request):
-        bodies[request.url.path] = json.loads(request.content)
+        body = json.loads(request.content)
+        assert body.pop("response_nonce")
+        bodies[request.url.path] = body
         if request.url.path.endswith("explain"):
             return ok({"explanation": "E"})
         return ok({"questions": [MCQ], "discarded": 0})
@@ -99,12 +161,13 @@ async def test_explain_and_question_bodies_name_no_identity():
     generated = await g.generate_questions(ACTOR, "cells", 3, "medium", "mcq")
     assert [q.to_dict() for q in generated.questions] == [MCQ]
     assert bodies == {
-        "/v1/ai/explain": {"subject": "osmosis"},
+        "/v1/ai/explain": {"subject": "osmosis", "denied_assets": []},
         "/v1/ai/generate-questions": {
             "topic": "cells",
             "count": 3,
             "difficulty": "medium",
             "question_type": "mcq",
+            "denied_assets": [],
         },
     }
 
@@ -278,3 +341,147 @@ async def test_a_closed_gate_sends_no_memory_request(monkeypatch, call):
     assert refused.value.error_code == "LEARNING_MEMORY_DISABLED"
     assert refused.value.unavailable is True
     assert sent == []
+
+
+# --- M3-D: retrieving calls carry the denial list and a nonce, and accept only a
+# signed, sourced response ---------------------------------------------------------------
+
+
+async def test_each_retrieving_call_sends_the_denial_list_and_a_fresh_nonce():
+    bodies: list[dict] = []
+
+    async def handler(request):
+        bodies.append(json.loads(request.content))
+        return ok({"answer": "A", "context_used": [], "memory_used": ""})
+
+    async def denied(tenant_id):
+        assert tenant_id == TENANT
+        return frozenset({"asset-b", "asset-a"})
+
+    g = gateway(handler, denied_assets=denied)
+    await g.chat(ACTOR, "one")
+    await g.chat(ACTOR, "two")
+    assert [b["denied_assets"] for b in bodies] == [["asset-a", "asset-b"]] * 2
+    assert bodies[0]["response_nonce"] != bodies[1]["response_nonce"]
+
+
+async def test_an_unreadable_denial_list_sends_nothing():
+    sent: list[httpx.Request] = []
+
+    async def handler(request):
+        sent.append(request)
+        return ok({"answer": "A", "context_used": [], "memory_used": ""})
+
+    async def unreadable(tenant_id):
+        raise RuntimeError("outbox down")
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(handler, denied_assets=unreadable).chat(ACTOR, "hi")
+    assert raised.value.unavailable and sent == []
+
+
+def answer() -> httpx.Response:
+    return ok({"answer": "A", "context_used": [], "memory_used": ""})
+
+
+@pytest.mark.parametrize(
+    "respond",
+    [
+        lambda request: answer(),  # unsigned
+        lambda request: httpx.Response(
+            200, content=sign(request, answer()).content + b" ", headers=sign(request, answer()).headers
+        ),  # body changed after signing
+        lambda request: sign(request, answer(), request_id="9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a"),
+        lambda request: sign(request, answer(), nonce="another-nonce-0123456789abcdef"),
+        lambda request: sign(
+            request, httpx.Response(200, json={"success": True, "data": {"answer": "A", "context_used": [], "memory_used": ""}})
+        ),
+        lambda request: sign(request, ok({"answer": "A", "context_used": [], "memory_used": ""}, sources=[{"asset_id": "a"}])),
+        lambda request: sign(request, ok({"answer": "A", "context_used": [], "memory_used": ""}, sources="asset-1")),
+    ],
+    ids=["unsigned", "body-changed", "other-request", "other-nonce", "no-sources", "malformed-source", "sources-not-a-list"],
+)
+async def test_a_response_that_is_not_signed_for_this_request_and_nonce_or_unsourced_is_withheld(respond):
+    async def handler(request):
+        return respond(request)
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(handler, signed=False).chat(ACTOR, "hi")
+    assert raised.value.error_code == "AI_SERVICE_BAD_RESPONSE" and not raised.value.unavailable
+
+
+async def test_a_response_signed_with_another_secret_is_withheld():
+    async def handler(request):
+        return sign(request, answer())
+
+    other = HttpAIAssistantGateway(
+        base_url="http://ai-service.internal",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        keys=KEYS,
+        response_keys=ServiceKeys(current="a-different-ai-to-backend-secret-000000000"),
+        nonce_store=Nonces(),
+    )
+    with pytest.raises(AIAssistantError) as raised:
+        await other.chat(ACTOR, "hi")
+    assert raised.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+async def test_an_accepted_response_consumes_its_nonce():
+    nonces = Nonces()
+    sent: list[str] = []
+
+    async def handler(request):
+        sent.append(json.loads(request.content)["response_nonce"])
+        return answer()
+
+    assert (await gateway(handler, nonces=nonces).chat(ACTOR, "hi")).answer == "A"
+    assert nonces.claimed == [(RESPONSE_NONCE_RECEIVER, "ai-service", sent[0])]
+
+
+async def test_a_response_for_a_consumed_nonce_is_refused_even_identical_and_signed():
+    nonces = Nonces()
+
+    async def handler(request):
+        # A response for this nonce was already accepted.
+        nonce = json.loads(request.content)["response_nonce"]
+        nonces.claimed.append((RESPONSE_NONCE_RECEIVER, "ai-service", nonce))
+        return sign(request, answer())
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(handler, nonces=nonces, signed=False).chat(ACTOR, "hi")
+    assert raised.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+async def test_without_the_replay_store_the_response_is_not_accepted():
+    class Down:
+        async def claim(self, receiver, sender, request_id):
+            raise ReplayStoreUnavailable("down")
+
+    async def handler(request):
+        return answer()
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(handler, nonces=Down()).chat(ACTOR, "hi")
+    assert raised.value.unavailable
+
+
+@pytest.mark.parametrize("size,sent_calls", [(1000, 1), (1001, 0)])
+async def test_the_shared_denial_limit_is_never_exceeded(size, sent_calls):
+    sent: list[dict] = []
+
+    async def handler(request):
+        sent.append(json.loads(request.content))
+        return answer()
+
+    async def denied(tenant_id):
+        return frozenset(f"asset-{i}" for i in range(size))
+
+    g = gateway(handler, denied_assets=denied)
+    if sent_calls:
+        await g.chat(ACTOR, "hi")
+        assert len(sent[0]["denied_assets"]) == 1000
+    else:
+        with pytest.raises(AIAssistantError) as raised:
+            await g.chat(ACTOR, "hi")
+        assert raised.value.unavailable
+    assert len(sent) == sent_calls  # never a truncated list

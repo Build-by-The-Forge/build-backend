@@ -51,8 +51,9 @@ class GenerateQuestionsRequest(AIRequest):
     question_type: Literal["mcq", "true_false"] = "mcq"
 
 
-def get_ai_assistant_gateway() -> AIAssistantGateway:
-    return HttpAIAssistantGateway()
+def get_ai_assistant_gateway(request: Request) -> AIAssistantGateway:
+    # Response nonces are consumed in the shared replay store (M3-D).
+    return HttpAIAssistantGateway(nonce_store=getattr(request.app.state, "service_replay_store", None))
 
 
 def correlation_id_for(request: Request) -> str:

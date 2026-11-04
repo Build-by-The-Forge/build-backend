@@ -119,6 +119,17 @@ The steps below run in this order. Every failure returns `401` with the body `{"
 
 **M3 provides authenticated request delivery, not authenticated response delivery.** Responses are not signed. The caller knows which service it addressed, because it sent to its configured URL, but a party able to tamper with the internal connection could alter a response. Response integrity and confidentiality are a documented residual risk until TLS/mTLS is enforced on the internal network in M6 (E.4). This risk is accepted for M3 and does not block it.
 
+**Amended by M3-D: responses with generated or retrieved content are signed.** The backend must trust a response's `sources_used` before checking it against the caller's authorization, so AI-service signs the four retrieving routes' 200 responses: chat, explain, question generation and retrieve. Other responses, including every error, stay unsigned, and the backend treats an unsigned retrieving response as failed.
+
+- **The denial list:** each retrieving request carries `denied_assets`, at most 1,000 asset ids. The limit is shared: AI-service refuses a longer list with 422, and the backend never sends one, refusing the tenant's retrieving calls instead of sending part of it. A change moves in both repositories and is tested together.
+- **The nonce:** each retrieving request carries `response_nonce`, a fresh single-use value the backend generates (`secrets.token_urlsafe(32)`), inside the signed body. AI-service accepts 22 to 128 URL-safe characters.
+- **Headers:** `X-BUILD-Response-Timestamp` (Unix seconds) and `X-BUILD-Response-Signature` (`v1=` and 64 lowercase hex).
+- **Canonical response:** the lines `v1`, `response`, the sender `ai-service`, the request's `X-BUILD-Request-ID`, the nonce, the timestamp, and the lowercase hex SHA-256 of the exact response bytes, joined by `
+` with no trailing newline.
+- **Signature:** HMAC-SHA256 under `AI_TO_BACKEND_SECRET`, the current secret only. The backend accepts the current or the previous secret, as in A.5.
+- **Verification:** the backend accepts a response only if it verifies for the request it sent and the nonce it put in it, over the bytes received, within ±60 s. It then marks the nonce consumed in the replay store, under its own namespace, so a second response for it is refused even if identical and validly signed. A missing, invalid or stale signature, or one for another request or nonce, withholds the result.
+- **What it doesn't cover:** a compromised AI service, which can sign what it likes. The backend's own `denied_assets` and the provenance check against its read policy are what bound that.
+
 ### A.7 Test vector (both repositories must reproduce it exactly)
 
 ```text
@@ -138,6 +149,28 @@ X-BUILD-Signature v1=be014f19af31ec051f99db00598a19eb80bc4de18d517f408d2abaca2f7
 ```
 
 Both repositories hold this vector (plus negative vectors: each single-field change must alter the signature) in their unit tests. The implementation is written independently in each repository; the shared vectors, not shared code, prove that the two compute the same thing.
+
+### A.8 Response test vector (M3-D; both repositories must reproduce it exactly)
+
+```text
+secret                     test-vector-ai-to-backend-secret-0123456789
+sender                     ai-service
+X-BUILD-Request-ID         4f1c2a7e-4b3d-4c8e-9a1f-2d3e4f5a6b7c
+response_nonce             Zt3m0VbqO9aX1yR4kLw2pQ8sHn6uJc5d
+X-BUILD-Response-Timestamp 1767225600
+body                       {"success":true,"message":"Chat response generated","sources_used":[{"asset_id":"a1","run_number":1,"attempt":2}],"data":{}}
+BODY_SHA256                a91ea3da217dda3d1ddee30233d2849b3510acb173f6799298b6b55476508468
+canonical response         "v1
+response
+ai-service
+4f1c2a7e-4b3d-4c8e-9a1f-2d3e4f5a6b7c
+Zt3m0VbqO9aX1yR4kLw2pQ8sHn6uJc5d
+1767225600
+a91ea3da217dda3d1ddee30233d2849b3510acb173f6799298b6b55476508468"
+X-BUILD-Response-Signature v1=8beebb6dbbcfd7168ed73ea5c5ca74b5da85717128ea028974a7bdb98c4d3e7d
+```
+
+Both repositories hold it in their unit tests, with negative vectors: another request id, nonce, timestamp, body, sender or secret must each give another signature.
 
 ---
 
