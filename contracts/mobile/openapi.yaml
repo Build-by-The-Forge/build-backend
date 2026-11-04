@@ -1428,7 +1428,12 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: IDEMPOTENCY_KEY_REUSED with a different message
+          description: >
+            IDEMPOTENCY_KEY_REUSED with a different message, or TURN_IN_PROGRESS while this
+            key's earlier request is still being answered. Retry the same key after
+            Retry-After seconds; it returns the stored turn once there is one
+          headers:
+            Retry-After: { schema: { type: integer } }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -1440,7 +1445,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
-        '503': { $ref: '#/components/responses/Unavailable' }
+        '503':
+          description: >
+            AI_UNAVAILABLE or OBJECT_STORAGE_UNAVAILABLE, or ANSWER_WITHHELD: a document the
+            answer used stopped being readable by this student while it was generated, so the
+            whole answer is withheld, cited or not, and nothing is stored. Retryable: a retry
+            retrieves afresh and leaves that document out
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
 
 components:
   securitySchemes:
@@ -1728,6 +1743,8 @@ components:
         - INTERNAL_ERROR
         - AI_UPSTREAM_ERROR
         - AI_UNAVAILABLE
+        - ANSWER_WITHHELD
+        - TURN_IN_PROGRESS
         - OBJECT_STORAGE_UNAVAILABLE
         - SERVICE_UNAVAILABLE
     ValidationDetails:
@@ -2245,13 +2262,21 @@ components:
         message: { type: string, minLength: 1, maxLength: 4000 }
     ConversationMessage:
       type: object
-      required: [id, role, content, grounded, citations, created_at]
+      required: [id, role, content, grounded, citations, redacted, created_at]
       properties:
         id: { type: string }
         role:
           type: string
           enum: [student, assistant]
-        content: { type: string }
+        content:
+          type: string
+          description: A redacted answer holds a fixed notice instead of its text.
+        redacted:
+          type: boolean
+          description: >
+            True when the answer used a document, cited or not, that was since deleted or that
+            this student can no longer read. Its text and citations are then gone, and
+            citations is empty. Always false for a student's message.
         grounded:
           type: [boolean, 'null']
           description: Null for a student's message.
