@@ -10,8 +10,9 @@ from app.api.content.asset_schemas import (
     ContentAssetRevokeRequest,
 )
 from app.api.content.reader_view import asset_view
+from app.api.content.reading import Caller, read_service, reading
 from app.api.content.upload_body import received_upload
-from app.application.content.access import ContentAccessError
+from app.application.content.access import ContentAccessError, ContentNotFoundError
 from app.application.content.asset_service import ContentAssetService
 from app.application.content.upload import (
     ContentAssetUploadService,
@@ -49,7 +50,7 @@ async def upload_asset(
     request: Request,
     file_name: str | None = Query(default=None),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+    caller: Caller = Depends(reading(Permission.CONTENT_ASSET_UPLOAD)),
 ) -> JSONResponse:
     """Upload a document as the raw request body (docs/p3-1-pr2-upload-design.md).
 
@@ -58,9 +59,10 @@ async def upload_asset(
     decides nothing. ``Idempotency-Key`` is required: the same key and bytes
     return the original asset (200).
     """
+    context = caller.context
     return await _receive_upload(
         request,
-        context,
+        caller,
         lambda body: upload_service.upload(
             source_id=source_id,
             tenant_id=context.tenant_id,
@@ -84,16 +86,20 @@ async def upload_asset_version(
     request: Request,
     file_name: str | None = Query(default=None),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+    caller: Caller = Depends(reading(Permission.CONTENT_ASSET_UPLOAD)),
 ) -> JSONResponse:
     """A new version of an asset from uploaded bytes (P3-1 PR 3b, design
     section 9). The asset must be the caller's tenant's current version; it
     stays current until the new version is recorded. A retry with the same
     ``Idempotency-Key`` and bytes returns the same version (200) and never
     supersedes twice."""
+    context = caller.context
+    if not await read_service.may_read_asset(caller.reader, asset_id):
+        # Reported exactly as a missing asset, before the body is read.
+        return _access_refused(ContentNotFoundError("asset not found"))
     return await _receive_upload(
         request,
-        context,
+        caller,
         lambda body: upload_service.upload_version(
             parent_asset_id=asset_id,
             tenant_id=context.tenant_id,
@@ -108,7 +114,7 @@ async def upload_asset_version(
 
 
 async def _receive_upload(
-    request: Request, context: TenantContext, store: Callable[[UploadedBody], Awaitable[UploadResult]]
+    request: Request, caller: Caller, store: Callable[[UploadedBody], Awaitable[UploadResult]]
 ) -> JSONResponse:
     """Stream the body, run ``store`` on it, and answer as the upload
     contract says: 201 created, 200 replayed, typed errors by class."""
@@ -123,8 +129,12 @@ async def _receive_upload(
         return _access_refused(exc)
     except UploadError as exc:
         error: dict[str, object] = {"code": exc.code, "message": public_message(exc)}
-        # The existing asset is named only to a caller who may read assets.
-        if isinstance(exc, DuplicateContentError) and authorization.can(context, Permission.CONTENT_ASSET_READ):
+        # The existing asset is named only to a caller who may read it.
+        if (
+            isinstance(exc, DuplicateContentError)
+            and authorization.can(caller.context, Permission.CONTENT_ASSET_READ)
+            and await read_service.may_read_asset(caller.reader, exc.existing_asset_id)
+        ):
             error["existing_asset_id"] = exc.existing_asset_id
         headers = {"Retry-After": "5"} if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE else None
         return JSONResponse(status_code=exc.status_code, content={"error": error}, headers=headers)
@@ -149,9 +159,11 @@ async def _receive_upload(
 async def get_asset(
     asset_id: str,
     request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_ASSET_READ)),
 ) -> JSONResponse:
-    asset = await service.get_asset(asset_id=asset_id, tenant_id=context.tenant_id)
+    context = caller.context
+    readable = await read_service.may_read_asset(caller.reader, asset_id)
+    asset = await service.get_asset(asset_id=asset_id, tenant_id=context.tenant_id) if readable else None
     if asset is None:
         return error_response(request, status.HTTP_404_NOT_FOUND, "RESOURCE_NOT_FOUND", "asset not found")
 
@@ -173,14 +185,10 @@ async def list_source_assets(
     request: Request,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_ASSET_READ)),
 ) -> JSONResponse:
-    assets, total = await service.list_assets(
-        tenant_id=context.tenant_id,
-        source_id=source_id,
-        limit=limit,
-        offset=offset,
-    )
+    context = caller.context
+    assets, total = await read_service.list_assets(caller.reader, source_id=source_id, limit=limit, offset=offset)
     items = [asset_view(ContentAssetResponse.from_domain(a).model_dump(mode="json"), context) for a in assets]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -205,18 +213,13 @@ async def list_all_assets(
     ingestion_filter: str | None = Query(default=None, alias="ingestion_status"),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_ASSET_READ)),
 ) -> JSONResponse:
+    context = caller.context
     st = AssetStatus(status_filter) if status_filter else None
     ing_st = IngestionStatus(ingestion_filter) if ingestion_filter else None
 
-    assets, total = await service.list_assets(
-        tenant_id=context.tenant_id,
-        status=st,
-        ingestion_status=ing_st,
-        limit=limit,
-        offset=offset,
-    )
+    assets, total = await read_service.list_assets(caller.reader, status=st, ingestion_status=ing_st, limit=limit, offset=offset)
     items = [asset_view(ContentAssetResponse.from_domain(a).model_dump(mode="json"), context) for a in assets]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -242,9 +245,12 @@ async def revoke_asset(
     asset_id: str,
     payload: ContentAssetRevokeRequest,
     request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_ASSET_UPLOAD)),
+    caller: Caller = Depends(reading(Permission.CONTENT_ASSET_UPLOAD)),
 ) -> JSONResponse:
+    context = caller.context
     try:
+        if not await read_service.may_read_asset(caller.reader, asset_id):
+            raise ContentNotFoundError("asset not found")
         revoked = await service.revoke_asset(
             asset_id=asset_id,
             reason=payload.reason,

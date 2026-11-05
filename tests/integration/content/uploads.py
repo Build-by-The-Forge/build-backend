@@ -4,9 +4,15 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 from uuid import uuid4
 
+from sqlalchemy import update
+
+from app.db.session import SessionLocal
 from app.domain.content.storage import ObjectInfo, ObjectNotFoundError, StoredObject
+from app.infrastructure.db.models.content import ContentAssetModel, ContentRightsAssertionModel
+from app.infrastructure.identity.models import UserModel
 
 BUCKET = "build-documents"
 
@@ -52,3 +58,35 @@ def upload_asset(
         headers=request_headers,
         content=data if data is not None else pdf_bytes(),
     )
+
+
+async def reviewed_for_students(asset_id: str) -> None:
+    """What a staff review will do (M3-D PR 5): the document becomes
+    institutional, with an accepted review for the whole tenant, so the read
+    policy lets students read it. For tests whose subject is what a student
+    sees of a readable document, not how it became readable."""
+    reviewer = str(uuid4())
+    async with SessionLocal() as session:
+        session.add(UserModel(id=reviewer, email=f"reviewer-{reviewer}@example.com", password_hash="x"))
+        await session.flush()
+        await session.execute(
+            update(ContentAssetModel).where(ContentAssetModel.id == asset_id).values(ownership_class="institutional")
+        )
+        tenant_id = (await session.get(ContentAssetModel, asset_id)).tenant_id
+        session.add(
+            ContentRightsAssertionModel(
+                id=str(uuid4()),
+                tenant_id=tenant_id,
+                asset_id=asset_id,
+                asserted_by=reviewer,
+                kind="staff_review",
+                rights_basis="lecturer_provided",
+                audience="tenant",
+                redistribution="tenant_only",
+                ai_use="not_permitted",
+                outcome="accepted",
+                reason="reviewed for the test",
+                asserted_at=datetime.now(timezone.utc),
+            )
+        )
+        await session.commit()
