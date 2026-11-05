@@ -197,12 +197,16 @@ class ListMyAttemptsHandler:
         self.answers = answers
         self.results = results
 
-    async def handle(self, command: ListMyAttemptsCommand) -> list[AssessmentAttempt]:
-        attempts = await self.repository.list_by_user(command.user_id, tenant_id=command.tenant_id)
+    async def handle(self, command: ListMyAttemptsCommand) -> tuple[list[AssessmentAttempt], int]:
+        attempts, total = await self.repository.list_by_user(
+            command.user_id, tenant_id=command.tenant_id, limit=command.limit, offset=command.offset
+        )
+        # Finalizing an expired attempt changes its status, never its place in
+        # the order (created_at, id) or the total.
         return [
             await finalize_if_expired(attempt, self.repository, self.assessments, self.answers, self.results)
             for attempt in attempts
-        ]
+        ], total
 
 
 class SubmitAttemptHandler:

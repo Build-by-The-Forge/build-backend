@@ -82,8 +82,10 @@ class InMemoryAttemptRepository:
             None,
         )
 
-    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
-        return [attempt for attempt in self.items.values() if attempt.user_id == user_id and attempt.tenant_id == tenant_id]
+    async def list_by_user(self, user_id: str, tenant_id: str, *, limit: int, offset: int) -> tuple[list[AssessmentAttempt], int]:
+        mine = [attempt for attempt in self.items.values() if attempt.user_id == user_id and attempt.tenant_id == tenant_id]
+        mine.sort(key=lambda attempt: (attempt.created_at, attempt.id), reverse=True)
+        return mine[offset : offset + limit], len(mine)
 
     async def update(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
         existing = await self.get_by_id(attempt.id, tenant_id=tenant_id)
@@ -159,8 +161,8 @@ async def test_get_and_list_attempts_are_scoped_to_owner_and_tenant(
     assert await service.get_attempt(attempt.id, "tenant-123", "user-123") is not None
     assert await service.get_attempt(attempt.id, "tenant-123", "user-999") is None
     assert await service.get_attempt(attempt.id, "tenant-999", "user-123") is None
-    assert await service.list_my_attempts("tenant-123", "user-123") == [attempt]
-    assert await service.list_my_attempts("tenant-123", "user-999") == []
+    assert await service.list_my_attempts("tenant-123", "user-123") == ([attempt], 1)
+    assert await service.list_my_attempts("tenant-123", "user-999") == ([], 0)
 
 
 @pytest.mark.asyncio

@@ -65,6 +65,6 @@ async def test_active_attempt_lookup_and_submitted_history(
     await repository.update(active, tenant_id="tenant-123")
 
     assert await repository.get_active_for_user("assessment-123", "user-123", "tenant-123") is None
-    attempts = await repository.list_by_user("user-123", "tenant-123")
-    assert len(attempts) == 1
+    attempts, total = await repository.list_by_user("user-123", "tenant-123", limit=50, offset=0)
+    assert len(attempts) == 1 and total == 1
     assert attempts[0].status == AttemptStatus.SUBMITTED
