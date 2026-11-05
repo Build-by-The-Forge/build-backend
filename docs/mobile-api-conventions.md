@@ -117,7 +117,7 @@ The registry below is the starting set. M1 fixes the full list, and M3-A impleme
 | 403 | `PERMISSION_DENIED` | Explain; no retry |
 | 404 | `RESOURCE_NOT_FOUND` | Show not found. Also used for other tenants' and other users' private resources |
 | 408 | `UPLOAD_READ_TIMEOUT` | Retry with the same `Idempotency-Key` |
-| 409 | `CONFLICT` and specific codes such as `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_CONTENT`, `ATTEMPT_ALREADY_SUBMITTED` | Reconcile with server state |
+| 409 | `CONFLICT` and specific codes such as `IDEMPOTENCY_KEY_REUSED`, `DUPLICATE_CONTENT`, `ATTEMPT_ALREADY_SUBMITTED`, `ACTIVE_JOB_EXISTS` | Reconcile with server state |
 | 405 | `METHOD_NOT_ALLOWED` | A client bug; no retry |
 | 413 | `UPLOAD_TOO_LARGE` | Explain the limit |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` | Explain the accepted types |
@@ -147,7 +147,7 @@ A bounded list that is small by nature, such as the caller's memberships, may be
 | Operation | Rule |
 |---|---|
 | Upload | `Idempotency-Key` required. Same key and bytes return the original asset with 200. Same key with different bytes is `IDEMPOTENCY_KEY_REUSED` |
-| Create ingestion job | A repeat for an asset with an active job returns that job. To be implemented if M2 confirms it's missing |
+| Create, reprocess or retry an ingestion job | A document has at most one active job (migration 0030). A request that would start a second one, including a repeat or a retry beside an active run, is refused with 409 `ACTIVE_JOB_EXISTS` and starts nothing. The client reads the document's latest job (`GET /content/assets/{asset_id}/jobs/latest`) to see the active one. Returning the active job instead of the 409 was considered and deferred: the 409 is explicit, and the database decides it, so racing requests get the same answer |
 | Start attempt | Returns the active attempt if there is one (already true) |
 | Save or delete answer | `PUT` and `DELETE` on one question, so a repeat leaves one answer |
 | Submit attempt | A repeat returns the submitted attempt or a defined conflict, and never grades twice. M2 verifies which applies today |
