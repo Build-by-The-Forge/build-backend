@@ -29,6 +29,8 @@ class GetAttemptCommand:
 class ListMyAttemptsCommand:
     tenant_id: str
     user_id: str
+    limit: int = 50
+    offset: int = 0
 
 
 @dataclass(slots=True)
