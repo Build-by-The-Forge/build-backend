@@ -190,6 +190,10 @@ async def test_retrier_claim_skips_permanent_failures_and_attempts_at_the_cap():
     assert "content_ingestion_jobs.is_retryable is true" in sql
     assert "content_ingestion_jobs.attempt_count < content_ingestion_jobs.max_attempts" in sql
     assert "order by content_ingestion_jobs.updated_at asc" in sql
+    # Not while the same document has an active run.
+    assert "content_ingestion_jobs_1.asset_id = content_ingestion_jobs.asset_id" in sql
+    assert "content_ingestion_jobs_1.status not in" in sql
+    assert "not (exists" in sql
 
 
 @pytest.mark.asyncio
