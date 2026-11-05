@@ -10,6 +10,7 @@ from app.api.assessment.schemas import (
     AttemptResultResponse,
     QuestionResultResponse,
 )
+from app.api.pagination import Page
 from app.application.ai.memory_reporting import LearningMemoryReporter
 from app.application.assessment.attempt_commands import AttemptQuestionSnapshot
 from app.application.assessment.attempt_service import AttemptService
@@ -92,16 +93,17 @@ async def get_attempt_questions(
 @router.get("/attempts", status_code=status.HTTP_200_OK)
 async def list_attempts(
     request: Request,
+    page: Page,
     context: TenantContext = Depends(require_permission(Permission.ASSESSMENT_ATTEMPT_READ)),
 ) -> JSONResponse:
-    attempts = await service.list_my_attempts(context.tenant_id, context.user_id)
+    attempts, total = await service.list_my_attempts(context.tenant_id, context.user_id, limit=page.limit, offset=page.offset)
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={
             "success": True,
             "data": [_attempt_payload(attempt) for attempt in attempts],
             "error": None,
-            "meta": {"request_id": getattr(request.state, "request_id", None)},
+            "meta": {"request_id": getattr(request.state, "request_id", None), "pagination": page.meta(total)},
         },
     )
 

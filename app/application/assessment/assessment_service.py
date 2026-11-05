@@ -94,12 +94,14 @@ class AssessmentService:
                 return await ListAssessmentsHandler(uow.assessments).handle(command)
         return await ListAssessmentsHandler(self._required_repository()).handle(command)
 
-    async def list_readable_assessments(self, tenant_id: str, course_id: str | None = None) -> list[tuple[Assessment, int]]:
-        """What the mobile routes list, for everyone (M3-E)."""
+    async def list_readable_assessments(
+        self, tenant_id: str, course_id: str | None = None, *, limit: int, offset: int
+    ) -> tuple[list[tuple[Assessment, int]], int]:
+        """One page of what the mobile routes list, for everyone (M3-E), and the total."""
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await uow.assessments.list_readable(tenant_id, course_id)
-        return await self._required_repository().list_readable(tenant_id, course_id)
+                return await uow.assessments.list_readable(tenant_id, course_id, limit=limit, offset=offset)
+        return await self._required_repository().list_readable(tenant_id, course_id, limit=limit, offset=offset)
 
     async def get_readable_assessment(self, assessment_id: str, tenant_id: str) -> tuple[Assessment, int] | None:
         if self.uow_factory is not None:

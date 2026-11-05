@@ -1,3 +1,5 @@
+from collections.abc import Collection
+
 from app.application.assessment.attempt_commands import (
     AttemptQuestionSnapshot,
     GetAttemptCommand,
@@ -57,12 +59,12 @@ class AttemptService:
             raise AttemptLimitReachedError("ATTEMPT_LIMIT_REACHED")
         return attempt
 
-    async def attempts_used(self, tenant_id: str, user_id: str) -> dict[str, int]:
-        """The attempts this user has started, by assessment, finalized or not."""
+    async def attempts_used(self, tenant_id: str, user_id: str, assessment_ids: Collection[str]) -> dict[str, int]:
+        """The attempts this user has started on these assessments, finalized or not."""
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                return await uow.attempts.counts_by_assessment(user_id, tenant_id)
-        return await self._required_repository().counts_by_assessment(user_id, tenant_id)
+                return await uow.attempts.counts_by_assessment(user_id, tenant_id, assessment_ids)
+        return await self._required_repository().counts_by_assessment(user_id, tenant_id, assessment_ids)
 
     async def get_attempt(self, attempt_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt | None:
         command = GetAttemptCommand(attempt_id, tenant_id, user_id)
@@ -76,16 +78,18 @@ class AttemptService:
             return attempt
         return await GetAttemptHandler(self._required_repository()).handle(command)
 
-    async def list_my_attempts(self, tenant_id: str, user_id: str) -> list[AssessmentAttempt]:
-        command = ListMyAttemptsCommand(tenant_id, user_id)
+    async def list_my_attempts(
+        self, tenant_id: str, user_id: str, *, limit: int = 50, offset: int = 0
+    ) -> tuple[list[AssessmentAttempt], int]:
+        command = ListMyAttemptsCommand(tenant_id, user_id, limit, offset)
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                attempts = await ListMyAttemptsHandler(
+                attempts, total = await ListMyAttemptsHandler(
                     uow.attempts, uow.assessments, uow.attempt_answers, uow.attempt_results
                 ).handle(command)
                 events = [event for attempt in attempts for event in attempt.pull_events()]
             self._publish_events(events)
-            return attempts
+            return attempts, total
         return await ListMyAttemptsHandler(self._required_repository()).handle(command)
 
     async def submit_attempt(self, attempt_id: str, tenant_id: str, user_id: str) -> AssessmentAttempt | None:

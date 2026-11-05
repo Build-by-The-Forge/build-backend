@@ -1,3 +1,4 @@
+from collections.abc import Collection
 from datetime import datetime
 from typing import Protocol
 
@@ -53,13 +54,15 @@ class AttemptRepository(Protocol):
     async def count_for_user(self, assessment_id: str, user_id: str, tenant_id: str) -> int:
         raise NotImplementedError
 
-    async def counts_by_assessment(self, user_id: str, tenant_id: str) -> dict[str, int]:
+    async def counts_by_assessment(self, user_id: str, tenant_id: str, assessment_ids: Collection[str]) -> dict[str, int]:
+        """The attempts this user has started on each of these assessments only."""
         raise NotImplementedError
 
     async def insert_unless_active(self, attempt: AssessmentAttempt) -> bool:
         raise NotImplementedError
 
-    async def list_by_user(self, user_id: str, tenant_id: str) -> list[AssessmentAttempt]:
+    async def list_by_user(self, user_id: str, tenant_id: str, *, limit: int, offset: int) -> tuple[list[AssessmentAttempt], int]:
+        """One page of this user's attempts, newest first, then by id, with the total."""
         raise NotImplementedError
 
     async def update(self, attempt: AssessmentAttempt, tenant_id: str | None = None) -> AssessmentAttempt:
