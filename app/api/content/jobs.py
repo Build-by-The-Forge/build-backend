@@ -17,6 +17,7 @@ from app.api.content.job_schemas import (
     IngestionJobRetryRequest,
 )
 from app.api.content.reader_view import job_view
+from app.api.content.reading import Caller, read_service, reading
 from app.application.content.job_handlers import (
     ASSET_DISPATCH_REFUSALS,
     ReconcileMismatchError,
@@ -25,9 +26,8 @@ from app.application.content.job_handlers import (
 from app.application.content.job_service import ContentIngestionJobService
 from app.bootstrap.container import build_container
 from app.core.authorization import Permission
-from app.core.dependencies import require_permission
 from app.core.exceptions import public_message, safe_validation_details
-from app.core.tenant_context import TenantContext
+from app.domain.client_safe import ClientSafeError
 from app.domain.content.ai_report import public_failure_message
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.job import (
@@ -45,6 +45,18 @@ from app.middleware.service_auth import STATE_KEY as SERVICE_AUTH_STATE_KEY
 router = APIRouter(prefix="", tags=["content-ingestion-jobs"])
 logger = structlog.get_logger(__name__)
 service = build_container().get(ContentIngestionJobService)
+
+
+async def _require_readable_asset(caller: Caller, asset_id: str) -> None:
+    # A document the caller may not read is reported exactly as a missing
+    # one: the same exception, so the route's existing 404 answers it.
+    if not await read_service.may_read_asset(caller.reader, asset_id):
+        raise ClientSafeError("ContentAsset does not exist")
+
+
+async def _require_readable_job(caller: Caller, job_id: str) -> None:
+    if await read_service.get_job(caller.reader, job_id) is None:
+        raise ClientSafeError("ContentIngestionJob does not exist")
 
 
 def _active_job_exists() -> JSONResponse:
@@ -70,9 +82,11 @@ async def trigger_ingestion_job(
     asset_id: str,
     payload: IngestionJobCreateRequest,
     request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
+    context = caller.context
     try:
+        await _require_readable_asset(caller, asset_id)
         job = await service.create_job(
             asset_id=asset_id,
             tenant_id=context.tenant_id,
@@ -108,9 +122,10 @@ async def trigger_ingestion_job(
 async def get_ingestion_job(
     job_id: str,
     request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_READ)),
 ) -> JSONResponse:
-    job = await service.get_job(job_id=job_id, tenant_id=context.tenant_id)
+    context = caller.context
+    job = await read_service.get_job(caller.reader, job_id)
     if job is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -133,9 +148,11 @@ async def get_ingestion_job(
 async def get_latest_job_for_asset(
     asset_id: str,
     request: Request,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_READ)),
 ) -> JSONResponse:
-    job = await service.get_latest_job_for_asset(asset_id=asset_id, tenant_id=context.tenant_id)
+    context = caller.context
+    readable = await read_service.may_read_asset(caller.reader, asset_id)
+    job = await service.get_latest_job_for_asset(asset_id=asset_id, tenant_id=context.tenant_id) if readable else None
     if job is None:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -156,14 +173,10 @@ async def list_jobs_for_asset(
     asset_id: str,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_READ)),
 ) -> JSONResponse:
-    jobs, total = await service.list_jobs(
-        tenant_id=context.tenant_id,
-        asset_id=asset_id,
-        limit=limit,
-        offset=offset,
-    )
+    context = caller.context
+    jobs, total = await read_service.list_jobs(caller.reader, asset_id=asset_id, limit=limit, offset=offset)
     items = [job_view(IngestionJobResponse.from_domain(j).model_dump(mode="json"), context) for j in jobs]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -180,16 +193,11 @@ async def list_ingestion_jobs(
     source_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_READ)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_READ)),
 ) -> JSONResponse:
+    context = caller.context
     st = IngestionStatus(status_filter) if status_filter else None
-    jobs, total = await service.list_jobs(
-        tenant_id=context.tenant_id,
-        source_id=source_id,
-        status=st,
-        limit=limit,
-        offset=offset,
-    )
+    jobs, total = await read_service.list_jobs(caller.reader, source_id=source_id, status=st, limit=limit, offset=offset)
     items = [job_view(IngestionJobResponse.from_domain(j).model_dump(mode="json"), context) for j in jobs]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -207,9 +215,11 @@ async def list_ingestion_jobs(
 async def retry_job(
     job_id: str,
     payload: IngestionJobRetryRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
+    context = caller.context
     try:
+        await _require_readable_job(caller, job_id)
         job = await service.retry_job(job_id=job_id, tenant_id=context.tenant_id, delay_seconds=payload.delay_seconds)
     except InvalidJobTransition as exc:
         return JSONResponse(
@@ -240,9 +250,11 @@ async def retry_job(
 async def reprocess_asset(
     asset_id: str,
     payload: IngestionJobReprocessRequest,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
+    context = caller.context
     try:
+        await _require_readable_asset(caller, asset_id)
         job = await service.reprocess_asset(
             asset_id=asset_id,
             tenant_id=context.tenant_id,
@@ -276,12 +288,14 @@ async def reprocess_asset(
 )
 async def dispatch_ingestion_job(
     job_id: str,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
+    context = caller.context
     # No request body: where AI-service reports back is never chosen by the
     # caller. The signed context carries this caller and the one permission
     # checked here (design B.2, decision E.6).
     try:
+        await _require_readable_job(caller, job_id)
         job = await service.dispatch_job(
             job_id=job_id,
             tenant_id=context.tenant_id,
@@ -349,7 +363,7 @@ async def dispatch_ingestion_job(
 )
 async def reconcile_ingestion_job(
     job_id: str,
-    context: TenantContext = Depends(require_permission(Permission.CONTENT_JOB_MANAGE)),
+    caller: Caller = Depends(reading(Permission.CONTENT_JOB_MANAGE)),
 ) -> JSONResponse:
     """Apply AI-service's account of the job's active task (design B.3).
 
@@ -357,7 +371,8 @@ async def reconcile_ingestion_job(
     ``meta.reconciled`` lists each event's outcome.
     """
     try:
-        result = await service.reconcile_job(job_id=job_id, tenant_id=context.tenant_id)
+        await _require_readable_job(caller, job_id)
+        result = await service.reconcile_job(job_id=job_id, tenant_id=caller.context.tenant_id)
     except InvalidJobTransition as exc:
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,

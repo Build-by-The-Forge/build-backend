@@ -8,7 +8,7 @@ from tests.integration.assessment.test_question_api import (
     seed_tenant_context,
 )
 from tests.integration.content.test_content_source_api import add_membership
-from tests.integration.content.uploads import pdf_bytes, upload_asset
+from tests.integration.content.uploads import pdf_bytes, reviewed_for_students, upload_asset
 
 
 def upload_version(client, asset_id, *, headers, data, key=None, name="v2.pdf"):
@@ -101,7 +101,10 @@ async def test_content_asset_api_lifecycle_and_deduplication(client) -> None:
     assert asset_b_data["id"] != asset_1_id
     assert asset_b_data["tenant_id"] == tenant_b_id
 
-    # 10. Student reads asset #1 details -> 200 OK
+    # 10. Student reads asset #1 details -> 200 OK, once it's reviewed for students
+    # (unreviewed staff material is staff-only: M3-D read policy).
+    assert client.get(f"/content/assets/{asset_1_id}", headers=student_headers).status_code == 404
+    await reviewed_for_students(asset_1_id)
     get_res = client.get(f"/content/assets/{asset_1_id}", headers=student_headers)
     assert get_res.status_code == 200
     assert get_res.json()["data"]["id"] == asset_1_id
@@ -124,10 +127,16 @@ async def test_content_asset_api_lifecycle_and_deduplication(client) -> None:
     assert parent_check.status_code == 200
     assert parent_check.json()["data"]["status"] == "superseded"
 
-    # 13. List assets for source A -> returns both v1 and v2
+    # 13. List assets for source A: staff see both versions. A student sees v1
+    #     only: v2 is a new document, with rights of its own, so it's
+    #     staff-only until it's reviewed too (M3-D ruling A, read policy).
+    staff_ids = [a["id"] for a in client.get(f"/content/sources/{source_a_id}/assets", headers=lecturer_a_headers).json()["data"]]
+    assert sorted(staff_ids) == sorted([v2_id, asset_1_id])
     list_res = client.get(f"/content/sources/{source_a_id}/assets", headers=student_headers)
     assert list_res.status_code == 200
-    listed_ids = [a["id"] for a in list_res.json()["data"]]
+    assert [a["id"] for a in list_res.json()["data"]] == [asset_1_id]
+    await reviewed_for_students(v2_id)
+    listed_ids = [a["id"] for a in client.get(f"/content/sources/{source_a_id}/assets", headers=student_headers).json()["data"]]
     assert sorted(listed_ids) == sorted([v2_id, asset_1_id])
 
     # 14. Revoke asset v2
