@@ -14,7 +14,10 @@ Retrieving calls (chat, explain, question generation) follow M3-D:
   and nonce, over the exact bytes received, within the window; the nonce
   is then consumed in the replay store, so a second response for it is
   refused;
-- it must carry ``sources_used``. Anything else is withheld.
+- it must carry ``sources_used``, and every source must be readable by the
+  caller under the one read policy at that moment and not denied, checked
+  after the response arrives. Otherwise the whole answer is withheld
+  (``ANSWER_WITHHELD``) and nothing of it is returned.
 """
 
 from __future__ import annotations
@@ -67,6 +70,12 @@ class NonceStore(Protocol):
     async def claim(self, receiver: str, sender: str, request_id: str) -> bool: ...
 
 
+async def no_source_is_readable(actor: AIActor, asset_ids: set[str]) -> set[str]:
+    """The fail-closed default: without the read policy wired in, no source
+    passes, so no answer that used one is returned."""
+    return set()
+
+
 async def nothing_lowered_yet(tenant_id: str) -> frozenset[str]:
     """The tenant's lowered, unacknowledged documents (M3-D immediate denial).
 
@@ -86,6 +95,7 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         response_keys: ServiceKeys | None = None,
         nonce_store: NonceStore | None = None,
         denied_assets: Callable[[str], Awaitable[frozenset[str]]] = nothing_lowered_yet,
+        readable_sources: Callable[[AIActor, set[str]], Awaitable[set[str]]] = no_source_is_readable,
     ) -> None:
         self._base_url = (base_url or settings.ai_service_url).rstrip("/")
         self._timeout = float(timeout_seconds or settings.ai_service_timeout_seconds)
@@ -94,6 +104,7 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         self._response_keys_override = response_keys
         self._nonce_store = nonce_store
         self._denied_assets = denied_assets
+        self._readable_sources = readable_sources
 
     def _keys(self) -> ServiceKeys:
         if self._keys_override is not None:
@@ -203,10 +214,37 @@ class HttpAIAssistantGateway(AIAssistantGateway):
             raise _bad_response(path) from exc
         await self._consume(nonce, path)
         envelope = _envelope(response, path)
-        if not _valid_sources(envelope.get("sources_used")):
+        sources = envelope.get("sources_used")
+        if not _valid_sources(sources):
             logger.warning("AI-service %s response withheld: no valid sources_used", path)
             raise _bad_response(path)
+        await self._check_provenance(path, actor, {source["asset_id"] for source in sources})
         return _data_of(envelope, path)
+
+    async def _check_provenance(self, path: str, actor: AIActor, asset_ids: set[str]) -> None:
+        """Every source readable by this caller now, by the one read policy,
+        and not denied now: the denial list is read again, since a document
+        may have been lowered while the call was out. Any failure, or a check
+        that can't run, withholds the whole answer."""
+        if not asset_ids:
+            return
+        try:
+            readable = await self._readable_sources(actor, set(asset_ids))
+            denied = await self._denied_assets(actor.tenant_id)
+        except Exception as exc:
+            logger.warning("AI-service %s answer withheld: provenance check failed (%s)", path, type(exc).__name__)
+            raise _withheld() from exc
+        refused = sorted((asset_ids - readable) | (asset_ids & denied))
+        if refused:
+            # IDs only: never the passage, the question or the answer.
+            logger.warning(
+                "AI-service %s answer withheld: tenant %s user %s sources %s",
+                path,
+                actor.tenant_id,
+                actor.user_id,
+                refused,
+            )
+            raise _withheld()
 
     async def _consume(self, nonce: str, path: str) -> None:
         """Accept one response per nonce, once."""
@@ -296,10 +334,8 @@ def _data_of(envelope: dict[str, Any], path: str) -> dict[str, Any]:
 
 
 def _valid_sources(sources: Any) -> bool:
-    """sources_used is required: a list of (asset, run, attempt).
-
-    Checking each source against the caller's read policy is the
-    provenance check, which needs M3-D's one read policy (PR 4)."""
+    """sources_used is required: a list of (asset, run, attempt). Each
+    source is then checked against the read policy (_check_provenance)."""
     if not isinstance(sources, list):
         return False
     for source in sources:
@@ -310,6 +346,10 @@ def _valid_sources(sources: Any) -> bool:
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
                 return False
     return True
+
+
+def _withheld() -> AIAssistantError:
+    return AIAssistantError("the answer drew on a source the caller may not read", error_code="ANSWER_WITHHELD")
 
 
 def _bad_response(operation: str) -> AIAssistantError:
