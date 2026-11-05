@@ -10,6 +10,7 @@ from app.application.assessment.question_service import QuestionService
 from app.application.catalogue.course_service import CourseService
 from app.application.content.asset_service import ContentAssetService
 from app.application.content.job_service import ContentIngestionJobService
+from app.application.content.read_policy import ContentReadService
 from app.application.content.source_service import ContentSourceService
 from app.application.content.upload import ContentAssetUploadService
 from app.application.curriculum.benchmark_service import (
@@ -38,6 +39,7 @@ from app.infrastructure.catalogue.unit_of_work import (
     CourseUnitOfWork,
     catalogue_unit_of_work,
 )
+from app.infrastructure.content.read_policy_sql import content_read_port
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
 from app.infrastructure.content.unit_of_work import (
     ContentUnitOfWork,
@@ -224,6 +226,8 @@ def build_container() -> Container:
         ),
     )
     container.register(ContentUnitOfWork, sqlalchemy_content_uow)
+    # The one read policy for documents and jobs (M3-D ruling B).
+    container.register(ContentReadService, ContentReadService(content_read_port))
     container.register(
         ContentSourceService,
         ContentSourceService(
