@@ -19,6 +19,7 @@ from app.domain.content.enums import AuthorityLevel, ContentSourceType, Visibili
 from app.domain.content.source import ContentSource
 from app.infrastructure.db.models.catalogue import TopicModel
 from tests.integration.assessment.test_assessment_visibility import assessment_with_question
+from tests.integration.content.uploads import reviewed_for_students
 from tests.integration.mobile_contract_audit import (
     ROOT,
     SPEC_PATH,
@@ -127,6 +128,7 @@ async def test_observed_behaviour_matches_the_gap_allowlist(client):
         topic_id = await session.scalar(select(TopicModel.id).where(TopicModel.course_id == assessment["course_id"]))
     tenant_id = client.get("/identity/tenant-context", headers=student).json()["data"]["tenant_id"]
     source_id, asset_id = await seeded_content(tenant_id)
+    await reviewed_for_students(asset_id)
     assert client.get(f"/content/assets/{asset_id}", headers=student).status_code == 200
     values = {
         "ids": {

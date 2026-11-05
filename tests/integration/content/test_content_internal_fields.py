@@ -8,7 +8,7 @@ import pytest
 from tests.integration.assessment.test_attempt_api import headers
 from tests.integration.assessment.test_question_api import register_and_authenticate, seed_tenant_context
 from tests.integration.content.test_content_source_api import add_membership
-from tests.integration.content.uploads import upload_asset
+from tests.integration.content.uploads import reviewed_for_students, upload_asset
 
 STAFF_ONLY = {
     "storage_uri",
@@ -57,6 +57,8 @@ async def content(client):
     asset_id = asset.json()["data"]["id"]
     job = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=lecturer)
     assert job.status_code == 201, job.text
+    # Readable by students, so the test sees what they're shown of it.
+    await reviewed_for_students(asset_id)
     student_id, student_token = await register_and_authenticate(client, f"fields-student-{uuid4()}@example.com")
     await add_membership(student_id, tenant_id, "student")
     return lecturer, headers(student_token, slug), source_id, asset_id, job.json()["data"]["id"]
