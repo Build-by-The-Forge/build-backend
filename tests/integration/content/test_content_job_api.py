@@ -123,9 +123,29 @@ async def test_content_job_api_and_rbac(client) -> None:
     assert (run2["run_number"], run2["status"]) == (2, "queued")
     assert run2["id"] != job_id
 
+    # Run 2 is active, so run 1 can't be retried beside it: a document has
+    # one active job (migration 0030). Run 1 stays failed.
+    retry_res = client.post(f"/content/jobs/{job_id}/retry", json={"delay_seconds": 1}, headers=admin_headers)
+    assert retry_res.status_code == 409, retry_res.text
+    assert retry_res.json()["error"]["code"] == "ACTIVE_JOB_EXISTS"
+    assert client.get(f"/content/jobs/{job_id}", headers=admin_headers).json()["data"]["status"] == "failed"
+
+    # Once run 2 finishes, run 1 can be retried.
+    async def finish_run2() -> None:
+        async with SessionLocal() as session:
+            await session.execute(
+                update(ContentIngestionJobModel).where(ContentIngestionJobModel.id == run2["id"]).values(status="failed")
+            )
+            await session.commit()
+
+    await finish_run2()
     retry_res = client.post(f"/content/jobs/{job_id}/retry", json={"delay_seconds": 1}, headers=admin_headers)
     assert retry_res.status_code == 200, retry_res.text
     assert (retry_res.json()["data"]["status"], retry_res.json()["data"]["attempt_count"]) == ("queued", 2)
+    # And now run 1 is active, a reprocess is refused the same way.
+    again = client.post(f"/content/assets/{asset_id}/reprocess", json={}, headers=admin_headers)
+    assert again.status_code == 409, again.text
+    assert again.json()["error"]["code"] == "ACTIVE_JOB_EXISTS"
 
     # G. Students cannot operate jobs at all.
     assert client.post(f"/content/jobs/{job_id}/retry", json={"delay_seconds": 1}, headers=student_headers).status_code == 403
