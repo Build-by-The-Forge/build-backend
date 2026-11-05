@@ -1,9 +1,9 @@
 # Pinned base image: the patch release and its multi-platform index digest,
-# resolved 2026-10-13 (the same image python:3.13-slim pointed to). To
+# resolved 2026-11-05 (the same image python:3.13-slim pointed to). To
 # upgrade: pull the new patch tag, take its digest from
 # `docker buildx imagetools inspect python:<version>-slim`, update both here,
 # and run scripts/m3_boundary_gate.sh before committing.
-FROM python:3.13.16-slim@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS runtime
+FROM python:3.13.18-slim@sha256:d0a9e379c0c588befb0e427db17ca9731751d281f32c6cb1a90a1277b680bdad AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
