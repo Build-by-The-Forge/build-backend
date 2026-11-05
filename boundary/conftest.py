@@ -13,6 +13,7 @@ the backend writes to a shared volume.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -27,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import asyncpg
 import httpx
 import pytest
 
@@ -172,6 +174,38 @@ def assign_scope(
     response = ai.post(SCOPE_ASSIGNMENTS, content=raw, headers=to_ai("POST", SCOPE_ASSIGNMENTS, raw, system_context(tenant_id)))
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def review_for_students(tenant: "Tenant", asset_id: str) -> None:
+    """The backend's side of an institutional scope: the document is
+    classified institutional with an accepted review for the tenant, as the
+    operator command (M3-D PR 5) will record before it assigns the scope.
+    Without it the backend's provenance check withholds any answer that
+    cites the document, whatever the AI service's scope says."""
+
+    async def go() -> None:
+        connection = await asyncpg.connect(os.environ.get("BOUNDARY_BACKEND_APP_DSN", ""))
+        try:
+            async with connection.transaction():
+                await connection.execute(
+                    "UPDATE content_assets SET ownership_class = 'institutional' WHERE id = $1 AND tenant_id = $2",
+                    asset_id,
+                    tenant.tenant_id,
+                )
+                await connection.execute(
+                    "INSERT INTO content_rights_assertions (id, tenant_id, asset_id, asserted_by, kind, rights_basis,"
+                    " audience, redistribution, ai_use, outcome, reason)"
+                    " VALUES ($1, $2, $3, $4, 'staff_review', 'lecturer_provided', 'tenant', 'tenant_only',"
+                    " 'permitted', 'accepted', 'boundary review')",
+                    str(uuid.uuid4()),
+                    tenant.tenant_id,
+                    asset_id,
+                    tenant.members["lecturer"].user_id,
+                )
+        finally:
+            await connection.close()
+
+    asyncio.run(go())
 
 
 def jbytes(value: dict[str, Any]) -> bytes:
