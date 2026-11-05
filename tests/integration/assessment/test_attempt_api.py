@@ -113,7 +113,9 @@ async def test_attempt_api_start_resume_get_list_and_submit(client) -> None:
 
     retrieved = client.get(f"/assessment/attempts/{attempt_id}", headers=student_headers)
     assert retrieved.status_code == 200
-    assert retrieved.json()["data"]["user_id"] == student_id
+    # The student's own attempt; the response doesn't repeat who they are (G-39).
+    assert retrieved.json()["data"]["id"] == attempt_id
+    assert "user_id" not in retrieved.json()["data"] and "tenant_id" not in retrieved.json()["data"]
 
     listed = client.get("/assessment/attempts", headers=student_headers)
     assert listed.status_code == 200
