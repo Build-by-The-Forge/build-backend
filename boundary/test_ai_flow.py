@@ -21,6 +21,7 @@ from boundary.conftest import (
     create_job_for,
     pdf_document,
     retrieving,
+    review_for_students,
     wait_for_status,
 )
 
@@ -36,6 +37,8 @@ def documents(ai, backend, tenant_a, tenant_b) -> dict[str, str]:
     for tenant in (tenant_a, tenant_b):
         marker = uuid.uuid4().hex
         asset = create_asset(backend, tenant, pdf_document(marker))
+        # Institutional on both sides: the backend's review, then the AI scope.
+        review_for_students(tenant, asset["id"])
         assign_scope(ai, tenant.tenant_id, asset["id"])
         job = create_job_for(backend, tenant, asset)
         final = wait_for_status(backend, tenant, job["id"], {"ready", "failed"}, timeout=READY_TIMEOUT)

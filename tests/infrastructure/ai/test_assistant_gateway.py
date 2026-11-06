@@ -7,7 +7,7 @@ import pytest
 
 from app.core.config import settings
 from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
-from app.infrastructure.ai.assistant_gateway import RESPONSE_NONCE_RECEIVER, HttpAIAssistantGateway
+from app.infrastructure.ai.assistant_gateway import RESPONSE_NONCE_RECEIVER, HttpAIAssistantGateway, no_source_is_readable
 from app.infrastructure.security.replay_store import ReplayStoreUnavailable
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
@@ -89,8 +89,17 @@ def signing(handler):
     return wrapped
 
 
-def gateway(handler, *, nonces: Nonces | None = None, denied_assets=None, signed: bool = True) -> HttpAIAssistantGateway:
+async def every_source_readable(actor, asset_ids):
+    return set(asset_ids)
+
+
+def gateway(
+    handler, *, nonces: Nonces | None = None, denied_assets=None, signed: bool = True, readable_sources=every_source_readable
+) -> HttpAIAssistantGateway:
+    # Tests of signing and nonces read every source as readable; the
+    # provenance tests below pass their own policy.
     extra = {} if denied_assets is None else {"denied_assets": denied_assets}
+    extra["readable_sources"] = readable_sources
     return HttpAIAssistantGateway(
         base_url="http://ai-service.internal",
         client=httpx.AsyncClient(transport=httpx.MockTransport(signing(handler) if signed else handler)),
@@ -474,7 +483,8 @@ async def test_the_shared_denial_limit_is_never_exceeded(size, sent_calls):
         return answer()
 
     async def denied(tenant_id):
-        return frozenset(f"asset-{i}" for i in range(size))
+        # Distinct from the source the answer cites, which a denial would withhold.
+        return frozenset(f"denied-{i}" for i in range(size))
 
     g = gateway(handler, denied_assets=denied)
     if sent_calls:
@@ -485,3 +495,89 @@ async def test_the_shared_denial_limit_is_never_exceeded(size, sent_calls):
             await g.chat(ACTOR, "hi")
         assert raised.value.unavailable
     assert len(sent) == sent_calls  # never a truncated list
+
+
+# --- The provenance check (M3-D PR 4b) ------------------------------------------------------
+
+
+async def two_sources(request):
+    sources = [SOURCE, {"asset_id": "asset-2", "run_number": 3, "attempt": 2}]
+    return ok({"answer": "A", "context_used": [], "memory_used": ""}, sources=sources)
+
+
+async def test_an_answer_is_returned_when_every_source_is_readable_and_not_denied():
+    asked: list[tuple[str, set[str]]] = []
+
+    async def readable(actor, asset_ids):
+        asked.append((actor.user_id, set(asset_ids)))
+        return set(asset_ids)
+
+    assert (await gateway(two_sources, readable_sources=readable).chat(ACTOR, "hi")).answer == "A"
+    # Asked about exactly the sources used, for this caller.
+    assert asked == [(ACTOR.user_id, {"asset-1", "asset-2"})]
+
+
+async def test_one_unreadable_source_withholds_the_whole_answer():
+    async def readable(actor, asset_ids):
+        return set(asset_ids) - {"asset-2"}
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(two_sources, readable_sources=readable).chat(ACTOR, "hi")
+    assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+async def test_a_source_denied_while_the_call_was_out_withholds_the_answer():
+    # The denial list is read again after the response: empty when the call
+    # went out, then naming a source by the time the answer arrives.
+    reads = iter([frozenset(), frozenset({"asset-1"})])
+
+    async def denied(tenant_id):
+        return next(reads)
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(two_sources, denied_assets=denied).chat(ACTOR, "hi")
+    assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+async def test_a_check_that_cant_run_withholds_the_answer():
+    async def failing(actor, asset_ids):
+        raise RuntimeError("database unavailable")
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(two_sources, readable_sources=failing).chat(ACTOR, "hi")
+    assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+async def test_an_answer_with_no_sources_needs_no_check():
+    async def never(actor, asset_ids):
+        raise AssertionError("no sources, so nothing to check")
+
+    async def unsourced(request):
+        return ok({"answer": "A", "context_used": [], "memory_used": ""}, sources=[])
+
+    assert (await gateway(unsourced, readable_sources=never).chat(ACTOR, "hi")).answer == "A"
+
+
+async def test_without_the_policy_wired_in_no_sourced_answer_is_returned():
+    # The constructor's default fails closed.
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(two_sources, readable_sources=no_source_is_readable).chat(ACTOR, "hi")
+    assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+@pytest.mark.parametrize("operation", ["explain", "generate_questions"])
+async def test_every_retrieving_operation_is_checked(operation):
+    async def nothing(actor, asset_ids):
+        return set()
+
+    async def handler(request):
+        data = {"explanation": "E"} if operation == "explain" else {"questions": [], "discarded": 0}
+        return ok(data, sources=[SOURCE])
+
+    client = gateway(handler, readable_sources=nothing)
+    with pytest.raises(AIAssistantError) as raised:
+        if operation == "explain":
+            await client.explain(ACTOR, "osmosis")
+        else:
+            await client.generate_questions(ACTOR, "cells", 2, "medium", "mcq")
+    assert raised.value.error_code == "ANSWER_WITHHELD"
