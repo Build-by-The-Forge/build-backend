@@ -15,17 +15,19 @@ from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.content.read_policy import ContentReadService, Reader
 from app.application.identity.throttle import AuthThrottle
 from app.bootstrap.container import build_container
-from app.core.authorization import Permission
+from app.core.authorization import ROLE_PERMISSIONS, Permission
 from app.core.dependencies import require_permission
-from app.core.exceptions import ClientError
+from app.core.exceptions import AnswerWithheldError, ClientError
 from app.core.tenant_context import TenantContext
 from app.domain.ai.assistant import AIActor, AIAssistantError, AIAssistantGateway
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 throttle = build_container().get(AuthThrottle)
+read_service = build_container().get(ContentReadService)
 
 MAX_MESSAGE_CHARS = 4000
 MAX_QUESTION_COUNT = 50
@@ -53,7 +55,22 @@ class GenerateQuestionsRequest(AIRequest):
 
 def get_ai_assistant_gateway(request: Request) -> AIAssistantGateway:
     # Response nonces are consumed in the shared replay store (M3-D).
-    return HttpAIAssistantGateway(nonce_store=getattr(request.app.state, "service_replay_store", None))
+    return HttpAIAssistantGateway(
+        nonce_store=getattr(request.app.state, "service_replay_store", None),
+        readable_sources=readable_sources,
+    )
+
+
+async def readable_sources(actor: AIActor, asset_ids: set[str]) -> set[str]:
+    """The provenance check's question: which of these documents may this
+    caller read now, by the one read policy (M3-D ruling B). The reader is
+    built from the verified actor, as for every content route."""
+    reader = Reader(
+        tenant_id=actor.tenant_id,
+        user_id=actor.user_id,
+        manages_shared=Permission.CONTENT_SOURCE_MANAGE in ROLE_PERMISSIONS.get(actor.role, frozenset()),
+    )
+    return await read_service.readable_asset_ids(reader, asset_ids)
 
 
 def correlation_id_for(request: Request) -> str:
@@ -83,7 +100,10 @@ def _envelope(request: Request, data: dict[str, object]) -> JSONResponse:
 
 
 def _failed(exc: AIAssistantError) -> ClientError:
-    # The client learns only that the AI step failed, not why.
+    # The client learns only that the AI step failed, not why. A withheld
+    # answer says so, since retrying is the right response (M3-D).
+    if exc.error_code == "ANSWER_WITHHELD":
+        return AnswerWithheldError()
     if exc.unavailable:
         return ClientError("ai service unavailable", status_code=503, code="AI_UNAVAILABLE")
     return ClientError("ai service error", status_code=502, code="AI_UPSTREAM_ERROR")
