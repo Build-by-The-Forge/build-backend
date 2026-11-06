@@ -165,10 +165,8 @@ async def get_attempt_result(
     result, shown = readable.result, readable.feedback_shown
     response = AttemptResultResponse(
         id=result.id,
-        tenant_id=result.tenant_id,
         attempt_id=result.attempt_id,
         assessment_id=result.assessment_id,
-        user_id=result.user_id,
         total_score=result.total_score,
         max_score=result.max_score,
         percentage=result.percentage,
@@ -199,9 +197,7 @@ async def get_attempt_result(
 def _attempt_payload(attempt: AssessmentAttempt) -> dict[str, object]:
     return AttemptResponse(
         id=attempt.id,
-        tenant_id=attempt.tenant_id,
         assessment_id=attempt.assessment_id,
-        user_id=attempt.user_id,
         status=attempt.status.value,
         started_at=attempt.started_at.isoformat(),
         expires_at=attempt.expires_at.isoformat(),

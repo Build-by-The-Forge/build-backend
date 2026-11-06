@@ -240,7 +240,6 @@ def _assessment_payload(
         raise RuntimeError("a counted assessment must not carry its questions")
     return AssessmentResponse(
         id=assessment.id,
-        tenant_id=assessment.tenant_id,
         course_id=assessment.course_id,
         title=assessment.title,
         instructions=assessment.instructions,

@@ -4,7 +4,10 @@ from itertools import product
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
+from app.db.session import SessionLocal
+from app.infrastructure.db.models.tenant_core import TenantModel
 from tests.integration.assessment.test_attempt_api import add_membership, headers
 from tests.integration.assessment.test_attempt_policy_api import lecturer_and_draft
 from tests.integration.assessment.test_question_api import register_and_authenticate
@@ -174,7 +177,8 @@ async def test_another_student_still_cannot_read_a_released_result(client):
 
     tenant_slug = student["X-Tenant-Slug"]
     other_id, token = await register_and_authenticate(client, f"rel-other-{uuid4()}@example.com")
-    tenant_id = client.get(f"/assessment/assessments/{assessment_id}", headers=lecturer).json()["data"]["tenant_id"]
+    async with SessionLocal() as session:  # responses no longer carry tenant_id (G-39)
+        tenant_id = await session.scalar(select(TenantModel.id).where(TenantModel.slug == tenant_slug))
     await add_membership(other_id, tenant_id, "student")
     assert result(client, headers(token, tenant_slug), attempt_id).status_code == 404
 
