@@ -374,6 +374,13 @@ class ContentOwnershipClassificationModel(Base):
         CheckConstraint("length(trim(evidence_reference)) > 0", name="ck_content_classifications_evidence"),
         CheckConstraint("decided_via <> 'operator_command' OR run_id IS NOT NULL", name="ck_content_classifications_run"),
         Index("ix_content_classifications_asset", "tenant_id", "asset_id", text("decided_at DESC")),
+        # An operator's decision names a run of its own tenant (migration 0031).
+        ForeignKeyConstraint(
+            ["tenant_id", "run_id"],
+            ["content_classification_runs.tenant_id", "content_classification_runs.id"],
+            name="fk_content_classifications_run",
+            ondelete="CASCADE",
+        ),
     )
 
 
@@ -553,4 +560,119 @@ class ContentRetryUsageModel(Base):
     __table_args__ = (
         _asset_reference("fk_content_retry_usage_asset"),
         CheckConstraint("retries >= 0", name="ck_content_retry_usage_retries"),
+    )
+
+
+class ContentAuthorityAuthorizationModel(Base):
+    """A tenant authority's written authorization for the operator command
+    (M3-D PR 5): who gave it, when, what it covers, and the document."""
+
+    __tablename__ = "content_authority_authorizations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    authority_name: Mapped[str] = mapped_column(Text, nullable=False)
+    authority_role: Mapped[str] = mapped_column(Text, nullable=False)
+    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    covers: Mapped[str] = mapped_column(Text, nullable=False)
+    document_reference: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    recorded_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=text("now()")
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_content_authority_tenant_id"),
+        CheckConstraint("length(trim(authority_name)) > 0", name="ck_content_authority_name"),
+        CheckConstraint("length(trim(authority_role)) > 0", name="ck_content_authority_role"),
+        CheckConstraint("length(trim(covers)) > 0", name="ck_content_authority_covers"),
+        CheckConstraint("length(trim(document_reference)) > 0", name="ck_content_authority_document"),
+        CheckConstraint("expires_at IS NULL OR expires_at > granted_at", name="ck_content_authority_expiry"),
+        CheckConstraint("(revoked_at IS NULL) = (revoked_by IS NULL)", name="ck_content_authority_revoked"),
+    )
+
+
+class ContentClassificationRunModel(Base):
+    """One applied run of the operator command, naming the authorization relied on."""
+
+    __tablename__ = "content_classification_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    authorization_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    operator_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=text("now()")
+    )
+    requested: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "authorization_id"],
+            ["content_authority_authorizations.tenant_id", "content_authority_authorizations.id"],
+            name="fk_content_runs_authorization",
+            ondelete="CASCADE",
+        ),
+        UniqueConstraint("tenant_id", "id", name="uq_content_runs_tenant_id"),
+        CheckConstraint("requested > 0", name="ck_content_runs_requested"),
+    )
+
+
+class ContentScopeAssignmentModel(Base):
+    """The scope-assignment outbox: a document's scope at a version, pending
+    until the AI service returns that version or a higher one."""
+
+    __tablename__ = "content_scope_assignments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    asset_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    scope: Mapped[str] = mapped_column(String(20), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    lowers: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    reason: Mapped[str] = mapped_column(String(40), nullable=False)
+    decided_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=text("now()")
+    )
+    state: Mapped[str] = mapped_column(String(12), nullable=False, default="pending", server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), server_default=text("now()")
+    )
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    settled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        # No ondelete: a pending lowering must never be lost with its document.
+        ForeignKeyConstraint(
+            ["tenant_id", "asset_id"],
+            ["content_assets.tenant_id", "content_assets.id"],
+            name="fk_content_scope_assignments_asset",
+        ),
+        UniqueConstraint("tenant_id", "asset_id", "version", name="uq_content_scope_assignments_version"),
+        CheckConstraint("scope IN ('institutional', 'personal', 'unknown')", name="ck_content_scope_assignments_scope"),
+        CheckConstraint("version > 0", name="ck_content_scope_assignments_version"),
+        CheckConstraint("lowers = (scope <> 'institutional')", name="ck_content_scope_assignments_lowers"),
+        CheckConstraint("length(trim(reason)) > 0", name="ck_content_scope_assignments_reason"),
+        CheckConstraint("state IN ('pending', 'acknowledged', 'superseded')", name="ck_content_scope_assignments_state"),
+        CheckConstraint("(state = 'pending') = (settled_at IS NULL)", name="ck_content_scope_assignments_settled"),
+        CheckConstraint("attempts >= 0", name="ck_content_scope_assignments_attempts"),
+        Index(
+            "ix_content_scope_assignments_due",
+            text("lowers DESC"),
+            "next_attempt_at",
+            postgresql_where=text("state = 'pending'"),
+            sqlite_where=text("state = 'pending'"),
+        ),
+        Index(
+            "ix_content_scope_assignments_denied",
+            "tenant_id",
+            "asset_id",
+            postgresql_where=text("state = 'pending' AND lowers"),
+            sqlite_where=text("state = 'pending' AND lowers"),
+        ),
     )
