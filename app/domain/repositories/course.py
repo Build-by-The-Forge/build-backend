@@ -24,7 +24,7 @@ class CourseRepository(Protocol):
     ) -> tuple[list[ProgrammeEntry], int]:
         raise NotImplementedError
 
-    async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_id(self, course_id: str, tenant_id: str | None = None, *, for_update: bool = False) -> Course | None:
         raise NotImplementedError
 
     async def list_page(
@@ -37,11 +37,15 @@ class CourseRepository(Protocol):
     ) -> tuple[list[Course], int]:
         raise NotImplementedError
 
-    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None, *, for_update: bool = False) -> Course | None:
         raise NotImplementedError
 
-    async def get_by_learning_outcome_id(self, learning_outcome_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_learning_outcome_id(
+        self, learning_outcome_id: str, tenant_id: str | None = None, *, for_update: bool = False
+    ) -> Course | None:
         raise NotImplementedError
 
-    async def get_by_reference_material_id(self, reference_material_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_reference_material_id(
+        self, reference_material_id: str, tenant_id: str | None = None, *, for_update: bool = False
+    ) -> Course | None:
         raise NotImplementedError
