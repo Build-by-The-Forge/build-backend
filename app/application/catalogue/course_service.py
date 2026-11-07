@@ -198,7 +198,7 @@ class CourseService:
     async def transition_topic(self, topic_id: str, tenant_id: str | None, transition: str) -> Topic | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                course = await uow.courses.get_by_topic_id(topic_id, tenant_id)
+                course = await uow.courses.get_by_topic_id(topic_id, tenant_id, for_update=True)
                 if course is None:
                     return None
                 topic = next((item for item in course.topics if item.id.value == topic_id), None)
@@ -251,7 +251,7 @@ class CourseService:
     ) -> LearningOutcome | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                course = await uow.courses.get_by_learning_outcome_id(learning_outcome_id, tenant_id)
+                course = await uow.courses.get_by_learning_outcome_id(learning_outcome_id, tenant_id, for_update=True)
                 if course is None:
                     return None
                 outcome = next(
@@ -313,7 +313,7 @@ class CourseService:
     ) -> ReferenceMaterial | None:
         if self.uow_factory is not None:
             async with self.uow_factory() as uow:
-                course = await uow.courses.get_by_reference_material_id(reference_material_id, tenant_id)
+                course = await uow.courses.get_by_reference_material_id(reference_material_id, tenant_id, for_update=True)
                 if course is None:
                     return None
                 material = next(

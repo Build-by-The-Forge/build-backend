@@ -10,6 +10,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Debian security fixes published after the pinned base image, each pinned
+# to its fixed version so the build stays reproducible. Remove an entry once
+# the base image carries it: scripts/scan_image_os.sh gates on what's left.
+#   zlib1g: CVE-2026-76844, CVE-2026-85091 (fixed in 1:1.3.dfsg+really1.3.1-1+deb13u1)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade 'zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1' \
+    && rm -rf /var/lib/apt/lists/*
+
 # Runtime dependencies only: the pinned closure (requirements.txt), mounted
 # for the install so no requirements file stays in the image. The project
 # itself is not installed: the app runs from /app.
