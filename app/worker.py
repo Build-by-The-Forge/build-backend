@@ -674,6 +674,12 @@ async def serve(*, registrations: bool = False) -> None:
                     "scans",
                     settings.worker_scan_interval_seconds,
                     run_scan_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
                     "scope_assignments",
                     settings.worker_scope_interval_seconds,
                     run_scope_assignment_pass,
