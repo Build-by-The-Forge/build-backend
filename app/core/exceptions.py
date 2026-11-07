@@ -91,6 +91,18 @@ class RateLimitedError(ClientError):
         self.retry_after = max(int(retry_after), 1)
 
 
+class AnswerWithheldError(ClientError):
+    """503 with a Retry-After hint: an AI answer drew on a document the caller
+    may not read now, or that's denied, so none of it is returned (M3-D
+    provenance check). A retry retrieves afresh, without that document."""
+
+    def __init__(self, retry_after: int = 1) -> None:
+        super().__init__(
+            "the answer was withheld; try again", status_code=status.HTTP_503_SERVICE_UNAVAILABLE, code="ANSWER_WITHHELD"
+        )
+        self.retry_after = max(int(retry_after), 1)
+
+
 class NotFoundError(ClientError):
     def __init__(self, message: str = "Resource not found") -> None:
         super().__init__(message, status_code=status.HTTP_404_NOT_FOUND)
@@ -276,7 +288,8 @@ async def app_exception_handler(request: Request, exc: Exception) -> JSONRespons
         status_code=exc.status_code,
         path=request.url.path,
     )
-    headers = {"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None
+    retry_after = exc.retry_after if isinstance(exc, (RateLimitedError, AnswerWithheldError)) else None
+    headers = {"Retry-After": str(retry_after)} if retry_after is not None else None
     # The final point of disclosure: unmarked text never leaves, whoever raised it.
     message = exc.message if isinstance(exc, ClientMessage) else message_for_status(exc.status_code)
     return error_response(request, exc.status_code, exc.code, message, headers=headers)

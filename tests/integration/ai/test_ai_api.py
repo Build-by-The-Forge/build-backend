@@ -207,6 +207,21 @@ async def test_ai_service_failures_are_mapped_without_detail(client, error, stat
     assert response.json()["error"]["code"] == code
 
 
+async def test_a_withheld_answer_is_a_retryable_503_that_returns_nothing_of_it(client):
+    error = AIAssistantError("the answer drew on a source the caller may not read", error_code="ANSWER_WITHHELD")
+    app.dependency_overrides[get_ai_assistant_gateway] = lambda: RecordingGateway(error)
+    try:
+        _, _, h = await member(client, "student")
+        response = client.post("/ai/chat", json={"message": "hi"}, headers=h)
+    finally:
+        app.dependency_overrides.pop(get_ai_assistant_gateway, None)
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "1"
+    assert response.json()["error"]["code"] == "ANSWER_WITHHELD"
+    assert response.json()["data"] is None
+    assert "source" not in response.json()["error"]["message"]
+
+
 async def test_an_unverified_email_is_refused(client, gateway):
     payload = {"email": f"ai-unverified-{uuid4()}@example.com", "password": "StrongPass123!"}
     user_id = register_and_get_id(client, payload)

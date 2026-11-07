@@ -88,7 +88,7 @@ class CreateTopicHandler:
         self.repository = repository
 
     async def handle(self, command: CreateTopicCommand) -> Topic | None:
-        course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id, for_update=True)
         if course is None:
             return None
         _refuse_if_archived(course)
@@ -110,7 +110,7 @@ class UpdateTopicHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateTopicCommand) -> Topic | None:
-        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id, for_update=True)
         if course is None:
             return None
         topic = next(
@@ -132,7 +132,7 @@ class CreateLearningOutcomeHandler:
         self.repository = repository
 
     async def handle(self, command: CreateLearningOutcomeCommand) -> LearningOutcome | None:
-        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id, for_update=True)
         if course is None:
             return None
         topic = next(
@@ -157,7 +157,9 @@ class UpdateLearningOutcomeHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateLearningOutcomeCommand) -> LearningOutcome | None:
-        course = await self.repository.get_by_learning_outcome_id(command.learning_outcome_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_learning_outcome_id(
+            command.learning_outcome_id, tenant_id=command.tenant_id, for_update=True
+        )
         if course is None:
             return None
         outcome = next(
@@ -177,7 +179,7 @@ class CreateReferenceMaterialHandler:
         self.repository = repository
 
     async def handle(self, command: CreateReferenceMaterialCommand) -> ReferenceMaterial | None:
-        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_topic_id(command.topic_id, tenant_id=command.tenant_id, for_update=True)
         if course is None:
             return None
         topic = next((item for item in course.topics if item.id.value == command.topic_id), None)
@@ -200,7 +202,9 @@ class UpdateReferenceMaterialHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateReferenceMaterialCommand) -> ReferenceMaterial | None:
-        course = await self.repository.get_by_reference_material_id(command.reference_material_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_reference_material_id(
+            command.reference_material_id, tenant_id=command.tenant_id, for_update=True
+        )
         if course is None:
             return None
         material = next(
@@ -223,7 +227,7 @@ class UpdateCourseHandler:
         self.repository = repository
 
     async def handle(self, command: UpdateCourseCommand) -> Course | None:
-        course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id)
+        course = await self.repository.get_by_id(command.course_id, tenant_id=command.tenant_id, for_update=True)
         if course is None:
             return None
         course.update_details(
@@ -238,7 +242,7 @@ class TransitionCourseHandler:
         self.repository = repository
 
     async def handle(self, course_id: str, tenant_id: str | None, transition: str) -> Course | None:
-        course = await self.repository.get_by_id(course_id, tenant_id=tenant_id)
+        course = await self.repository.get_by_id(course_id, tenant_id=tenant_id, for_update=True)
         if course is None:
             return None
         if transition == "publish":

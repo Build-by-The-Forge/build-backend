@@ -244,7 +244,24 @@ async def test_the_operator_command_needs_a_run_and_evidence():
     args = {"t": w["tenant"], "a": w["asset"], "u": w["user"]}
     await _refused(base, id=_id(), via="operator_command", e="ref-1", r=None, **args)
     await _refused(base, id=_id(), via="staff_route", e="  ", r=None, **args)
-    await _run(base, id=_id(), via="operator_command", e="ref-1", r=_id(), **args)
+    # Since 0031 the run must exist, in the document's tenant.
+    authorization, run = _id(), _id()
+    await _run(
+        "INSERT INTO content_authority_authorizations (id, tenant_id, authority_name, authority_role, granted_at,"
+        " covers, document_reference, recorded_by) VALUES (:id, :t, 'Registrar', 'Registrar', now(), 'notes', 'REG-1', :u)",
+        id=authorization,
+        t=w["tenant"],
+        u=w["user"],
+    )
+    await _run(
+        "INSERT INTO content_classification_runs (id, tenant_id, authorization_id, operator_user_id, requested)"
+        " VALUES (:id, :t, :auth, :u, 1)",
+        id=run,
+        t=w["tenant"],
+        auth=authorization,
+        u=w["user"],
+    )
+    await _run(base, id=_id(), via="operator_command", e="ref-1", r=run, **args)
 
 
 # --- Ownership -------------------------------------------------------------------------
