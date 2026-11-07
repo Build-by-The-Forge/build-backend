@@ -31,15 +31,21 @@
 
 ### Merged in this round
 
-#95 (0030), #96, #98, #99 (read policy), #100 (provenance), #101, #102 (catalogue lock), #103 (0031), #105 (zlib), and `ai-service` #46.
-
-### Open, in merge order
-
-| PR | Status | Next step |
+| PR | What | Merged on |
 |---|---|---|
-| #97 G-39 field removal | Refreshed onto main | Merge when its PostgreSQL check passes |
-| #104 classification, outbox, dispatcher | Refreshed and retargeted to main | Merge when CI and the boundary gate pass |
-| #106 malware scanning | Refreshed | Merge when CI and the **real-ClamAV** boundary gate pass |
+| #95 | Migration 0030: ownership, rights, blobs, the one-active-job index | CI and boundary gate green |
+| #96, #97 | M3-E pagination (G-10) and response fields (G-39) | CI and boundary gate green; #97 after #102 |
+| #98, #105 | Base image 3.13.18; pinned zlib security update | Production image scan clean |
+| #99, #100 | The one read policy; the provenance check (`ANSWER_WITHHELD`) | CI and boundary gate green |
+| #101 | `ACTIVE_JOB_EXISTS` convention | Docs |
+| #102 | Catalogue course lock (the lost-write fix) | Race test 40 of 40 |
+| #103, #104, #108 | Migration 0031; classification, outbox, dispatcher, immediate denial; per-decision authority recheck | CI and boundary gate green, including the real worker-to-AI dispatcher test |
+| #106 | Malware scanning, quarantine and the scan gate | CI and the **real-ClamAV** boundary gate green |
+| `ai-service` #46 | README: the ingestion pipeline as built | CI green |
+
+### Open
+
+None in the merge queue. This document (#107) is the only open PR.
 
 ### Carried forward from the reviewer
 
