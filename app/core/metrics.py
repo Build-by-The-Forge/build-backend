@@ -94,6 +94,24 @@ content_jobs_due = Gauge(
     "Queued ingestion jobs currently eligible for dispatch",
     registry=registry,
 )
+content_scope_assignments_pending = Gauge(
+    "build_backend_content_scope_assignments_pending",
+    "Scope assignments not yet acknowledged by the AI service, by whether they lower a document",
+    ["lowers"],
+    registry=registry,
+)
+content_scope_assignment_oldest_age_seconds = Gauge(
+    "build_backend_content_scope_assignment_oldest_age_seconds",
+    "Age of the oldest unacknowledged scope assignment, by whether it lowers a document (alert on lowerings)",
+    ["lowers"],
+    registry=registry,
+)
+content_scope_deliveries_total = Counter(
+    "build_backend_content_scope_deliveries_total",
+    "Scope assignment delivery attempts, by outcome",
+    ["outcome"],
+    registry=registry,
+)
 content_oldest_due_job_age_seconds = Gauge(
     "build_backend_content_oldest_due_job_age_seconds",
     "Age of the oldest queued ingestion job eligible for dispatch",

@@ -29,6 +29,9 @@ from app.core.metrics import (
     content_oldest_due_job_age_seconds,
     content_recoveries_total,
     content_retries_scheduled_total,
+    content_scope_assignment_oldest_age_seconds,
+    content_scope_assignments_pending,
+    content_scope_deliveries_total,
     registry,
 )
 from app.db.session import SessionLocal, engine
@@ -40,6 +43,8 @@ from app.infrastructure.assessment.unit_of_work import AssessmentUnitOfWork
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
 from app.infrastructure.content.orphan_sweeper import sweep_orphaned_objects
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
+from app.infrastructure.content.scope_assignments import SqlAlchemyScopeAssignmentRepository
+from app.infrastructure.content.scope_gateway import HttpScopeAssignmentGateway, ScopeDeliveryError
 from app.infrastructure.content.unit_of_work import ContentUnitOfWork
 from app.infrastructure.db.models.content import ContentIngestionJobModel
 
@@ -140,6 +145,107 @@ async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 status=job.status.value,
             )
             return True
+
+
+def _scope_gateway() -> HttpScopeAssignmentGateway:
+    return HttpScopeAssignmentGateway(timeout_seconds=settings.worker_scope_timeout_seconds)
+
+
+async def _deliver_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
+    """Deliver one due scope assignment, lowerings first. The row stays locked
+    across one bounded AI call; it's settled only when the AI service returns
+    its version or a higher one, and otherwise stays pending with backoff."""
+    async with SessionLocal() as session:
+        async with session.begin():
+            await set_transaction_timeouts(session)
+            outbox = SqlAlchemyScopeAssignmentRepository(session)
+            row = await outbox.claim_due(excluded_ids)
+            if row is None:
+                return False
+            claimed_ids.append(row.id)
+            try:
+                stored = await asyncio.wait_for(
+                    _scope_gateway().assign(
+                        tenant_id=row.tenant_id,
+                        asset_id=row.asset_id,
+                        scope=row.scope,
+                        version=row.version,
+                        correlation_id=row.id,
+                    ),
+                    timeout=settings.worker_scope_timeout_seconds + 1,
+                )
+            except (ScopeDeliveryError, TimeoutError) as exc:
+                code = exc.code if isinstance(exc, ScopeDeliveryError) else "AI_SERVICE_TIMEOUT"
+                delay = retry_delay_seconds(
+                    row.attempts + 1, settings.worker_retry_base_seconds, settings.worker_retry_cap_seconds
+                )
+                await outbox.record_failure(row, code, delay)
+                content_scope_deliveries_total.labels(outcome="failed").inc()
+                log = logger.error if code == "ASSET_HELD_BY_ANOTHER_TENANT" else logger.warning
+                log(
+                    "content_scope_assignment_not_delivered",
+                    assignment_id=row.id,
+                    tenant_id=row.tenant_id,
+                    asset_id=row.asset_id,
+                    version=row.version,
+                    lowers=row.lowers,
+                    attempt=row.attempts + 1,
+                    error_code=code,
+                    retry_in_seconds=delay,
+                )
+                return True
+            outcome = await outbox.settle(row, stored)
+            content_scope_deliveries_total.labels(outcome=outcome).inc()
+            logger.info(
+                "content_scope_assignment_delivered",
+                assignment_id=row.id,
+                tenant_id=row.tenant_id,
+                asset_id=row.asset_id,
+                version=row.version,
+                stored_version=stored,
+                lowers=row.lowers,
+                outcome=outcome,
+            )
+            return True
+
+
+async def update_scope_backlog_metrics() -> None:
+    async with SessionLocal() as session:
+        backlog = await SqlAlchemyScopeAssignmentRepository(session).backlog()
+    now = datetime.now(timezone.utc)
+    seen = {lowers: (count, oldest) for lowers, count, oldest in backlog}
+    for lowers in (True, False):
+        count, oldest = seen.get(lowers, (0, None))
+        label = "true" if lowers else "false"
+        content_scope_assignments_pending.labels(lowers=label).set(count)
+        content_scope_assignment_oldest_age_seconds.labels(lowers=label).set(
+            max(0.0, (now - oldest).total_seconds()) if oldest is not None else 0.0
+        )
+
+
+async def run_scope_assignment_pass(stop: asyncio.Event | None = None) -> None:
+    excluded_ids: set[str] = set()
+    processed = 0
+    while processed < settings.worker_scope_batch and not (stop and stop.is_set()):
+        claimed_ids: list[str] = []
+        try:
+            found = await _deliver_one(excluded_ids, claimed_ids)
+        except Exception as exc:
+            excluded_ids.update(claimed_ids)
+            logger.error(
+                "content_scope_assignment_pass_error",
+                assignment_id=claimed_ids[-1] if claimed_ids else None,
+                error_type=type(exc).__name__,
+            )
+            if not claimed_ids:
+                raise
+            continue
+        if not found:
+            break
+        # Settled or deferred, a row isn't taken again in this pass.
+        excluded_ids.update(claimed_ids)
+        processed += 1
+    await update_scope_backlog_metrics()
 
 
 async def _retry_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
@@ -457,6 +563,15 @@ async def serve(*, registrations: bool = False) -> None:
                     "recoverer",
                     settings.worker_recoverer_interval_seconds,
                     run_recoverer_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
+                    "scope_assignments",
+                    settings.worker_scope_interval_seconds,
+                    run_scope_assignment_pass,
                     stop,
                     completed_at,
                 )
