@@ -29,23 +29,6 @@ contract_gaps:
   summary: No record of a student's programme or department
   closes_in: Later phase
   evidence: Read from app/api/catalogue/courses.py.
-- id: G-39
-  severity: Low
-  summary: Responses carry tenant_id and user_id that the contract doesn't
-  closes_in: M3-E, M3-B
-  findings:
-  - exposes_field GET /assessment/assessments tenant_id
-  - exposes_field GET /assessment/assessments/{assessment_id} tenant_id
-  - exposes_field GET /assessment/attempts tenant_id
-  - exposes_field GET /assessment/attempts user_id
-  - exposes_field GET /assessment/attempts/{attempt_id} tenant_id
-  - exposes_field GET /assessment/attempts/{attempt_id} user_id
-  - exposes_field GET /assessment/attempts/{attempt_id}/result tenant_id
-  - exposes_field GET /assessment/attempts/{attempt_id}/result user_id
-  - exposes_field POST /assessment/assessments/{assessment_id}/attempts tenant_id
-  - exposes_field POST /assessment/assessments/{assessment_id}/attempts user_id
-  - exposes_field POST /assessment/attempts/{attempt_id}/submit tenant_id
-  - exposes_field POST /assessment/attempts/{attempt_id}/submit user_id
 implementation_gaps:
 - id: G-01
   severity: Blocker
@@ -199,6 +182,9 @@ closed:
 - id: G-10
   summary: Assessment and attempt lists weren't paginated
   proof: tests/integration/assessment/test_assessment_pagination.py::test_assessment_pages_cover_everything_once_in_contract_order_with_the_true_total
+- id: G-39
+  summary: Assessment and attempt responses carried tenant_id and user_id that the contract doesn't
+  proof: tests/integration/assessment/test_assessment_response_fields.py::test_no_mobile_assessment_response_carries_tenant_or_user_ids
 - id: G-24
   summary: OpenAPI was only generated with docs on. The gate reads app.openapi(), which doesn't need them
   proof: tests/integration/test_mobile_contract_drift.py::test_observed_behaviour_matches_the_gap_allowlist
