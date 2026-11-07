@@ -94,6 +94,12 @@ content_jobs_due = Gauge(
     "Queued ingestion jobs currently eligible for dispatch",
     registry=registry,
 )
+content_scans_total = Counter(
+    "build_backend_content_scans_total",
+    "Document scan attempts, by outcome: accepted, rejected, deferred or superseded",
+    ["outcome"],
+    registry=registry,
+)
 content_oldest_due_job_age_seconds = Gauge(
     "build_backend_content_oldest_due_job_age_seconds",
     "Age of the oldest queued ingestion job eligible for dispatch",

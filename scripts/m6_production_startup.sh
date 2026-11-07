@@ -27,6 +27,7 @@ BACKEND_PROD=(
   -e AI_TO_BACKEND_SECRET="$A2B"
   -e AUTH_RATE_LIMIT_FAILURE_MODE=closed
   -e LEARNING_MEMORY_ENABLED=false
+  -e CLAMAV_HOST=clamav
 )
 AI_PROD=(
   -e APP_ENVIRONMENT=production
@@ -126,6 +127,8 @@ main() {
     "${BACKEND_PROD[@]}" -e BACKEND_TO_AI_SECRET="$SHORT_SECRET"
   check_refusal "backend: known development secret" backend "BACKEND_TO_AI_SECRET is a known development value" \
     "${BACKEND_PROD[@]}" -e BACKEND_TO_AI_SECRET="$KNOWN_DEV_SECRET"
+  check_refusal "backend: no malware scanner" backend "CLAMAV_HOST is required" \
+    "${BACKEND_PROD[@]}" -e CLAMAV_HOST=
   check_refusal "backend: wildcard CORS" backend "CORS_ALLOWED_ORIGINS must list exact origins" \
     "${BACKEND_PROD[@]}" -e CORS_ALLOWED_ORIGINS='*'
   check_refusal "backend: learning memory requested" backend "LEARNING_MEMORY_ENABLED is refused" \

@@ -136,6 +136,15 @@ class Settings(BaseSettings):
     # limit applies to the upload route only; every other route keeps
     # max_request_body_bytes. Out-of-range values fail validation at startup.
     max_upload_bytes: int = Field(default=25 * 1024 * 1024, ge=1024, le=100 * 1024 * 1024)
+    # Malware scanning (M3-D PR 6): the clamd the worker streams documents to.
+    # Without one, documents stay quarantined: the scan fails closed.
+    clamav_host: str | None = None
+    clamav_port: int = Field(default=3310, ge=1, le=65535)
+    scan_timeout_seconds: int = Field(default=30, ge=1, le=300)
+    scan_lease_seconds: int = Field(default=120, ge=10, le=3600)
+    scan_max_bytes: int = Field(default=25 * 1024 * 1024, ge=1024, le=200 * 1024 * 1024)
+    worker_scan_interval_seconds: int = Field(default=2, ge=1, le=300)
+    worker_scan_batch: int = Field(default=10, ge=1, le=200)
     upload_read_timeout_seconds: float = Field(default=60.0, gt=0, le=600)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -269,6 +278,15 @@ class Settings(BaseSettings):
             schemes = {"https"} if strict else {"http", "https"}
             if parts.scheme not in schemes or not parts.hostname or parts.path not in ("", "/"):
                 raise ValueError(f"CORS origin {origin!r} must be a bare {' or '.join(sorted(schemes))} origin")
+        return self
+
+    @model_validator(mode="after")
+    def validate_scanning(self) -> "Settings":
+        if self.scan_max_bytes < self.max_upload_bytes:
+            # A document larger than the scanner reads would never be accepted.
+            raise ValueError("SCAN_MAX_BYTES must be at least MAX_UPLOAD_BYTES")
+        if self.app_environment in STRICT_ENVIRONMENTS and not self.clamav_host:
+            raise ValueError(f"CLAMAV_HOST is required when app_environment is {self.app_environment!r}")
         return self
 
     @field_validator("trusted_proxies")

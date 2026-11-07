@@ -11,6 +11,7 @@ SECRETS = {
     "AI_SERVICE_URL": "https://ai-service.internal",
     "BACKEND_TO_AI_SECRET": "b2a-" + "x" * 40,
     "AI_TO_BACKEND_SECRET": "a2b-" + "z" * 40,
+    "CLAMAV_HOST": "clamav",
 }
 ALL_ENVIRONMENTS = ["development", "testing", "staging", "production"]
 

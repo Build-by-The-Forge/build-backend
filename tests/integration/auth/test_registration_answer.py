@@ -392,6 +392,7 @@ def test_inline_completion_is_refused_where_timing_could_matter(environment):
         "backend_to_ai_secret": "b" * 40,
         "ai_to_backend_secret": "a" * 40,
         "auth_jwt_secret": "j" * 40,
+        "clamav_host": "clamav",
     }
     with pytest.raises(ValueError, match="REGISTRATION_INLINE_FOR_TESTS"):
         Settings(_env_file=None, app_environment=environment, registration_inline_for_tests=True, **boundary)
