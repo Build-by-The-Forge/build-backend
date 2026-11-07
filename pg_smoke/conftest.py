@@ -55,6 +55,19 @@ def reset_auth_rate_limits():
     yield
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "real_scanning: new documents stay quarantined until a real scan verdict")
+
+
+@pytest.fixture(autouse=True)
+def scan_stand_in(request, monkeypatch):
+    """New documents pass a stand-in scan unless the test is marked
+    real_scanning (tests/scan_stand_in.py)."""
+    from tests.scan_stand_in import stand_in_unless_real_scanning
+
+    stand_in_unless_real_scanning(request, monkeypatch)
+
+
 @pytest.fixture(autouse=True)
 def _registrations_complete_inline(monkeypatch):
     """These suites have no worker process. Set on the object, not the environment, so

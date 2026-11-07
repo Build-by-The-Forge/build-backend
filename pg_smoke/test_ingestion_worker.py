@@ -120,6 +120,9 @@ async def _queued_jobs(objects: StoredObjects, count: int) -> list[ContentIngest
             )
             managed(asset, objects)
             await uow.assets.save_asset(asset)
+            # Its scan, as every new document has (M3-D PR 6); the test
+            # stand-in records the clean verdict.
+            await uow.scans.create_pending(tenant_id, asset.id)
             job = ContentIngestionJob.create(asset_id=asset.id, source_id=source.id, tenant_id=tenant_id, created_by="usr-1")
             job.queue()
             await uow.jobs.save_job(job)

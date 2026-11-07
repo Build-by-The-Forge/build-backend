@@ -12,6 +12,7 @@ from app.infrastructure.content.asset_mappers import (
     content_asset_model_to_domain,
     content_asset_to_model,
 )
+from app.infrastructure.content.scan_repository import SqlAlchemyScanRepository
 from app.infrastructure.db.models.content import ContentAssetModel
 
 
@@ -37,8 +38,14 @@ class SqlAlchemyContentAssetRepository(ContentAssetRepository):
         # Never a select-then-update: a concurrent insert of the same id must
         # reach the database and fail on its primary key (P3-1 PR 2 uploads).
         model = content_asset_to_model(asset)
+        # Nothing opens a document before its scan accepts it (M3-D ruling
+        # 7): it's quarantined, with a pending scan, in this transaction.
+        model.ingestion_status = IngestionStatus.QUARANTINED.value
         self._session.add(model)
         await self._session.flush()
+        if model.tenant_id is not None:
+            await SqlAlchemyScanRepository(self._session).create_pending(model.tenant_id, model.id)
+            await self._session.refresh(model, ["ingestion_status"])
         return content_asset_model_to_domain(model)
 
     async def supersede_if_active(self, asset_id: str) -> bool:

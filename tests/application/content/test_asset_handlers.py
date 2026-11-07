@@ -103,8 +103,15 @@ class InMemoryContentAssetRepo:
         return res[offset : offset + limit], len(res)
 
 
+class AcceptedScans:
+    async def verdict(self, asset_id: str) -> str:
+        return "accepted"
+
+
 class FakeContentUnitOfWork:
     def __init__(self) -> None:
+        # The scan worker's verdict for these documents (M3-D PR 6).
+        self.scans = AcceptedScans()
         self.sources = InMemoryContentSourceRepo()
         self.assets = InMemoryContentAssetRepo()
 
