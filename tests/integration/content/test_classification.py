@@ -320,3 +320,58 @@ async def test_a_classified_document_reviewed_for_the_tenant_reaches_students():
             select(ContentScopeAssignmentModel.state).where(ContentScopeAssignmentModel.asset_id == w["assets"][0])
         )
     assert state == "pending"
+
+
+@pytest.mark.asyncio
+async def test_a_revocation_during_a_run_stops_every_later_decision(monkeypatch):
+    # Each applied decision rechecks the authority in its own transaction; once
+    # it's revoked, nothing after that point is decided on it.
+    w = await world()
+    real_one = ClassificationService._one
+    calls = {"n": 0}
+
+    async def one_then_revoke(self, *args, **kwargs):
+        outcome = await real_one(self, *args, **kwargs)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            async with SessionLocal() as session:
+                await session.execute(
+                    update(ContentAuthorityAuthorizationModel)
+                    .where(ContentAuthorityAuthorizationModel.id == w["authorization"])
+                    .values(revoked_at=NOW, revoked_by=w["operator"])
+                )
+                await session.commit()
+        return outcome
+
+    monkeypatch.setattr(ClassificationService, "_one", one_then_revoke)
+    report = await classify(w, [decision(a) for a in w["assets"]])
+    assert [(o.result, o.reason) for o in report.outcomes] == [
+        ("classified", None),
+        ("refused", "NO_TENANT_AUTHORITY"),
+        ("refused", "NO_TENANT_AUTHORITY"),
+    ]
+    assert await count(ContentAssetModel, tenant_id=w["tenant"], ownership_class="institutional") == 1
+
+
+@pytest.mark.asyncio
+async def test_losing_the_content_role_during_a_run_stops_every_later_decision(monkeypatch):
+    w = await world()
+    real_one = ClassificationService._one
+    calls = {"n": 0}
+
+    async def one_then_demote(self, *args, **kwargs):
+        outcome = await real_one(self, *args, **kwargs)
+        calls["n"] += 1
+        if calls["n"] == 1:
+            async with SessionLocal() as session:
+                await session.execute(
+                    update(MembershipModel)
+                    .where(MembershipModel.tenant_id == w["tenant"], MembershipModel.user_id == w["operator"])
+                    .values(role="student")
+                )
+                await session.commit()
+        return outcome
+
+    monkeypatch.setattr(ClassificationService, "_one", one_then_demote)
+    report = await classify(w, [decision(a) for a in w["assets"]])
+    assert [o.reason for o in report.outcomes] == [None, "OPERATOR_NOT_AUTHORIZED", "OPERATOR_NOT_AUTHORIZED"]

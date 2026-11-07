@@ -35,32 +35,35 @@ class SqlAlchemyClassificationStore:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def authorization_valid(self, tenant_id: str, authorization_id: str) -> bool:
+    async def authorization_valid(self, tenant_id: str, authorization_id: str, *, lock: bool = False) -> bool:
+        """With ``lock``, the row is held FOR SHARE until the transaction ends: a
+        concurrent revocation waits for this decision to commit, and a
+        revocation committed first is seen here and refuses it."""
         now = datetime.now(timezone.utc)
-        found = await self._session.scalar(
-            select(ContentAuthorityAuthorizationModel.id).where(
-                ContentAuthorityAuthorizationModel.id == authorization_id,
-                ContentAuthorityAuthorizationModel.tenant_id == tenant_id,
-                ContentAuthorityAuthorizationModel.revoked_at.is_(None),
-                ContentAuthorityAuthorizationModel.granted_at <= now,
-                or_(
-                    ContentAuthorityAuthorizationModel.expires_at.is_(None),
-                    ContentAuthorityAuthorizationModel.expires_at > now,
-                ),
-            )
+        statement = select(ContentAuthorityAuthorizationModel.id).where(
+            ContentAuthorityAuthorizationModel.id == authorization_id,
+            ContentAuthorityAuthorizationModel.tenant_id == tenant_id,
+            ContentAuthorityAuthorizationModel.revoked_at.is_(None),
+            ContentAuthorityAuthorizationModel.granted_at <= now,
+            or_(
+                ContentAuthorityAuthorizationModel.expires_at.is_(None),
+                ContentAuthorityAuthorizationModel.expires_at > now,
+            ),
         )
-        return found is not None
+        if lock:
+            statement = statement.with_for_update(read=True)
+        return await self._session.scalar(statement) is not None
 
-    async def operator_manages_content(self, tenant_id: str, user_id: str) -> bool:
-        found = await self._session.scalar(
-            select(MembershipModel.id).where(
-                MembershipModel.tenant_id == tenant_id,
-                MembershipModel.user_id == user_id,
-                MembershipModel.status == "active",
-                MembershipModel.role.in_(CONTENT_ROLES),
-            )
+    async def operator_manages_content(self, tenant_id: str, user_id: str, *, lock: bool = False) -> bool:
+        statement = select(MembershipModel.id).where(
+            MembershipModel.tenant_id == tenant_id,
+            MembershipModel.user_id == user_id,
+            MembershipModel.status == "active",
+            MembershipModel.role.in_(CONTENT_ROLES),
         )
-        return found is not None
+        if lock:
+            statement = statement.with_for_update(read=True)
+        return await self._session.scalar(statement) is not None
 
     async def document(self, tenant_id: str, asset_id: str, *, lock: bool) -> DocumentState | None:
         statement = (
