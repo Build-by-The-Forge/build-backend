@@ -49,7 +49,7 @@ None in the merge queue. This document (#107) is the only open PR.
 
 ### Carried forward from the reviewer
 
-- **#104:** revalidate the tenant authority and the operator's authorization for **each applied decision**, inside its transaction, not only at the start of the run. This is the first follow-up after #104 merges.
+- **#104, done by #108:** each applied decision rechecks the tenant authority and the operator's membership inside its own transaction, holding both rows `FOR SHARE` until it commits. A revocation or demotion during a run waits for the decision in flight, and stops every later decision.
 - **#99:** the read policy doesn't complete scanning. #106 does, and PR 10's byte route must refuse `quarantined` and `rejected` documents to everyone.
 - **#106:** the scan stand-in stays confined to tests that aren't about scanning. `real_scanning` tests and the boundary gate keep exercising the real lifecycle.
 - **Backfill:** older documents stay unavailable for processing until a controlled backfill scans them and handles rejected or already-indexed ones through the outbox.
