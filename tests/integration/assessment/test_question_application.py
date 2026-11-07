@@ -35,14 +35,16 @@ class InMemoryCourseRepository:
     def _matches_tenant(value: str, tenant_id: str | None) -> bool:
         return tenant_id is None or tenant_id in value
 
-    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None, *, for_update: bool = False) -> Course | None:
         for course in self.items.values():
             if any(topic.id.value == topic_id for topic in course.topics):
                 if self._matches_tenant(course.id.value, tenant_id):
                     return course
         return None
 
-    async def get_by_learning_outcome_id(self, learning_outcome_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_learning_outcome_id(
+        self, learning_outcome_id: str, tenant_id: str | None = None, *, for_update: bool = False
+    ) -> Course | None:
         for course in self.items.values():
             for topic in course.topics:
                 if any(item.id.value == learning_outcome_id for item in topic.learning_outcomes):

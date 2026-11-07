@@ -125,6 +125,43 @@ async def test_two_racing_topics_on_different_sequences_both_survive(client):
     assert [item["sequence"] for item in listed.json()["data"]] == [1, 2, 3, 4]
 
 
+async def test_racing_changes_to_one_course_all_survive_past_five_runs(client):
+    # Every change to a course loads the whole course and saves it back. Without
+    # a lock, two at once each rewrote its children from a stale copy and one
+    # was lost, though both answered 201. Topics and outcomes, past five runs.
+    staff, ids = await institution(client, "admin")
+    for run in range(6):
+        created = await client.post("/catalogue/courses/", headers=staff, json=_course(ids["department"], f"RACE{run}"))
+        course_id = created.json()["data"]["id"]
+        topics = await asyncio.gather(
+            *(
+                client.post(
+                    f"/catalogue/courses/{course_id}/topics",
+                    headers=staff,
+                    json={"title": "Limits", "slug": f"limits-{run}-{sequence}", "sequence": sequence},
+                )
+                for sequence in (1, 2, 3, 4)
+            )
+        )
+        assert [response.status_code for response in topics] == [201] * 4
+        topic_id = topics[0].json()["data"]["id"]
+        outcomes = await asyncio.gather(
+            *(
+                client.post(
+                    f"/catalogue/topics/{topic_id}/learning-outcomes",
+                    headers=staff,
+                    json={"sequence": sequence, "description": f"Students can explain outcome {sequence}"},
+                )
+                for sequence in (1, 2, 3, 4)
+            )
+        )
+        assert [response.status_code for response in outcomes] == [201] * 4, [r.text for r in outcomes]
+        listed = await client.get(f"/catalogue/courses/{course_id}/topics", headers=staff)
+        assert sorted(item["sequence"] for item in listed.json()["data"]) == [1, 2, 3, 4], run
+        kept = await client.get(f"/catalogue/topics/{topic_id}/learning-outcomes", headers=staff)
+        assert sorted(item["sequence"] for item in kept.json()["data"]) == [1, 2, 3, 4], run
+
+
 async def test_a_department_under_an_archived_faculty_takes_no_course_and_hides_its_own(client):
     staff, ids = await institution(client, "admin")
     created = await client.post("/catalogue/courses/", headers=staff, json=_course(ids["department"], "HID101"))

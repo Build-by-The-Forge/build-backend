@@ -37,6 +37,18 @@ class SqlAlchemyCourseRepository(CourseRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def _one_course(self, statement, for_update: bool) -> Course | None:
+        """One course aggregate. For a change, its row is locked first (FOR
+        UPDATE OF courses), and its topics, outcomes and materials are read
+        after the lock is held, so a concurrent change to the same course
+        waits and then sees what the other committed. Without the lock, two
+        changes each rewrote the children from a stale copy and one was lost."""
+        if for_update:
+            statement = statement.with_for_update(of=CourseModel).execution_options(populate_existing=True)
+        result = await self._session.scalars(statement)
+        model = result.first()
+        return course_to_domain(model) if model is not None else None
+
     async def save(self, course: Course, tenant_id: str | None = None) -> Course:
         statement = select(CourseModel).where(CourseModel.id == course.id.value)
         if tenant_id is not None:
@@ -118,7 +130,7 @@ class SqlAlchemyCourseRepository(CourseRepository):
             for row in rows
         ], total
 
-    async def get_by_id(self, course_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_id(self, course_id: str, tenant_id: str | None = None, *, for_update: bool = False) -> Course | None:
         statement = select(CourseModel).where(CourseModel.id == course_id)
         if tenant_id is not None:
             statement = statement.where(CourseModel.tenant_id == tenant_id)
@@ -126,9 +138,7 @@ class SqlAlchemyCourseRepository(CourseRepository):
             selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
             selectinload(CourseModel.reference_materials),
         )
-        result = await self._session.scalars(statement)
-        model = result.first()
-        return course_to_domain(model) if model is not None else None
+        return await self._one_course(statement, for_update)
 
     async def list_page(
         self,
@@ -159,7 +169,7 @@ class SqlAlchemyCourseRepository(CourseRepository):
         result = await self._session.scalars(statement)
         return [course_to_domain(c) for c in result.all()], total or 0
 
-    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_topic_id(self, topic_id: str, tenant_id: str | None = None, *, for_update: bool = False) -> Course | None:
         statement = select(CourseModel).join(TopicModel, TopicModel.course_id == CourseModel.id).where(TopicModel.id == topic_id)
         if tenant_id is not None:
             statement = statement.where(CourseModel.tenant_id == tenant_id)
@@ -167,11 +177,11 @@ class SqlAlchemyCourseRepository(CourseRepository):
             selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
             selectinload(CourseModel.reference_materials),
         )
-        result = await self._session.scalars(statement)
-        model = result.first()
-        return course_to_domain(model) if model is not None else None
+        return await self._one_course(statement, for_update)
 
-    async def get_by_learning_outcome_id(self, learning_outcome_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_learning_outcome_id(
+        self, learning_outcome_id: str, tenant_id: str | None = None, *, for_update: bool = False
+    ) -> Course | None:
         statement = (
             select(CourseModel)
             .join(TopicModel, TopicModel.course_id == CourseModel.id)
@@ -187,11 +197,11 @@ class SqlAlchemyCourseRepository(CourseRepository):
             selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
             selectinload(CourseModel.reference_materials),
         )
-        result = await self._session.scalars(statement)
-        model = result.first()
-        return course_to_domain(model) if model is not None else None
+        return await self._one_course(statement, for_update)
 
-    async def get_by_reference_material_id(self, reference_material_id: str, tenant_id: str | None = None) -> Course | None:
+    async def get_by_reference_material_id(
+        self, reference_material_id: str, tenant_id: str | None = None, *, for_update: bool = False
+    ) -> Course | None:
         statement = (
             select(CourseModel)
             .join(
@@ -206,6 +216,4 @@ class SqlAlchemyCourseRepository(CourseRepository):
             selectinload(CourseModel.topics).selectinload(TopicModel.learning_outcomes),
             selectinload(CourseModel.reference_materials),
         )
-        result = await self._session.scalars(statement)
-        model = result.first()
-        return course_to_domain(model) if model is not None else None
+        return await self._one_course(statement, for_update)
