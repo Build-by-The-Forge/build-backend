@@ -11,6 +11,33 @@ from boundary.conftest import create_source, upload
 
 # The EICAR anti-malware test file: harmless, and detected by every scanner.
 EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+
+
+def pdf_embedding(payload: bytes) -> bytes:
+    """A valid PDF carrying ``payload`` as an embedded file. Uploads accept only
+    PDF, PNG and JPEG, so EICAR travels inside a PDF; clamd's PDF parser
+    extracts the embedded stream and finds it (verified against the pinned
+    clamav image: "Eicar-Signature FOUND")."""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(eicar.com) 4 0 R] >> >> >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>",
+        b"<< /Type /Filespec /F (eicar.com) /EF << /F 5 0 R >> >>",
+        b"<< /Type /EmbeddedFile /Length " + str(len(payload)).encode() + b" >>\nstream\n" + payload + b"\nendstream",
+    ]
+    out = b"%PDF-1.4\n"
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += str(number).encode() + b" 0 obj\n" + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 " + str(len(objects) + 1).encode() + b"\n0000000000 65535 f \n"
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    trailer = b"trailer\n<< /Size " + str(len(objects) + 1).encode() + b" /Root 1 0 R >>\n"
+    return out + trailer + b"startxref\n" + str(xref).encode() + b"\n%%EOF\n"
+
+
 SCAN_TIMEOUT = 120
 
 
@@ -39,7 +66,7 @@ def uploaded(backend, tenant, document: bytes) -> dict:
 
 
 def test_m3d_the_eicar_file_is_rejected_and_never_processed(backend, tenant_a):
-    data = uploaded(backend, tenant_a, EICAR)
+    data = uploaded(backend, tenant_a, pdf_embedding(EICAR))
     assert settles(backend, tenant_a, data["id"]) == "rejected"
     refused = backend.post(f"/content/assets/{data['id']}/jobs", json={}, headers=tenant_a.h("lecturer"))
     assert refused.status_code == 409, refused.text
