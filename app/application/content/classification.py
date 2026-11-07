@@ -32,6 +32,8 @@ RIGHTS_BASES = frozenset({"own_work", "lecturer_provided", "institution_licensed
 AUDIENCES = frozenset({"tenant", "faculty", "department", "programme", "course"})
 REDISTRIBUTION = frozenset({"none", "tenant_only", "permitted"})
 AI_USE = frozenset({"not_permitted", "permitted"})
+# Outcomes that end a run: what authorized it no longer holds.
+AUTHORITY_LOST = frozenset({"NO_TENANT_AUTHORITY", "OPERATOR_NOT_AUTHORIZED"})
 
 
 class ClassificationRefused(Exception):
@@ -128,9 +130,9 @@ def judge(document: DocumentState | None, decision: Decision) -> tuple[str, str 
 class ClassificationStore(Protocol):
     """One transaction: committed when its context exits cleanly."""
 
-    async def authorization_valid(self, tenant_id: str, authorization_id: str) -> bool: ...
+    async def authorization_valid(self, tenant_id: str, authorization_id: str, *, lock: bool = False) -> bool: ...
 
-    async def operator_manages_content(self, tenant_id: str, user_id: str) -> bool: ...
+    async def operator_manages_content(self, tenant_id: str, user_id: str, *, lock: bool = False) -> bool: ...
 
     async def document(self, tenant_id: str, asset_id: str, *, lock: bool) -> DocumentState | None: ...
 
@@ -173,18 +175,41 @@ class ClassificationService:
                 report.run_id = await store.create_run(tenant_id, authorization_id, operator_user_id, len(decisions))
 
         seen: set[str] = set()
-        for decision in decisions:
+        for index, decision in enumerate(decisions):
             if decision.asset_id in seen:
                 report.outcomes.append(Outcome(decision.asset_id, "refused", "DUPLICATE_IN_RUN"))
                 continue
             seen.add(decision.asset_id)
-            report.outcomes.append(await self._one(tenant_id, operator_user_id, report.run_id, decision, apply))
+            outcome = await self._one(tenant_id, operator_user_id, report.run_id, decision, apply, authorization_id)
+            report.outcomes.append(outcome)
+            if outcome.reason in AUTHORITY_LOST:
+                # The authority or the operator's role ended during the run:
+                # nothing after this point is decided on it.
+                report.outcomes += [Outcome(d.asset_id, "refused", outcome.reason) for d in decisions[index + 1 :]]
+                break
         return report
 
-    async def _one(self, tenant_id: str, operator_user_id: str, run_id: str | None, decision: Decision, apply: bool) -> Outcome:
+    async def _one(
+        self,
+        tenant_id: str,
+        operator_user_id: str,
+        run_id: str | None,
+        decision: Decision,
+        apply: bool,
+        authorization_id: str,
+    ) -> Outcome:
         # Each document in its own transaction: its decision is recorded
         # whole or not at all, whatever happens to the others.
         async with self._store() as store:
+            if apply:
+                # Rechecked for every decision, in its own transaction and held
+                # until it commits (FOR SHARE on PostgreSQL), not only at the
+                # start of the run: a revocation waits for an in-flight decision
+                # and stops every later one.
+                if not await store.authorization_valid(tenant_id, authorization_id, lock=True):
+                    return Outcome(decision.asset_id, "refused", "NO_TENANT_AUTHORITY")
+                if not await store.operator_manages_content(tenant_id, operator_user_id, lock=True):
+                    return Outcome(decision.asset_id, "refused", "OPERATOR_NOT_AUTHORIZED")
             document = await store.document(tenant_id, decision.asset_id, lock=apply)
             verdict, reason = judge(document, decision)
             if verdict == "refuse":

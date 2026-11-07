@@ -4,20 +4,23 @@ revocation."""
 
 import asyncio
 import json
+from datetime import datetime, timezone
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 import app.worker as worker
 from app.api.ai import pending_lowerings
 from app.application.content.asset_commands import RevokeContentAssetCommand
 from app.application.content.asset_handlers import RevokeContentAssetHandler
+from app.application.content.classification import ClassificationService
 from app.db.session import SessionLocal
+from app.infrastructure.content.classification_store import SqlAlchemyClassificationStore, classification_store
 from app.infrastructure.content.scope_assignments import SqlAlchemyScopeAssignmentRepository
 from app.infrastructure.content.scope_gateway import HttpScopeAssignmentGateway
 from app.infrastructure.content.unit_of_work import ContentUnitOfWork
-from app.infrastructure.db.models.content import ContentScopeAssignmentModel
+from app.infrastructure.db.models.content import ContentAuthorityAuthorizationModel, ContentScopeAssignmentModel
 from app.infrastructure.security.service_signature import ServiceKeys
 from tests.integration.content.test_classification import classify, decision, world
 
@@ -174,3 +177,46 @@ async def test_revoking_a_document_never_made_institutional_queues_nothing():
                 )
             )
     assert await rows(w["tenant"]) == []
+
+
+async def test_a_revocation_waits_for_an_in_flight_decision_and_stops_the_next(monkeypatch):
+    # On PostgreSQL the recheck holds the authorization FOR SHARE: a revocation
+    # started during a decision waits for it to commit, and the next decision
+    # sees the revocation.
+    w = await world()
+    held, release = asyncio.Event(), asyncio.Event()
+    real_record = SqlAlchemyClassificationStore.record
+
+    async def slow_record(self, *args, **kwargs):
+        result = await real_record(self, *args, **kwargs)
+        held.set()
+        await release.wait()
+        return result
+
+    monkeypatch.setattr(SqlAlchemyClassificationStore, "record", slow_record)
+    run = asyncio.create_task(
+        ClassificationService(classification_store, 50).run(
+            tenant_id=w["tenant"],
+            operator_user_id=w["operator"],
+            authorization_id=w["authorization"],
+            decisions=[decision(a) for a in w["assets"][:2]],
+            apply=True,
+        )
+    )
+    await asyncio.wait_for(held.wait(), timeout=10)
+
+    async def revoke():
+        async with SessionLocal() as session, session.begin():
+            await session.execute(
+                update(ContentAuthorityAuthorizationModel)
+                .where(ContentAuthorityAuthorizationModel.id == w["authorization"])
+                .values(revoked_at=datetime.now(timezone.utc), revoked_by=w["operator"])
+            )
+
+    revoking = asyncio.create_task(revoke())
+    await asyncio.sleep(0.5)
+    assert not revoking.done(), "the revocation must wait for the in-flight decision"
+    release.set()
+    await asyncio.wait_for(revoking, timeout=10)
+    report = await asyncio.wait_for(run, timeout=10)
+    assert [(o.result, o.reason) for o in report.outcomes] == [("classified", None), ("refused", "NO_TENANT_AUTHORITY")]
