@@ -32,6 +32,7 @@ def make(environment: str, **overrides) -> Settings:
         "ai_service_url": URL,
         "backend_to_ai_secret": B2A,
         "ai_to_backend_secret": A2B,
+        "clamav_host": "clamav",
     }
     values.update(overrides)
     return Settings(_env_file=None, **{k: v for k, v in values.items() if v is not None})
@@ -68,6 +69,7 @@ def test_missing_required_setting_refuses_to_start(environment, field, message):
         "ai_service_url": URL,
         "backend_to_ai_secret": B2A,
         "ai_to_backend_secret": A2B,
+        "clamav_host": "clamav",
     }
     del values[field]
     with pytest.raises(ValueError, match=message):

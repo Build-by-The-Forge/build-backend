@@ -94,6 +94,12 @@ content_jobs_due = Gauge(
     "Queued ingestion jobs currently eligible for dispatch",
     registry=registry,
 )
+content_scans_total = Counter(
+    "build_backend_content_scans_total",
+    "Document scan attempts, by outcome: accepted, rejected, deferred or superseded",
+    ["outcome"],
+    registry=registry,
+)
 content_scope_assignments_pending = Gauge(
     "build_backend_content_scope_assignments_pending",
     "Scope assignments not yet acknowledged by the AI service, by whether they lower a document",

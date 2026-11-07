@@ -57,6 +57,10 @@ class AssetStatus(StrEnum):
 
 
 class IngestionStatus(StrEnum):
+    # A new document waits in quarantine until its scan accepts it, and a
+    # rejected one never leaves (M3-D ruling 7).
+    QUARANTINED = "quarantined"
+    REJECTED = "rejected"
     UPLOADED = "uploaded"
     QUEUED = "queued"
     PROCESSING = "processing"

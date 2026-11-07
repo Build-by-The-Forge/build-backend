@@ -22,6 +22,8 @@ SERVICE_BOUNDARY = {
     "ai_service_url": "https://ai-service.internal",
     "backend_to_ai_secret": "b" * 40,
     "ai_to_backend_secret": "a" * 40,
+    # Strict environments also need a malware scanner (M3-D PR 6).
+    "clamav_host": "clamav",
 }
 
 

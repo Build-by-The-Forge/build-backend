@@ -9,6 +9,7 @@ BOUNDARY = {
     "backend_to_ai_secret": "b" * 40,
     "ai_to_backend_secret": "a" * 40,
     "auth_jwt_secret": "j" * 40,
+    "clamav_host": "clamav",
 }
 
 

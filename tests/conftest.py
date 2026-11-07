@@ -6,6 +6,7 @@ import pytest
 
 
 def pytest_configure(config):
+    config.addinivalue_line("markers", "real_scanning: new documents stay quarantined until a real scan verdict")
     """The application's logging configuration, for every test.
 
     app.main applies it when imported, so without this a test's log
@@ -27,6 +28,15 @@ def learning_memory_enabled(monkeypatch):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "learning_memory_enabled", True)
+
+
+@pytest.fixture(autouse=True)
+def scan_stand_in(request, monkeypatch):
+    """New documents pass a stand-in scan unless the test is marked
+    real_scanning (tests/scan_stand_in.py)."""
+    from tests.scan_stand_in import stand_in_unless_real_scanning
+
+    stand_in_unless_real_scanning(request, monkeypatch)
 
 
 @pytest.fixture(autouse=True)

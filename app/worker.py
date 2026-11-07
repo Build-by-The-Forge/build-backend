@@ -29,6 +29,7 @@ from app.core.metrics import (
     content_oldest_due_job_age_seconds,
     content_recoveries_total,
     content_retries_scheduled_total,
+    content_scans_total,
     content_scope_assignment_oldest_age_seconds,
     content_scope_assignments_pending,
     content_scope_deliveries_total,
@@ -41,8 +42,10 @@ from app.domain.content.enums import IngestionStatus
 from app.events.event_bus import EventBus
 from app.infrastructure.assessment.unit_of_work import AssessmentUnitOfWork
 from app.infrastructure.content.ai_gateway import HttpAIServiceIngestionGateway
+from app.infrastructure.content.clamav import ClamdScanner, ScannerUnavailable
 from app.infrastructure.content.orphan_sweeper import sweep_orphaned_objects
 from app.infrastructure.content.s3_object_storage import S3ObjectStorage
+from app.infrastructure.content.scan_repository import ScanClaim, SqlAlchemyScanRepository
 from app.infrastructure.content.scope_assignments import SqlAlchemyScopeAssignmentRepository
 from app.infrastructure.content.scope_gateway import HttpScopeAssignmentGateway, ScopeDeliveryError
 from app.infrastructure.content.unit_of_work import ContentUnitOfWork
@@ -145,6 +148,105 @@ async def _dispatch_one(excluded_ids: set[str], claimed_ids: list[str]) -> bool:
                 status=job.status.value,
             )
             return True
+
+
+def _scanner() -> ClamdScanner | None:
+    if not settings.clamav_host:
+        return None
+    return ClamdScanner(settings.clamav_host, settings.clamav_port, float(settings.scan_timeout_seconds), settings.scan_max_bytes)
+
+
+def _scan_storage() -> S3ObjectStorage:
+    return S3ObjectStorage.from_settings()
+
+
+def _managed_key(claim: ScanClaim) -> str | None:
+    """The object key, only if the row's storage_uri is exactly the managed one."""
+    from app.application.content.upload import object_key, storage_uri_for
+
+    key = object_key(claim.tenant_id, claim.asset_id, claim.content_sha256)
+    return key if claim.storage_uri == storage_uri_for(settings.object_storage_bucket, key) else None
+
+
+async def _scan_one(claimed_ids: list[str]) -> bool:
+    """Scan one pending document (M3-D ruling 7). The claim takes a fence and a
+    lease and is committed before the scan runs, so no transaction is held
+    across it; the verdict is recorded only if this attempt still holds the
+    fence. Anything short of a verdict leaves the document quarantined, to be
+    tried again: the scan fails closed."""
+    async with SessionLocal() as session:
+        async with session.begin():
+            await set_transaction_timeouts(session)
+            claim = await SqlAlchemyScanRepository(session).claim_due(settings.scan_lease_seconds)
+    if claim is None:
+        return False
+    claimed_ids.append(claim.asset_id)
+    try:
+        scanner = _scanner()
+        if scanner is None:
+            raise ScannerUnavailable("SCANNER_NOT_CONFIGURED")
+        key = _managed_key(claim)
+        if key is None:
+            raise ScannerUnavailable("NOT_IN_MANAGED_STORAGE")
+        data = await _scan_storage().get(key, expected_sha256=claim.content_sha256, max_bytes=settings.scan_max_bytes)
+        verdict = await scanner.scan(data)
+    except Exception as exc:
+        code = exc.code if isinstance(exc, ScannerUnavailable) else getattr(exc, "error_code", type(exc).__name__)
+        delay = retry_delay_seconds(claim.attempts, settings.worker_retry_base_seconds, settings.worker_retry_cap_seconds)
+        async with SessionLocal() as session:
+            async with session.begin():
+                await SqlAlchemyScanRepository(session).defer(claim, delay)
+        content_scans_total.labels(outcome="deferred").inc()
+        logger.warning(
+            "content_scan_deferred",
+            asset_id=claim.asset_id,
+            tenant_id=claim.tenant_id,
+            attempt=claim.attempts,
+            error_code=code,
+            retry_in_seconds=delay,
+        )
+        return True
+    async with SessionLocal() as session:
+        async with session.begin():
+            recorded = await SqlAlchemyScanRepository(session).record_verdict(
+                claim, accepted=verdict.clean, scanner=verdict.scanner, signature_version=verdict.signature_version
+            )
+    outcome = ("accepted" if verdict.clean else "rejected") if recorded else "superseded"
+    content_scans_total.labels(outcome=outcome).inc()
+    # The signature name is for operators; the uploader is never told it.
+    (logger.info if verdict.clean else logger.warning)(
+        "content_scan_verdict",
+        asset_id=claim.asset_id,
+        tenant_id=claim.tenant_id,
+        attempt=claim.attempts,
+        outcome=outcome,
+        scanner=verdict.scanner,
+        signature_version=verdict.signature_version,
+        signature=verdict.signature,
+    )
+    return True
+
+
+async def run_scan_pass(stop: asyncio.Event | None = None) -> None:
+    processed = 0
+    while processed < settings.worker_scan_batch and not (stop and stop.is_set()):
+        claimed_ids: list[str] = []
+        try:
+            found = await _scan_one(claimed_ids)
+        except Exception as exc:
+            logger.error(
+                "content_scan_pass_error",
+                asset_id=claimed_ids[-1] if claimed_ids else None,
+                error_type=type(exc).__name__,
+            )
+            if not claimed_ids:
+                raise
+            # Its lease lapses and a later pass takes it again.
+            processed += 1
+            continue
+        if not found:
+            return
+        processed += 1
 
 
 def _scope_gateway() -> HttpScopeAssignmentGateway:
@@ -563,6 +665,15 @@ async def serve(*, registrations: bool = False) -> None:
                     "recoverer",
                     settings.worker_recoverer_interval_seconds,
                     run_recoverer_pass,
+                    stop,
+                    completed_at,
+                )
+            ),
+            asyncio.create_task(
+                _run_loop(
+                    "scans",
+                    settings.worker_scan_interval_seconds,
+                    run_scan_pass,
                     stop,
                     completed_at,
                 )

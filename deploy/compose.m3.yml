@@ -305,6 +305,8 @@ services:
         condition: service_completed_successfully
       ai-service:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
     environment:
       APP_ENVIRONMENT: development
       POSTGRES_URL: postgresql+asyncpg://build_backend_app:${BUILD_BACKEND_APP_PASSWORD}@postgres:5432/build
@@ -316,6 +318,9 @@ services:
       OBJECT_STORAGE_BUCKET: build-documents
       OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_BACKEND_ACCESS_KEY}
       OBJECT_STORAGE_SECRET_ACCESS_KEY: ${OBJECT_STORAGE_BACKEND_SECRET_KEY}
+      # Malware scanning (M3-D PR 6): every new document is streamed here
+      # before anything opens it.
+      CLAMAV_HOST: clamav
     entrypoint: ["python", "-m", "app.worker"]
     healthcheck:
       test: ["CMD", "python", "-m", "app.worker", "--check"]
@@ -323,7 +328,22 @@ services:
       timeout: 3s
       retries: 3
       start_period: 30s
-    networks: [internal]
+    networks: [internal, scanning]
+
+  clamav:
+    # Self-hosted, so no third party receives a student's file. The image
+    # carries a signature database and freshclam updates it. Only the
+    # backend worker can reach it: its own network, no published port.
+    image: clamav/clamav:1.4@sha256:8ad6197396974726c35d017e50aaaaf4b91745726a04faec8480c203edd98052
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    networks: [scanning]
 
   ai-service:
     image: build-m3-ai-service
@@ -407,6 +427,7 @@ volumes:
 
 networks:
   internal:
+  scanning:
 
 secrets:
   github_token:

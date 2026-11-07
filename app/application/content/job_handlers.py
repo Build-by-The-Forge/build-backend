@@ -91,8 +91,44 @@ def require_managed_storage(asset: ContentAsset, bucket: str) -> str:
     return key
 
 
+class DocumentNotScannedError(UnmanagedAssetError):
+    """The document's scan hasn't accepted it (M3-D ruling 7): pending, or
+    rejected. Nothing processes it."""
+
+    code = "DOCUMENT_NOT_SCANNED"
+
+
+class DocumentRejectedError(DocumentNotScannedError):
+    """The scan rejected the document: nothing will ever process it."""
+
+    code = "DOCUMENT_REJECTED"
+
+
+async def scan_refusal(uow: ContentUnitOfWorkPort, asset: ContentAsset) -> tuple[str, str] | None:
+    """Why the document may not be processed yet, or None once accepted. No
+    scan at all is refused like a pending one: absence is never acceptance."""
+    scans = getattr(uow, "scans", None)
+    verdict = await scans.verdict(asset.id) if scans is not None else None
+    if verdict == "accepted":
+        return None
+    if verdict == "rejected":
+        return ("DOCUMENT_REJECTED", "the document was not accepted by the security check")
+    return ("DOCUMENT_NOT_SCANNED", "the document is waiting for its security check")
+
+
+async def require_scanned(uow: ContentUnitOfWorkPort, asset: ContentAsset) -> None:
+    refusal = await scan_refusal(uow, asset)
+    if refusal is None:
+        return
+    if refusal[0] == "DOCUMENT_REJECTED":
+        raise DocumentRejectedError("the document was not accepted by the security check")
+    raise DocumentNotScannedError("the document is waiting for its security check")
+
+
 # Dispatch refusals about the asset itself; they are not AI-service errors.
-ASSET_DISPATCH_REFUSALS = frozenset({"ASSET_NOT_IN_MANAGED_STORAGE", "ASSET_OBJECT_MISSING", "ASSET_OBJECT_MISMATCH"})
+ASSET_DISPATCH_REFUSALS = frozenset(
+    {"ASSET_NOT_IN_MANAGED_STORAGE", "ASSET_OBJECT_MISSING", "ASSET_OBJECT_MISMATCH", "DOCUMENT_NOT_SCANNED", "DOCUMENT_REJECTED"}
+)
 
 
 def owned_asset(asset: ContentAsset | None, tenant_id: str, asset_id: str) -> ContentAsset:
@@ -110,6 +146,7 @@ class CreateIngestionJobHandler:
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
         require_managed_storage(asset, self._bucket)
+        await require_scanned(self._uow, asset)
 
         job = ContentIngestionJob.create(
             asset_id=asset.id,
@@ -170,6 +207,7 @@ class ReprocessAssetHandler:
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
         require_managed_storage(asset, self._bucket)
+        await require_scanned(self._uow, asset)
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
         if latest_job is not None:
@@ -221,6 +259,10 @@ class DispatchIngestionJobHandler:
     async def _object_refusal(self, asset: ContentAsset) -> tuple[str, str, bool] | None:
         """Why the asset must not reach the AI-service, as (code, message,
         retryable), or None when its managed object exists and matches."""
+        # Its scan first: nothing unscanned or rejected is ever sent.
+        scanned = await scan_refusal(self._uow, asset)
+        if scanned is not None:
+            return (scanned[0], scanned[1], False)
         key = managed_storage_key(asset, self._bucket)
         if key is None:
             return ("ASSET_NOT_IN_MANAGED_STORAGE", "the asset is not in managed storage", False)
