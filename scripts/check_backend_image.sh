@@ -45,7 +45,8 @@ app = Path("/app")
 top = sorted(p.name for p in app.iterdir())
 check(top == ["alembic", "alembic.ini", "app", "scripts"], "/app holds only the allowlist", f"found {top}")
 scripts = sorted(p.name for p in (app / "scripts").iterdir()) if (app / "scripts").is_dir() else []
-check(scripts == ["provision_tenant.py"], "/app/scripts holds only provision_tenant.py", f"found {scripts}")
+expected_scripts = ["classify_content.py", "provision_tenant.py", "record_content_authority.py"]
+check(scripts == expected_scripts, "/app/scripts holds only the operator commands", f"found {scripts}")
 
 tools = ["pytest", "_pytest", "pytest_asyncio", "pytest_cov", "pytest_env", "ruff", "mypy", "pre_commit", "respx", "aiosqlite", "coverage"]
 present = [m for m in tools if importlib.util.find_spec(m)]

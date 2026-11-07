@@ -73,6 +73,13 @@ class Settings(BaseSettings):
     worker_orphan_sweep_interval_seconds: int = Field(default=3600, ge=60, le=604800)
     worker_attempt_finalizer_interval_seconds: int = Field(default=30, ge=1, le=3600)
     worker_attempt_finalizer_batch: int = Field(default=100, ge=1, le=1000)
+    # The scope-assignment dispatcher (M3-D PR 5): how often it runs, how many
+    # rows a pass delivers, and the per-call bound while a row is locked.
+    worker_scope_interval_seconds: int = Field(default=5, ge=1, le=3600)
+    # The most documents one operator classification run may decide (M3-D PR 5).
+    content_classification_max_per_run: int = Field(default=200, ge=1, le=1000)
+    worker_scope_batch: int = Field(default=50, ge=1, le=1000)
+    worker_scope_timeout_seconds: int = Field(default=10, ge=1, le=25)
     worker_shutdown_grace_seconds: int = Field(default=25, ge=1, le=120)
 
     # Access-token signing (HS256). The current key signs; the previous key,

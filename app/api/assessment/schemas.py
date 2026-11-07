@@ -129,7 +129,6 @@ class AssessmentQuestionResponse(BaseModel):
 
 class AssessmentResponse(BaseModel):
     id: str
-    tenant_id: str
     course_id: str
     title: str
     instructions: str
@@ -151,10 +150,9 @@ class AddAssessmentQuestionRequest(BaseModel):
 
 
 class AttemptResponse(BaseModel):
+    # No tenant_id or user_id: the caller's own, and outside the contract (G-39).
     id: str
-    tenant_id: str
     assessment_id: str
-    user_id: str
     status: str
     started_at: str
     expires_at: str
@@ -211,10 +209,8 @@ class QuestionResultResponse(BaseModel):
 
 class AttemptResultResponse(BaseModel):
     id: str
-    tenant_id: str
     attempt_id: str
     assessment_id: str
-    user_id: str
     total_score: int
     max_score: int
     percentage: float

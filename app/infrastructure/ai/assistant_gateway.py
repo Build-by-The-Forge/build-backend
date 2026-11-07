@@ -77,11 +77,9 @@ async def no_source_is_readable(actor: AIActor, asset_ids: set[str]) -> set[str]
 
 
 async def nothing_lowered_yet(tenant_id: str) -> frozenset[str]:
-    """The tenant's lowered, unacknowledged documents (M3-D immediate denial).
-
-    Only the scope-assignment outbox (M3-D PR 5) lowers a document, and
-    until it exists nothing can be raised to institutional either, so
-    the list is empty. PR 5 replaces this with a read of its pending rows."""
+    """The constructor's default for tests and unwired gateways. The routes
+    pass app.api.ai.pending_lowerings, the outbox's pending lowerings for
+    the tenant (M3-D PR 5)."""
     return frozenset()
 
 

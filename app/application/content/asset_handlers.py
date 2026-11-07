@@ -28,6 +28,19 @@ class RevokeContentAssetHandler:
         asset.revoke(cmd.reason)
         events = asset.pull_events()
         saved = await self._uow.assets.save_asset(asset)
+        # A document the AI service may hold as institutional is lowered in
+        # this transaction: from its commit it's in every retrieving call's
+        # denied_assets, until the AI service acknowledges (M3-D PR 5).
+        outbox = getattr(self._uow, "scope_assignments", None)
+        if outbox is not None and asset.tenant_id is not None:
+            if await outbox.latest_scope(asset.tenant_id, asset.id) == "institutional":
+                await outbox.enqueue(
+                    tenant_id=asset.tenant_id,
+                    asset_id=asset.id,
+                    scope="unknown",
+                    reason="revoked",
+                    decided_by=cmd.revoked_by,
+                )
 
         if self._event_bus and events:
             self._event_bus.publish_all(events)

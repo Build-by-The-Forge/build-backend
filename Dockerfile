@@ -39,6 +39,10 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
 COPY scripts/provision_tenant.py ./scripts/provision_tenant.py
+# The operator classification commands (M3-D PR 5): the tenant authority's
+# record, and classification by that authority while staff workflows are paused.
+COPY scripts/record_content_authority.py ./scripts/record_content_authority.py
+COPY scripts/classify_content.py ./scripts/classify_content.py
 
 USER 10001:10001
 
