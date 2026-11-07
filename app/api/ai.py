@@ -22,8 +22,10 @@ from app.core.authorization import ROLE_PERMISSIONS, Permission
 from app.core.dependencies import require_permission
 from app.core.exceptions import AnswerWithheldError, ClientError
 from app.core.tenant_context import TenantContext
+from app.db.session import SessionLocal
 from app.domain.ai.assistant import AIActor, AIAssistantError, AIAssistantGateway
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
+from app.infrastructure.content.scope_assignments import SqlAlchemyScopeAssignmentRepository
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 throttle = build_container().get(AuthThrottle)
@@ -58,7 +60,16 @@ def get_ai_assistant_gateway(request: Request) -> AIAssistantGateway:
     return HttpAIAssistantGateway(
         nonce_store=getattr(request.app.state, "service_replay_store", None),
         readable_sources=readable_sources,
+        denied_assets=pending_lowerings,
     )
+
+
+async def pending_lowerings(tenant_id: str) -> frozenset[str]:
+    """The tenant's denied_assets: documents the backend has lowered and the
+    AI service hasn't acknowledged (M3-D immediate denial). A read failure
+    propagates, and the gateway then makes no call."""
+    async with SessionLocal() as session:
+        return await SqlAlchemyScopeAssignmentRepository(session).pending_lowerings(tenant_id)
 
 
 async def readable_sources(actor: AIActor, asset_ids: set[str]) -> set[str]:
