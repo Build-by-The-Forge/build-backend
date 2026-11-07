@@ -1,6 +1,6 @@
 # BUILD Master Execution Blueprint
 
-**Status:** proposed, for the reviewer. **Written:** 2026-11-07, against `build-backend` main `ccef555`, `ai-service` main after #46, and `Build-UI` main `9c6937c`.
+**Status:** proposed, for the reviewer. **Baseline:** 2026-11-07, `build-backend` main `a8f4b4d` (after #108), `ai-service` main `2506dfd` (after #46), and `Build-UI` main `9c6937c`.
 
 **Purpose:** the source of truth for the delivery programme. Every claim about existing code below was checked against the repository it names.
 
