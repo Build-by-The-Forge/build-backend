@@ -112,7 +112,14 @@ status=0
 scripts/check_backend_image.sh build-m3-backend || status=$?
 
 "${COMPOSE[@]}" run --rm boundary-tests "$@" -q \
-  -m "not redis_down and not storage_down and not fault_injection and not c23_prepare and not c23_verify" || status=$?
+  -m "not redis_down and not storage_down and not scanner_down and not fault_injection and not c23_prepare and not c23_verify" || status=$?
+
+# M3-D PR 6: the scanner stopped. Uploads must stay quarantined and no job
+# may be created for them: the scan fails closed.
+echo "M3-D: stopping the scanner"
+"${COMPOSE[@]}" stop clamav
+"${COMPOSE[@]}" run --rm --no-deps boundary-tests -q -m scanner_down || status=$?
+"${COMPOSE[@]}" up -d --wait clamav || status=$?
 
 # Storage secret keys: in no image layer or configuration, and in no log
 # written by the run so far.

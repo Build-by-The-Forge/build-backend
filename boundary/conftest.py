@@ -48,6 +48,7 @@ if not (BACKEND_URL and AI_URL and B2A and A2B):
 def pytest_configure(config):
     config.addinivalue_line("markers", "redis_down: C11, run only while Redis is stopped")
     config.addinivalue_line("markers", "storage_down: P3-1, run only while object storage is stopped")
+    config.addinivalue_line("markers", "scanner_down: M3-D PR 6, run only while clamav is stopped")
     config.addinivalue_line("markers", "fault_injection: P3-6 7b, run only against ai-worker-faults")
     config.addinivalue_line("markers", "c23_prepare: P3-6 C23, before the gate kills ai-worker-faults")
     config.addinivalue_line("markers", "c23_verify: P3-6 C23, after the gate restarts ai-worker-faults")
@@ -426,10 +427,25 @@ def create_asset(backend: httpx.Client, tenant: Tenant, document: bytes | None =
     stored = response.json()["data"]
     assert stored["content_sha256"] == hashlib.sha256(document).hexdigest()
     assert stored["storage_uri"].startswith("s3://build-documents/tenants/")
-    return stored
+    return released(backend, tenant, stored)
+
+
+def released(backend: httpx.Client, tenant: Tenant, asset: dict[str, Any]) -> dict[str, Any]:
+    """The asset once the scan worker's clamd has accepted it. Every new
+    document waits in quarantine until then (M3-D PR 6), and no job can be
+    created for it before."""
+    deadline = time.time() + 120
+    while asset.get("ingestion_status", "quarantined") == "quarantined" and time.time() < deadline:
+        time.sleep(1)
+        current = backend.get(f"/content/assets/{asset['id']}", headers=tenant.h("lecturer"))
+        assert current.status_code == 200, current.text
+        asset = current.json()["data"]
+    assert asset["ingestion_status"] != "quarantined", f"still quarantined after 120s: {asset['id']}"
+    return asset
 
 
 def create_job_for(backend: httpx.Client, tenant: Tenant, asset: dict[str, Any]) -> dict[str, Any]:
+    released(backend, tenant, asset)
     job = backend.post(f"/content/assets/{asset['id']}/jobs", json={"max_attempts": 3}, headers=tenant.h("lecturer"))
     assert job.status_code == 201, job.text
     return job.json()["data"]

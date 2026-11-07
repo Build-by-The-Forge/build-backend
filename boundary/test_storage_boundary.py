@@ -188,6 +188,16 @@ async def _seed_managed_asset(tenant_id: str, source_id: str) -> str:
             json.dumps({}),
             now,
         )
+        # As the scan worker would have recorded it, for a clean file (M3-D
+        # PR 6): this case is about storage, not scanning.
+        await conn.execute(
+            """INSERT INTO content_scans (asset_id, tenant_id, verdict, fence, attempts, scanner,
+                   signature_version, scanned_at)
+               VALUES ($1, $2, 'accepted', 1, 1, 'boundary seed', '0', $3)""",
+            asset_id,
+            tenant_id,
+            now,
+        )
     finally:
         await conn.close()
     return asset_id
