@@ -135,7 +135,7 @@ These go beyond M0's route list. Each needs the reviewer's agreement.
 | `PATCH /content/my-documents/{id}`: the shelf form, and My Shelf's `level` and `course_id` filters | Nothing | The Student Shelf needs documents described by course and level. M3-D design, approved at `ab09d2c`. Gap G-41 |
 | `POST /content/my-documents/{id}/publication-request` and `DELETE .../publication` | Nothing | The sprint ruling on `06b433a`: a student's own work publishes on request, anything else stays private as `requested`. Gap G-42 |
 | `GET /content/tenant-shelf` and `POST /content/tenant-shelf/{id}/report` | Nothing | "Public" means this tenant only, with reports, hiding and takedown (rulings on `fe7742e`). Gap G-43 |
-| `quarantined` and `rejected` ingestion statuses, and `DOCUMENT_NOT_AVAILABLE` | Nothing | Ruling 7: every document is scanned before anything opens it. Gap G-40 |
+| `quarantined` and `rejected` ingestion statuses, and `DOCUMENT_NOT_AVAILABLE` | Every new document is quarantined until its scan accepts it, and nothing unscanned or rejected gets a job (`DOCUMENT_NOT_SCANNED`, `DOCUMENT_REJECTED`). No student route shows the status yet | Ruling 7: every document is scanned before anything opens it. Scanning merged in #106 and closed G-40. Students see the statuses with G-01's routes and `DOCUMENT_NOT_AVAILABLE` with G-13's |
 
 ## Durable queuing
 

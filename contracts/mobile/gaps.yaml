@@ -123,11 +123,6 @@ implementation_gaps:
   summary: Upload creates no job, so durable queuing doesn't exist yet
   closes_in: M3-D
   evidence: Read from app/application/content/upload.py.
-- id: G-40
-  severity: High
-  summary: Uploads aren't scanned, so no document is ever quarantined or rejected before processing
-  closes_in: M3-D
-  evidence: No scanner exists (M3-D ruling 7); read from app/application/content/upload.py.
 - id: G-41
   severity: Medium
   summary: Students can't describe their documents with the shelf form
@@ -203,3 +198,6 @@ closed:
 - id: G-21
   summary: Validation errors and logs repeated the refused value, which may be a password
   proof: tests/integration/test_validation_never_echoes.py::test_a_signed_in_route_does_not_log_a_refused_value
+- id: G-40
+  summary: Uploads weren't scanned, so no document was quarantined or rejected before processing
+  proof: pg_smoke/test_scanning.py::test_a_new_document_is_quarantined_with_a_pending_scan_and_gets_no_job
