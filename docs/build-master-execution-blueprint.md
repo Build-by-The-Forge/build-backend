@@ -43,9 +43,15 @@
 | #106 | Malware scanning, quarantine and the scan gate | CI and the **real-ClamAV** boundary gate green |
 | `ai-service` #46 | README: the ingestion pipeline as built | CI green |
 
-### Open
+### Since the baseline (2026-11-08)
 
-None in the merge queue. This document (#107) is the only open PR.
+| PR | What | State |
+|---|---|---|
+| #109 | G-40 closed with its proof test; register snapshot 19 closed, 24 open | **Merged** (`c13af71`) |
+| `ai-service` #47 | The unmounted `/ocr` and `/generate` placeholder modules removed | **Merged** (`403dcf3`) |
+| `ai-service` #48 | AI-01 design: one model execution boundary | **Design merged** (`0ef1569`); each of its four implementation PRs needs its own review |
+| #110 | S-02 academic profile design | **In design review**; the composite tenant key fixed at `2264aac` |
+| #107 | This document | In final review |
 
 ### Carried forward from the reviewer
 
