@@ -177,9 +177,17 @@ Stages overlap. Each PR states its exit evidence.
 | Subscriptions | Backend entitlements implemented | No feature depends on a client flag |
 | Other personas | Out of this delivery | Student login only |
 
-## 9. Decisions for the reviewer
+## 9. Decisions
 
-1. **The academic profile (S-02).** I propose a backend-owned student profile: programme, level and enrolled courses, validated against the catalogue, closing G-28. It would be a migration after 0031, and its own design PR first.
-2. **Practice versus CBT (S-10).** I propose that generated practice never becomes an official assessment: separate tables or labels, never scored as CBT, never in results.
-3. **AI-01 order.** Consolidate onto `ModelGateway` before adding Gemini, so Gemini plugs into the resilience, budget and fallback layer instead of into `LLMProvider`.
-4. **The placeholder routes** `/v1/ai/ocr` and `/v1/ai/generate`. I propose removing them (ingestion already OCRs) rather than implementing them.
+The reviewer agreed with all four on 2026-11-07, on #107.
+
+1. **The academic profile (S-02): agreed.**
+   - It is backend-owned: programme, level and enrolled courses, validated against the academic catalogue, closing G-28.
+   - Its design PR comes first; only then its migration, after 0031.
+2. **Practice versus CBT (S-10): agreed.**
+   - Generated practice stays a separate learning activity.
+   - It never creates an official CBT attempt, never affects official CBT scores, and never appears in official assessment results.
+3. **AI-01 order: agreed.** Chat, explanations and question generation move onto `ModelGateway` before Gemini is added, so the provider adapter gets the gateway's resilience, budget and fallback controls.
+4. **The placeholder routes: agreed.**
+   - `/v1/ai/ocr` and `/v1/ai/generate` are removed.
+   - The real ingestion OCR pipeline and the distinct question-generation capability stay.
