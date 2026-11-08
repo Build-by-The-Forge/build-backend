@@ -132,7 +132,7 @@
 
 | Boundary | Contract | State | Owner |
 |---|---|---|---|
-| Mobile and backend | `contracts/mobile/openapi.yaml`, with `gaps.yaml` enforced by the drift gate | 53 operations; 25 gaps open (G-40 still listed though #106 implemented it; Stage 0 closes it) | Backend, one contract PR per milestone |
+| Mobile and backend | `contracts/mobile/openapi.yaml`, with `gaps.yaml` enforced by the drift gate | 53 operations; 24 gaps open (G-40 closed by #109) | Backend, one contract PR per milestone |
 | Backend and AI, requests | Service Signature v1, user or system context, single-use nonce | Built, boundary-tested | Paired PRs; the boundary gate runs against `ai-service` main |
 | Backend and AI, responses | Signed response with `sources_used`, then the provenance check (#100) | Built | Paired |
 | Backend and AI, scope | `/v1/ingest/scope-assignments`, versioned, plus `denied_assets` | Built; the dispatcher merged (#104), with the per-decision authority recheck (#108) | Paired |
@@ -147,7 +147,7 @@ Stages overlap. Each PR states its exit evidence.
 
 | Stage | Backend | AI service | Mobile | Exit evidence |
 |---|---|---|---|---|
-| **0. Stabilise** | Verify main at the baseline head: CI, pg_smoke and the real-ClamAV boundary gate green on the merge commit itself; close G-40 in `gaps.yaml` with its proof test (scanning merged in #106) | Verify main: CI and the retrieval quality gate green | Baseline audit (plan M0) | Each main's own gates green on its baseline head, recorded with run links |
+| **0. Stabilise** | Verify main at the baseline head: CI, pg_smoke and the real-ClamAV boundary gate green on the merge commit itself; close G-40 in `gaps.yaml` with its proof test (scanning merged in #106) | Verify main: CI and the retrieval quality gate green | Baseline audit (plan M0) | Each main's own gates green on its baseline head, recorded with run links. **Done:** build-backend `a8f4b4d` [CI](https://github.com/Build-by-The-Forge/build-backend/actions/runs/42416105435) and [boundary-gate](https://github.com/Build-by-The-Forge/build-backend/actions/runs/42416105474); ai-service `2506dfd` [CI](https://github.com/Build-by-The-Forge/ai-service/actions/runs/42409504066) and [AI Service CI](https://github.com/Build-by-The-Forge/ai-service/actions/runs/42409503994); G-40 closed by #109 |
 | **1. Contracts** | Student journey contract PR (S-02, S-03, S-07 to S-10, S-13, S-14); academic profile design | AI-01 consolidation PR | Typed API client from the contract; mock adapters; route protection | Contract merged and drift gate green; mobile typechecks against it |
 | **2. Student foundation** | Academic profile (migration), dashboard summary | — | Auth, onboarding and dashboard wired | A real student registers, onboards and sees their courses on a device |
 | **3. Secure content** | PR 7 (dispatch scope), PR 8 (upload, quotas, list and get), PR 9 (retry), PR 10 (bytes), controlled backfill | AI-02 hardening | Upload, the shelf, Read Mode bytes | Upload, then quarantine, scan, ingest, ready, then read on a device; EICAR rejected |
