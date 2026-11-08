@@ -59,13 +59,13 @@ None in the merge queue. This document (#107) is the only open PR.
 **Status key:**
 - **Built:** implemented, reachable and tested.
 - **Partial:** implemented, but missing something the milestone requires.
-- **Placeholder:** a route that returns a fixed message.
+- **Placeholder:** code that returns a fixed message.
 - **Not started:** no code.
 
 | # | Capability | Existing code (`ai-service`) | Status | What's missing |
 |---|---|---|---|---|
 | AI-01 | Model Gateway | `core/models/gateway.py`: retries, circuit breaker, token-bucket rate limit, budget, fallback. Providers in `core/models/providers/`: `openai`, `mock` | **Partial** | **Two abstractions:** chat, explain and question generation call `services/ai/llm.py` (`LLMProvider`, OpenAI or deterministic) directly, not the gateway. Only `services/agents/executor.py` uses the gateway. Consolidate onto the gateway, then add the Gemini adapter, with the model ID verified and G-33 enforced in configuration |
-| AI-02 | Ingestion and OCR | `services/tasks/handlers.py` `ContentIngestionTaskHandler`: verified fetch, then text layer or OCR (`services/ocr`: PaddleOCR, OpenVINO), page-aware chunks, ONNX MiniLM embeddings, one-transaction durable index, signed stage callbacks | **Built** | Harden, don't rewrite: OCR edge cases, tables and equations, versioning and reprocess, index consistency after deletion and revocation, duplicate and retry behaviour, concurrency. `/v1/ai/ocr` is a **placeholder** route to remove or implement |
+| AI-02 | Ingestion and OCR | `services/tasks/handlers.py` `ContentIngestionTaskHandler`: verified fetch, then text layer or OCR (`services/ocr`: PaddleOCR, OpenVINO), page-aware chunks, ONNX MiniLM embeddings, one-transaction durable index, signed stage callbacks | **Built** | Harden, don't rewrite: OCR edge cases, tables and equations, versioning and reprocess, index consistency after deletion and revocation, duplicate and retry behaviour, concurrency. `app/api/v1/ai/ocr.py` is an unmounted placeholder, never served (the contract test pins the served `/v1/ai` paths); removed by ai-service #47 |
 | AI-03 | Retrieval and RAG | `services/rag`: pgvector store, lexical full-text, hybrid `retrieval.py`, `evidence.py`, `recorder.py` (`sources_used`), `scopes.py`, index fence; `/v1/ai/retrieve` | **Built**, quality gap | Real FUTA material scored 62.5% recall@5 (tier-2). Separate the variables: extraction, chunking, metadata, hybrid weighting, reranking. Allow-list retrieval for personal documents (M4, G-05) |
 | AI-04 | AI Tutor | `services/ai/orchestrator.py` `chat`: grounded with `check_grounded`, abstains without evidence, signed `sources_used` | **Partial** | Conversations (M3-F, contract #90): multi-turn history, citations with excerpts, the redacted flag, `TURN_IN_PROGRESS`. Backend G-04, G-17, G-18 |
 | AI-05 | Explanation Engine | `orchestrator.explain`, `generation/explain.py`, `/v1/ai/explain` | **Partial** | Depth levels (structured explanations at selectable depth), and an evaluation set |
@@ -78,7 +78,7 @@ None in the merge queue. This document (#107) is the only open PR.
 | AI-12 | Offline AI | None in this repository | **Not started** | On-device portfolio (Qwen3-1.7B, smaller fallbacks, Glimmer in the benchmark), benchmarked on target Android devices before any claim |
 | AI-13 | Evaluation and observability | Retrieval quality gate in CI, tier-2 evaluation tooling, Prometheus metrics, the worker's task metrics | **Partial** | Grounding, citation correctness, latency and cost dashboards per capability; a per-capability evaluation set with a baseline before any threshold |
 | AI-14 | Security and governance | Service Signature v1, signed responses, single-use nonces, the scope filter, `denied_assets`, `sources_used`, the memory gate, the ownership manifest | **Partial** | Provider data-processing records (G-33), retention and deletion of derived data (G-32), and an audit of provider calls |
-| — | `/v1/ai/generate` | Placeholder route | **Placeholder** | Remove, or define it under a capability above |
+| — | `/v1/ai/generate` | `app/api/v1/ai/generate.py`, included only by the unmounted `app/services/ai/router.py`; never served | **Placeholder** | Removed by ai-service #47 |
 
 ### AI implementation order
 
@@ -189,5 +189,5 @@ The reviewer agreed with all four on 2026-11-07, on #107.
    - It never creates an official CBT attempt, never affects official CBT scores, and never appears in official assessment results.
 3. **AI-01 order: agreed.** Chat, explanations and question generation move onto `ModelGateway` before Gemini is added, so the provider adapter gets the gateway's resilience, budget and fallback controls.
 4. **The placeholder routes: agreed.**
-   - `/v1/ai/ocr` and `/v1/ai/generate` are removed.
+   - `/v1/ai/ocr` and `/v1/ai/generate` are removed. They were never served: their modules hung off an unmounted router. ai-service #47 deletes them.
    - The real ingestion OCR pipeline and the distinct question-generation capability stay.
