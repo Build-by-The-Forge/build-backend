@@ -71,20 +71,23 @@ academic_profiles
   level_code       integer     not null
   created_at, updated_at  timestamptz not null
   unique (tenant_id, user_id)
+  unique (id, tenant_id)                # target of the course rows' composite FK
   foreign key (tenant_id, user_id)      references memberships (tenant_id, user_id) on delete cascade
   foreign key (tenant_id, programme_id) references programmes (tenant_id, id)       on delete restrict
   foreign key (tenant_id, level_code)   references levels (tenant_id, code)         on delete restrict
 
 academic_profile_courses
-  profile_id  varchar(36) not null references academic_profiles (id) on delete cascade
+  profile_id  varchar(36) not null
   tenant_id   varchar(36) not null
   course_id   varchar(36) not null
   primary key (profile_id, course_id)
+  foreign key (profile_id, tenant_id) references academic_profiles (id, tenant_id) on delete cascade
   foreign key (tenant_id, course_id) references courses (tenant_id, id) on delete cascade
   index (tenant_id, course_id)
 ```
 
 - **Tenant-consistent references.** Every foreign key carries `tenant_id`, as 0030 did for courses, so a row can't point into another tenant even if a code path is wrong.
+  - A course row's profile and course must share **its** `tenant_id`: both foreign keys include it. Two independent keys (`profile_id` alone, and `tenant_id, course_id`) would let a row join a tenant A profile to a tenant B course, so the profile key is composite, `(profile_id, tenant_id)`, against `unique (id, tenant_id)`.
   - `uq_programmes_tenant_id_id` is added as the programme FK's target.
   - `uq_levels_tenant_code` and `uq_courses_tenant_id_id` already exist.
 - **Deleting.** No route hard-deletes catalogue rows, so `restrict` is never hit in normal use; it stops a manual deletion from silently emptying profiles. A course deletion cascades, because an enrolment in a course that no longer exists means nothing.
@@ -134,5 +137,6 @@ academic_profile_courses
 | Two concurrent first saves: one profile row | `pg_smoke` |
 | Removing the membership deletes the profile and its courses | `pg_smoke` |
 | The reads and the save's lookups repeated past five executions, so the generic plan is exercised | `pg_smoke` |
+| The database itself refuses a course row whose `tenant_id` differs from its profile's, or from its course's, with the application bypassed | `pg_smoke` |
 | Migration 0032 round trip and schema drift | Migration gate |
 | G-28 closed with its proof; the drift gate is green | Drift gate |
