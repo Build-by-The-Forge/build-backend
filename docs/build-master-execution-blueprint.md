@@ -141,7 +141,7 @@ Stages overlap. Each PR states its exit evidence.
 
 | Stage | Backend | AI service | Mobile | Exit evidence |
 |---|---|---|---|---|
-| **0. Stabilise** | Merge #97, #104, #106; the #104 per-decision authority follow-up | — | Baseline audit (plan M0) | Clean mains; CI and boundary gates green |
+| **0. Stabilise** | Verify main at the baseline head: CI, pg_smoke and the real-ClamAV boundary gate green on the merge commit itself; close G-40 in `gaps.yaml` with its proof test (scanning merged in #106) | Verify main: CI and the retrieval quality gate green | Baseline audit (plan M0) | Each main's own gates green on its baseline head, recorded with run links |
 | **1. Contracts** | Student journey contract PR (S-02, S-03, S-07 to S-10, S-13, S-14); academic profile design | AI-01 consolidation PR | Typed API client from the contract; mock adapters; route protection | Contract merged and drift gate green; mobile typechecks against it |
 | **2. Student foundation** | Academic profile (migration), dashboard summary | — | Auth, onboarding and dashboard wired | A real student registers, onboards and sees their courses on a device |
 | **3. Secure content** | PR 7 (dispatch scope), PR 8 (upload, quotas, list and get), PR 9 (retry), PR 10 (bytes), controlled backfill | AI-02 hardening | Upload, the shelf, Read Mode bytes | Upload, then quarantine, scan, ingest, ready, then read on a device; EICAR rejected |
