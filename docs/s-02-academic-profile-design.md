@@ -93,11 +93,15 @@ academic_profile_courses
 
 ## Transaction (`PUT`)
 
-1. Lock the caller's profile row (`SELECT ... FOR UPDATE`). On the first save, insert it with `ON CONFLICT (tenant_id, user_id) DO NOTHING` first, then lock it. Two first saves can't both insert.
-2. Read the programme, the level and every course in one query each, filtered by tenant and by the M3-C readability rule. Any miss is the 422.
-3. Update the profile row, delete its course rows, insert the new ones, then commit.
+1. Read the programme, the level and every course, one query each, filtered by tenant and by the readability rule above. Any miss is the 422, and nothing is written.
+2. Upsert the profile row: `INSERT ... ON CONFLICT (tenant_id, user_id) DO UPDATE SET programme_id, level_code, updated_at ... RETURNING id`. This takes the row lock.
+   - The first save inserts the row. Two concurrent first saves can't both insert: the second becomes the update.
+   - A concurrent save waits here until the first commits.
+3. Delete the profile's course rows, insert the new ones, then commit.
 
-Steps 2 and 3 run under the lock from step 1, so concurrent saves serialise. An archival that commits during step 2 isn't blocked. The save that read the course before the archival still stores it, and reads hide it afterwards (decision 4). This is the same outcome as saving just before the archival, so no `FOR SHARE` is needed on catalogue rows.
+**Concurrent saves serialise at step 2.** The waiting save's step 3 runs after the first one has committed. Under READ COMMITTED, its delete therefore sees and removes the first save's courses, so the stored set is exactly the second save's.
+
+**An archival that commits between steps 1 and 3 isn't blocked.** The save still stores the course, and reads hide it afterwards (decision 4). This is the same outcome as saving just before the archival, so no `FOR SHARE` is needed on catalogue rows.
 
 ## What must not change
 
