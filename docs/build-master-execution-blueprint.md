@@ -126,10 +126,10 @@ None in the merge queue. This document (#107) is the only open PR.
 
 | Boundary | Contract | State | Owner |
 |---|---|---|---|
-| Mobile and backend | `contracts/mobile/openapi.yaml`, with `gaps.yaml` enforced by the drift gate | 53 operations; 26 gaps open | Backend, one contract PR per milestone |
+| Mobile and backend | `contracts/mobile/openapi.yaml`, with `gaps.yaml` enforced by the drift gate | 53 operations; 25 gaps open (G-40 still listed though #106 implemented it; Stage 0 closes it) | Backend, one contract PR per milestone |
 | Backend and AI, requests | Service Signature v1, user or system context, single-use nonce | Built, boundary-tested | Paired PRs; the boundary gate runs against `ai-service` main |
 | Backend and AI, responses | Signed response with `sources_used`, then the provenance check (#100) | Built | Paired |
-| Backend and AI, scope | `/v1/ingest/scope-assignments`, versioned, plus `denied_assets` | Built; the dispatcher in #104 | Paired |
+| Backend and AI, scope | `/v1/ingest/scope-assignments`, versioned, plus `denied_assets` | Built; the dispatcher merged (#104), with the per-decision authority recheck (#108) | Paired |
 | Backend and AI, ingestion | Signed dispatch, stage callbacks, the reconcile pull | Built; dispatch scope in PR 7 | Paired |
 | Mobile and AI | **None, by design** | — | — |
 
