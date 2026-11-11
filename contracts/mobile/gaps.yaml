@@ -87,13 +87,6 @@ implementation_gaps:
   summary: 'No way to discover a tenant slug. Accepted: FUTA is app configuration'
   closes_in: M6
   evidence: Reviewer decision at 976c88a.
-- id: G-28
-  severity: Low
-  summary: No record of a student's programme, level or courses
-  closes_in: S-02
-  findings:
-  - missing_route GET /academic/profile
-  - missing_route PUT /academic/profile
 - id: G-30
   severity: High
   summary: Content sources record no rights basis, audience or redistribution limits
@@ -203,3 +196,6 @@ closed:
 - id: G-40
   summary: Uploads weren't scanned, so no document was quarantined or rejected before processing
   proof: pg_smoke/test_scanning.py::test_a_new_document_is_quarantined_with_a_pending_scan_and_gets_no_job
+- id: G-28
+  summary: No record of a student's programme, level or courses
+  proof: tests/integration/academic/test_academic_profile.py::test_a_save_reads_back_with_department_and_faculty_from_the_programme
