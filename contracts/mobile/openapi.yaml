@@ -16,6 +16,7 @@ tags:
   - name: identity
   - name: tenants
   - name: catalogue
+  - name: academic
   - name: content
   - name: assessment
   - name: ai
@@ -558,6 +559,68 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /academic/profile:
+    get:
+      tags: [academic]
+      operationId: getAcademicProfile
+      summary: The student's academic profile in the tenant
+      description: >
+        Programme, level and enrolled courses. Before the first save it answers 200 with
+        every field null, no courses and complete false. A programme the student can no
+        longer read reads as null with complete false, and an enrolled course the student
+        can no longer read is left out. Student memberships only.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AcademicProfile' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    put:
+      tags: [academic]
+      operationId: putAcademicProfile
+      summary: Replace the student's academic profile
+      description: >
+        Replaces the programme, level and courses as a whole. Of two concurrent saves, the
+        stored profile is exactly one of them, never a mix. Each reference must be one a
+        student of this tenant can read: an active programme of an active department, an
+        active level, and active courses under an active department and faculty. Anything
+        else is VALIDATION_FAILED naming the field, the same answer whether it doesn't
+        exist, belongs to another tenant or is archived. Student memberships only.
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcademicProfileUpdate' }
+      responses:
+        '200':
+          description: The stored profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/AcademicProfile' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
@@ -1874,6 +1937,68 @@ components:
         faculty_id: { type: string }
         name: { type: string }
         slug: { type: string }
+    AcademicProfile:
+      type: object
+      description: >
+        Department and faculty are read from the programme, so they can't disagree with it.
+        complete is true when a readable programme and a level are set.
+      required: [programme, department, faculty, level, courses, complete, updated_at]
+      properties:
+        programme:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ProfileProgramme'
+        department:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ProfileUnit'
+        faculty:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ProfileUnit'
+        level: { type: [integer, 'null'], description: 'A level code of the tenant, such as 300' }
+        courses:
+          type: array
+          description: Ordered by code, then id
+          items: { $ref: '#/components/schemas/ProfileCourse' }
+        complete: { type: boolean }
+        updated_at: { type: [string, 'null'], format: date-time }
+    ProfileProgramme:
+      type: object
+      required: [id, name, code]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        code: { type: string }
+    ProfileUnit:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    ProfileCourse:
+      type: object
+      required: [id, code, title, level, semester, credit_units]
+      properties:
+        id: { type: string }
+        code: { type: string }
+        title: { type: string }
+        level: { type: integer }
+        semester: { type: integer }
+        credit_units: { type: integer }
+    AcademicProfileUpdate:
+      type: object
+      additionalProperties: false
+      required: [programme_id, level, course_ids]
+      properties:
+        programme_id: { type: string, minLength: 1, maxLength: 36 }
+        level: { type: integer }
+        course_ids:
+          type: array
+          maxItems: 30
+          uniqueItems: true
+          description: May be empty
+          items: { type: string, minLength: 1, maxLength: 36 }
     Programme:
       type: object
       required: [id, faculty_id, department_id, name, slug, code, duration_years]
