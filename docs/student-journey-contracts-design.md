@@ -135,7 +135,7 @@ Material can change after generation, so rule 1 alone isn't enough; rule 2 makes
 | `results_released` | Attempts whose result the student may see now | The release policy (L2) | Unreleased results aren't counted |
 | `mean_percentage` | Mean score percentage over released results | Results | Null when there are none |
 | `by_course` | The same, per course | Results and assessments | Readable courses only |
-| `by_topic` | Correct answers over answered questions, per topic | Answers, `questions.topic_id` | **Only attempts whose feedback timing already discloses correctness** |
+| `by_topic` | Correct answers over answered questions, per topic | Answers, `questions.topic_id` | **Only attempts whose feedback timing already discloses correctness**, and only topics the student can read now (active, in a readable course: the M3-C rule), so an archived topic's title isn't shown |
 | `last_activity_at` | The latest attempt start or submission | Attempts | — |
 
 Practice figures, if they are ever shown, are a separate, labelled section, never in `official`.
