@@ -14,7 +14,7 @@ This carries out the blueprint's "needed first" item (section 5): the student jo
   - account preferences (S-14).
 - **No aggregate endpoint for the dashboard (S-03):** it is composed from existing routes, plus one new filter.
 - **Study planning (S-09)** stays on the device in this release.
-- **Knowledge trees (S-08)** get their contract now. They are implemented once the AI service builds them from authorised course material.
+- **Knowledge trees (S-08)** get their contract now. They are implemented once the AI service builds them from authorised course material. A shared tree uses only material every eligible student can read, and every read re-checks each citation for the reader (D3, revised after review).
 
 ## Rules for every operation here
 
@@ -34,7 +34,7 @@ These are the same as S-02, including the review findings on #111.
 |---|---|---|---|
 | D1 | S-03 dashboard | One aggregate endpoint, or composed from existing routes? | **Composed.** The PRD wants sections that load and fail independently (section 75). An aggregate would couple their failures and duplicate each list's authorization. The contract documents which route feeds each section. "Suggested next actions" waits for recommendations (PRD section 153), which depend on learning memory's gate |
 | D2 | S-07 reading | What is stored? | **The last page per document only**: `{page, updated_at}`, per student and document. The app derives a percentage from the page count. Highlights and notes need their own retention decision and aren't in this slice. A new version of the document starts again at page 1 |
-| D3 | S-08 trees | When? | **The contract now; implementation after AI-07 builds trees from authorised course material** (blueprint AI order, step 5). Today's generator works from a supplied title and topic list, and the PRD forbids presenting that as verified (section 158). Generation is a backend job (202 with a status), never synchronous |
+| D3 | S-08 trees | When, and who may see a shared tree? | **The contract now; implementation after AI-07 builds trees from authorised course material** (blueprint AI order, step 5). Generation is a backend job (202 with a status), never synchronous. **Revised after review:** a tree shared by a course's students is built **only from material every eligible student can read**. Every read **re-checks each cited source for that reader**, so a citation can never reveal material the reader can't access. See the S-08 section |
 | D4 | S-09 planning | Backend or device? | **Device only in this release.** The calendar already works locally, and nothing else needs the data yet. The contract says so, and the app labels plans as stored on this device (PRD section 188). Goals stay unstored (S-02 decision 6) |
 | D5 | S-10 practice | What is a practice set? | Generated from authorised material by the AI service, through the backend. **Stored per student.** Never an official attempt, score or result (blueprint decision 2). Answers come with the set: practice reveals them by learning mode, and every question is labelled generated. Unsupported questions are dropped and counted (AI-06's checks). A daily cap per student applies until entitlements exist |
 | D6 | S-10 practice | Which permission does the backend sign? | **A new `ai.practice.generate`**, granted to students, which the AI service accepts on `/v1/ai/generate-questions` (a paired change). `ai.questions.generate` stays staff-only: it is for question banks, and students don't hold it |
@@ -72,11 +72,36 @@ The only contract change is the `ingestion_status` filter on `listMyDocuments` (
 
 | Route | Behaviour |
 |---|---|
-| `GET /courses/{course_id}/knowledge-tree` | `{status, version, generated_at, nodes: [{id, parent_id, title, kind, sources: [{asset_id, page}]}]}`. `status` is `not_generated`, `generating`, `ready` or `failed`. A course the student can't read is 404 (the M3-C rule) |
+| `GET /courses/{course_id}/knowledge-tree` | `{status, version, generated_at, nodes: [{id, parent_id, title, kind, sources: [{asset_id, page}]}]}`. `status` is `not_generated`, `generating`, `ready`, `stale` (a source changed since generation; a regeneration is queued) or `failed`. A course the student can't read is 404 (the M3-C rule) |
 | `POST /courses/{course_id}/knowledge-tree/generation` | **202**, with the job's status. One job runs per course: a second request while one runs returns it |
 
-- The AI service builds it from the course's authorised institutional material only, under the scope filter, `denied_assets` and the provenance check.
-- **Every node cites at least one source**, and a node without one is dropped. A tree is the course's, shared by its students. Trees from a student's own documents come later.
+### Who may see a shared tree (revised after review)
+
+A tree is the course's, shared by the students who can read the course. Two rules keep sharing from becoming a way around authorization.
+
+**1. Generation uses only uniformly authorized material.** The AI service is given only material that **every** student who can read the course can read:
+- the course's institutional-scope material (scope acknowledged by the AI service);
+- with a tenant-wide audience under the content read policy (`may_read`, M3-D PR 4);
+- not in `denied_assets` and not pending a lowering.
+
+**Excluded:**
+- a student's own documents;
+- material limited to a narrower audience;
+- anything unclassified.
+
+So no student's access shapes what the others see. The generation call carries `denied_assets`, and the provenance check runs on the answer as for chat.
+
+**2. Every read re-checks the citations for the reader.** `GET` runs `may_read` for the caller on each node's sources:
+- A source the caller can't read now is removed from that node's citations: no asset ID, page or title.
+- A node left with no readable source is omitted, and its children move up to the nearest remaining ancestor.
+- If any source was lowered, revoked or denied since generation, the tree reads as `stale` and a regeneration is queued.
+
+Material can change after generation, so rule 1 alone isn't enough; rule 2 makes the citations safe for each reader regardless.
+
+**Further:**
+- **Every node cites at least one source** at generation, and a node without one is dropped.
+- A citation is an asset ID and a page only. The passage's text is read through the reading routes, which apply `may_read` themselves.
+- Trees from a student's own documents are per student and come later. **Partitioning** shared trees by authorization scope (the review's alternative) is the route if narrower audiences become student-visible; until then, one uniformly authorized tree per course is enough.
 
 ## S-09 planning (D4)
 
@@ -143,7 +168,8 @@ Practice figures, if they are ever shown, are a separate, labelled section, neve
 |---|---|
 | Each dashboard section's route answers on its own; one failing doesn't affect the others | S-03 |
 | A position is saved and read back. An unreadable or unknown document gets the same 404. A page outside the document is 422. A new version starts at page 1 | S-07 |
-| A tree's every node cites a readable source. A second generation request while one runs returns the running job | S-08 |
+| Generation receives only uniformly authorized material: no personal, narrow-audience, unclassified, denied or lowering-pending asset. Every node cites a source. A second generation request while one runs returns the running job | S-08 |
+| A source lowered or revoked after generation disappears from a reader's citations on the next read. A node left without a readable source is omitted. The tree reads as `stale`. A reader who can't read a source never receives its asset ID | S-08 |
 | A set's questions come from authorised material, with sources. Topics without material give `grounded: false` and no questions. Nothing is written to the assessment tables. The cap is 429. Another student's set is 404 | S-10 |
 | Every figure matches its definition on seeded attempts. An unreleased result, or correctness not yet disclosed, never changes a figure | S-13 |
 | Preferences round-trip. Unknown keys or values are 422. They are the same from any tenant | S-14 |
