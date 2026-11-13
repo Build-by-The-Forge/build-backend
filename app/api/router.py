@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.academic import router as academic_router
 from app.api.ai import router as ai_router
 from app.api.assessment import assessment_router, attempt_router, question_router, staff_assessment_router
 from app.api.assessment.answers import router as answer_router
@@ -20,6 +21,7 @@ from app.api.curriculum import (
 router = APIRouter()
 router.include_router(courses_router)
 router.include_router(structure_router)
+router.include_router(academic_router)
 router.include_router(topic_router)
 router.include_router(learning_outcome_router)
 router.include_router(reference_router)

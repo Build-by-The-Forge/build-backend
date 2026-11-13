@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # ensure app is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import app.infrastructure.db.models.academic  # noqa: F401
 import app.infrastructure.db.models.assessment  # noqa: F401
 import app.infrastructure.db.models.benchmark  # noqa: F401
 import app.infrastructure.db.models.benchmark_audit  # noqa: F401
