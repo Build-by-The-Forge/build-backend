@@ -46,23 +46,29 @@ class SqlAlchemyAcademicProfileRepository(AcademicProfileRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def _require_student(self, tenant_id: str, user_id: str, *, lock: bool) -> None:
-        """An active student membership of the tenant, or NotAStudentMember. A
-        save holds it FOR SHARE, so a role change or revocation can't commit
-        while the save runs."""
-        statement = select(MembershipModel.id).where(
-            MembershipModel.tenant_id == tenant_id,
-            MembershipModel.user_id == user_id,
-            MembershipModel.role == MembershipRole.STUDENT.value,
-            MembershipModel.status == MembershipStatus.ACTIVE.value,
+    async def _require_student(self, tenant_id: str, user_id: str) -> None:
+        """An active student membership of the tenant, or NotAStudentMember.
+        Held FOR SHARE until the transaction ends, by reads and saves alike:
+        a role change, archive or removal waits for a read or save in
+        progress, so neither can return or write a profile after the
+        membership that authorized it has changed. Under READ COMMITTED, a
+        check made without the lock could pass, and the rest of the read
+        run after the change had committed."""
+        statement = (
+            select(MembershipModel.id)
+            .where(
+                MembershipModel.tenant_id == tenant_id,
+                MembershipModel.user_id == user_id,
+                MembershipModel.role == MembershipRole.STUDENT.value,
+                MembershipModel.status == MembershipStatus.ACTIVE.value,
+            )
+            .with_for_update(read=True)
         )
-        if lock:
-            statement = statement.with_for_update(read=True)
         if await self._session.scalar(statement) is None:
             raise NotAStudentMember()
 
     async def read(self, tenant_id: str, user_id: str) -> AcademicProfile:
-        await self._require_student(tenant_id, user_id, lock=False)
+        await self._require_student(tenant_id, user_id)
         profile = await self._session.scalar(
             select(AcademicProfileModel).where(
                 AcademicProfileModel.tenant_id == tenant_id, AcademicProfileModel.user_id == user_id
@@ -119,7 +125,7 @@ class SqlAlchemyAcademicProfileRepository(AcademicProfileRepository):
         )
 
     async def replace(self, tenant_id: str, user_id: str, programme_id: str, level: int, course_ids: list[str]) -> None:
-        await self._require_student(tenant_id, user_id, lock=True)
+        await self._require_student(tenant_id, user_id)
         # 1. Every reference, against what a student of this tenant can read.
         # Any miss refuses the save before anything is written.
         unavailable = []

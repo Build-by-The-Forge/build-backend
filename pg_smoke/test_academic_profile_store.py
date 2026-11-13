@@ -317,3 +317,44 @@ async def test_a_save_waits_for_a_membership_change_in_progress_then_refuses(cha
 
     async with SessionLocal() as session:
         assert await _profiles(session, w["user"]) == 0
+
+
+# --- Reads hold the membership too ---------------------------------------------------
+# A read takes the same membership lock as a save, until its transaction ends, so
+# no profile is returned after the membership that authorized reading it changed.
+
+
+@pytest.mark.parametrize("change", CHANGES)
+async def test_a_membership_change_waits_for_a_read_in_progress(change):
+    w = await _world()
+    admin = await _admin(w)
+    await service.replace(w["tenant"], w["user"], w["programme"], 300, [w["course"]])
+
+    async with SessionLocal() as session:
+        reader = SqlAlchemyAcademicProfileRepository(session)
+        async with session.begin():
+            reader_pid = await _pid(session)
+            profile = await reader.read(w["tenant"], w["user"])
+            assert profile.complete and [c.id for c in profile.courses] == [w["course"]]
+            changing = asyncio.create_task(_change_membership(w, change, admin))
+            await _blocked_by(reader_pid)
+            assert not changing.done(), "the membership changed under a read in progress"
+        await changing
+
+    # The read finished first; from then on the member reads nothing.
+    with pytest.raises(NotAStudentMember):
+        await service.get(w["tenant"], w["user"])
+
+
+@pytest.mark.parametrize("change", CHANGES)
+async def test_a_read_waits_for_a_membership_change_in_progress_then_refuses(change, monkeypatch):
+    w = await _world()
+    admin = await _admin(w)
+    await service.replace(w["tenant"], w["user"], w["programme"], 300, [w["course"]])
+
+    async with _change_held_open(w, change, admin, monkeypatch) as changer_pid:
+        reading = asyncio.create_task(service.get(w["tenant"], w["user"]))
+        await _blocked_by(changer_pid)
+        assert not reading.done(), "the read didn't wait for the membership change"
+    with pytest.raises(NotAStudentMember):
+        await reading
