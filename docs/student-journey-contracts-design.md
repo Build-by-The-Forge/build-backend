@@ -117,6 +117,10 @@ Material can change after generation, so rule 1 alone isn't enough; rule 2 makes
 
 - **What a set holds:** `{id, created_at, topic, course, question_type, difficulty, requested, grounded, discarded, questions: [{id, prompt, options: [{text, is_correct}], explanation, sources: [{asset_id, page}]}]}`.
 - **The material it may use:** the student's own readable documents and the tenant's institutional material. That means `asset_ids`, checked by `may_read`, or the course's material otherwise. Every call carries `denied_assets`, and the provenance check runs on the answer.
+- **Citations are re-checked on every read**, as for trees (D3, rule 2), and in line with chat's provenance check (#100). A stored set can outlive the reader's access to a source: a rights takedown, a revocation or a lowering.
+  - A source the student can no longer read is removed from a question's citations.
+  - A question with no readable source left is **withheld** (`withheld: true`, with no prompt, options or explanation), because its text was built from that material.
+  - The set's counts show how many are withheld.
 - **Separate from CBT:** `practice_sets` and `practice_questions` are separate tables. Nothing is written to the assessment tables, so practice can't reach official results.
 - **The daily cap** is a setting, with a conservative default, enforced by the backend.
 
@@ -171,6 +175,7 @@ Practice figures, if they are ever shown, are a separate, labelled section, neve
 | Generation receives only uniformly authorized material: no personal, narrow-audience, unclassified, denied or lowering-pending asset. Every node cites a source. A second generation request while one runs returns the running job | S-08 |
 | A source lowered or revoked after generation disappears from a reader's citations on the next read. A node left without a readable source is omitted. The tree reads as `stale`. A reader who can't read a source never receives its asset ID | S-08 |
 | A set's questions come from authorised material, with sources. Topics without material give `grounded: false` and no questions. Nothing is written to the assessment tables. The cap is 429. Another student's set is 404 | S-10 |
+| After a source is revoked or lowered, a stored set's next read drops that citation. A question left with no readable source is withheld, with none of its text | S-10 |
 | Every figure matches its definition on seeded attempts. An unreleased result, or correctness not yet disclosed, never changes a figure | S-13 |
 | Preferences round-trip. Unknown keys or values are 422. They are the same from any tenant | S-14 |
 | Staff memberships are refused at the data-access boundary, and the membership is held for each read and write (PostgreSQL forced-order tests) | S-07, S-10, S-13 |
