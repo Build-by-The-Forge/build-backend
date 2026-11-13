@@ -3,14 +3,18 @@ membership lock held for the whole save, refusals at the data-access
 boundary, and generic plans."""
 
 import asyncio
+import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 
 from app.application.academic.profile_service import AcademicProfileService
-from app.bootstrap.container import sqlalchemy_academic_profiles
+from app.application.tenant.membership_service import TenantMembershipService
+from app.bootstrap.container import build_container, sqlalchemy_academic_profiles
+from app.core.tenant_context import TenantContext
 from app.db.session import SessionLocal
 from app.domain.academic.profile import NotAStudentMember, UnavailableReferences
 from app.infrastructure.academic.profile_repository import SqlAlchemyAcademicProfileRepository
@@ -18,11 +22,14 @@ from app.infrastructure.db.models.academic import AcademicProfileModel
 from app.infrastructure.db.models.catalogue import CourseModel
 from app.infrastructure.db.models.tenant_core import MembershipModel
 from app.infrastructure.identity.models import UserModel
+from app.infrastructure.tenant.async_repositories import AsyncSqlAlchemyMembershipRepository
 from pg_smoke.test_migration_0032 import _world
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 service = AcademicProfileService(sqlalchemy_academic_profiles)
+# The membership changes go through the application's own path, as wired in production.
+members = build_container().get(TenantMembershipService)
 
 
 async def _courses(w: dict[str, str], count: int) -> list[str]:
@@ -82,6 +89,30 @@ async def _stored(w: dict[str, str], user_id: str) -> set[str]:
     return {c.id for c in (await service.get(w["tenant"], user_id)).courses}
 
 
+async def _pid(session) -> int:
+    """The PostgreSQL backend serving this session's transaction."""
+    return await session.scalar(text("SELECT pg_backend_pid()"))
+
+
+async def _blocked_by(holder_pid: int) -> None:
+    """Returns once another session is waiting on a lock that the holder's
+    session holds, as PostgreSQL itself reports it (pg_blocking_pids). The
+    order is observed, not assumed after a sleep. Each check is a fresh
+    transaction, because pg_stat_activity is a per-transaction snapshot."""
+    deadline = time.monotonic() + 10
+    while True:
+        async with SessionLocal() as session:
+            blocked = await session.scalar(
+                text("SELECT count(*) FROM pg_stat_activity WHERE :holder = ANY(pg_blocking_pids(pid))"),
+                {"holder": holder_pid},
+            )
+        if blocked:
+            return
+        if time.monotonic() > deadline:
+            pytest.fail("no session waited on the holder's lock: the order wasn't enforced")
+        await asyncio.sleep(0.01)  # the interval between checks, not a wait for the outcome
+
+
 async def test_a_save_waiting_on_another_replaces_what_that_one_committed():
     """The forced order: one save holds the profile row; the second waits on
     it, then deletes the first's committed courses and stores only its own."""
@@ -92,9 +123,10 @@ async def test_a_save_waiting_on_another_replaces_what_that_one_committed():
     async with SessionLocal() as session:
         holder = SqlAlchemyAcademicProfileRepository(session)
         async with session.begin():
+            holder_pid = await _pid(session)
             await holder.replace(w["tenant"], w["user"], w["programme"], 300, first)
             waiting = asyncio.create_task(service.replace(w["tenant"], w["user"], w["programme"], 300, second))
-            await asyncio.sleep(0.5)
+            await _blocked_by(holder_pid)
             assert not waiting.done(), "the second save didn't wait for the profile row's lock"
         await waiting
 
@@ -160,32 +192,108 @@ async def test_a_user_without_a_membership_in_the_tenant_has_no_profile_there():
         await service.replace(other["tenant"], w["user"], other["programme"], 300, [])
 
 
-# --- The authorization holds for the whole save --------------------------------------
-# A save takes the membership FOR SHARE, then the profile row, in one transaction.
-# Removing or changing a membership locks the membership first, then (by cascade)
-# the profile: the same order, so the two serialize instead of deadlocking.
+# --- The authorization holds for the whole save, and the whole read ------------------
+# A save or a read takes the student's membership FOR SHARE, then works on the
+# profile, in one transaction. A membership is archived (revoke) or re-roled
+# (change_role) through TenantMembershipService; no application path deletes one,
+# so deletion is the cascade from the user's row, as an account deletion would be.
+# Each locks the membership row first, then (by cascade) the profile: the same order
+# as a save or read, so the two serialize instead of deadlocking. (The service also
+# locks the tenant's owner rows first; a student is never an owner, so a save or a
+# read never holds one.)
+
+CHANGES = ["archived", "made staff", "deleted"]
 
 
-async def _change_membership(w: dict[str, str], change: str) -> None:
+async def _admin(w: dict[str, str]) -> TenantContext:
+    """An admin of the world's tenant, to make changes as the application does."""
+    now = datetime.now(timezone.utc)
+    user_id, member_id = str(uuid4()), str(uuid4())
     async with SessionLocal() as session:
-        if change == "deleted":
-            await session.execute(delete(MembershipModel).where(MembershipModel.id == w["member"]))
-        else:
-            values = {"status": "archived"} if change == "archived" else {"role": "lecturer"}
-            await session.execute(update(MembershipModel).where(MembershipModel.id == w["member"]).values(**values))
+        session.add(UserModel(id=user_id, email=f"s02-admin-{uuid4().hex}@example.com", password_hash="x"))
+        await session.flush()
+        session.add(
+            MembershipModel(
+                id=member_id,
+                tenant_id=w["tenant"],
+                user_id=user_id,
+                role="admin",
+                status="active",
+                created_at=now,
+                updated_at=now,
+            )
+        )
         await session.commit()
+    return TenantContext(user_id=user_id, tenant_id=w["tenant"], membership_id=member_id, role="admin")
+
+
+async def _delete_user(session, w: dict[str, str]) -> None:
+    await session.execute(delete(UserModel).where(UserModel.id == w["user"]))
+
+
+async def _change_membership(w: dict[str, str], change: str, admin: TenantContext) -> None:
+    if change == "archived":
+        await members.revoke(admin, w["member"])
+    elif change == "made staff":
+        await members.change_role(admin, w["member"], "lecturer")
+    else:
+        async with SessionLocal() as session, session.begin():
+            await _delete_user(session, w)
+
+
+@asynccontextmanager
+async def _change_held_open(w: dict[str, str], change: str, admin: TenantContext, monkeypatch):
+    """The membership change, made through its real path and held open after its
+    write and before its commit. Yields its session's pid; leaving the block lets it
+    commit. The hold is an event, not a sleep."""
+    written, release = asyncio.Event(), asyncio.Event()
+    holder: dict[str, int] = {}
+
+    if change == "deleted":
+
+        async def run() -> None:
+            async with SessionLocal() as session, session.begin():
+                holder["pid"] = await _pid(session)
+                await _delete_user(session, w)
+                written.set()
+                await release.wait()
+
+    else:
+        original = AsyncSqlAlchemyMembershipRepository.save
+
+        async def held_save(self, membership) -> None:
+            await original(self, membership)  # its UPDATE is flushed: the row is locked
+            holder["pid"] = await _pid(self.session)
+            written.set()
+            await release.wait()
+
+        monkeypatch.setattr(AsyncSqlAlchemyMembershipRepository, "save", held_save)
+
+        async def run() -> None:
+            await _change_membership(w, change, admin)
+
+    task = asyncio.create_task(run())
+    try:
+        async with asyncio.timeout(10):
+            await written.wait()
+        yield holder["pid"]
+    finally:
+        release.set()
+        await task
 
 
 @pytest.mark.parametrize(("change", "profiles_after"), [("archived", 1), ("made staff", 1), ("deleted", 0)])
 async def test_a_membership_change_waits_for_the_save_it_would_invalidate(change, profiles_after):
     """The save's membership lock is held until the profile write commits."""
     w = await _world()
+    admin = await _admin(w)
     async with SessionLocal() as session:
         holder = SqlAlchemyAcademicProfileRepository(session)
         async with session.begin():
+            holder_pid = await _pid(session)
             await holder.replace(w["tenant"], w["user"], w["programme"], 300, [w["course"]])
-            changing = asyncio.create_task(_change_membership(w, change))
-            await asyncio.sleep(0.5)
+            changing = asyncio.create_task(_change_membership(w, change, admin))
+            await _blocked_by(holder_pid)
             assert not changing.done(), "the membership changed under an uncommitted save"
         await changing
 
@@ -196,21 +304,16 @@ async def test_a_membership_change_waits_for_the_save_it_would_invalidate(change
         await service.get(w["tenant"], w["user"])
 
 
-@pytest.mark.parametrize("change", ["archived", "made staff", "deleted"])
-async def test_a_save_waits_for_a_membership_change_in_progress_then_refuses(change):
+@pytest.mark.parametrize("change", CHANGES)
+async def test_a_save_waits_for_a_membership_change_in_progress_then_refuses(change, monkeypatch):
     w = await _world()
-    async with SessionLocal() as session:
-        async with session.begin():
-            if change == "deleted":
-                await session.execute(delete(MembershipModel).where(MembershipModel.id == w["member"]))
-            else:
-                values = {"status": "archived"} if change == "archived" else {"role": "lecturer"}
-                await session.execute(update(MembershipModel).where(MembershipModel.id == w["member"]).values(**values))
-            saving = asyncio.create_task(service.replace(w["tenant"], w["user"], w["programme"], 300, [w["course"]]))
-            await asyncio.sleep(0.5)
-            assert not saving.done(), "the save didn't wait for the membership change"
-        with pytest.raises(NotAStudentMember):
-            await saving
+    admin = await _admin(w)
+    async with _change_held_open(w, change, admin, monkeypatch) as changer_pid:
+        saving = asyncio.create_task(service.replace(w["tenant"], w["user"], w["programme"], 300, [w["course"]]))
+        await _blocked_by(changer_pid)
+        assert not saving.done(), "the save didn't wait for the membership change"
+    with pytest.raises(NotAStudentMember):
+        await saving
 
     async with SessionLocal() as session:
         assert await _profiles(session, w["user"]) == 0
