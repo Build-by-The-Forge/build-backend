@@ -36,7 +36,7 @@ These are the same as S-02, including the review findings on #111.
 | D2 | S-07 reading | What is stored? | **The last page per document only**: `{page, updated_at}`, per student and document. The app derives a percentage from the page count. Highlights and notes need their own retention decision and aren't in this slice. A new version of the document starts again at page 1 |
 | D3 | S-08 trees | When, and who may see a shared tree? | **The contract now; implementation after AI-07 builds trees from authorised course material** (blueprint AI order, step 5). Generation is a backend job (202 with a status), never synchronous. **Revised after review:** a tree shared by a course's students is built **only from material every eligible student can read**. Every read re-checks, for that reader, **every source that contributed to each node**, not only the cited ones. **If any contributing source is unreadable, the whole node is withheld**: its title and meaning may come from that source. Neither a citation nor generated text can reveal material the reader can't access. See the S-08 section |
 | D4 | S-09 planning | Backend or device? | **Device only in this release.** The calendar already works locally, and nothing else needs the data yet. The contract says so, and the app labels plans as stored on this device (PRD section 188). Goals stay unstored (S-02 decision 6) |
-| D5 | S-10 practice | What is a practice set? | Generated from authorised material by the AI service, through the backend. **Stored per student.** Never an official attempt, score or result (blueprint decision 2). Answers come with the set: practice reveals them by learning mode, and every question is labelled generated. Unsupported questions are dropped and counted (AI-06's checks). A daily cap per student applies until entitlements exist |
+| D5 | S-10 practice | What is a practice set? | Generated from authorised material by the AI service, through the backend. **Stored per student.** Never an official attempt, score or result (blueprint decision 2). Answers come with the set: practice reveals them by learning mode, and every question is labelled generated. Unsupported questions are dropped and counted (AI-06's checks). A daily cap per student applies until entitlements exist. **A stored question is withheld whole when any source that contributed to it becomes unreadable** (revised after review; see S-10) |
 | D6 | S-10 practice | Which permission does the backend sign? | **A new `ai.practice.generate`**, granted to students, which the AI service accepts on `/v1/ai/generate-questions` (a paired change). `ai.questions.generate` stays staff-only: it is for question banks, and students don't hold it |
 | D7 | S-13 progress | Which metrics? | **Official CBT only in this slice**, each with a definition (below). Practice never enters official figures. **Correctness counts only where the result's release policy already discloses it** (L2), so the summary can't reveal what the result screen withholds |
 | D8 | S-14 preferences | Which, and where? | **A closed set:** theme, text size and reduce motion. They belong to the **account**, not a tenant (`/identity/preferences`). Notification toggles arrive with notifications. Account deletion is its own design (NDPR), not a preference |
@@ -124,13 +124,15 @@ Material can change after generation, so rule 1 alone isn't enough. Rule 2 makes
 | `GET /practice/sets` | The student's sets, paged, newest first |
 | `GET /practice/sets/{set_id}`, `DELETE /practice/sets/{set_id}` | The student's own only. Any other set is 404 |
 
-- **What a set holds:** `{id, created_at, topic, course, question_type, difficulty, requested, grounded, discarded, questions: [{id, prompt, options: [{text, is_correct}], explanation, sources: [{asset_id, page}]}]}`.
+- **What a set holds:** `{id, created_at, topic, course, question_type, difficulty, requested, grounded, discarded, questions: [{id, withheld, prompt, options: [{text, is_correct}], explanation, sources: [{asset_id, page}]}]}`. A withheld question has only `id` and `withheld: true`.
 - **The material it may use:** the student's own readable documents and the tenant's institutional material. That means `asset_ids`, checked by `may_read`, or the course's material otherwise. Every call carries `denied_assets`, and the provenance check runs on the answer.
-- **Citations are re-checked on every read**, as for trees (D3, rule 2), and in line with chat's provenance check (#100). A stored set can outlive the reader's access to a source: a rights takedown, a revocation or a lowering.
-  - A source the student can no longer read is removed from a question's citations.
-  - A question with no readable source left is **withheld** (`withheld: true`, with no prompt, options or explanation), because its text was built from that material.
-  - The set's counts show how many are withheld.
-- **Separate from CBT:** `practice_sets` and `practice_questions` are separate tables. Nothing is written to the assessment tables, so practice can't reach official results.
+- **Every contributing source is re-checked on every read**, as for trees (D3, rule 2), and in line with chat's provenance check (#100). A stored set can outlive the reader's access to a source: a rights takedown, a revocation or a lowering.
+  - Each question stores **all its contributing sources**: every asset whose passages were in the model's context for that question. Its citations are the subset shown.
+  - **If any contributing source is unreadable, the whole question is withheld** (`withheld: true`, with no prompt, options, explanation or citations). Its wording, options and answer may come from that source, even when another source stays readable.
+  - The only exception is the verified field-level attribution described for trees. None exists in this release, so the default always applies.
+  - Questions are generated in small groups, each group in its own call from its own passages, and every question in a group shares that call's contributing set. One revocation withholds only the groups that drew on the revoked source, not the whole set.
+  - The set's counts show how many are withheld, and the app offers a fresh set.
+- **Separate from CBT:** `practice_sets` and `practice_questions` are separate tables. `practice_questions` stores each question's contributing sources beside its citations. Nothing is written to the assessment tables, so practice can't reach official results.
 - **The daily cap** is a setting, with a conservative default, enforced by the backend.
 
 ## S-13 progress summary (D7)
@@ -170,7 +172,7 @@ Practice figures, if they are ever shown, are a separate, labelled section, neve
    - S-14 preferences;
    - S-07 reading positions;
    - S-13 progress;
-   - S-10 practice, paired with the AI service for `ai.practice.generate`;
+   - S-10 practice, paired with the AI service for `ai.practice.generate`. The AI service also returns each question's contributing sources (D5);
    - S-08 after AI-07, which generates per topic and returns each node's contributing sources (D3).
 
    Each closes its gaps with proof, and each has PostgreSQL tests wherever it writes.
@@ -186,7 +188,8 @@ Practice figures, if they are ever shown, are a separate, labelled section, neve
 | A source that contributed to a node without being cited withholds the node when it becomes unreadable, exactly as a cited one does. The contributing list comes from the retrieval recorder, never from the model's answer. A node whose list is missing, or names material outside the generation's authorized scope, is dropped at generation | S-08 |
 | A revocation inside one topic withholds that topic's subtree, generated in one call. Other topics' nodes are returned whole | S-08 |
 | A set's questions come from authorised material, with sources. Topics without material give `grounded: false` and no questions. Nothing is written to the assessment tables. The cap is 429. Another student's set is 404 | S-10 |
-| After a source is revoked or lowered, a stored set's next read drops that citation. A question left with no readable source is withheld, with none of its text | S-10 |
+| A question generated from two documents, one revoked after generation and one still readable, is **withheld whole** on the set's next read: no prompt, options, explanation or citations. A question from a group that didn't draw on the revoked document is returned unchanged. The set's counts show the withheld number | S-10 |
+| A source that contributed to a question without being cited withholds the question when it becomes unreadable | S-10 |
 | Every figure matches its definition on seeded attempts. An unreleased result, or correctness not yet disclosed, never changes a figure | S-13 |
 | Preferences round-trip. Unknown keys or values are 422. They are the same from any tenant | S-14 |
 | Staff memberships are refused at the data-access boundary, and the membership is held for each read and write (PostgreSQL forced-order tests) | S-07, S-10, S-13 |
