@@ -74,7 +74,7 @@ def dispatch_evidence(
     # The gate's tests share the stream: only entries tied to these affected jobs
     # by their own job or task ID are listed. An entry without either, such as
     # an unreadable one, is never listed: it is counted.
-    affected_ids = {job.get("id") for job in affected}
+    affected_ids = {job.get("id") for job in affected} - {None}
     affected_tasks = {job.get("external_task_id") for job in affected} - {None}
 
     report = {

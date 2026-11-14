@@ -122,6 +122,19 @@ def test_an_unrelated_malformed_entry_is_counted_never_listed():
     assert found["unreadable_entries_all_tests"] == 2
 
 
+def test_an_affected_job_without_an_id_matches_no_unrelated_entry():
+    """An entry that lacks a job ID never matches through a missing one."""
+    nameless = job(None, "task_2", attempt=2)
+    entries = [
+        ("9-0", {"data": json.dumps({"task_id": "task_other", "run_number": 1})}),
+        entry("3-0", "task_2", None, attempt=2),
+    ]
+
+    found = report(dispatch_evidence([nameless], entries))
+
+    assert [e["entry_id"] for e in found["stream_entries_for_affected"]] == ["3-0"]
+
+
 def test_an_unreadable_entry_is_reported_without_its_content():
     assert stream_entries([("1-0", {"data": "not json " + SENTINEL}), ("2-0", {})]) == [
         {"entry_id": "1-0", "unreadable": True},
