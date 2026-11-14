@@ -14,7 +14,7 @@ This carries out the blueprint's "needed first" item (section 5): the student jo
   - account preferences (S-14).
 - **No aggregate endpoint for the dashboard (S-03):** it is composed from existing routes, plus one new filter.
 - **Study planning (S-09)** stays on the device in this release.
-- **Knowledge trees (S-08)** get their contract now. They are implemented once the AI service builds them from authorised course material. A shared tree uses only material every eligible student can read, and every read re-checks each citation for the reader (D3, revised after review).
+- **Knowledge trees (S-08)** get their contract now. They are implemented once the AI service builds them from authorised course material. A shared tree uses only material every eligible student can read. Every read re-checks **every source that contributed** to a node for the reader, and withholds the whole node if any one is unreadable (D3, revised after two reviews).
 
 ## Rules for every operation here
 
@@ -34,7 +34,7 @@ These are the same as S-02, including the review findings on #111.
 |---|---|---|---|
 | D1 | S-03 dashboard | One aggregate endpoint, or composed from existing routes? | **Composed.** The PRD wants sections that load and fail independently (section 75). An aggregate would couple their failures and duplicate each list's authorization. The contract documents which route feeds each section. "Suggested next actions" waits for recommendations (PRD section 153), which depend on learning memory's gate |
 | D2 | S-07 reading | What is stored? | **The last page per document only**: `{page, updated_at}`, per student and document. The app derives a percentage from the page count. Highlights and notes need their own retention decision and aren't in this slice. A new version of the document starts again at page 1 |
-| D3 | S-08 trees | When, and who may see a shared tree? | **The contract now; implementation after AI-07 builds trees from authorised course material** (blueprint AI order, step 5). Generation is a backend job (202 with a status), never synchronous. **Revised after review:** a tree shared by a course's students is built **only from material every eligible student can read**. Every read **re-checks each cited source for that reader**, so a citation can never reveal material the reader can't access. See the S-08 section |
+| D3 | S-08 trees | When, and who may see a shared tree? | **The contract now; implementation after AI-07 builds trees from authorised course material** (blueprint AI order, step 5). Generation is a backend job (202 with a status), never synchronous. **Revised after review:** a tree shared by a course's students is built **only from material every eligible student can read**. Every read re-checks, for that reader, **every source that contributed to each node**, not only the cited ones. **If any contributing source is unreadable, the whole node is withheld**: its title and meaning may come from that source. Neither a citation nor generated text can reveal material the reader can't access. See the S-08 section |
 | D4 | S-09 planning | Backend or device? | **Device only in this release.** The calendar already works locally, and nothing else needs the data yet. The contract says so, and the app labels plans as stored on this device (PRD section 188). Goals stay unstored (S-02 decision 6) |
 | D5 | S-10 practice | What is a practice set? | Generated from authorised material by the AI service, through the backend. **Stored per student.** Never an official attempt, score or result (blueprint decision 2). Answers come with the set: practice reveals them by learning mode, and every question is labelled generated. Unsupported questions are dropped and counted (AI-06's checks). A daily cap per student applies until entitlements exist |
 | D6 | S-10 practice | Which permission does the backend sign? | **A new `ai.practice.generate`**, granted to students, which the AI service accepts on `/v1/ai/generate-questions` (a paired change). `ai.questions.generate` stays staff-only: it is for question banks, and students don't hold it |
@@ -72,7 +72,7 @@ The only contract change is the `ingestion_status` filter on `listMyDocuments` (
 
 | Route | Behaviour |
 |---|---|
-| `GET /courses/{course_id}/knowledge-tree` | `{status, version, generated_at, nodes: [{id, parent_id, title, kind, sources: [{asset_id, page}]}]}`. `status` is `not_generated`, `generating`, `ready`, `stale` (a source changed since generation; a regeneration is queued) or `failed`. A course the student can't read is 404 (the M3-C rule) |
+| `GET /courses/{course_id}/knowledge-tree` | `{status, version, generated_at, nodes: [{id, parent_id, withheld, title, kind, sources: [{asset_id, page}]}]}`. A withheld node has only `id`, `parent_id` and `withheld: true`. `status` is `not_generated`, `generating`, `ready`, `stale` (a source changed since generation; a regeneration is queued) or `failed`. A course the student can't read is 404 (the M3-C rule) |
 | `POST /courses/{course_id}/knowledge-tree/generation` | **202**, with the job's status. One job runs per course: a second request while one runs returns it |
 
 ### Who may see a shared tree (revised after review)
@@ -91,16 +91,25 @@ A tree is the course's, shared by the students who can read the course. Two rule
 
 So no student's access shapes what the others see. The generation call carries `denied_assets`, and the provenance check runs on the answer as for chat.
 
-**2. Every read re-checks the citations for the reader.** `GET` runs `may_read` for the caller on each node's sources:
-- A source the caller can't read now is removed from that node's citations: no asset ID, page or title.
-- A node left with no readable source is omitted, and its children move up to the nearest remaining ancestor.
-- If any source was lowered, revoked or denied since generation, the tree reads as `stale` and a regeneration is queued.
+**2. Every read re-checks every contributing source for the reader** (revised after the second review). A node's title, kind and meaning can come from any material the model was given, not only what it cites. So a citation check alone is not enough. Picture a node built from documents A and B: if B is revoked and A stays readable, removing B's citation would still leave text derived from B.
 
-Material can change after generation, so rule 1 alone isn't enough; rule 2 makes the citations safe for each reader regardless.
+- **Contributing sources.** Each node stores two lists:
+  - **all its contributing sources:** every asset whose passages were in the model's context when the node was generated, whether cited or not;
+  - **its citations:** the subset shown to students.
+
+  Retrieval happens in the AI service, so the **contributing list comes from its retrieval recorder** (the M3-D provenance design), which records every asset retrieved into the context. The model never writes this list, so it can't leave a source out. The AI service returns the list with each node. The backend checks that every listed asset is inside the scope it authorized for that generation (rule 1) and drops any node whose list is missing or names material outside that scope.
+- **The read rule.** `GET` runs `may_read` for the caller on **every contributing source** of each node:
+  - If all are readable, the node is returned whole, with its citations.
+  - **If any one is unreadable, the whole node is withheld:** `{id, parent_id, withheld: true}`, with no title, kind, citations or asset IDs. Its children are checked on their own contributing sources, and they keep their place under the withheld node.
+  - If any contributing source was lowered, revoked or denied since generation, the tree reads as `stale` and a regeneration is queued. The regenerated tree is built without that material.
+- **The only exception** is source-level attribution that **proves** a node's content is independent of the unreadable source: a recorded, verified mapping from each generated field to the sources it came from. No such attribution exists in this release. Support checks such as AI-06 show that a source supports a claim, not that other sources didn't shape it. **So every unreadable contributing source withholds the node.** Adding an attribution exception later is its own decision, reviewed separately.
+- **Generation is per topic, to keep contributing sets small.** If one model call built the whole tree, every source in the call would contribute to every node, and one revocation would withhold the entire tree. So each top-level topic and its subtree is generated in its own call, from that topic's passages only. Every node in a topic shares that call's contributing set. A revocation therefore withholds that topic's whole subtree and leaves the other topics untouched.
+
+Material can change after generation, so rule 1 alone isn't enough. Rule 2 makes each node safe for each reader regardless.
 
 **Further:**
 - **Every node cites at least one source** at generation, and a node without one is dropped.
-- A citation is an asset ID and a page only. The passage's text is read through the reading routes, which apply `may_read` themselves.
+- A citation is an asset ID and a page only. The passage's text is read through the reading routes, which apply `may_read` themselves. Contributing sources are never returned: they are kept for the read check.
 - Trees from a student's own documents are per student and come later. **Partitioning** shared trees by authorization scope (the review's alternative) is the route if narrower audiences become student-visible; until then, one uniformly authorized tree per course is enough.
 
 ## S-09 planning (D4)
@@ -162,7 +171,7 @@ Practice figures, if they are ever shown, are a separate, labelled section, neve
    - S-07 reading positions;
    - S-13 progress;
    - S-10 practice, paired with the AI service for `ai.practice.generate`;
-   - S-08 after AI-07.
+   - S-08 after AI-07, which generates per topic and returns each node's contributing sources (D3).
 
    Each closes its gaps with proof, and each has PostgreSQL tests wherever it writes.
 
@@ -173,7 +182,9 @@ Practice figures, if they are ever shown, are a separate, labelled section, neve
 | Each dashboard section's route answers on its own; one failing doesn't affect the others | S-03 |
 | A position is saved and read back. An unreadable or unknown document gets the same 404. A page outside the document is 422. A new version starts at page 1 | S-07 |
 | Generation receives only uniformly authorized material: no personal, narrow-audience, unclassified, denied or lowering-pending asset. Every node cites a source. A second generation request while one runs returns the running job | S-08 |
-| A source lowered or revoked after generation disappears from a reader's citations on the next read. A node left without a readable source is omitted. The tree reads as `stale`. A reader who can't read a source never receives its asset ID | S-08 |
+| A node generated from two documents, one revoked after generation and one still readable, is **withheld whole** on the next read: no title, kind, citations or asset IDs. Nodes generated without the revoked document (another topic's call) are still returned whole. The tree reads as `stale` | S-08 |
+| A source that contributed to a node without being cited withholds the node when it becomes unreadable, exactly as a cited one does. The contributing list comes from the retrieval recorder, never from the model's answer. A node whose list is missing, or names material outside the generation's authorized scope, is dropped at generation | S-08 |
+| A revocation inside one topic withholds that topic's subtree, generated in one call. Other topics' nodes are returned whole | S-08 |
 | A set's questions come from authorised material, with sources. Topics without material give `grounded: false` and no questions. Nothing is written to the assessment tables. The cap is 429. Another student's set is 404 | S-10 |
 | After a source is revoked or lowered, a stored set's next read drops that citation. A question left with no readable source is withheld, with none of its text | S-10 |
 | Every figure matches its definition on seeded attempts. An unreleased result, or correctness not yet disclosed, never changes a figure | S-13 |
