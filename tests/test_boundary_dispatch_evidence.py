@@ -104,6 +104,24 @@ def test_other_tests_entries_are_not_listed():
     assert found["stream_length_all_tests"] == 3
 
 
+def test_an_unrelated_malformed_entry_is_counted_never_listed():
+    """Review of #114: an unreadable entry can't be tied to an affected job, and
+    the stream is shared, so its entry ID stays out of the evidence."""
+    jobs = [job("job_twice", "task_2", attempt=2)]
+    entries = [
+        ("1700000000000-7", {"data": "not json " + SENTINEL}),
+        ("1700000000001-3", {}),
+        entry("3-0", "task_2", "job_twice", attempt=2),
+    ]
+
+    text = dispatch_evidence(jobs, entries)
+    found = report(text)
+
+    assert "1700000000000-7" not in text and "1700000000001-3" not in text and SENTINEL not in text
+    assert [e["entry_id"] for e in found["stream_entries_for_affected"]] == ["3-0"]
+    assert found["unreadable_entries_all_tests"] == 2
+
+
 def test_an_unreadable_entry_is_reported_without_its_content():
     assert stream_entries([("1-0", {"data": "not json " + SENTINEL}), ("2-0", {})]) == [
         {"entry_id": "1-0", "unreadable": True},

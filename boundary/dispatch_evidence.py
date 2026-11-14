@@ -71,7 +71,9 @@ def dispatch_evidence(
         or per_task[job.get("external_task_id")] != 1
         or per_job[job.get("id")] > 1
     ]
-    # The gate's tests share the stream: only entries for these affected jobs are listed.
+    # The gate's tests share the stream: only entries tied to these affected jobs
+    # by their own job or task ID are listed. An entry without either, such as
+    # an unreadable one, is never listed: it is counted.
     affected_ids = {job.get("id") for job in affected}
     affected_tasks = {job.get("external_task_id") for job in affected} - {None}
 
@@ -80,10 +82,9 @@ def dispatch_evidence(
         "affected_jobs": [{key: job.get(key) for key in JOB_FIELDS} for job in affected],
         "stream_length_all_tests": len(stream),
         "stream_entries_for_affected": [
-            entry
-            for entry in stream
-            if entry.get("job_id") in affected_ids or entry.get("task_id") in affected_tasks or entry.get("unreadable")
+            entry for entry in stream if entry.get("job_id") in affected_ids or entry.get("task_id") in affected_tasks
         ],
+        "unreadable_entries_all_tests": sum(1 for entry in stream if entry.get("unreadable")),
         "consumer_groups": [{key: group[key] for key in GROUP_FIELDS if key in group} for group in groups],
     }
     return "dispatch evidence:\n" + json.dumps(report, indent=1, sort_keys=True, default=str)
