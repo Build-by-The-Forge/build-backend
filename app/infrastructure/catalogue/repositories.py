@@ -33,6 +33,36 @@ def _active_department(tenant_id: str) -> list[ColumnElement[bool]]:
     ]
 
 
+def readable_programme(tenant_id: str) -> list[ColumnElement[bool]]:
+    """A programme a student can read (listProgrammes): active, under an
+    active department of an active faculty, that department in the
+    programme's own faculty. Correlated only to programmes, so it holds in a
+    query that also joins departments or faculties."""
+    return [
+        ProgrammeModel.tenant_id == tenant_id,
+        ProgrammeModel.status == "active",
+        # The department's own faculty must be the programme's: nothing in the schema says so.
+        select(DepartmentModel.id)
+        .where(
+            DepartmentModel.id == ProgrammeModel.department_id,
+            DepartmentModel.faculty_id == ProgrammeModel.faculty_id,
+            *_active_department(tenant_id),
+        )
+        .correlate(ProgrammeModel)
+        .exists(),
+    ]
+
+
+def readable_course(tenant_id: str) -> list[ColumnElement[bool]]:
+    """A course a student can read (listCourses, getCourse): active, under an
+    active department of an active faculty."""
+    return [
+        CourseModel.tenant_id == tenant_id,
+        CourseModel.status == CourseStatus.ACTIVE.value,
+        CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))),
+    ]
+
+
 class SqlAlchemyCourseRepository(CourseRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -102,18 +132,7 @@ class SqlAlchemyCourseRepository(CourseRepository):
     async def list_programmes(
         self, tenant_id: str, department_id: str | None, limit: int, offset: int
     ) -> tuple[list[ProgrammeEntry], int]:
-        conditions: list[ColumnElement[bool]] = [
-            ProgrammeModel.tenant_id == tenant_id,
-            ProgrammeModel.status == "active",
-            # The department's own faculty must be the programme's: nothing in the schema says so.
-            select(DepartmentModel.id)
-            .where(
-                DepartmentModel.id == ProgrammeModel.department_id,
-                DepartmentModel.faculty_id == ProgrammeModel.faculty_id,
-                *_active_department(tenant_id),
-            )
-            .exists(),
-        ]
+        conditions = readable_programme(tenant_id)
         if department_id is not None:
             conditions.append(ProgrammeModel.department_id == department_id)
         rows, total = await self._structure_page(ProgrammeModel, conditions, limit, offset)
@@ -148,12 +167,9 @@ class SqlAlchemyCourseRepository(CourseRepository):
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[Course], int]:
-        conditions = [CourseModel.tenant_id == tenant_id]
+        conditions = readable_course(tenant_id) if active_only else [CourseModel.tenant_id == tenant_id]
         if department_id is not None:
             conditions.append(CourseModel.department_id == department_id)
-        if active_only:
-            conditions.append(CourseModel.status == CourseStatus.ACTIVE.value)
-            conditions.append(CourseModel.department_id.in_(select(DepartmentModel.id).where(*_active_department(tenant_id))))
         total = await self._session.scalar(select(func.count()).select_from(CourseModel).where(*conditions))
         statement = (
             select(CourseModel)

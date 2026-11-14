@@ -2,7 +2,7 @@
 # tests/integration/test_mobile_contract_drift.py. `findings` are computed from the
 # running app. A gap with only `evidence` isn't machine-checked yet. To close a gap,
 # move it to `closed` with a test that proves it. See contracts/mobile/README.md.
-contract_sha256: 5d6155e0f73648b9201890e6e10fc88f510f2b3c9f11ea1b3cacc71e17e4576c
+contract_sha256: 8d15f0e31f329dc6b0902dbafb8ddefffa0557ad6e07eb5b3b1c2371ce736a83
 contract_gaps:
 - id: G-07
   severity: Medium
@@ -24,11 +24,6 @@ contract_gaps:
   summary: Asset ordering has no unique tie-breaker
   closes_in: M3-D
   evidence: Read from asset_repositories.py.
-- id: G-28
-  severity: Low
-  summary: No record of a student's programme or department
-  closes_in: Later phase
-  evidence: Read from app/api/catalogue/courses.py.
 implementation_gaps:
 - id: G-01
   severity: Blocker
@@ -201,3 +196,6 @@ closed:
 - id: G-40
   summary: Uploads weren't scanned, so no document was quarantined or rejected before processing
   proof: pg_smoke/test_scanning.py::test_a_new_document_is_quarantined_with_a_pending_scan_and_gets_no_job
+- id: G-28
+  summary: No record of a student's programme, level or courses
+  proof: tests/integration/academic/test_academic_profile.py::test_a_save_reads_back_with_department_and_faculty_from_the_programme

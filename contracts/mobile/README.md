@@ -169,7 +169,7 @@ These continue the [M0 inventory](../../docs/mobile-m0-inventory.md) and move in
 |---|---|---|---|---|---|
 | G-26 | Implementation | Low | A student has no way to discover a tenant slug. Accepted for now: FUTA is app configuration in the first release, and institution selection comes later | No listing route; `tenants` routes take a known slug | M6 |
 | G-27 | Implementation | **High** | **Assessment time limits appear not to be enforced.** `duration_minutes` is stored, but nothing in the attempt code reads it | `app/application/assessment/attempt*.py`, `app/domain/assessment/attempt.py` | M3-E. M2 confirms it first |
-| G-28 | Contract | Low | No record of a student's programme or department, so course lists filter by a parameter rather than "my courses" | `app/api/catalogue/courses.py` | Later phase |
+| G-28 | Implementation | Low | No record of a student's programme, level or courses. **Closed by S-02:** `getAcademicProfile` and `putAcademicProfile` (design #110), on migration 0032 | `app/api/academic.py` | S-02, migration 0032 |
 | G-29 | Implementation | Medium | Assessments have no attempt policy, and starting an attempt checks only for one in progress | `app/application/assessment/attempt_handlers.py` | M3-E, needs a migration |
 | G-30 | Implementation | **High** | Content sources record no rights basis, intended audience or redistribution limits, so nothing can stop unverified material reaching students | `app/infrastructure/db/models/content.py` | M3-D, needs a migration |
 | G-31 | Implementation | **High** | Knowledge scope isn't modelled, so retrieval can't apply it | ai-service `retrieval.py`; backend content models | M3-D, M4 |

@@ -1,3 +1,4 @@
+import app.infrastructure.db.models.academic  # noqa: F401
 import app.infrastructure.db.models.assessment  # noqa: F401
 import app.infrastructure.db.models.catalogue  # noqa: F401
 import app.infrastructure.db.models.content  # noqa: F401

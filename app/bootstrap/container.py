@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import TypeVar, cast
 
+from app.application.academic.profile_service import AcademicProfileService
 from app.application.assessment.assessment_service import AssessmentService
 from app.application.assessment.attempt_answer_service import AttemptAnswerService
 from app.application.assessment.attempt_service import AttemptService
@@ -30,7 +31,9 @@ from app.application.tenant.join_service import TenantJoinService
 from app.application.tenant.membership_service import TenantMembershipService
 from app.core.config import STRICT_ENVIRONMENTS, settings
 from app.db.session import SessionLocal
+from app.domain.repositories.academic_profile import AcademicProfileRepository
 from app.events.event_bus import EventBus
+from app.infrastructure.academic.profile_repository import SqlAlchemyAcademicProfileRepository
 from app.infrastructure.assessment.unit_of_work import (
     AssessmentUnitOfWork,
     assessment_unit_of_work,
@@ -175,6 +178,7 @@ def build_container() -> Container:
             security_events=security_events,
         ),
     )
+    container.register(AcademicProfileService, AcademicProfileService(sqlalchemy_academic_profiles))
     container.register(CourseUnitOfWork, sqlalchemy_catalogue_uow)
     container.register(
         CourseService,
@@ -276,6 +280,13 @@ async def sqlalchemy_tenant_membership_uow() -> AsyncIterator[TenantMembershipUn
     async with SessionLocal() as session:
         async with TenantMembershipUnitOfWork(session) as uow:
             yield uow
+
+
+@asynccontextmanager
+async def sqlalchemy_academic_profiles() -> AsyncIterator[AcademicProfileRepository]:
+    """One transaction: committed when the block succeeds, rolled back if it raises."""
+    async with SessionLocal() as session, session.begin():
+        yield SqlAlchemyAcademicProfileRepository(session)
 
 
 @asynccontextmanager

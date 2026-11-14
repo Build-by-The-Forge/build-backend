@@ -85,6 +85,8 @@ class ProgrammeModel(Base):
     __table_args__ = (
         UniqueConstraint("tenant_id", "slug", name="uq_programmes_tenant_slug"),
         UniqueConstraint("tenant_id", "code", name="uq_programmes_tenant_code"),
+        # The target of the academic profile's tenant-carrying programme key (0032).
+        UniqueConstraint("tenant_id", "id", name="uq_programmes_tenant_id_id"),
         Index("ix_programmes_tenant_id", "tenant_id"),
         Index("ix_programmes_faculty_id", "faculty_id"),
         Index("ix_programmes_department_id", "department_id"),
