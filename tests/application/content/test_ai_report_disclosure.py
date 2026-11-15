@@ -19,6 +19,26 @@ def test_a_failure_message_comes_only_from_its_code():
     assert public_failure_message(None) == DEFAULT_FAILURE_MESSAGE
 
 
+def test_an_encrypted_pdf_gets_a_message_the_student_can_act_on():
+    assert public_failure_message("PDF_ENCRYPTED") == (
+        "The document is password-protected. Remove the password and upload it again."
+    )
+
+
+def test_the_ai_services_internal_failures_keep_the_default_message():
+    """A student can't act on these, so they read as a processing failure, by
+    decision (ai-service #58's closed set, reviewed for #54)."""
+    for code in (
+        "AI_PROCESSING_FAILED",
+        "AI_UNCLASSIFIED_ERROR",
+        "CALLBACK_DELIVERY_FAILED",
+        "INGESTION_INCOMPLETE",
+        "INVALID_INGESTION_PAYLOAD",
+        "STAGE_OUT_OF_ORDER",
+    ):
+        assert public_failure_message(code) == DEFAULT_FAILURE_MESSAGE, code
+
+
 def test_a_code_that_is_not_a_code_is_replaced():
     assert safe_error_code("OCR_PAGE_FAILED") == "OCR_PAGE_FAILED"
     assert safe_error_code(LEAK) == UNKNOWN_FAILURE_CODE

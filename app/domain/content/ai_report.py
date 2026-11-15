@@ -53,6 +53,8 @@ _FAILURE_MESSAGES = {
     "IMAGE_UNREADABLE": "An image in the document could not be read.",
     "OCR_PAGE_FAILED": "A page of the document could not be read.",
     "PDF_UNREADABLE": "The document could not be read.",
+    # The one PDF failure a student can fix themselves.
+    "PDF_ENCRYPTED": "The document is password-protected. Remove the password and upload it again.",
 }
 
 _MEASURES = frozenset(
