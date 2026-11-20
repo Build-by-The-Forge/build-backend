@@ -50,3 +50,15 @@ Sources: https://fireworks.ai/pricing, https://docs.fireworks.ai/serverless/pric
 - It does not show quality, latency or cost for BUILD's tasks. That is the 100-task evaluation (plan phase 3).
 - It does not approve a model. Approval needs the provider's G-33 record approved first.
 - Prices change: Gemini's already change on 2027-01-01. Re-check on the day any budget is set.
+
+## Role hypotheses for the three Fireworks models (2026-11-20)
+
+The user confirmed the three models as the intended portfolio. **No role is assigned.** Two sources suggest roles, and they differ:
+
+| Model | Source A: the user's suggestion | Source B: the Notion report (unverified) | Decided by benchmark |
+|---|---|---|---|
+| Nemotron 3.5 Lightning 30B A3B | Agentic reasoning and multi-step work | Small-task execution, simple RAG, routing, summaries; "not for hard multi-step planning" | **No. Unassigned** |
+| gpt-oss-120B | Complex reasoning and synthesis | Default orchestration | **No. Unassigned** |
+| DeepSeek V4.1 Flash | High-volume multi-step work | Long-context work over 131K | **No. Unassigned** |
+
+The sources contradict each other on Nemotron. Each model is evaluated against BUILD's agentic task suite, and for grounding, citation accuracy and abstention, before a role is assigned. A role also needs the structured-output status above, which Fireworks' pages don't state per model.
