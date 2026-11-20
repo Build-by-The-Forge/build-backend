@@ -236,6 +236,7 @@ A milestone is complete only when its acceptance criteria hold and the evidence 
 | Mobile built against drifting contracts | Rework | Drift gate; fixtures before screens |
 | Alembic head contention | Migration conflicts | Ask the head's owner for the next revision |
 | Open incident (`067d980` purge) | Exposed audit file | Register, until GitHub confirms |
+| **Cached documents outlive a revocation or deletion** | M3-D promises immediate denial; a copy cached on the device would still open. R1 caches only already-opened documents, but the exposure is real | *Proposal, for the reviewer:* app-private storage; cleared on logout, on session end, and when the backend reports revocation or deletion; a short TTL set by the reviewer; revalidated whenever online. Until approved, R1 may ship with no cache at all |
 
 ### Release acceptance checklist
 
@@ -249,6 +250,7 @@ A milestone is complete only when its acceptance criteria hold and the evidence 
 - [ ] The 100-task evaluation baseline recorded; real-material retrieval measured.
 - [ ] Device results for the 4 GB RAM and 100 MB requirements, with the device named.
 - [ ] Official CBT works online only; the app offers no offline assessment.
+- [ ] Document cache (R1), if shipped: stored in app-private storage; cleared on logout, on session end and on a revocation or deletion report; a document past its TTL is not served; every cached document is revalidated when the device is online; storage stays within the stated limit. The rule itself is a proposal until the reviewer approves it.
 - [ ] Backups restored in a drill; monitoring and alerts live.
 - [ ] Every gate's own checks green on the pinned SHAs, with run links.
 
