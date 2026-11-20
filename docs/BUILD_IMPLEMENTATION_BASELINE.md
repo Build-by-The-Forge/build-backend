@@ -1,6 +1,6 @@
 # BUILD Implementation Baseline
 
-**Taken:** 2026-11-20, from `git fetch` of each repository's default branch and the open pull requests on GitHub.
+**Taken:** 2026-11-20T21:38Z (UTC snapshot), from `git fetch` of each repository's default branch and the open pull requests on GitHub at that moment. Anything after that time isn't in it. Lane statuses are dated, handover-based snapshots, not a live dashboard.
 
 **Purpose:** Phase 0 of `docs/BUILD_IMPLEMENTATION_PLAN.md` (backlog B-001 to B-005). It records where the code stands, with the plan's completion states, and the documentation conflicts found.
 
@@ -11,11 +11,13 @@
 
 ## 1. Repositories (B-001)
 
-| Repository | Default branch | Head at baseline | Open PRs |
+Snapshot 2026-11-20T21:38Z.
+
+| Repository | Default branch | Head at snapshot | Open PRs at snapshot |
 |---|---|---|---|
-| `build-backend` | `main` | `e9067ed` (merge of #115, 2026-11-15) | None before the PRs of this lane |
-| `ai-service` | `main` | `2c76c93` (merge of #64, 2026-11-16) | #65 `feat/gemini-adapter`, head `9d8c993`, hosted CI green, awaiting review |
-| `Build-UI` | `main` | `30a869e` (2026-10-30, "Refine FUTA map styling…") | None |
+| `build-backend` | `main` | `e9067ed` (merge of #115, 2026-11-15) | #116 plan and baseline, #117 PRD amendment (draft), #118 G-33 records (draft), #119 status refresh, #120 entitlement design (draft), #121 M3-D PR 7 backend (`claude/m3d-pr7-f68199`, ready), #122 offline content-pack contract (draft), #123 study-planner design (draft) |
+| `ai-service` | `main` | `4150c5f` (merge of #65, the Gemini adapter, 2026-11-20). **#65 is merged; it is code only and enables nothing** | #66 M3-F tutor turn, #67 PRD mirror (draft), #68 G-18 chat returns only cited passages, #69 M3-D PR 7 AI dispatch scope, #70 `PROJECT_STATUS.md` (draft), #71 AI-12 offline benchmark harness (draft) |
+| `Build-UI` | `main` | `30a869e` (2026-10-30, "Refine FUTA map styling…") | #4 typed API client with a drift check, #5 sign-in and protected routes, #6 onboarding and academic profile (M5, ready) |
 
 Alembic head on `build-backend` main: `0032_s02_academic_profiles` (`alembic/versions/`). The next free revision is `0033`; the M3-D uploads lane owns it, and M3-F must ask before taking one.
 
@@ -41,11 +43,13 @@ Alembic head on `build-backend` main: `0032_s02_academic_profiles` (`alembic/ver
 
 ### 2.2 ai-service
 
+Rows were read at `2c76c93` except the Gemini row, re-read at `4150c5f`.
+
 | Area | State | Evidence |
 |---|---|---|
 | Model Gateway, one execution boundary (AI-01) | Implemented on main | `app/core/models/gateway.py`; chat, explain and questions through it (#56); legacy layer removed (#63) |
 | Gateway providers on main | `openai`, `deterministic`, `mock` | `app/core/models/providers/{openai,deterministic,mock}.py` |
-| Gemini adapter | Open PR | #65, head `9d8c993`; no `gemini` module on main (`app/core/models/provider.py` mentions the name in a docstring only) |
+| Gemini adapter | Implemented on main, **not enabled** | Merged in #65 (`4150c5f`): `app/core/models/providers/gemini.py`; `GATEWAY_PROVIDERS` is `{openai, gemini}` and `MODEL_PROVIDER` accepts `gemini` (`app/core/config.py`). `MODEL_PROVIDERS_APPROVED` is empty by default, so the gateway fails closed for student passages until G-33 is approved. The adapter passes the key explicitly with `vertexai=False` |
 | Fireworks adapter | Not started | No code; governance first (plan phase 3) |
 | Provider approval | Implemented on main | `MODEL_PROVIDERS_APPROVED` and `GATEWAY_PROVIDERS` in `app/core/config.py`; empty by default |
 | Ingestion and OCR | Implemented on main | `app/services/tasks/handlers.py`; `app/services/ocr` |
@@ -80,19 +84,20 @@ From `contracts/mobile/gaps.yaml` on `e9067ed`: **20 closed, 23 open** (4 contra
 
 ## 4. Lanes running now (B-005)
 
-Owners are the sessions on this machine, as listed on 2026-11-20. The state is what each lane's hand-over note records, not a claim about the branch.
+Snapshot 2026-11-20T21:38Z. Owners are the sessions on this machine. For each lane, **committed** means a commit exists on a local branch, **pushed** means the branch is on the remote, **opened** means a PR is open. Sources: `git ls-remote`, local branch heads, `gh pr list`, and hand-over notes.
 
-| Lane | Repository and branch | State |
-|---|---|---|
-| M3-D uploads (PRs 7 to 16) | build-backend `claude/m3d-pr7-f68199` | In progress, nothing pushed |
-| M3-F tutor | ai-service `claude/m3f-conversations-e270e1`; backend plan in the shared notes | Design delivery in progress |
-| Retrieval quality and OCR baseline | ai-service `p3-5/ocr-corpus`, `p3-5/real-baseline` | PR 1 unpushed |
-| Offline benchmark (AI-12) | ai-service `claude/ai-12-offline-benchmark-4620ed` | Local WIP, benchmark not yet run |
-| AI-10 coverage | ai-service `claude/ai10-topic-coverage-60ec4e` | Uncommitted |
-| GCP staging | build-backend `claude/gcp-staging-a19c38` | Nothing committed |
-| Gemini adapter | ai-service #65 | Open PR, awaiting review |
-| Mobile client | Build-UI | No lane has a branch; not started |
-| Plan and governance (this) | build-backend `docs/implementation-plan` and follow-ups | PR A to C and two specs |
+| Lane | Work | Committed | Pushed | Opened |
+|---|---|---|---|---|
+| M3-D uploads (PRs 7 to 16) | build-backend `claude/m3d-pr7-f68199`; ai-service `feat/m3d-pr7-dispatch-scope` | Yes | Yes | Yes: build-backend #121, ai-service #69 (PR 7 only; PRs 8 to 16 not started) |
+| M3-F tutor | ai-service `feat/m3-f-tutor-turn` | Yes | Yes | Yes: ai-service #66; the paired backend work isn't open |
+| G-18 chat fix | ai-service `fix/g-18-chat-context` | Yes | Yes | Yes: ai-service #68 |
+| Offline benchmark (AI-12) | ai-service `claude/ai-12-offline-benchmark-4620ed` | Yes | Yes | Yes: ai-service #71 (draft) |
+| Retrieval quality and OCR baseline | ai-service `p3-5/ocr-corpus` (a local commit `397ce5f`) | Yes, locally | No remote branch found | No |
+| AI-10 coverage | ai-service `claude/ai10-topic-coverage-60ec4e` | No commit beyond `main` found; the hand-over note says changes are uncommitted | No | No |
+| GCP staging | build-backend `claude/gcp-staging-a19c38` | No (at `e9067ed`) | No | No |
+| Gemini adapter | ai-service #65 | Yes | Yes | **Merged** (`4150c5f`); enables nothing |
+| Mobile client (M5) | Build-UI `m5/typed-api-client`, `m5/auth-session`, `m5/onboarding-profile` | Yes | Yes | Yes: Build-UI #4, #5, #6 |
+| Plan and governance (this lane) | build-backend `docs/*` and ai-service `docs/*` branches | Yes | Yes | Yes: build-backend #116 to #120, #122, #123; ai-service #67, #70 |
 
 ## 5. Documentation conflicts (B-003)
 
