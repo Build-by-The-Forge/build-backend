@@ -301,11 +301,11 @@ Nothing in this section approves a provider, enables a route or fixes a quota. I
 
 | Provider | Position | Needs before use |
 |---|---|---|
-| Gemini | The approved first provider, through the existing approval controls (`MODEL_PROVIDERS_APPROVED`, empty by default) | G-33 approved, a paid-tier key, adapter #65 reviewed and merged |
+| Gemini | The **designated first R1 provider**. Selection is not approval: it is **not enabled** for student or institutional passages until its G-33 requirements are satisfied and approved, and until then the production gateway **fails closed** for those requests (`MODEL_PROVIDERS_APPROVED` is empty by default). Once approved, R1 uses it under the configured budget | G-33 approved (see the record's age blocker), a paid-tier key, and an adapter in use (#65 is merged; it enables nothing) |
 | Fireworks | **Proposed and disabled** (intended portfolio confirmed by the user on 2026-11-20; section 14.5). It comes from a research report (the Notion page "BUILD — Provider and Agentic Architecture Model", 2026-11-18) that is a proposal, not an approved record | Its own governance: reconcile the PRD, a separate G-33 record, verified terms and model IDs, reviewer approval, then an adapter after #65 |
 
 - Fallback happens only between approved portfolio entries. GLM, Qwen and MiniMax are not v1 defaults.
-- While Fireworks is unapproved, every request routes to Gemini. No routing change follows from documentation.
+- Until Gemini's G-33 is approved, student and institutional passages go to no provider: the gateway fails closed. Fireworks stays disabled until its own governance and evaluation are satisfied. No routing change follows from documentation.
 
 ### 14.2 Plan-to-capability policy (user, 2026-11-20, updated; provisional)
 
@@ -313,7 +313,7 @@ This replaces the earlier table and the report-derived mapping. Quotas, budgets,
 
 | Plan | Online | Offline (R2) | Agentic (R2) |
 |---|---|---|---|
-| **Free** | A very low-cost model for ordinary questions and straightforward academic help, under strict backend-enforced usage budgets. Low-cost, not zero-cost: BUILD pays per call. **Target:** a Fireworks-hosted low-cost model once approved. **R1:** Gemini under a strict budget | **The smallest local model** (the user decided this on 2026-11-20) | None |
+| **Free** | A very low-cost model for ordinary questions and straightforward academic help, under strict backend-enforced usage budgets. Low-cost, not zero-cost: BUILD pays per call. **Target:** a Fireworks-hosted low-cost model once approved. **R1:** Gemini under a strict budget, once its G-33 is approved | **The smallest local model** (the user decided this on 2026-11-20) | None |
 | **Plus** | Everything in Free's online access, plus the approved online capabilities, subject to budget | The **full benchmark-selected local model portfolio**: offline AI inference and local assistance | None |
 | **Pro** | Everything in Plus | Everything in Plus | **Full bounded agentic study workflows**: multi-step research and synthesis, personalised study planning and reading paths. Routed across Gemini and the three Fireworks models by task capability, quality, cost, latency and availability. **Gemini is complementary, not the only agent provider** |
 | **Campus** | Institution-sponsored access. **Entitlements and allocation are undefined.** Not inferred from the student plans | | |
@@ -321,7 +321,7 @@ This replaces the earlier table and the report-derived mapping. Quotas, budgets,
 **Offline reading of downloaded materials stays free for everyone.** Only AI inference is entitled.
 
 **By release**
-- **R1:** online-first. **Gemini is the only approved online provider until Fireworks passes governance**, so in R1 "Free online" runs on Gemini under a strict budget. Free's Fireworks model and every local-model entitlement arrive only after approval and benchmarking. No offline AI and no agentic workflows. Payments are paused (PRD §0.5), so Plus and Pro can only be **granted** (promotional, campus, admin); R1 needs the entitlement infrastructure and Free enforcement, with no purchase flow.
+- **R1:** online-first. Gemini is the **designated first R1 provider**, subject to its G-33 approval before any student material is sent; Fireworks is disabled until its governance completes. Once Gemini is approved, "Free online" in R1 runs on it under a strict budget; until then no online AI over student passages is available. Free's Fireworks model and every local-model entitlement arrive only after approval and benchmarking. No offline AI and no agentic workflows. Payments are paused (PRD §0.5), so Plus and Pro can only be **granted** (promotional, campus, admin); R1 needs the entitlement infrastructure and Free enforcement, with no purchase flow.
 - **R2:** the offline entitlements and Pro's agentic workflows, subject to evaluation and safety controls.
 - Official assessments stay online-only. Offline practice, if introduced, is a separate R2 capability and is never authoritative grading.
 
