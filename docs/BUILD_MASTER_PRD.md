@@ -162,6 +162,24 @@ The offline model benchmark continues during Release 1, so Release 2 starts from
 | Open: who pays per token (BUILD absorbs small, schools pay for medium) | **Open**; no per-token student billing in v1; mapping provisional (§81) |
 | Open: exam mode, AI off during attempts, backend-enforced | **Adopted by the user** for the plan |
 
+### Proposed Fireworks model registry (2026-11-20; all unverified; roles are hypotheses)
+
+The user confirmed this intended portfolio. **Nothing is assigned; benchmarks decide.** Status is from Fireworks' own pages, read 2026-11-20 (URLs and dates in `docs/g33-model-verification.md`).
+
+| Model | Identifier | Verified? | Serving mode | Price per 1M (in / cached / out) | Context | Structured output | Tool calling | Licence |
+|---|---|---|---|---|---|---|---|---|
+| NVIDIA Nemotron 3.5 Lightning 30B A3B | `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` (the report's ID was not found) | Identifier, availability, price verified | Serverless, on-demand | $0.05 / $0.01 / $0.20 | 262,144 | Not stated | Supported | Not stated (unverified) |
+| OpenAI gpt-oss-120B | `accounts/fireworks/models/gpt-oss-120b` | Identifier, price verified; serving mode conflicts between pages | On-demand per its page; serverless per pricing pages | $0.15 / $0.015 / $0.60 | 131,072 | Unclear | Supported | Apache 2.0 |
+| DeepSeek V4.1 Flash | `accounts/fireworks/models/deepseek-v4p1-flash` | Verified | Serverless, on-demand | $0.30 / $0.006 / $1.20 | 1,048,576 | Not stated | Supported | MIT |
+
+| Model | User's suggested role | Notion report's role | Decided by benchmark |
+|---|---|---|---|
+| Nemotron | Agentic reasoning, multi-step | Small tasks, simple RAG, routing, summaries; not hard multi-step planning | No, unassigned |
+| gpt-oss-120B | Complex reasoning and synthesis | Default orchestration | No, unassigned |
+| DeepSeek V4.1 Flash | High-volume multi-step | Long context over 131K | No, unassigned |
+
+Fireworks stays **disabled** until its governance approval. The API key is supplied separately by the user and is never committed, pasted into documents or logged (a secret manager, or an environment file outside the repository); a key enables the integration process only and approves no production use. Each model is evaluated against BUILD's agentic task suite, grounding, citation accuracy and abstention before any role is assigned.
+
 **Conflicts with this document, to be settled by the reviewer** (none is resolved by this amendment):
 
 1. §0.2, §38, §39 and the production blueprint make Gemini the online provider and say it replaces the earlier plan. The report splits work between two providers. §0.2, §0.4, §38 to §41, §110, §146.9 and §146.10 need amending once the reviewer decides.
@@ -2362,7 +2380,7 @@ Premium should feel like **more intelligence**, not permission to learn.
 
 # 81. Future Subscription Levels
 
-> **Amended 2026-11-20 (§0.8).** Applies to §78 to §88. Free, Plus, Pro and Campus stay, with backend-authoritative entitlements and budgets. The provider report's mapping is **not** adopted. The user's **provisional** plan-to-capability policy is: online AI tutor (Free restricted; Plus and Pro yes); small-model access (Free limited usage and budget; Plus subject to budget; Pro yes); offline AI inference (Plus and Pro, Release 2); agentic study workflows, multi-hop study assistance and autonomous reading paths (Pro only, Release 2, subject to evaluation and safety controls). **Campus is a separate institution-managed policy and is undefined.** Rules: Free limits are enforced by the backend, never by hidden UI; budgets are server-authoritative and count provider costs, retries and failed requests; model-tier access and agentic capability are separate entitlements; Pro agentic gives no authority over scores, mastery, permissions or tenant isolation; Free's small-model access does not depend on Fireworks (in Release 1 it is Gemini under a strict budget); a plan name alone never grants a costlier model. Exact quotas, model assignments and cost limits need separate review. In Release 1 payments stay paused (§0.5), so Plus and Pro can only be granted. **Limits stated plainly:** offline inference runs on the device, so the backend gates the authorised, signed model-pack download and a periodic entitlement lease, which is distribution gating and not hard prevention (§84.1). Offline *reading* of downloaded material is not paywalled (§78 to §80); whether Free gets the smallest local model is an open decision.
+> **Amended 2026-11-20 (§0.8).** Applies to §78 to §88. Free, Plus, Pro and Campus stay, with backend-authoritative entitlements and budgets. The provider report's mapping is **not** adopted. The user's **provisional** policy (updated 2026-11-20): **Free** gets a very low-cost online model for ordinary questions under strict backend budgets (low-cost, not zero-cost; a Fireworks-hosted model is the target once approved, Gemini under a strict budget is the fallback and the Release 1 reality) and, in Release 2, the smallest local model. **Plus** gets the full benchmark-selected local portfolio and the online capabilities (Release 2). **Pro** gets everything in Plus and full bounded agentic study workflows (multi-step research and synthesis, personalised study planning and reading paths), routed across Gemini and the three Fireworks models by capability, quality, cost, latency and availability, with Gemini complementary and not the only agent provider (Release 2). **Campus is institution-sponsored access with entitlements and allocation undefined.** Rules: Free limits are enforced by the backend, never by hidden UI; budgets are server-authoritative and count provider costs, retries and failed requests; model-tier access and agentic capability are separate entitlements; Pro agentic gives no authority over scores, mastery, permissions or tenant isolation; Free targets a Fireworks model once approved and falls back to Gemini under a strict budget; a plan name alone never grants a costlier model. Exact quotas, model assignments and cost limits need separate review. In Release 1 payments stay paused (§0.5), so Plus and Pro can only be granted. **Limits stated plainly:** offline inference runs on the device, so the backend gates the authorised, signed model-pack download and a periodic entitlement lease, which is distribution gating and not hard prevention (§84.1). Offline *reading* of downloaded material is not paywalled for anyone (§78 to §80); only AI inference is entitled. A Free default model must first clear a minimum grounded-answer, citation and abstention bar in evaluation, and the smallest local model a minimum abstention bar before it ships to Free.
 
 The platform may eventually support:
 
