@@ -236,6 +236,10 @@ A milestone is complete only when its acceptance criteria hold and the evidence 
 | Mobile built against drifting contracts | Rework | Drift gate; fixtures before screens |
 | Alembic head contention | Migration conflicts | Ask the head's owner for the next revision |
 | Open incident (`067d980` purge) | Exposed audit file | Register, until GitHub confirms |
+| **Offline AI can't be hard-gated** | A modified APK can run side-loaded open-weight models; the backend can't prevent it | *Proposal:* gate the signed model-pack download and a periodic entitlement lease; document it as distribution gating (section 14.2, issue 1) |
+| **Pro agentic is costly on Gemini alone** | Estimated 8 to 16 times Fireworks per task (unverified) | R2 depends on Fireworks approval or an explicit budget |
+| **Paywalling offline reading** | Would contradict PRD §78 to §80 | Only AI inference is entitled; reading downloaded material is not (section 14.2, issue 2) |
+| **No purchase flow in R1** | Plus and Pro can't be bought | Grantable states only; the entitlement design covers grants and overrides |
 | **Cached documents outlive a revocation or deletion** | M3-D promises immediate denial; a copy cached on the device would still open. R1 caches only already-opened documents, but the exposure is real | *Proposal, for the reviewer:* app-private storage; cleared on logout, on session end, and when the backend reports revocation or deletion; a short TTL set by the reviewer; revalidated whenever online. Until approved, R1 may ship with no cache at all |
 
 ### Release acceptance checklist
