@@ -302,48 +302,51 @@ Nothing in this section approves a provider, enables a route or fixes a quota. I
 | Provider | Position | Needs before use |
 |---|---|---|
 | Gemini | The approved first provider, through the existing approval controls (`MODEL_PROVIDERS_APPROVED`, empty by default) | G-33 approved, a paid-tier key, adapter #65 reviewed and merged |
-| Fireworks | **Proposed and disabled.** It comes from a research report (the Notion page "BUILD — Provider and Agentic Architecture Model", 2026-11-18) that is a proposal, not an approved record | Its own governance: reconcile the PRD, a separate G-33 record, verified terms and model IDs, reviewer approval, then an adapter after #65 |
+| Fireworks | **Proposed and disabled** (intended portfolio confirmed by the user on 2026-11-20; section 14.5). It comes from a research report (the Notion page "BUILD — Provider and Agentic Architecture Model", 2026-11-18) that is a proposal, not an approved record | Its own governance: reconcile the PRD, a separate G-33 record, verified terms and model IDs, reviewer approval, then an adapter after #65 |
 
 - Fallback happens only between approved portfolio entries. GLM, Qwen and MiniMax are not v1 defaults.
 - While Fireworks is unapproved, every request routes to Gemini. No routing change follows from documentation.
 
-### 14.2 Plan-to-capability policy (user, 2026-11-20; provisional)
+### 14.2 Plan-to-capability policy (user, 2026-11-20, updated; provisional)
 
-This replaces the earlier mapping from the research report. Exact quotas, model assignments, cost limits and Campus rules stay unspecified until separately reviewed. Nothing here is hardcoded, and no quota enforcement code follows from this document.
+This replaces the earlier table and the report-derived mapping. Quotas, budgets, limits and Campus rules stay unspecified until separately reviewed. Nothing here is hardcoded, and no quota enforcement code follows from this document.
 
-| Capability | Free | Plus | Pro |
+| Plan | Online | Offline (R2) | Agentic (R2) |
 |---|---|---|---|
-| Online AI tutor | Yes, restricted | Yes | Yes |
-| Small-model access | Limited usage and budget | Yes, subject to budget | Yes |
-| Offline AI inference | No | Yes | Yes |
-| Agentic study workflows | No | No | Full access |
-| Multi-hop study assistance | No | No | Yes |
-| Autonomous reading paths | No | No | Yes |
+| **Free** | A very low-cost model for ordinary questions and straightforward academic help, under strict backend-enforced usage budgets. Low-cost, not zero-cost: BUILD pays per call. **Target:** a Fireworks-hosted low-cost model once approved. **R1:** Gemini under a strict budget | **The smallest local model** (the user decided this on 2026-11-20) | None |
+| **Plus** | Everything in Free's online access, plus the approved online capabilities, subject to budget | The **full benchmark-selected local model portfolio**: offline AI inference and local assistance | None |
+| **Pro** | Everything in Plus | Everything in Plus | **Full bounded agentic study workflows**: multi-step research and synthesis, personalised study planning and reading paths. Routed across Gemini and the three Fireworks models by task capability, quality, cost, latency and availability. **Gemini is complementary, not the only agent provider** |
+| **Campus** | Institution-sponsored access. **Entitlements and allocation are undefined.** Not inferred from the student plans | | |
 
-**Campus** is a separate, institution-managed entitlement policy and is **left undefined**. It is not inferred from the student plans. The questions it needs answered are in `docs/entitlement-design.md`.
+**Offline reading of downloaded materials stays free for everyone.** Only AI inference is entitled.
 
 **By release**
-- **R1:** online-first. Gemini is the only approved online provider until Fireworks passes governance. Free usage is tightly limited. Plus and Pro receive their approved online entitlements. No offline AI and no agentic workflows. Payments are paused (PRD §0.5), so Plus and Pro can only be **granted** (promotional, campus, admin); R1 needs the entitlement infrastructure and Free enforcement, with no purchase flow.
-- **R2:** Plus unlocks offline AI. Pro unlocks full agentic study capabilities, subject to evaluation and safety controls.
+- **R1:** online-first. **Gemini is the only approved online provider until Fireworks passes governance**, so in R1 "Free online" runs on Gemini under a strict budget. Free's Fireworks model and every local-model entitlement arrive only after approval and benchmarking. No offline AI and no agentic workflows. Payments are paused (PRD §0.5), so Plus and Pro can only be **granted** (promotional, campus, admin); R1 needs the entitlement infrastructure and Free enforcement, with no purchase flow.
+- **R2:** the offline entitlements and Pro's agentic workflows, subject to evaluation and safety controls.
 - Official assessments stay online-only. Offline practice, if introduced, is a separate R2 capability and is never authoritative grading.
 
 **Rules**
 1. Free restrictions are enforced by the backend, never by hidden UI.
 2. Usage budgets are server-authoritative and count provider costs, retries and failed requests.
-3. Plus offline access does not grant Pro agentic permissions.
+3. Plus's offline access does not grant Pro's agentic permissions.
 4. Pro agentic access gives no authority over assessment scores, mastery, permissions or tenant isolation.
-5. Free's small-model entitlement does not depend on Fireworks. In R1 it is Gemini under a strict budget.
+5. **The earlier rule that Free must not depend on Fireworks is replaced:** Free targets a Fireworks low-cost model once approved, with Gemini under a strict budget as the fallback and as the R1 reality.
 6. Model-tier access and agentic capability permissions are **separate entitlements**.
 7. A plan name alone never grants a costlier model.
 
-**Open issues, with the reviewer's verdicts (proposals)**
+**Gates before a default ships**
+- The Free online model must clear a minimum grounded-answer, citation and abstention bar in evaluation before it becomes the Free default. A small low-cost model citing correctly is unproven.
+- The smallest local model must clear a minimum abstention bar before it ships to Free.
+- Pro agentic runs are bounded: permissions, step and token budgets, deadlines, cancellation and an audit trail.
+
+**Open issues (proposals)**
 
 | # | Issue | Proposal |
 |---|---|---|
-| 1 | **Offline AI runs on the device.** The backend cannot technically stop a modified APK from running side-loaded open-weight models | State the honest boundary. The entitlement gates the **authorised model-pack download** (backend-issued and signed) and a periodic entitlement lease. That is distribution gating, not hard prevention. PRD §84.1 says the client never decides; this document records the limit rather than claiming more |
-| 2 | Offline inference costs BUILD nothing per use, and offline matters most to students with poor connectivity and data costs. PRD §78 to §80 say never charge for a student's own notes, basic CBT or essential learning | Offline **reading** of downloaded materials and content packs is **not paywalled**; only AI inference is entitled. **Decision open:** whether Free should get the smallest local model. Not decided here |
-| 3 | Pro agentic on Gemini alone is estimated at 8 to 16 times the Fireworks tier's cost per task (the report's own arithmetic, unverified) | R2 Pro agentic depends on either Fireworks approval or an explicit budget. Recorded as a dependency |
-| 4 | Payments are paused in R1 | Plus and Pro are grantable states only (see above) |
+| 1 | **Offline AI runs on the device.** The backend cannot stop a modified APK from running side-loaded open-weight models | State the honest boundary. The entitlement gates the **authorised model-pack download** (backend-issued and signed) and a periodic entitlement lease. That is distribution gating, not hard prevention. PRD §84.1 says the client never decides; this records the limit rather than claiming more |
+| 2 | Free gets the smallest local model | **Decided** (2026-11-20). The bar in "Gates" applies |
+| 3 | **Cost.** A typical tutor answer (8,000 input and 500 output tokens) costs about $0.016 on Gemini at the 2027 price ($1.50 and $7.50 per 1M, verified on Google's page) against about $0.0005 on the small Fireworks tier at uncached prices, or about $0.0002 with the input cached (the page's prices, unverified): roughly 30 to 80 times, depending on caching. The relayed figure was about $0.0003, or about 45 times; the difference is the cache assumption | Free at scale on Gemini alone is expensive. Fireworks governance and evaluation should start now, in parallel, not only for R2 Pro |
+| 4 | Payments are paused in R1 | Plus and Pro are grantable states only |
 
 ### 14.3 Provider data protection (both providers)
 
@@ -354,3 +357,28 @@ This replaces the earlier mapping from the research report. Exact quotas, model 
 
 - The gateway's existing circuit breaker and retry policy (`app/core/models/resilience.py` in `ai-service`) are the baseline.
 - Provider-specific thresholds become configurable and are set from measurements. The report's "three failures, five minutes" is not adopted without evidence.
+
+### 14.5 Proposed Fireworks model registry (all unverified; roles are hypotheses)
+
+The user confirmed this as the intended portfolio. **Nothing is assigned.** Benchmarks decide roles. Verification status is from Fireworks' own pages, read 2026-11-20; the full table with URLs and dates is `docs/g33-model-verification.md`.
+
+| Model | Identifier | Verified? | Serving mode | Price (in / cached / out per 1M) | Context | Structured output | Tool calling | Licence |
+|---|---|---|---|---|---|---|---|---|
+| NVIDIA Nemotron 3.5 Lightning 30B A3B | `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` (the report's `nvidia-nemotron-3.5-lightning` was **not found**) | Identifier, availability and price **verified** | Serverless and on-demand | $0.05 / $0.01 / $0.20 | 262,144 | Not stated per model | Supported | Not stated by Fireworks (**unverified**) |
+| OpenAI gpt-oss-120B | `accounts/fireworks/models/gpt-oss-120b` | Identifier and price **verified**; serving mode **conflicts** | Model page: on-demand only; pricing pages: serverless | $0.15 / $0.015 / $0.60 | 131,072 | Unclear | Supported | Apache 2.0 (model page) |
+| DeepSeek V4.1 Flash | `accounts/fireworks/models/deepseek-v4p1-flash` | **Verified** | Serverless and on-demand | $0.30 / $0.006 / $1.20 | 1,048,576 | Not stated per model | Supported | MIT (model page) |
+
+**Role hypotheses.** Both sets are proposals; no role is assigned.
+
+| Model | The user's suggestion | The Notion report | Decided by benchmark |
+|---|---|---|---|
+| Nemotron 3.5 Lightning 30B A3B | Agentic reasoning and multi-step work | Small-task execution, simple RAG, routing, summaries; "not for hard multi-step planning" | **No. Unassigned** |
+| gpt-oss-120B | Complex reasoning and synthesis | Default orchestration | **No. Unassigned** |
+| DeepSeek V4.1 Flash | High-volume multi-step work | Long-context work over 131K | **No. Unassigned** |
+
+The two sources disagree about Nemotron in particular. Each model is evaluated against BUILD's agentic task suite, and for grounding, citation accuracy and abstention, before any role is assigned.
+
+**Conditions**
+- Fireworks stays **disabled** until its own governance approval (section 14.1) and its G-33 record.
+- The API key is supplied separately by the user and is **never committed, pasted into a document or logged**. It lives in a secret manager or an environment file outside the repository.
+- A key enables the integration *process* only. It approves no production use.
