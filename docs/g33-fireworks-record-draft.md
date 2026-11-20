@@ -81,11 +81,23 @@ See `docs/g33-model-verification.md`. In short: one of the report's three model 
 
 Same as the Gemini record, and stated separately: no student names, school IDs or unnecessary identifying information; pseudonymous or opaque identifiers, not "anonymous"; a student's own question and passages can contain personal data that can't be stripped. Fireworks gives no DPA, no sub-processor list and no controller-processor statement in what was read, so contractual safeguards are **not established**.
 
+## 8a. Age and eligibility (the same question as for Gemini)
+
+Read 2026-11-20.
+
+| Item | Finding |
+|---|---|
+| **Terms of Service** | **UNREAD.** https://fireworks.ai/terms-of-service answers HTTP 308 to a PDF on `cdn.sanity.io` (the PDF's title metadata reads "Terms of Service (7.10.26) (1)", an ambiguous date, not a verified effective date). The PDF was fetched, but its text could not be decoded by the page reader, so **no clause on eligibility, minimum age, end-user rules, data processing, training, retention, sub-processors, governing law or change notice was read.** A saved copy exists in the harness's tool-results directory for someone with a PDF text extractor. A model summary of the binary mentioned a link to `fireworks.ai/dpa`; that is **unverified and unfetched** |
+| Privacy Notice (https://fireworks.ai/privacy-policy, "Last Modified: 16 SEP, 2026") | Section 9: the Services are "not directed to" children under 13, who "should not use our Services"; the same section says data from a child "under the age of 16" will be promptly deleted if learned of (13 and 16 are inconsistent within it). No 18+ rule, no business-only rule, and nothing about students, schools or the end users of a customer's application. The notice "is not a contract" and does not apply to processing Fireworks does as a service provider for other businesses |
+| DPA, sub-processor list, acceptable use policy | Not found in the docs index, the Privacy Notice or the data-security page |
+
+**Consequence:** the age question for Fireworks is **open, not answered**: nothing read says Fireworks permits or bars a student app with 16 and 17 year old users, because the one document that would is unread. Required: read the Terms PDF (a text extractor, or Fireworks' own text version), and ask Fireworks in writing for the DPA, the sub-processor list and its position on end users under 18.
+
 ## 9. Gaps that block an approval
 
 1. No DPA and no controller or processor statement.
 2. No sub-processor list; no statement about whether prompts reach model vendors.
-3. Terms of Service unread; Trust Center unreadable.
+3. Terms of Service **unread** (the PDF could not be decoded); Trust Center unreadable; **age and eligibility for a student app unanswered** (section 8a).
 4. US-hosted processing, with no documented African or EU region.
 5. Zero retention covers "open models" and has named exceptions; the Responses API stores by default.
 6. No serverless SLA; Batch is paused.
