@@ -288,3 +288,33 @@ The mapping is held in `docs/milestone-register.md`, section "Phase to milestone
 | B-014 | Offline benchmark harness and device procedure | 5, 8 | In progress (own lane) |
 | B-015 | 100-task evaluation set (50 RAG, 30 orchestration, 20 question generation) | 3 | Not started |
 | B-016 | GCP staging design and Terraform | 10 | In progress (own lane); spending needs authorisation |
+
+## 14. Provider and entitlement positions (user, 2026-11-20; provisional)
+
+Nothing in this section approves a provider, enables a route or fixes a quota. It records the positions the plan works from, and what each still needs.
+
+### 14.1 Providers
+
+| Provider | Position | Needs before use |
+|---|---|---|
+| Gemini | The approved first provider, through the existing approval controls (`MODEL_PROVIDERS_APPROVED`, empty by default) | G-33 approved, a paid-tier key, adapter #65 reviewed and merged |
+| Fireworks | **Proposed and disabled.** It comes from a research report (the Notion page "BUILD — Provider and Agentic Architecture Model", 2026-11-18) that is a proposal, not an approved record | Its own governance: reconcile the PRD, a separate G-33 record, verified terms and model IDs, reviewer approval, then an adapter after #65 |
+
+- Fallback happens only between approved portfolio entries. GLM, Qwen and MiniMax are not v1 defaults.
+- While Fireworks is unapproved, every request routes to Gemini. No routing change follows from documentation.
+
+### 14.2 Entitlements
+
+- No per-token student billing in v1. The plans stay Free, Plus, Pro and Campus, with backend-authoritative entitlements and budgets.
+- The report's mapping (Free on a small-model tier with a conservative budget; Plus a medium-tier allowance; Pro a higher one subject to quality and cost controls; Campus institution-managed) is a **provisional policy**. It is not hardcoded anywhere. Exact limits, model capabilities, quotas and Campus allocation need explicit entitlement definitions and reviewer approval, and a plan name alone never grants a costlier model.
+- The mapping presupposes Fireworks tiers. In R1, "Free" means Gemini under a conservative backend budget.
+
+### 14.3 Provider data protection (both providers)
+
+- Prompts carry no student names, no school IDs and no unnecessary identifying information. Where an identifier is needed it is pseudonymous or opaque, not "anonymous": pseudonymous data can still be personal data.
+- A student's own question text and course passages can contain personal data that can't be stripped. Each provider's G-33 record states data minimisation, identifier handling, retention, logging and contractual safeguards separately, and says so plainly.
+
+### 14.4 Gateway resilience
+
+- The gateway's existing circuit breaker and retry policy (`app/core/models/resilience.py` in `ai-service`) are the baseline.
+- Provider-specific thresholds become configurable and are set from measurements. The report's "three failures, five minutes" is not adopted without evidence.
