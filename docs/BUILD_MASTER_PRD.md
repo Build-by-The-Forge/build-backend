@@ -142,6 +142,36 @@ The offline model benchmark continues during Release 1, so Release 2 starts from
 - The Model Gateway stays provider-agnostic. Gemini's adapter is under review (ai-service #65) with passages disabled; a Fireworks adapter is not started and waits for the governance steps: reconcile this document, record G-33 for both providers, verify terms and model identifiers, reviewer approval.
 - Model names and prices from outside this repository are unverified until a G-33 record checks them against the provider's own documentation.
 
+### Provider reconciliation (Notion report, 2026-11-18)
+
+**Source:** the page "BUILD — Provider and Agentic Architecture Model", https://app.notion.com/p/41c4e323b2f28052a699ebe18394fe6f, last edited 2026-11-18T17:48Z, as summarised to this lane by the review session (this lane did not read the page itself). It is a pasted research report marked "Decisions Locked for v1", not a reviewer-approved governance record, and its model facts rest on non-authoritative sources (a blog, a model directory, a latency post and unnamed "audits"). **It is a proposal.**
+
+| Report decision | Status |
+|---|---|
+| BUILD owns the foundation (RAG, tools, OCR, deterministic scoring); APIs only assist | Consistent with §0.2; **approved direction** |
+| No API keys in the mobile app; all AI calls through ai-service behind the Model Gateway | Consistent with the architecture; **approved direction** |
+| No model chosen by users; routing by task | **Proposed** |
+| Exactly two v1 providers: Gemini and Fireworks | Gemini **approved first provider**; Fireworks **proposed and disabled** |
+| Gemini "high-scale only"; Fireworks for all small and medium work, including grounded RAG answers | **Proposed**; conflicts with §0.2, §38, §39 |
+| Models and prices (`gemini-3.8-flash`; three Fireworks models) | **Unverified**; see the G-33 records |
+| Fallbacks (GLM, MiniMax, Qwen) | **Not adopted**; fallback only within approved portfolio entries |
+| Circuit breaker: three failures, five minutes | **Not adopted**; the gateway's breaker is the baseline, thresholds set from measurements |
+| Per-request, per-user, per-school and per-feature budgets; a monthly Fireworks spend limit | **Proposed** |
+| Offline "Tier 0" with one on-device model, shipped first | **Not adopted**; offline is Release 2 and roles are assigned after benchmarking |
+| Open: the two Tier 1 agentic jobs | **Open**; agentic work is Release 2 |
+| Open: who pays per token (BUILD absorbs small, schools pay for medium) | **Open**; no per-token student billing in v1; mapping provisional (§81) |
+| Open: exam mode, AI off during attempts, backend-enforced | **Adopted by the user** for the plan |
+
+**Conflicts with this document, to be settled by the reviewer** (none is resolved by this amendment):
+
+1. §0.2, §38, §39 and the production blueprint make Gemini the online provider and say it replaces the earlier plan. The report splits work between two providers. §0.2, §0.4, §38 to §41, §110, §146.9 and §146.10 need amending once the reviewer decides.
+2. G-33 is recorded for Gemini only. A second provider that receives student passages needs its own record.
+3. §146.3 and the report differ on offline models and on whether offline ships first.
+4. §78 to §88 define the entitlement model. The report's payer split is not it.
+5. The report's fallback list contains models outside its own default portfolio.
+6. The gateway already has a circuit breaker and retry policy; thresholds are to be measured, not copied.
+7. **Data protection, for both providers:** no student names, school IDs or unnecessary identifying information in prompts; pseudonymous or opaque identifiers, not "anonymous", since pseudonymous data can still be personal data. A student's own question text and course passages can contain personal data that can't be stripped. Each G-33 record states minimisation, identifier handling, retention, logging and contractual safeguards separately.
+
 ---
 
 # 1. Document Purpose
