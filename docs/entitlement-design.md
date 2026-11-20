@@ -31,6 +31,21 @@
 
 Offline **reading** of downloaded materials is free for everyone; only AI inference is entitled. In R1: online-first, Gemini the only approved online provider until Fireworks passes governance, no offline AI, no agentic workflows, and Plus and Pro only as **granted** states (payments are paused, PRD §0.5). Gates before defaults: the Free online model must clear a minimum grounded-answer, citation and abstention bar in evaluation, and the smallest local model a minimum abstention bar, before either ships to Free.
 
+**Subscription wording (user, 2026-11-20; this wording governs where the tables differ):**
+- **Free** = strictly budgeted online AI; the smallest local model in Release 2, after it passes evaluation.
+- **Plus** = the full local model portfolio in Release 2.
+- **Pro** = Plus entitlements and bounded agentic workflows using approved Gemini and Fireworks models.
+- **Campus** = undefined, pending a separate entitlement decision.
+- Offline reading remains free for everyone when it ships.
+
+**No paid Fireworks call is authorised.** There is no Fireworks key and the wallet is unfunded (user, 2026-11-20). The reviewer recommends $0 evaluation until governance and evaluation controls are ready, then a separate, explicit spending decision by the user. Before any paid call, all of these must hold:
+1. The governance documentation (the G-33 record) is reviewed.
+2. Model IDs are verified and current pricing is confirmed.
+3. A written evaluation plan exists, using **synthetic passages only** (the offline-bench lane is writing it in `ai-service`).
+4. A hard spend limit, with request and token limits and an automatic stop, is in place.
+5. Results and costs are recorded.
+6. The user has approved the cap in writing.
+
 ## 4. Data model (proposed)
 
 Extends the blueprint's sketch. Names are proposals.
