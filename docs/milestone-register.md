@@ -33,9 +33,11 @@ M3 is **not done**. The fixes merged so far closed security and lifecycle gaps e
 
 | | Count | IDs |
 |---|---|---|
-| Closed | 20 | G-03, G-06, G-08, G-09, G-10, G-14, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-28, G-29, G-35, G-36, G-37, G-39, G-40 |
+| Closed | 20 (checked against `gaps.yaml` on `e9067ed`, 2026-11-20) | G-03, G-06, G-08, G-09, G-10, G-14, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-28, G-29, G-35, G-36, G-37, G-39, G-40 |
 | Open | 23 | 4 contract, 19 implementation, listed in `contracts/mobile/gaps.yaml` |
 | Open and blocking | 2 | G-01, G-02: students can't upload or start ingestion |
+
+**Merged since the last update of this register (2026-11-20):** S-02, the student's academic profile, is implemented (design #110, migration `0032` and routes #111), closing G-28, which this table already counts. The student journey contracts design is merged (#112); it adds no contract operation yet. Also merged: #113 (opentelemetry), #114 (dispatch-test evidence), #115 (an encrypted PDF's failure message). In `ai-service`, AI-01's gateway consolidation is complete (#56, #61, #63) and AI-10's exam is structured and grounded but unrouted (#62); the Gemini adapter is open (#65). The lanes running in parallel, and their owners, are in `docs/build-master-execution-blueprint.md` section 10.
 
 `contracts/mobile/gaps.yaml` stays the source of truth for individual gaps. This table is a snapshot of it. Don't reopen a closed gap without new evidence.
 
