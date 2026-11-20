@@ -189,10 +189,22 @@ class AcceptedScans:
         return "accepted"
 
 
+class DecidedScopes:
+    """The assignment outbox's latest decision per document (M3-D PR 7):
+    none unless a test records one."""
+
+    def __init__(self) -> None:
+        self.decisions: dict[tuple[str, str], tuple[str, int]] = {}
+
+    async def latest_decision(self, tenant_id: str, asset_id: str) -> tuple[str, int] | None:
+        return self.decisions.get((tenant_id, asset_id))
+
+
 class FakeContentUnitOfWork:
     def __init__(self) -> None:
         # The scan worker's verdict for these documents (M3-D PR 6).
         self.scans = AcceptedScans()
+        self.scope_assignments = DecidedScopes()
         self.sources = InMemoryContentSourceRepo()
         self.assets = InMemoryContentAssetRepo()
         self.jobs = InMemoryContentJobRepo()

@@ -18,6 +18,7 @@ def content_asset_to_model(asset: ContentAsset, model: ContentAssetModel | None 
     model.storage_uri = asset.storage_uri
     model.asset_version = asset.asset_version
     model.parent_asset_id = asset.parent_asset_id
+    model.blob_id = asset.blob_id
     model.status = asset.status.value
     model.ingestion_status = asset.ingestion_status.value
     model.metadata_json = dict(asset.metadata)
@@ -40,6 +41,7 @@ def content_asset_model_to_domain(model: ContentAssetModel) -> ContentAsset:
         storage_uri=model.storage_uri,
         asset_version=model.asset_version,
         parent_asset_id=model.parent_asset_id,
+        blob_id=model.blob_id,
         status=AssetStatus(model.status),
         ingestion_status=IngestionStatus(model.ingestion_status),
         metadata=dict(model.metadata_json) if model.metadata_json else {},

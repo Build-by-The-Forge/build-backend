@@ -18,7 +18,7 @@ from app.application.content.job_commands import (
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
 )
-from app.application.content.upload import managed_storage_key
+from app.application.content.upload import resolve_managed_key
 from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
@@ -33,8 +33,10 @@ from app.domain.client_safe import ClientMessage, ClientSafeError
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import (
+    UNASSIGNED_SCOPE,
     AIServiceIngestionGateway,
     AIServiceStatusResult,
+    DispatchScope,
     IngestionDispatchActor,
     JobTenantMissing,
     SystemDispatchActor,
@@ -84,8 +86,8 @@ class UnmanagedAssetError(ClientMessage, ValueError):
     code = "ASSET_NOT_IN_MANAGED_STORAGE"
 
 
-def require_managed_storage(asset: ContentAsset, bucket: str) -> str:
-    key = managed_storage_key(asset, bucket)
+async def require_managed_storage(uow: ContentUnitOfWorkPort, asset: ContentAsset, bucket: str) -> str:
+    key = await resolve_managed_key(uow, asset, bucket)
     if key is None:
         raise UnmanagedAssetError("the asset is not in managed storage, so it cannot be processed; upload it instead")
     return key
@@ -125,6 +127,23 @@ async def require_scanned(uow: ContentUnitOfWorkPort, asset: ContentAsset) -> No
     raise DocumentNotScannedError("the document is waiting for its security check")
 
 
+async def dispatch_scope(uow: ContentUnitOfWorkPort, asset: ContentAsset) -> DispatchScope:
+    """The scope a dispatch states (M3-D PR 7): the latest decision in the
+    assignment outbox, delivered or not, or ``unknown`` at version 0 if none
+    was ever made. A decision is only ever written with the reasons behind
+    it (classification, review, lowering), so stating it early gives the AI
+    service nothing the dispatcher wouldn't deliver anyway; and the version
+    rule means a dispatch can't move scope out of order."""
+    outbox = getattr(uow, "scope_assignments", None)
+    if outbox is None:
+        # A wiring fault, never a reason to send a document without a scope.
+        raise RuntimeError("the content unit of work has no scope-assignment outbox")
+    if not asset.tenant_id:
+        return UNASSIGNED_SCOPE
+    decided = await outbox.latest_decision(asset.tenant_id, asset.id)
+    return UNASSIGNED_SCOPE if decided is None else DispatchScope(*decided)
+
+
 # Dispatch refusals about the asset itself; they are not AI-service errors.
 ASSET_DISPATCH_REFUSALS = frozenset(
     {"ASSET_NOT_IN_MANAGED_STORAGE", "ASSET_OBJECT_MISSING", "ASSET_OBJECT_MISMATCH", "DOCUMENT_NOT_SCANNED", "DOCUMENT_REJECTED"}
@@ -145,7 +164,7 @@ class CreateIngestionJobHandler:
 
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
-        require_managed_storage(asset, self._bucket)
+        await require_managed_storage(self._uow, asset, self._bucket)
         await require_scanned(self._uow, asset)
 
         job = ContentIngestionJob.create(
@@ -206,7 +225,7 @@ class ReprocessAssetHandler:
 
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
-        require_managed_storage(asset, self._bucket)
+        await require_managed_storage(self._uow, asset, self._bucket)
         await require_scanned(self._uow, asset)
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
@@ -263,7 +282,7 @@ class DispatchIngestionJobHandler:
         scanned = await scan_refusal(self._uow, asset)
         if scanned is not None:
             return (scanned[0], scanned[1], False)
-        key = managed_storage_key(asset, self._bucket)
+        key = await resolve_managed_key(self._uow, asset, self._bucket)
         if key is None:
             return ("ASSET_NOT_IN_MANAGED_STORAGE", "the asset is not in managed storage", False)
         try:
@@ -332,12 +351,14 @@ class DispatchIngestionJobHandler:
             code, message, retryable = refusal
             return await self._record_dispatch_failure(job, asset, code, message, retryable)
 
+        scope = await dispatch_scope(self._uow, asset)
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
                 job=job,
                 asset=asset,
                 source=source,
                 actor=actor,
+                scope=scope,
             )
             job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)

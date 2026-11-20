@@ -127,6 +127,8 @@ def test_another_tenants_storage_reference_is_rejected_by_the_ai_service(ai, bac
         "file_size_bytes": asset["file_size_bytes"],
         "storage_uri": asset["storage_uri"],
         "correlation_id": "boundary",
+        "scope": "unknown",
+        "scope_version": 0,
     }
     raw = jbytes(body)
     context = user_context(tenant_b.tenant_id, str(uuid.uuid4()), ["content.job.manage"])

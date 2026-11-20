@@ -20,7 +20,7 @@ from app.domain.content.enums import (
     IngestionStatus,
     VisibilityScope,
 )
-from app.domain.content.gateway import AIServiceDispatchResult, IngestionDispatchActor
+from app.domain.content.gateway import UNASSIGNED_SCOPE, AIServiceDispatchResult, DispatchScope, IngestionDispatchActor
 from app.domain.content.job import CallbackOutcome, ContentIngestionJob, InvalidJobTransition
 from app.domain.content.source import ContentSource
 from app.events.event_bus import EventBus
@@ -44,12 +44,14 @@ class FakeAIGateway:
     def __init__(self, error: Exception | None = None, status: str = "accepted") -> None:
         self.dispatched_jobs: list[str] = []
         self.actors: list[IngestionDispatchActor] = []
+        self.scopes: list[DispatchScope] = []
         self.error = error
         self.status = status
 
-    async def dispatch_ingestion_job(self, job, asset, source, actor) -> AIServiceDispatchResult:
+    async def dispatch_ingestion_job(self, job, asset, source, actor, *, scope: DispatchScope) -> AIServiceDispatchResult:
         self.dispatched_jobs.append(job.id)
         self.actors.append(actor)
+        self.scopes.append(scope)
         if self.error is not None:
             raise self.error
         return AIServiceDispatchResult(
@@ -939,3 +941,92 @@ async def test_the_worker_cannot_dispatch_a_job_that_is_not_due() -> None:
     with pytest.raises(InvalidJobTransition):
         await handler.handle_system(job)
     assert gateway.dispatched_jobs == [job.id]  # dispatched once
+
+
+# --- M3-D PR 7: the dispatch states the document's scope -----------------------------------
+
+
+async def _queued(uow, tenant_id: str = "tenant-1") -> ContentIngestionJob:
+    source = ContentSource.create(
+        code="CS_SRC_SCOPE",
+        name="Source",
+        source_type=ContentSourceType.LECTURER_UPLOAD,
+        authority_level=AuthorityLevel.INSTITUTIONAL,
+        visibility=VisibilityScope.TENANT,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+        tenant_id=tenant_id,
+    )
+    await uow.sources.save_source(source)
+    asset = ContentAsset.create(
+        source_id=source.id,
+        file_name="notes.pdf",
+        mime_type=AssetMimeType.PDF,
+        file_size_bytes=2048,
+        content_sha256="d" * 64,
+        storage_uri="s3://build/notes.pdf",
+        tenant_id=tenant_id,
+        created_by="usr-1",
+        created_by_email="u@example.com",
+    )
+    managed(asset)
+    await uow.assets.save_asset(asset)
+    return await CreateIngestionJobHandler(uow, EventBus(), bucket=BUCKET).handle(
+        CreateIngestionJobCommand(asset_id=asset.id, tenant_id=tenant_id, created_by="usr-1")
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_document_never_decided_is_dispatched_as_unknown_at_version_zero() -> None:
+    uow = FakeContentUnitOfWork()
+    gateway = FakeAIGateway()
+    job = await _queued(uow)
+
+    await DispatchIngestionJobHandler(uow, gateway, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
+    assert gateway.scopes == [UNASSIGNED_SCOPE]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("decided", [("personal", 1), ("institutional", 4), ("unknown", 6)])
+async def test_the_dispatch_states_the_latest_decision(decided) -> None:
+    uow = FakeContentUnitOfWork()
+    gateway = FakeAIGateway()
+    job = await _queued(uow)
+    uow.scope_assignments.decisions[("tenant-1", job.asset_id)] = decided
+
+    await DispatchIngestionJobHandler(uow, gateway, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
+    assert gateway.scopes == [DispatchScope(*decided)]
+
+
+@pytest.mark.asyncio
+async def test_the_worker_dispatch_states_the_scope_too() -> None:
+    uow = FakeContentUnitOfWork()
+    gateway = FakeAIGateway()
+    job = await _queued(uow)
+    uow.scope_assignments.decisions[("tenant-1", job.asset_id)] = ("personal", 2)
+
+    await DispatchIngestionJobHandler(uow, gateway, storage=lambda: OBJECTS, bucket=BUCKET).handle_system(job)
+    assert gateway.scopes == [DispatchScope("personal", 2)]
+
+
+@pytest.mark.asyncio
+async def test_another_tenants_decision_for_the_same_id_is_never_stated() -> None:
+    uow = FakeContentUnitOfWork()
+    gateway = FakeAIGateway()
+    job = await _queued(uow)
+    uow.scope_assignments.decisions[("tenant-2", job.asset_id)] = ("institutional", 9)
+
+    await DispatchIngestionJobHandler(uow, gateway, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
+    assert gateway.scopes == [UNASSIGNED_SCOPE]
+
+
+@pytest.mark.asyncio
+async def test_without_an_outbox_nothing_is_dispatched() -> None:
+    uow = FakeContentUnitOfWork()
+    gateway = FakeAIGateway()
+    job = await _queued(uow)
+    del uow.scope_assignments
+
+    with pytest.raises(RuntimeError):
+        await DispatchIngestionJobHandler(uow, gateway, storage=lambda: OBJECTS, bucket=BUCKET).handle(dispatch_cmd(job.id))
+    assert gateway.dispatched_jobs == []

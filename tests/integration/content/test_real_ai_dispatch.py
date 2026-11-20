@@ -25,7 +25,7 @@ from app.domain.content.enums import (
     ContentSourceType,
     VisibilityScope,
 )
-from app.domain.content.gateway import IngestionDispatchActor
+from app.domain.content.gateway import UNASSIGNED_SCOPE, DispatchScope, IngestionDispatchActor
 from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.infrastructure.content.ai_gateway import (
@@ -94,7 +94,7 @@ def gateway(secret: str | None = None) -> HttpAIServiceIngestionGateway:
 @pytest.mark.asyncio
 async def test_real_signed_dispatch_is_accepted() -> None:
     source, asset, job = material()
-    result = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+    result = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(), scope=UNASSIGNED_SCOPE)
     assert result.status == "ACCEPTED"
     assert result.external_task_id.startswith("task_")
 
@@ -105,7 +105,9 @@ async def test_real_idempotency_follows_the_signed_tenant() -> None:
 
     async def dispatch(tenant_id: str):
         source, asset, job = material(tenant_id, job_id)
-        return await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(tenant_id))
+        return await gateway().dispatch_ingestion_job(
+            job=job, asset=asset, source=source, actor=actor(tenant_id), scope=UNASSIGNED_SCOPE
+        )
 
     first = await dispatch(TENANT_A)
     again = await dispatch(TENANT_A)
@@ -131,13 +133,15 @@ async def test_timeout_after_real_ai_acceptance_retries_the_same_key_as_duplicat
     uncertain_gateway = HttpAIServiceIngestionGateway(base_url=AI_URL, client=client, keys=ServiceKeys(current=B2A or ""))
     try:
         with pytest.raises(AIServiceGatewayError) as timeout:
-            await uncertain_gateway.dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+            await uncertain_gateway.dispatch_ingestion_job(
+                job=job, asset=asset, source=source, actor=actor(), scope=UNASSIGNED_SCOPE
+            )
     finally:
         await client.aclose()
 
     assert accepted and accepted[0].status_code == 202
     assert timeout.value.outcome_uncertain is True
-    duplicate = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+    duplicate = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(), scope=UNASSIGNED_SCOPE)
     assert duplicate.status == "DUPLICATE"
     assert duplicate.external_task_id.startswith("task_")
 
@@ -146,7 +150,9 @@ async def test_timeout_after_real_ai_acceptance_retries_the_same_key_as_duplicat
 async def test_real_dispatch_signed_with_the_other_directions_secret_is_refused() -> None:
     source, asset, job = material()
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await gateway(secret=A2B).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+        await gateway(secret=A2B).dispatch_ingestion_job(
+            job=job, asset=asset, source=source, actor=actor(), scope=UNASSIGNED_SCOPE
+        )
     assert exc_info.value.details == {"status_code": 401}
 
 
@@ -154,7 +160,9 @@ async def test_real_dispatch_signed_with_the_other_directions_secret_is_refused(
 async def test_real_dispatch_without_the_permission_is_refused() -> None:
     source, asset, job = material()
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(permission="ai.use"))
+        await gateway().dispatch_ingestion_job(
+            job=job, asset=asset, source=source, actor=actor(permission="ai.use"), scope=UNASSIGNED_SCOPE
+        )
     assert exc_info.value.details == {"status_code": 403}
 
 
@@ -184,6 +192,8 @@ def _body(**extra) -> dict:
         "content_sha256": "c" * 64,
         "storage_uri": "s3://build-assets/real.pdf",
         "correlation_id": "corr-real",
+        "scope": "unknown",
+        "scope_version": 0,
         **extra,
     }
 
@@ -227,6 +237,57 @@ def test_real_identity_fields_in_a_signed_body_are_rejected(extra) -> None:
     assert response.status_code == 422
 
 
+# --- M3-D PR 7: every dispatch states its scope ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        {"scope": None, "scope_version": None},
+        {"scope": None},
+        {"scope_version": None},
+        {"scope": "public", "scope_version": 1},
+        {"scope": "personal", "scope_version": 0},
+        {"scope": "personal", "scope_version": "1"},
+    ],
+)
+def test_real_a_dispatch_without_a_valid_scope_is_refused(scope) -> None:
+    body = {k: v for k, v in _body(asset_id=f"asset-{uuid4()}", **scope).items() if v is not None}
+    raw, headers = _raw_signed(body, _context())
+    with httpx.Client(timeout=10) as http:
+        response = http.post(f"{AI_URL}/v1/ingest/dispatch", content=raw, headers=headers)
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_real_the_ai_service_holds_the_stated_scope_by_its_version() -> None:
+    source, asset, job = material(job_id=f"cjob-{uuid4()}")
+    first = await gateway().dispatch_ingestion_job(
+        job=job, asset=asset, source=source, actor=actor(), scope=DispatchScope("personal", 1)
+    )
+    held = first.raw_response["data"]
+    assert (held["scope"], held["scope_version"]) == ("personal", 1)
+
+    # A later attempt stating no decision changes nothing, and reports what is held.
+    _, _, second_job = material(job_id=f"cjob-{uuid4()}")
+    second_job.asset_id = asset.id
+    again = await gateway().dispatch_ingestion_job(
+        job=second_job, asset=asset, source=source, actor=actor(), scope=UNASSIGNED_SCOPE
+    )
+    held = again.raw_response["data"]
+    assert (held["scope"], held["scope_version"]) == ("personal", 1)
+
+
+def test_real_a_scope_for_another_tenants_asset_is_refused() -> None:
+    asset_id = f"asset-{uuid4()}"
+    with httpx.Client(timeout=10) as http:
+        url = f"{AI_URL}/v1/ingest/dispatch"
+        mine = _raw_signed(_body(asset_id=asset_id, scope="personal", scope_version=1), _context(TENANT_A))
+        theirs = _raw_signed(_body(asset_id=asset_id, scope="personal", scope_version=2), _context(TENANT_B))
+        assert http.post(url, content=mine[0], headers=mine[1]).status_code == 202
+        assert http.post(url, content=theirs[0], headers=theirs[1]).status_code == 403
+
+
 def test_real_bearer_and_unsigned_requests_are_refused() -> None:
     with httpx.Client(timeout=10) as http:
         for headers in ({"Authorization": f"Bearer {B2A}"}, {}):
@@ -244,7 +305,7 @@ def test_real_bearer_and_unsigned_requests_are_refused() -> None:
 @pytest.mark.asyncio
 async def test_real_task_status_answers_only_the_tasks_tenant() -> None:
     source, asset, job = material()
-    accepted = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor())
+    accepted = await gateway().dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor(), scope=UNASSIGNED_SCOPE)
 
     status = await gateway().fetch_job_status(accepted.external_task_id, TENANT_A, "corr-real")
     assert (status.external_task_id, status.job_id, status.run_number, status.attempt_count) == (

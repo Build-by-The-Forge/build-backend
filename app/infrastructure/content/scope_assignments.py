@@ -62,6 +62,19 @@ class SqlAlchemyScopeAssignmentRepository:
         )
         return (await self._session.execute(statement)).scalar_one_or_none()
 
+    async def latest_decision(self, tenant_id: str, asset_id: str) -> tuple[str, int] | None:
+        """The scope most recently decided for the document and its version,
+        delivered or not; None if nothing was ever decided. An ingestion
+        dispatch states it (M3-D PR 7)."""
+        statement = (
+            select(ContentScopeAssignmentModel.scope, ContentScopeAssignmentModel.version)
+            .where(ContentScopeAssignmentModel.tenant_id == tenant_id, ContentScopeAssignmentModel.asset_id == asset_id)
+            .order_by(ContentScopeAssignmentModel.version.desc())
+            .limit(1)
+        )
+        row = (await self._session.execute(statement)).one_or_none()
+        return None if row is None else (row.scope, int(row.version))
+
     async def enqueue(self, *, tenant_id: str, asset_id: str, scope: str, reason: str, decided_by: str) -> ScopeAssignment:
         """Queue the document's next version, in the transaction that records
         the decision. The document's row is locked first, so two decisions

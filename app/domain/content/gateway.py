@@ -69,6 +69,32 @@ class JobTenantMissing(Exception):
     is_retryable = False
 
 
+DISPATCH_SCOPES = frozenset({"institutional", "personal", "unknown"})
+
+
+@dataclass(frozen=True, slots=True)
+class DispatchScope:
+    """The document's scope as the backend last decided it, and that
+    decision's version (M3-D PR 7). Every dispatch states one, and the AI
+    service applies it by the assignment rule: only a higher version than
+    the one it holds changes anything. Version 0 means no decision was ever
+    made, and then the scope is ``unknown``."""
+
+    scope: str
+    version: int
+
+    def __post_init__(self) -> None:
+        if self.scope not in DISPATCH_SCOPES:
+            raise ValueError(f"unknown scope {self.scope!r}")
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 0:
+            raise ValueError("a scope version is a non-negative integer")
+        if self.version == 0 and self.scope != "unknown":
+            raise ValueError("only unknown can be stated without a decision")
+
+
+UNASSIGNED_SCOPE = DispatchScope("unknown", 0)
+
+
 class AIServiceIngestionGateway(Protocol):
     async def dispatch_ingestion_job(
         self,
@@ -76,6 +102,8 @@ class AIServiceIngestionGateway(Protocol):
         asset: ContentAsset,
         source: ContentSource,
         actor: IngestionDispatchActor | SystemDispatchActor,
+        *,
+        scope: DispatchScope,
     ) -> AIServiceDispatchResult:
         raise NotImplementedError
 

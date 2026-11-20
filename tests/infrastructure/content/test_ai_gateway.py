@@ -10,7 +10,7 @@ from app.domain.content.enums import (
     ContentSourceType,
     VisibilityScope,
 )
-from app.domain.content.gateway import IngestionDispatchActor
+from app.domain.content.gateway import UNASSIGNED_SCOPE, DispatchScope, IngestionDispatchActor
 from app.domain.content.job import ContentIngestionJob
 from app.domain.content.source import ContentSource
 from app.infrastructure.content.ai_gateway import (
@@ -47,7 +47,11 @@ DISPATCH_FIELDS = {
     "file_size_bytes",
     "storage_uri",
     "correlation_id",
+    "scope",
+    "scope_version",
 }
+# What the AI service reports holding for an unassigned document.
+HELD_UNASSIGNED = {"scope": "unknown", "scope_version": 0}
 
 
 def _material(correlation_id: str | None = "corr-42"):
@@ -92,7 +96,7 @@ def _gateway(handler, base_url: str = "http://ai-service.internal") -> HttpAISer
 
 
 def _accepted(task_id: str = "task_9876") -> httpx.Response:
-    return httpx.Response(202, json={"status": "ACCEPTED", "external_task_id": task_id})
+    return httpx.Response(202, json={"status": "ACCEPTED", "external_task_id": task_id, "data": HELD_UNASSIGNED})
 
 
 @pytest.mark.asyncio
@@ -104,7 +108,9 @@ async def test_dispatch_is_signed_and_carries_the_tenant_only_in_the_context() -
         seen.append(request)
         return _accepted()
 
-    result = await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    result = await _gateway(handler).dispatch_ingestion_job(
+        job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE
+    )
     assert (result.external_task_id, result.status) == ("task_9876", "ACCEPTED")
 
     [request] = seen
@@ -146,7 +152,7 @@ async def test_a_tampered_dispatch_no_longer_verifies() -> None:
         seen.append(request)
         return _accepted()
 
-    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     [request] = seen
     tampered = request.content.replace(job.id.encode(), b"cjob-someone-else")
     with pytest.raises(ServiceAuthError, match="signature mismatch"):
@@ -171,7 +177,7 @@ async def test_signed_target_includes_a_base_url_path_prefix() -> None:
         return _accepted()
 
     await _gateway(handler, base_url="http://gateway.internal/ai").dispatch_ingestion_job(
-        job=job, asset=asset, source=source, actor=ACTOR
+        job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE
     )
     [request] = seen
     verify_request(
@@ -194,7 +200,7 @@ async def test_unusable_correlation_id_falls_back_to_the_job_id() -> None:
         seen.append(request)
         return _accepted()
 
-    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert json.loads(seen[0].content)["correlation_id"] == job.id
 
 
@@ -212,7 +218,7 @@ async def test_dispatch_without_a_configured_secret_is_refused_before_sending(mo
 
     gateway = HttpAIServiceIngestionGateway(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await gateway.dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await gateway.dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert exc_info.value.error_code == "AI_SERVICE_NOT_CONFIGURED"
     assert sent == []
 
@@ -225,7 +231,7 @@ async def test_acceptance_without_a_task_id_is_an_error() -> None:
         return httpx.Response(202, json={"status": "ACCEPTED"})
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert exc_info.value.error_code == "AI_SERVICE_BAD_RESPONSE"
     assert exc_info.value.outcome_uncertain is True
 
@@ -238,15 +244,21 @@ async def test_successful_dispatch_requires_a_valid_accepted_response(status_cod
     async def handler(request: httpx.Request) -> httpx.Response:
         if status_code == 204:
             return httpx.Response(status_code)
-        return httpx.Response(status_code, json={"status": "DUPLICATE", "external_task_id": "task_original"})
+        return httpx.Response(
+            status_code, json={"status": "DUPLICATE", "external_task_id": "task_original", "data": HELD_UNASSIGNED}
+        )
 
     if status_code == 204:
         with pytest.raises(AIServiceGatewayError) as exc_info:
-            await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+            await _gateway(handler).dispatch_ingestion_job(
+                job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE
+            )
         assert exc_info.value.outcome_uncertain is True
         return
 
-    result = await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+    result = await _gateway(handler).dispatch_ingestion_job(
+        job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE
+    )
     assert (result.status, result.external_task_id) == ("DUPLICATE", "task_original")
 
 
@@ -258,7 +270,7 @@ async def test_malformed_success_response_is_uncertain() -> None:
         return httpx.Response(202, text="not json")
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert exc_info.value.error_code == "AI_SERVICE_BAD_RESPONSE"
     assert exc_info.value.outcome_uncertain is True
 
@@ -271,7 +283,7 @@ async def test_transport_timeout_is_an_uncertain_dispatch() -> None:
         raise httpx.ReadTimeout("response timed out", request=request)
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert exc_info.value.error_code == "AI_SERVICE_TRANSPORT_ERROR"
     assert exc_info.value.is_retryable is True
     assert exc_info.value.outcome_uncertain is True
@@ -300,7 +312,7 @@ async def test_failure_classification(status_code, error_code, retryable, outcom
         return httpx.Response(status_code=status_code, text="no")
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert (exc_info.value.error_code, exc_info.value.is_retryable, exc_info.value.outcome_uncertain) == (
         error_code,
         retryable,
@@ -316,10 +328,112 @@ async def test_idempotency_conflict_is_a_definite_integrity_failure() -> None:
         return httpx.Response(409, json={"detail": "IDEMPOTENCY_CONFLICT: different work"})
 
     with pytest.raises(AIServiceGatewayError) as exc_info:
-        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE)
     assert exc_info.value.error_code == "AI_IDEMPOTENCY_CONFLICT"
     assert exc_info.value.is_retryable is False
     assert exc_info.value.outcome_uncertain is False
+
+
+# --- M3-D PR 7: every dispatch states its scope -------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stated",
+    [UNASSIGNED_SCOPE, DispatchScope("personal", 3), DispatchScope("institutional", 7), DispatchScope("unknown", 2)],
+)
+async def test_the_dispatch_states_the_scope_and_its_version(stated: DispatchScope) -> None:
+    source, asset, job = _material()
+    seen: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        held = {"scope": stated.scope, "scope_version": stated.version}
+        return httpx.Response(202, json={"status": "ACCEPTED", "external_task_id": "task_1", "data": held})
+
+    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR, scope=stated)
+    body = json.loads(seen[0].content)
+    assert (body["scope"], body["scope_version"]) == (stated.scope, stated.version)
+    assert type(body["scope_version"]) is int
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "held",
+    [
+        {"scope": "personal", "scope_version": 3},  # what was stated
+        {"scope": "unknown", "scope_version": 4},  # a newer decision it already holds
+        {"scope": "institutional", "scope_version": 9},
+    ],
+)
+async def test_an_acceptance_holding_the_stated_version_or_newer_succeeds(held) -> None:
+    source, asset, job = _material()
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, json={"status": "ACCEPTED", "external_task_id": "task_1", "data": held})
+
+    result = await _gateway(handler).dispatch_ingestion_job(
+        job=job, asset=asset, source=source, actor=ACTOR, scope=DispatchScope("personal", 3)
+    )
+    assert result.status == "ACCEPTED"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["ACCEPTED", "DUPLICATE"])
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        None,  # an AI service that doesn't report scope at all
+        {},
+        {"scope": "personal"},
+        {"scope_version": 3},
+        {"scope": "personal", "scope_version": 2},  # older than stated: not applied
+        {"scope": "unknown", "scope_version": 3},  # another scope under the same version
+        {"scope": "public", "scope_version": 3},
+        {"scope": "personal", "scope_version": "3"},
+        {"scope": "personal", "scope_version": 3.0},
+        {"scope": "personal", "scope_version": True},
+        {"scope": None, "scope_version": 3},
+        ["personal", 3],
+        "personal",
+    ],
+)
+async def test_an_acceptance_without_the_stated_scope_held_is_uncertain(status, receipt) -> None:
+    """Never success: the AI service may be one that ignores the field. The
+    attempt is retried with the same key, as for any uncertain dispatch."""
+    source, asset, job = _material()
+    payload = {"status": status, "external_task_id": "task_1"}
+    if receipt is not None:
+        payload["data"] = receipt
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(202, json=payload)
+
+    with pytest.raises(AIServiceGatewayError) as exc_info:
+        await _gateway(handler).dispatch_ingestion_job(
+            job=job, asset=asset, source=source, actor=ACTOR, scope=DispatchScope("personal", 3)
+        )
+    assert exc_info.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+    assert exc_info.value.outcome_uncertain is True
+    assert exc_info.value.is_retryable is True
+
+
+@pytest.mark.parametrize(
+    ("scope", "version"),
+    [
+        ("public", 1),
+        ("Personal", 1),
+        ("", 1),
+        ("personal", 0),
+        ("institutional", 0),
+        ("unknown", -1),
+        ("unknown", True),
+        ("unknown", 1.0),
+    ],
+)
+def test_a_dispatch_scope_is_one_of_three_values_with_a_valid_version(scope, version) -> None:
+    with pytest.raises(ValueError):
+        DispatchScope(scope, version)
 
 
 # --- M3-09: signed task status -----------------------------------------------------------
@@ -431,7 +545,7 @@ async def test_a_system_dispatch_is_signed_as_the_system_naming_the_jobs_tenant(
         return _accepted()
 
     actor = SystemDispatchActor.for_job(job)
-    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor)
+    await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=actor, scope=UNASSIGNED_SCOPE)
 
     [request] = seen
     verified = verify_request(
@@ -465,7 +579,7 @@ async def test_a_system_dispatch_can_never_name_another_tenant() -> None:
 
     other = SystemDispatchActor(tenant_id="11111111-2222-4333-8444-555555555555")
     with pytest.raises(JobTenantMissing):
-        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=other)
+        await _gateway(handler).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=other, scope=UNASSIGNED_SCOPE)
     assert seen == []
 
 
@@ -477,5 +591,7 @@ async def test_a_transport_failure_never_names_the_internal_address() -> None:
         raise httpx.ConnectError("refused", request=request)
 
     with pytest.raises(AIServiceGatewayError) as caught:
-        await _gateway(unreachable).dispatch_ingestion_job(job=job, asset=asset, source=source, actor=ACTOR)
+        await _gateway(unreachable).dispatch_ingestion_job(
+            job=job, asset=asset, source=source, actor=ACTOR, scope=UNASSIGNED_SCOPE
+        )
     assert "ai-service.internal" not in str(caught.value)

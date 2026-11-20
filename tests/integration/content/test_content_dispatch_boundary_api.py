@@ -24,7 +24,7 @@ def dispatched(monkeypatch) -> list[str]:
     """The jobs the AI gateway was asked to dispatch."""
     calls: list[str] = []
 
-    async def dispatch(self, job, asset, source, actor):
+    async def dispatch(self, job, asset, source, actor, *, scope):
         calls.append(job.id)
         return AIServiceDispatchResult(
             external_task_id=f"task-{job.id}", accepted_at=datetime.now(timezone.utc), status="accepted"

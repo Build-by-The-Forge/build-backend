@@ -135,3 +135,20 @@ async def test_sweeper_rejects_short_grace_and_naive_clock():
             grace_period_seconds=GRACE,
             now=NOW.replace(tzinfo=None),
         )
+
+
+@pytest.mark.asyncio
+async def test_a_shared_blob_object_is_kept_however_old():
+    """M3-D PR 7: the sweeper only parses the per-document form today, so a
+    blob's object is unparseable to it and never deleted. Extending it to
+    the blob form, with its own reference check, is the upload PR's."""
+    blob_key = f"tenants/t1/blobs/{'e' * 64}/3f2c1b0a-9d8e-4c7b-a6f5-e4d3c2b1a098"
+    storage = FakeStorage([([stored(blob_key, NOW - timedelta(days=30))], None)])
+
+    async def lookup(asset_ids):
+        return []
+
+    result = await sweep_object_pages(storage, lookup, bucket=BUCKET, grace_period_seconds=GRACE, now=NOW)
+
+    assert storage.deleted == []
+    assert (result.scanned, result.deleted, result.kept, result.unparseable) == (1, 0, 1, 1)
