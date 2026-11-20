@@ -42,6 +42,8 @@ The student journey the release must complete:
 
 ## 0.2 Intelligence architecture
 
+> **Amended 2026-11-20 (§0.8).** Online intelligence: Gemini is the approved first provider, under the existing approval controls. A second provider, Fireworks, is proposed and disabled, under reconciliation (§0.9). Offline intelligence is Release 2 (§0.8).
+
 BUILD has three connected intelligence capabilities, behind one orchestration layer:
 
 | Capability | Role |
@@ -56,11 +58,15 @@ BUILD has three connected intelligence capabilities, behind one orchestration la
 
 ## 0.3 Naive RAG and Agentic RAG
 
+> **Amended 2026-11-20 (§0.8).** Release 1's tutor is naive RAG only. Agentic RAG, multi-hop study help, autonomous reading paths and agentic loops are Release 2 (§0.8).
+
 **Naive RAG is the default** for straightforward, well-scoped requests: definitions, summaries, explanations from the student's material, and question generation from a chapter. It understands the question, retrieves, reranks and filters the evidence, generates from it, and validates citations and grounding.
 
 **Agentic RAG is reserved** for work that needs multiple retrieval steps, planning or tools: comparing how sources explain a concept, finding contradictions across materials, multi-source research, or a revision plan from weak areas. It plans, retrieves iteratively, checks whether the evidence is sufficient, synthesizes and verifies. **It always runs within bounded permissions, budgets, iteration limits and retrieval scope**, and never gains unrestricted access to student materials. Routing between the two is an explicit policy (§26.1).
 
 ## 0.4 Execution order
+
+> **Amended 2026-11-20 (§0.8).** Release 1 covers the journey, online CBT and the naive-RAG tutor. Agentic RAG (step 5, second half) and offline AI (step 6) are Release 2 (§0.8). Fireworks waits for its governance (§0.9).
 
 1. Complete the remaining M paths: contracts, migrations, security boundaries, callbacks and their gates.
 2. Stabilize the core backend: authentication, student identity, academic context, ownership, courses, content, assessments and student permissions.
@@ -72,6 +78,8 @@ BUILD has three connected intelligence capabilities, behind one orchestration la
 8. **Frontend Student Intelligence, last:** the complete student journey integrated against real, tested backend and AI contracts. Lightweight contract tests and integration fixtures run earlier, so interface mismatches aren't discovered at the end.
 
 ## 0.5 Paused for the first release
+
+> **Amended 2026-11-20 (§0.8).** Also outside Release 1 (§0.8), without being paused for good: managed offline packs and sync, offline retrieval and AI, flashcards, knowledge trees, personalised study plans, multi-hop agentic study help, expanded caching.
 
 To protect the student experience, these leave the current production critical path. They stay in the architecture:
 
@@ -1383,6 +1391,8 @@ OCR output must feed downstream ingestion rather than remaining isolated.
 
 # 38. AI Model Gateway
 
+> **Amended 2026-11-20 (§0.8).** The gateway stays provider-agnostic. Gemini is the approved first provider; Fireworks is proposed and disabled (§0.9). No routing change follows from this document.
+
 BUILD shall implement a provider-agnostic Model Gateway.
 
 **Online models (§0.2):**
@@ -1413,6 +1423,8 @@ Other foundation models, and the local models, shall remain pluggable behind the
 
 # 39. Initial Model Configuration
 
+> **Amended 2026-11-20 (§0.8).** Model identifiers and prices named anywhere in this document, and in the provider report of 2026-11-18, are unverified until a G-33 record checks them (§0.9).
+
 Conceptually:
 
 ```text
@@ -1441,6 +1453,8 @@ The Model Gateway should handle:
 
 # 40. Model Evaluation
 
+> **Amended 2026-11-20 (§0.8).** Release 1 evaluation covers the grounded tutor, orchestration and question generation (the plan's 100-task set). Agentic and offline evaluation follow in Release 2 (§0.8).
+
 BUILD must not assume that one model is universally superior.
 
 The BUILD AI Evaluation Lab should compare models against BUILD-specific evaluations.
@@ -1466,6 +1480,8 @@ Model decisions should be evidence-driven.
 ---
 
 # 41. AI Cost Governance
+
+> **Amended 2026-11-20 (§0.8).** No per-token student billing in v1. Budgets are backend-authoritative and per request, per user and per feature. Any model-tier allowance by plan is a provisional policy (§0.9, §81).
 
 AI usage must be measurable by:
 
@@ -2316,6 +2332,8 @@ Premium should feel like **more intelligence**, not permission to learn.
 
 # 81. Future Subscription Levels
 
+> **Amended 2026-11-20 (§0.8).** Applies to §81 to §88. Free, Plus, Pro and Campus stay, with backend-authoritative entitlements and budgets. The provisional mapping in the provider report (Free on a small-model tier; Plus and Pro with medium-tier allowances; Campus institution-managed) is **not** adopted: exact limits, model capabilities, quotas and Campus allocation need explicit entitlement definitions and reviewer approval, and a plan name alone never grants a costlier model. While Fireworks is unapproved, every plan routes to Gemini under a conservative backend budget.
+
 The platform may eventually support:
 
 The agreed levels (2026-11-04). These are feature boundaries, not prices: prices follow measured Gemini, document-processing, storage, bandwidth and infrastructure costs.
@@ -2569,6 +2587,8 @@ BUILD should support accessibility across:
 ---
 
 # 93. Offline / Poor Connectivity Strategy
+
+> **Amended 2026-11-20 (§0.8).** Offline capability is Release 2. Release 1 has limited caching of already-opened documents, under the cache rule proposed in §0.8, and no offline assessment.
 
 Full offline AI is not an initial requirement.
 
@@ -2955,6 +2975,8 @@ AI should fail gracefully rather than bringing down core academic functionality.
 
 # 110. Provider Fallback
 
+> **Amended 2026-11-20 (§0.8).** Fallback happens only between approved portfolio entries. The gateway's existing circuit breaker and retry policy are the baseline; provider-specific thresholds become configurable and are set from measurements.
+
 The Model Gateway should support future provider fallback.
 
 Possible:
@@ -3313,6 +3335,8 @@ This creates a continuous learning loop.
 ---
 
 # 123. V1 Scope
+
+> **Amended 2026-11-20 (§0.8).** V1 scope is Release 1 as defined in §0.8. Offline, agentic and personalisation items that appear below are Release 2.
 
 V1 should prioritize:
 
@@ -3914,6 +3938,8 @@ The technology should remain modular enough that the product can evolve without 
 
 # 146. Offline AI & Hybrid Intelligence Architecture
 
+> **Amended 2026-11-20 (§0.8).** This whole section is Release 2. The benchmark and designs continue during Release 1 as preparation (§0.8).
+
 ## 146.1 Overview
 
 BUILD shall support a **hybrid AI architecture** in which online cloud intelligence and local/offline intelligence coexist as complementary capabilities.
@@ -4229,6 +4255,8 @@ The goal is to ensure that:
 
 ## 146.9 Online AI Remains the Primary High-Capability Layer
 
+> **Amended 2026-11-20 (§0.8).** Provider references follow §0.9: Gemini first, Fireworks proposed and disabled.
+
 Offline AI shall **not replace BUILD's online AI infrastructure**.
 
 When connectivity is available, BUILD may access substantially stronger models through the Model Gateway.
@@ -4274,6 +4302,8 @@ The gateway shall determine the appropriate execution path based on factors such
 
 ## 146.10 Intelligent Model Routing
 
+> **Amended 2026-11-20 (§0.8).** Routing changes only by an approved change to configuration; this document changes none (§0.9).
+
 BUILD shall implement provider- and model-agnostic routing.
 
 The routing system shall not assume that the most powerful available model is always the appropriate model.
@@ -4298,6 +4328,8 @@ Example routing policy:
 Routing decisions shall be configurable and should evolve as benchmark and production data become available.
 
 ## 146.11 Offline-to-Online Continuity
+
+> **Amended 2026-11-20 (§0.8).** Release 2. Release 1 has no offline continuity beyond limited caching (§0.8).
 
 BUILD shall support continuity between offline and online operation.
 
