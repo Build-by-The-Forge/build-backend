@@ -38,7 +38,7 @@ The student journey the release must complete:
 7. Learning: Read Mode, explanations of concepts, and relevant academic resources.
 8. CBT and assessment: practice, generated questions, submission, and authoritative results with explanations.
 9. Progress and remediation: performance, weak topics, and what to study next.
-10. Offline continuity: downloaded materials, local AI assistance and available CBT without internet, with controlled synchronization afterwards.
+10. Offline continuity: downloaded materials, offline retrieval and offline practice without internet, with controlled synchronization afterwards. Official CBT is online-only (§0.8); local AI assistance follows in Release 2.
 
 ## 0.2 Intelligence architecture
 
@@ -117,6 +117,8 @@ The production push ships in two releases. This section governs where §0.1, §0
 |---|---|
 | **Release 1** | The core journey on staging, then production: registration, academic onboarding, upload and ingestion, the grounded tutor, practice, CBT and results, progress, settings, backend-authoritative entitlements, and offline continuity limited to downloaded course packs, offline retrieval and offline practice |
 | **Release 2** | Offline generative AI inference on the device, flashcards, knowledge trees, study plans, and personalisation (Learning Memory only after its production gate is approved) |
+
+**Offline CBT is practice-only (decided 2026-11-20).** Official CBT attempts, submission, grading and results are online-only. Offline practice runs on downloaded course packs, and its scores are provisional until the server validates them on reconnect. An offline practice attempt never becomes an official attempt, never changes an official score, and never appears in official results (as with online practice, S-10).
 
 The offline model benchmark continues during Release 1, so Release 2 starts from device evidence. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`; the milestone register stays the one tracker.
 
@@ -2564,7 +2566,7 @@ Future offline capability should prioritize:
 * course metadata;
 * Read Mode;
 * selected learning content;
-* selected CBT;
+* selected practice questions (official CBT is online-only, §0.8);
 * progress synchronization.
 
 AI features can initially require connectivity.
@@ -3341,7 +3343,7 @@ V1 should prioritize:
 
 * downloaded academic materials;
 * local AI assistance from the local model portfolio (§146.3);
-* available CBT offline;
+* offline practice on downloaded questions (official CBT is online-only, §0.8);
 * controlled synchronization.
 
 ### Analytics
@@ -4111,7 +4113,9 @@ This is particularly important for university-specific content where the expecte
 
 ## 146.6 Offline CBT Intelligence
 
-BUILD shall provide access to locally available CBT resources when the student is offline.
+**Amended 2026-11-20 (§0.8): offline CBT is practice-only.** The list below describes what a device may hold and do for practice. Official attempts, submission, grading and results are online-only, and offline practice scores are provisional until server validation.
+
+BUILD shall provide access to locally available CBT resources for practice when the student is offline.
 
 Where authorized and available, the device may retain:
 
@@ -4126,8 +4130,7 @@ Where authorized and available, the device may retain:
 
 Offline CBT functionality may include:
 
-* taking previously downloaded CBTs;
-* practicing questions;
+* practising previously downloaded questions (not taking official CBTs);
 * reviewing answers;
 * explaining why an answer is correct;
 * identifying weak topics;
