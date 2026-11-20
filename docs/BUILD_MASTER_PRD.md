@@ -4053,7 +4053,7 @@ The starting portfolio of 2026-11-04 was one general-purpose language model plus
 |---|---|---|
 | General conversation, explanation and simple reasoning | A target from the list above | Role assigned after benchmarking; Qwen3-1.7B was the 2026-11-04 first choice |
 | Low-memory fallback | A target from the list above | Role assigned after benchmarking; Qwen3.5-0.8B is the smallest target |
-| Alternative general model | A target or comparison from the lists above | "Glimmer 2B" is removed: no such model was found (only a 30B model), so it can't be benchmarked |
+| Alternative general model | A target or comparison from the lists above | "Glimmer 2B" is **unverified as a benchmark candidate**: the exact repository and checkpoint must be confirmed before it is included (an internal hand-over note found only a 30B model of that name, which is not a model-card verification) |
 | Local semantic retrieval | A small embedding model | Matches the online index's embedding space where feasible |
 | Retrieval relevance | A compact reranker | Optional, by device capability |
 | OCR | A PaddleOCR / OpenVINO-class model | Where the device supports it |
