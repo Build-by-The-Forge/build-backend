@@ -98,7 +98,10 @@ Same as the Gemini record, and stated separately: no student names, school IDs o
 3. **US-only endpoint** or the default one, given the unknown default region.
 4. **Responses API:** forbid it for student material (use chat completions only, or `store=False`).
 5. **Model set:** which of the verified models, if any, may receive passages.
-6. **Spend:** set a monthly spend limit before any key is used. **Any account, key or paid call needs the user's explicit authorisation.** None exists.
+6. **Free tier default.** The user's direction is that Free targets a low-cost Fireworks model once approved. That model must first clear a minimum grounded-answer, citation and abstention bar in evaluation; a small low-cost model citing correctly is unproven. Until then Free runs on Gemini under a strict budget.
+7. **Key handling.** The API key is supplied separately by the user and is never committed, pasted into a document or logged; it lives in a secret manager or an environment file outside the repository. A key enables the integration process only and approves no production use.
+8. **Cost urgency.** At the 2027 Gemini price a typical tutor answer (8,000 input and 500 output tokens) costs about $0.016; on the small Fireworks tier, at the page's unverified prices, about $0.0005 uncached or $0.0002 with input cached, roughly 30 to 80 times less. Governance and evaluation should start now, not only for R2.
+9. **Spend:** set a monthly spend limit before any key is used. **Any account, key or paid call needs the user's explicit authorisation.** None exists.
 
 **Prerequisites, not satisfied:** the above approval, a Fireworks account and key (a spending decision), and the Fireworks adapter, which doesn't exist and waits for ai-service #65. Until then Fireworks is not in `MODEL_PROVIDERS_APPROVED`, and no routing changes.
 
