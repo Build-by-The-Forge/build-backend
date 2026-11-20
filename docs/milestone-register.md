@@ -67,7 +67,7 @@ The delivery plan (`docs/BUILD_IMPLEMENTATION_PLAN.md`, approved 2026-11-20) has
 | 4. Grounded intelligence | M4 for authorisation; retrieval quality has no milestone | Retrieval quality is measured in `ai-service` |
 | 5. Offline AI | None. **R2 rows, not yet in the tracker:** offline AI inference, offline retrieval, offline CBT and practice (practice only, if separately approved) | R2. The benchmark and the designs continue during R1 as preparation |
 | 6. Android app | M5, M6 | |
-| 7. Offline continuity | **R2 rows, not yet in the tracker:** offline authorisation and sync (lease design approved with M3-D, #79; see "Product direction"); managed packs | R2. R1 has limited caching of already-opened documents only, under a cache rule that is a proposal for the reviewer, and no offline assessment |
+| 7. Offline continuity | **R2 rows, not yet in the tracker:** offline authorisation and sync (lease design approved with M3-D, #79; see "Product direction"); managed packs | R2. R1 has no document cache unless an approved cache policy and its evidence exist, and no offline assessment |
 | 8. Testing and benchmarking | M7; boundary-gate bar (met) | |
 | 9. Security and governance | L-track memory gate (L0-A, L0-B, L4, activation); G-32, G-33 | `GATE_OPEN` stays `False` |
 | 10. Deployment | None yet | Needs explicit authorisation to spend |

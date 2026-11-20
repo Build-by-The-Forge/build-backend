@@ -115,7 +115,7 @@ Owners are the sessions on this machine, as listed on 2026-11-20. The state is w
 | 15 | **Fallback models.** The report names GLM, Qwen and MiniMax as fallbacks outside its own default portfolio. Resolved: fallback only within approved portfolio entries | The report | The plan's section 14.1 |
 | 16 | **Circuit breaker.** The report says three failures, then five minutes. The gateway already has a breaker and retry policy (`app/core/models/resilience.py`) | `ai-service` | Keep the gateway's as the baseline; make thresholds configurable and set them from measurements (plan §14.4) |
 | 17 | **Identifiers in provider prompts.** The report says send anonymised IDs. Pseudonymous data can still be personal data, and a student's own text can contain personal data | G-33 | Plan §14.3; each G-33 record states it separately |
-| 18 | **Cached documents versus immediate denial.** `docs/m3-d-design.md` promises immediate denial on revocation; a copy cached on the device would outlive it | M3-D, plan §2.3 | A proposed cache rule for the reviewer; until approved, R1 may ship with no cache |
+| 18 | **Cached documents versus immediate denial.** `docs/m3-d-design.md` promises immediate denial on revocation; a copy cached on the device would outlive it | M3-D, plan §2.3 | Decision: R1 ships without a document cache unless an approved policy and its evidence exist |
 
 ## 6. What this baseline does not establish
 

@@ -19,7 +19,7 @@ Two releases:
 
 | Release | What a student gets | Where it must work |
 |---|---|---|
-| **R1** | The core journey, with a grounded tutor (naive RAG), **online** CBT and results, and limited caching of already-opened documents | Staging, one student end to end, then production |
+| **R1** | The core journey, with a grounded tutor (naive RAG), **online** CBT and results, and **no document cache** (section 2.3) | Staging, one student end to end, then production |
 | **R2** | Managed offline packs with lease and sync, offline retrieval, offline AI inference, flashcards, knowledge trees, personalised study plans, multi-hop agentic study help, and offline practice if separately approved | After R1; the offline benchmark and the offline and planner designs continue during R1 as R2 preparation |
 
 ## 2. Scope
@@ -33,7 +33,7 @@ Two releases:
 - Practice kept apart from official CBT (S-10), and CBT with authoritative results (S-11, S-12). **All online.** R1 has no offline assessment of any kind.
 - Progress (S-13) and settings (S-14).
 - Entitlements as backend-owned infrastructure; no payment experience.
-- **Limited document caching:** documents the student has already opened may be cached, within storage limits, under the cache rule in section 2.3. This is not a supported offline system: no managed packs, no lease, no offline retrieval, no offline generation.
+- **No document cache in R1.** R1 ships without caching of any document. A cache ships only if a cache policy with an approved TTL, revocation behaviour and implementation evidence exists (section 2.3). This is not a supported offline system: no managed packs, no lease, no offline retrieval, no offline generation.
 - GCP staging and the end-to-end acceptance suite.
 
 ### 2.2 Release 2
@@ -50,7 +50,7 @@ Two releases:
 **R1**
 - **CBT and every official assessment are online only.** There is no offline assessment of any kind in R1.
 - No offline AI, no managed offline packs, no authorisation lease, no sync, no offline retrieval.
-- Already-opened documents may be cached, within storage limits. *Proposed cache rule, for the reviewer:* app-private storage; cleared on logout, on session end, and when the backend reports a revocation or deletion; a short time-to-live set by the reviewer; revalidated whenever the device is online. This is a proposal, not an approved rule (see the cache risk in section 10).
+- **No document cache in R1** unless a cache policy with an approved TTL, revocation behaviour and implementation evidence exists. R1 ships without caching. *Proposed rule, for later reviewer approval:* app-private storage; cleared on logout, on session end, and when the backend reports a revocation or deletion; a short time-to-live set by the reviewer; revalidated whenever the device is online. This is a proposal, not an approved rule (see the cache risk in section 10).
 
 **R2, when offline exists**
 - Official CBT attempts, submission, grading and results stay online-only.
@@ -240,7 +240,7 @@ A milestone is complete only when its acceptance criteria hold and the evidence 
 | **Pro agentic is costly on Gemini alone** | Estimated 8 to 16 times Fireworks per task (unverified) | R2 depends on Fireworks approval or an explicit budget |
 | **Paywalling offline reading** | Would contradict PRD §78 to §80 | Only AI inference is entitled; reading downloaded material is not (section 14.2, issue 2) |
 | **No purchase flow in R1** | Plus and Pro can't be bought | Grantable states only; the entitlement design covers grants and overrides |
-| **Cached documents outlive a revocation or deletion** | M3-D promises immediate denial; a copy cached on the device would still open. R1 caches only already-opened documents, but the exposure is real | *Proposal, for the reviewer:* app-private storage; cleared on logout, on session end, and when the backend reports revocation or deletion; a short TTL set by the reviewer; revalidated whenever online. Until approved, R1 may ship with no cache at all |
+| **Cached documents outlive a revocation or deletion** | M3-D promises immediate denial; a copy cached on the device would still open | *Proposal, for the reviewer:* app-private storage; cleared on logout, on session end, and when the backend reports revocation or deletion; a short TTL set by the reviewer; revalidated whenever online. **Decision: R1 ships without a document cache** unless a policy with an approved TTL, revocation behaviour and implementation evidence exists |
 
 ### Release acceptance checklist
 
@@ -254,7 +254,7 @@ A milestone is complete only when its acceptance criteria hold and the evidence 
 - [ ] The 100-task evaluation baseline recorded; real-material retrieval measured.
 - [ ] Device results for the 4 GB RAM and 100 MB requirements, with the device named.
 - [ ] Official CBT works online only; the app offers no offline assessment.
-- [ ] Document cache (R1), if shipped: stored in app-private storage; cleared on logout, on session end and on a revocation or deletion report; a document past its TTL is not served; every cached document is revalidated when the device is online; storage stays within the stated limit. The rule itself is a proposal until the reviewer approves it.
+- [ ] R1 ships without a document cache. If a cache policy is later approved (TTL, revocation behaviour), the cache ships only with its evidence: app-private storage; cleared on logout, on session end and on a revocation or deletion report; a document past its TTL is not served; every cached document is revalidated when online; storage within the stated limit.
 - [ ] Backups restored in a drill; monitoring and alerts live.
 - [ ] Every gate's own checks green on the pinned SHAs, with run links.
 
