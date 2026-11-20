@@ -20,18 +20,16 @@
 5. **Free is enforced in the backend**, not by hiding buttons.
 6. **Plans are data**, so limits change without a release.
 
-## 3. The policy this implements (provisional)
+## 3. The policy this implements (provisional, updated 2026-11-20)
 
-| Capability | Free | Plus | Pro |
+| Plan | Online | Offline (R2) | Agentic (R2) |
 |---|---|---|---|
-| Online AI tutor | Restricted | Yes | Yes |
-| Small-model access | Limited usage and budget | Yes, subject to budget | Yes |
-| Offline AI inference (R2) | No | Yes | Yes |
-| Agentic study workflows (R2) | No | No | Full |
-| Multi-hop study assistance (R2) | No | No | Yes |
-| Autonomous reading paths (R2) | No | No | Yes |
+| Free | A very low-cost model for ordinary questions, under strict backend budgets (low-cost, not zero-cost). Target: a Fireworks model once approved; R1: Gemini under a strict budget | The smallest local model | None |
+| Plus | Free's online access plus the approved online capabilities, subject to budget | The full benchmark-selected local portfolio | None |
+| Pro | Everything in Plus | Everything in Plus | Full bounded agentic study workflows: multi-step research and synthesis, personalised study planning, reading paths; routed across Gemini and the three Fireworks models by capability, quality, cost, latency and availability |
+| Campus | Institution-sponsored access; **undefined** | | |
 
-Campus is **not** in this table. In R1: online-first, Gemini the only approved online provider, no offline AI, no agentic workflows, and Plus and Pro exist only as **granted** states (payments are paused, PRD §0.5). Free's small-model access does not depend on Fireworks; in R1 it is Gemini under a strict budget.
+Offline **reading** of downloaded materials is free for everyone; only AI inference is entitled. In R1: online-first, Gemini the only approved online provider until Fireworks passes governance, no offline AI, no agentic workflows, and Plus and Pro only as **granted** states (payments are paused, PRD §0.5). Gates before defaults: the Free online model must clear a minimum grounded-answer, citation and abstention bar in evaluation, and the smallest local model a minimum abstention bar, before either ships to Free.
 
 ## 4. Data model (proposed)
 
@@ -40,7 +38,7 @@ Extends the blueprint's sketch. Names are proposals.
 | Table | Holds | Notes |
 |---|---|---|
 | `plans` | `code` (`free`, `plus`, `pro`, `campus`), `version`, `status` | Versioned rows; a subscription points at a version |
-| `plan_entitlements` | plan version, `capability` key, `limits` (JSON checked against a schema per capability) | One row per capability. Capability keys: `ai_tutor`, `model_tier`, `offline_ai`, `agentic_workflows`, `multi_hop`, `reading_paths` |
+| `plan_entitlements` | plan version, `capability` key, `limits` (JSON checked against a schema per capability) | One row per capability. Capability keys: `ai_tutor`, `model_tier`, `offline_ai` (`none`, `smallest`, `portfolio`), `agentic_workflows`, `multi_hop`, `reading_paths` |
 | `subscriptions` | user, plan version, `source` (`promotion`, `campus`, `admin`; later `play`, `direct`), `status`, period | R1: only the granted sources |
 | `entitlement_grants` | user or tenant, plan or capability, scope, period, granter, reason | Audited. Campus and promotional grants |
 | `entitlement_overrides` | user, capability, value, actor, reason, expiry | Audited; never silently permanent |
@@ -60,7 +58,7 @@ For each protected request the backend resolves `effective(user, capability)`:
 4. A revoked, expired or refunded source removes its contribution at once.
 5. The result is a capability value, e.g. `model_tier = small`, `agentic_workflows = none`, with its limits.
 
-Rules: **model tier and agentic capability resolve independently.** Plus resolves `offline_ai = yes` and `agentic_workflows = none`. Resolution is a pure function over rows, so it can be tested with no AI service.
+Rules: **model tier and agentic capability resolve independently.** Free resolves `offline_ai = smallest`, Plus `portfolio`, and neither resolves `agentic_workflows` above `none`. Resolution is a pure function over rows, so it can be tested with no AI service.
 
 ## 6. Enforcement
 
@@ -92,8 +90,8 @@ Rules: **model tier and agentic capability resolve independently.** Plus resolve
 **Provisional (not to be hardcoded):** the capability table, all limits, which models belong to which tier, the budgets, and period lengths.
 
 **Open decisions:**
-1. Whether **Free** gets the smallest local model in R2. Offline *reading* of downloaded material is **not** paywalled (PRD §78 to §80); only AI inference is entitled.
-2. R2 Pro agentic cost: on Gemini alone it is estimated at 8 to 16 times the Fireworks tier per task (the provider report's arithmetic, unverified). It depends on Fireworks approval or an explicit budget.
+1. *Decided 2026-11-20:* Free gets the smallest local model; offline *reading* is not paywalled (PRD §78 to §80). Open: the abstention bar it must clear.
+2. Cost. A typical tutor answer (8,000 input, 500 output tokens) is about $0.016 on Gemini at the 2027 price against about $0.0005 on the small Fireworks tier at uncached prices (page's unverified prices), roughly 30 to 80 times with caching. Free at scale on Gemini alone is expensive, and Pro agentic on Gemini alone more so, so Fireworks governance should start now. Gemini stays complementary for Pro agentic, not the only provider.
 3. Budget periods (daily, monthly) and what a student sees when a limit is reached.
 4. Who may grant Plus and Pro in R1, and how grants are audited.
 
@@ -123,5 +121,5 @@ Campus is a separate, institution-managed policy. It is **not** inferred from th
 1. Approve the data model and the two-entitlement split.
 2. Approve the signed-budget field as a shared contract (both repositories).
 3. Choose how R1 grants Plus and Pro, and who may.
-4. Decide the Free local-model question for R2, or defer it.
+4. Set the evaluation bars (grounded answers, citations, abstention) for the Free online default and the smallest local model.
 5. Start the Campus questions.
