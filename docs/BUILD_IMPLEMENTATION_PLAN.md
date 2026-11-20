@@ -115,7 +115,7 @@ Record where every repository stands, label every claim, and list documentation 
 ### Phase 2: backend foundation
 | Part | Content |
 |---|---|
-| M3-D | Student uploads and content rights: PRs 7 to 15 of `docs/m3-d-design.md` |
+| M3-D | Student uploads and content rights: PRs 7 to 16 of `docs/m3-d-design.md` |
 | M3-E | Assessment contract: complete pending the reviewer's check |
 | M3-F | Conversations, cited chat |
 | M4 | Retrieval eligibility and citation authorisation |
@@ -271,7 +271,7 @@ The mapping is held in `docs/milestone-register.md`, section "Phase to milestone
 | B-008 | Fireworks governance: reconcile docs, verify terms and model IDs | 3 | Not started |
 | B-009 | Offline content-pack contract | 1, 5, 7 | Design to write |
 | B-010 | Bounded agentic study planner design | 1, 4 | Design to write |
-| B-011 | M3-D PRs 7 to 15 | 2 | In progress (own lane) |
+| B-011 | M3-D PRs 7 to 16 | 2 | In progress (own lane) |
 | B-012 | M3-F implementation | 2 | In progress (own lane) |
 | B-013 | Retrieval quality on real material | 4 | In progress (own lane) |
 | B-014 | Offline benchmark harness and device procedure | 5, 8 | In progress (own lane) |
