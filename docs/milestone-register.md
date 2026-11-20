@@ -62,12 +62,12 @@ The delivery plan (`docs/BUILD_IMPLEMENTATION_PLAN.md`, approved 2026-11-20) has
 |---|---|---|
 | 0. Audit | None | `docs/BUILD_IMPLEMENTATION_BASELINE.md`; runs alongside active lanes and gates nothing |
 | 1. Architecture and contracts | M0, M1, M2 (merged); the journey contracts design (#112) | Offline content-pack contract and study-planner design are design documents, not milestones |
-| 2. Backend foundation | M3-A to M3-F, M4, M5, M6, M7; the entitlements work (not yet a milestone); offline authorisation and sync (design in M3-D, #79) | Entitlements and offline sync get milestone rows when their designs are approved |
+| 2. Backend foundation | M3-A to M3-F, M4, M5, M6, M7; the entitlements work (not yet a milestone) | Entitlements get a milestone row when their design is approved. Offline authorisation and sync are **R2** (row below) |
 | 3. AI foundation | AI-01 and the gateway (no register row; tracked in `docs/build-master-execution-blueprint.md`) | G-33 is an open implementation gap in `contracts/mobile/gaps.yaml` |
 | 4. Grounded intelligence | M4 for authorisation; retrieval quality has no milestone | Retrieval quality is measured in `ai-service` |
-| 5. Offline AI | None | R2 |
+| 5. Offline AI | None. **R2 rows, not yet in the tracker:** offline AI inference, offline retrieval, offline CBT and practice (practice only, if separately approved) | R2. The benchmark and the designs continue during R1 as preparation |
 | 6. Android app | M5, M6 | |
-| 7. Offline continuity | The offline authorisation row under "Product direction" | R1 is practice-only |
+| 7. Offline continuity | **R2 rows, not yet in the tracker:** offline authorisation and sync (lease design approved with M3-D, #79; see "Product direction"); managed packs | R2. R1 has limited caching of already-opened documents only, under a cache rule that is a proposal for the reviewer, and no offline assessment |
 | 8. Testing and benchmarking | M7; boundary-gate bar (met) | |
 | 9. Security and governance | L-track memory gate (L0-A, L0-B, L4, activation); G-32, G-33 | `GATE_OPEN` stays `False` |
 | 10. Deployment | None yet | Needs explicit authorisation to spend |
