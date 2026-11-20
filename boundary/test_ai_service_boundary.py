@@ -56,6 +56,8 @@ def dispatch_body(**extra) -> dict:
         "content_sha256": "ab" * 32,
         "storage_uri": "s3://build-assets/boundary.pdf",
         "correlation_id": "boundary",
+        "scope": "unknown",
+        "scope_version": 0,
         **extra,
     }
 
