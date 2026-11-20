@@ -170,15 +170,15 @@ The offline model benchmark continues during Release 1, so Release 2 starts from
 5. Results and costs are recorded.
 6. The user has approved the cap in writing.
 
-### Proposed Fireworks model registry (2026-11-20; all unverified; roles are hypotheses)
+### Proposed Fireworks model registry (2026-11-20; candidates, not an adopted portfolio)
 
-The user confirmed this intended portfolio. **Nothing is assigned; benchmarks decide.** Status is from Fireworks' own pages, read 2026-11-20 (URLs and dates in `docs/g33-model-verification.md`).
+The user confirmed this intended portfolio of **candidates**. Three dimensions are kept apart. Provider metadata comes from Fireworks' own pages, read 2026-11-20 (URLs and dates in `docs/g33-model-verification.md`). **BUILD suitability is unverified for all three until evaluation. No role is assigned until evaluation.**
 
-| Model | Identifier | Verified? | Serving mode | Price per 1M (in / cached / out) | Context | Structured output | Tool calling | Licence |
-|---|---|---|---|---|---|---|---|---|
-| NVIDIA Nemotron 3.5 Lightning 30B A3B | `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` (the report's ID was not found) | Identifier, availability, price verified | Serverless, on-demand | $0.05 / $0.01 / $0.20 | 262,144 | Not stated | Supported | Not stated (unverified) |
-| OpenAI gpt-oss-120B | `accounts/fireworks/models/gpt-oss-120b` | Identifier, price verified; serving mode conflicts between pages | On-demand per its page; serverless per pricing pages | $0.15 / $0.015 / $0.60 | 131,072 | Unclear | Supported | Apache 2.0 |
-| DeepSeek V4.1 Flash | `accounts/fireworks/models/deepseek-v4p1-flash` | Verified | Serverless, on-demand | $0.30 / $0.006 / $1.20 | 1,048,576 | Not stated | Supported | MIT |
+| Model | Identifier | Provider metadata, each Verified or Unverified | BUILD suitability | Role |
+|---|---|---|---|---|
+| NVIDIA Nemotron 3.5 Lightning 30B A3B | `accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b` (the report's ID was not found) | Identifier: **Verified**. Serverless and on-demand: **Verified**. Price $0.05 / $0.01 / $0.20 per 1M (in / cached / out): **Verified**. Context 262,144: **Verified**. Tool calling: **Verified**. Structured output: **Unverified** (not stated per model). Licence: **Unverified** (not stated by Fireworks) | **Unverified** | **None** |
+| OpenAI gpt-oss-120B | `accounts/fireworks/models/gpt-oss-120b` | Identifier: **Verified**. Serving mode: **Unverified** (its model page says on-demand only; the pricing pages list serverless). Price $0.15 / $0.015 / $0.60: **Verified**. Context 131,072: **Verified**. Tool calling: **Verified**. Structured output: **Unverified** (unclear). Licence Apache 2.0: **Verified** (model page) | **Unverified** | **None** |
+| DeepSeek V4.1 Flash | `accounts/fireworks/models/deepseek-v4p1-flash` | Identifier: **Verified**. Serverless and on-demand: **Verified**. Price $0.30 / $0.006 / $1.20: **Verified**. Context 1,048,576: **Verified**. Tool calling: **Verified**. Structured output: **Unverified** (not stated per model). Licence MIT: **Verified** (model page) | **Unverified** | **None** |
 
 | Model | User's suggested role | Notion report's role | Decided by benchmark |
 |---|---|---|---|
