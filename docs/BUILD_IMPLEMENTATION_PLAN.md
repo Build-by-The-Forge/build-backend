@@ -19,8 +19,8 @@ Two releases:
 
 | Release | What a student gets | Where it must work |
 |---|---|---|
-| **R1** | The core journey, with a grounded tutor, CBT and results, and downloaded course material | Staging, one student end to end, then production |
-| **R2** | Offline AI inference, flashcards, knowledge trees, study plans, personalisation | After R1; the offline benchmark continues during R1 so R2 starts from evidence |
+| **R1** | The core journey, with a grounded tutor (naive RAG), **online** CBT and results, and limited caching of already-opened documents | Staging, one student end to end, then production |
+| **R2** | Managed offline packs with lease and sync, offline retrieval, offline AI inference, flashcards, knowledge trees, personalised study plans, multi-hop agentic study help, and offline practice if separately approved | After R1; the offline benchmark and the offline and planner designs continue during R1 as R2 preparation |
 
 ## 2. Scope
 
@@ -29,24 +29,33 @@ Two releases:
 - Registration, login, sessions, academic onboarding and the academic profile (S-01, S-02).
 - Dashboard summary (S-03).
 - Study Shelf, upload, ingestion, quarantine and scanning, Read Mode (S-04, S-05, S-07).
-- The AI Tutor with conversations, citations, provenance, abstention (S-06).
-- Practice kept apart from official CBT (S-10) and CBT with authoritative results (S-11, S-12).
+- The AI Tutor with conversations, citations, provenance, abstention (S-06). **Bounded: naive RAG only.** No autonomous multi-hop retrieval, no autonomous reading paths, no agentic loops.
+- Practice kept apart from official CBT (S-10), and CBT with authoritative results (S-11, S-12). **All online.** R1 has no offline assessment of any kind.
 - Progress (S-13) and settings (S-14).
 - Entitlements as backend-owned infrastructure; no payment experience.
-- Offline continuity limited to **practice only** (section 2.3): downloaded course packs, offline retrieval over them, offline practice with provisional scores.
+- **Limited document caching:** documents the student has already opened may be cached, within storage limits, under the cache rule in section 2.3. This is not a supported offline system: no managed packs, no lease, no offline retrieval, no offline generation.
 - GCP staging and the end-to-end acceptance suite.
 
 ### 2.2 Release 2
 
+- Managed offline academic packs, the authorisation lease and sync, and offline retrieval (designs: `docs/m3-d-design.md`, and the content-pack contract to come).
 - Offline AI inference (a small on-device model portfolio, chosen by benchmark).
-- Flashcards, knowledge trees (S-08), study plans (S-09), the bounded agentic study planner.
+- Offline practice, only if separately approved, under the rules in section 2.3.
+- Flashcards, knowledge trees (S-08), personalised study plans (S-09), multi-hop agentic study help, autonomous reading paths and agentic loops (the bounded agentic study planner).
+- Expanded document caching.
 - Personalisation, including Learning Memory, only after its production gate (`GATE_OPEN`) is approved. Nothing in this plan opens it.
 
-### 2.3 Offline decision for R1 (approved 2026-11-20)
+### 2.3 Offline decisions (user, 2026-11-20)
 
-- **Practice-only offline in v1.** Official CBT attempts, submission, grading and results are online-only.
-- Offline practice scores are provisional until the server validates them on reconnect.
-- The offline authorisation lease (72 hours, monotonic time, failing closed) and its sync design stay as approved in `docs/m3-d-design.md`.
+**R1**
+- **CBT and every official assessment are online only.** There is no offline assessment of any kind in R1.
+- No offline AI, no managed offline packs, no authorisation lease, no sync, no offline retrieval.
+- Already-opened documents may be cached, within storage limits. *Proposed cache rule, for the reviewer:* app-private storage; cleared on logout, on session end, and when the backend reports a revocation or deletion; a short time-to-live set by the reviewer; revalidated whenever the device is online. This is a proposal, not an approved rule (see the cache risk in section 10).
+
+**R2, when offline exists**
+- Official CBT attempts, submission, grading and results stay online-only.
+- Offline practice, if separately approved, produces scores that are provisional until the server validates them on reconnect. An offline practice attempt never becomes an official attempt.
+- The offline authorisation lease (72 hours, monotonic time, failing closed) and its sync design stay as approved in `docs/m3-d-design.md`, for R2.
 
 ### 2.4 Deferred (not in R1 or R2 unless a later decision says so)
 
@@ -123,7 +132,7 @@ Record where every repository stands, label every claim, and list documentation 
 | M6 | Student workflows and screens |
 | M7 | The pinned, release-blocking integration gate |
 | Entitlements | Free, Plus, Pro, Campus; the backend is the only authority |
-| Offline authorisation and sync | The lease, pack download and revocation, provisional-score validation |
+| Offline authorisation and sync (**R2**) | The lease, pack download and revocation, provisional-score validation |
 
 **Exit:** the M3 exit checklist in the register, then M4 to M7 acceptance.
 
@@ -136,16 +145,16 @@ Record where every repository stands, label every claim, and list documentation 
 - **Exit:** gateway evidence, an approved G-33 for each provider used, the 100-task baseline.
 
 ### Phase 4: grounded intelligence
-Ingestion and OCR hardening; retrieval quality on real material (62.5% recall@5 on real first-semester FUTA material, against 94.6% on the controlled set); naive RAG, then bounded agentic RAG; citations mapped from chunk metadata; real-material evaluation. **Exit:** a measured improvement on real material, with each variable changed alone.
+Ingestion and OCR hardening; retrieval quality on real material (62.5% recall@5 on real first-semester FUTA material, against 94.6% on the controlled set); naive RAG for R1, then bounded agentic RAG for R2; citations mapped from chunk metadata; real-material evaluation. **Exit:** a measured improvement on real material, with each variable changed alone.
 
-### Phase 5: offline AI
+### Phase 5: offline AI (R2; the benchmark runs during R1)
 Benchmark the on-device portfolio on real devices; build the offline retrieval and the content-pack runtime; local inference in R2. **Offline model roles are assigned only after benchmarking.** Targets: Qwen3.5-0.8B, Qwen3-1.7B, SmolLM2-1.7B. Comparisons: Qwen3.5 2B and 4B, Gemma 4 E2B, Gemma 3n E2B, Ministral 3 3B, Phi-4-mini. The benchmark continues during R1.
 
 ### Phase 6: Android app
 Typed client from the contract; secure storage; single-flight refresh; onboarding, dashboard, shelf, upload, tutor, practice, CBT, results; removal of fixtures and fabricated results (the CBT screen's hardcoded 95%).
 
-### Phase 7: offline continuity
-Pack download, integrity check, lease, revocation, practice, provisional scores, reconnect validation, sync. In R1 this is practice-only (section 2.3).
+### Phase 7: offline continuity (R2)
+Pack download, integrity check, lease, revocation, offline retrieval, offline practice if separately approved, provisional scores, reconnect validation, sync. R1 has limited document caching only (section 2.3).
 
 ### Phase 8: testing and benchmarking
 - Unit, PostgreSQL, boundary, contract drift, end to end, device.
@@ -182,9 +191,9 @@ Concurrency: three to four lanes at once on the 8 GB development laptop. Heavy j
 | Mobile screens | M5, plus the contract for each screen |
 | Gemini on student passages | G-33 approved and a paid-tier key |
 | Fireworks adapter | The governance steps in Phase 3, then #65 merged |
-| Agentic RAG | The tool registry design, retrieval evidence on real material |
+| Agentic RAG (R2) | The tool registry design, retrieval evidence on real material |
 | Offline inference | Benchmark results on real devices |
-| Offline practice | The authorisation lease and pack contract |
+| Offline packs and offline practice (R2) | The authorisation lease and pack contract; separate approval for offline practice |
 | Learning Memory | L4 and the production gate |
 | Staging | Explicit spending authorisation |
 | Release acceptance | M7 on pinned SHAs |
@@ -239,7 +248,7 @@ A milestone is complete only when its acceptance criteria hold and the evidence 
 - [ ] `GATE_OPEN` is `False` and verified in the built image.
 - [ ] The 100-task evaluation baseline recorded; real-material retrieval measured.
 - [ ] Device results for the 4 GB RAM and 100 MB requirements, with the device named.
-- [ ] Offline practice works under the lease, and official CBT is refused offline.
+- [ ] Official CBT works online only; the app offers no offline assessment.
 - [ ] Backups restored in a drill; monitoring and alerts live.
 - [ ] Every gate's own checks green on the pinned SHAs, with run links.
 
@@ -266,11 +275,11 @@ The mapping is held in `docs/milestone-register.md`, section "Phase to milestone
 | B-003 | Baseline: documentation conflicts | 0 | In the baseline |
 | B-004 | Baseline: gap snapshot from `gaps.yaml` | 0 | In the baseline |
 | B-005 | Baseline: running lanes and owners | 0 | In the baseline |
-| B-006 | PRD amendment: practice-only offline, R1/R2, provider section under reconciliation | 1 | Draft PR, needs reviewer approval |
+| B-006 | PRD amendment: R1/R2 split, offline in R2, provider section under reconciliation | 1 | Draft PR, needs reviewer approval |
 | B-007 | G-33 records for Gemini and Fireworks | 3, 9 | Draft PR; approves nothing |
 | B-008 | Fireworks governance: reconcile docs, verify terms and model IDs | 3 | Not started |
-| B-009 | Offline content-pack contract | 1, 5, 7 | Design to write |
-| B-010 | Bounded agentic study planner design | 1, 4 | Design to write |
+| B-009 | Offline content-pack contract (R2 preparation) | 1, 5, 7 | Design to write |
+| B-010 | Bounded agentic study planner design (R2 preparation) | 1, 4 | Design to write |
 | B-011 | M3-D PRs 7 to 16 | 2 | In progress (own lane) |
 | B-012 | M3-F implementation | 2 | In progress (own lane) |
 | B-013 | Retrieval quality on real material | 4 | In progress (own lane) |
