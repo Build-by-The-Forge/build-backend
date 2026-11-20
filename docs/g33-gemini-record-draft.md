@@ -1,10 +1,52 @@
 # G-33 record: Gemini API (DRAFT)
 
-**Status: DRAFT. This approves nothing.** It records what Google's own pages say so the user and the reviewer can decide. `MODEL_PROVIDERS_APPROVED` stays empty and `GATE_OPEN` stays `False`.
+**Status: DRAFT. This approves nothing.** **It is an evidence and gap register, never an approval. Blocker for Gemini: the age rule (section 0).** It records what Google's own pages say so the user and the reviewer can decide. `MODEL_PROVIDERS_APPROVED` stays empty and `GATE_OPEN` stays `False`.
 
 **Gap:** G-33 in `contracts/mobile/gaps.yaml`: "Whether a model provider may train on retrieved passages hasn't been checked."
 
 **Accessed:** 2026-11-20. **How:** each page was read by a research subagent through a page reader, and this lane relied on its report. Where the report says it worked from a model-extracted summary rather than the page's own text, the row below says so. Google's `ai.google.dev` pages now redirect to `aistudio.google.com/docs/...`; the pages carry no "last updated" line unless stated.
+
+## 0. BLOCKER: the age rule (read this first)
+
+**Gemini cannot be approved for student material until an authoritative answer exists to the age question below.** The reviewer will not approve it before then. This record is evidence, not an approval.
+
+### 0.1 The clause (a): Gemini API Additional Terms, effective March 23, 2026
+
+Source: https://ai.google.dev/gemini-api/terms, which redirects to https://aistudio.google.com/docs/terms. The page was read in full, verbatim, on 2026-11-20.
+- Under "Age Requirements": "You must be 18 years of age or older to use the APIs."
+- The same section bars using the Services "as part of a website, application, or other service" that is "directed towards or is likely to be accessed by individuals under the age of 18."
+- **No education, student or Workspace for Education carve-out and no "child-directed" wording appears anywhere on the page.**
+- Under "Use Restrictions": the service "is for developers building with Google AI models for professional or business purposes, not for consumer use."
+
+**The conflict:** FUTA first-year students can be 16 or 17, so a student app is plausibly "likely to be accessed by" under-18s. Whether it is depends on BUILD's own registration policy and Google's reading, which this record can't settle.
+
+### 0.2 Does Google Cloud change it? (b)
+
+BUILD's chosen hosting is Google Cloud, and the Additional Terms say they "do not govern your direct use of any Google Cloud Platform service." Gemini reached through Google Cloud ("Gemini Enterprise Agent Platform", the Vertex AI successor name in the SDK docs) is under **different documents**: the Google Cloud Terms of Service (last modified March 24, 2026), the Service Specific Terms (last modified April 2, 2026) and the Cloud Data Processing Addendum (last modified October 23, 2025).
+
+| Question | What the pages say | Read how |
+|---|---|---|
+| Is there an under-18 restriction on the Cloud route? | A model summary of the Service Specific Terms reports a "Generative AI Services" age rule (Section 20(d)) that mirrors the one above: no use in a service "directed towards or is likely to be accessed by individuals under the age of 18" | **Unverified.** Summary only; the last 4,115 characters of that page were unread. **The Cloud route may not remove the restriction** |
+| Which DPA applies? | The Cloud DPA, which the Cloud Terms rank first in precedence | Summary. The DPA's text read verbatim (first ~40,000 characters) doesn't mention Vertex AI, Gemini or generative AI; a summary says the rest doesn't either. **Unverified;** Appendix 4 and https://cloud.google.com/terms/services were not read |
+| Training on prompts | Off by default: Google "will not use Customer Data to train or fine-tune any AI/ML models without Customer's prior permission or instruction", for "all managed models", GA and pre-GA | Verbatim on https://docs.cloud.google.com/vertex-ai/generative-ai/docs/data-governance |
+| Pre-GA offerings | "No data processing terms (including the Cloud Data Processing Addendum) apply to Pre-GA Offerings" unless stated otherwise | Verbatim, Service Specific Terms 5(d) |
+| Caching and retention | In-memory and durable caching deleted no later than 24 hours after writing; request-response logging disabled by default; Grounding with Google Search stores logs up to 3 days and Maps 30 days, with no way to disable; Interactions API `store` defaults to true | Verbatim, data-governance page. Zero retention needs specific settings |
+| Data residency | Regions listed for Google models: US and EU multi-regions, Brazil, Canada, France, Germany, Netherlands, UK, Australia, India, Japan, Singapore, South Korea. **No Africa and no Middle East region.** Global endpoints "don't provide any data residency guarantees" | Verbatim, https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/data-residency |
+| Sub-processors | The page returned no readable content (https://cloud.google.com/terms/subprocessors) | **UNREAD** |
+
+**What the adapter would need.** The merged adapter passes the key explicitly with `vertexai=False` on purpose (`ai-service` `app/core/models/providers/gemini.py`, line 112, on `main` `4150c5f`). Google's SDK examples show `genai.Client(vertexai=True, project=..., location=...)` (and `enterprise=True`), authenticating with a **Google Cloud service account**, not an API key (https://aistudio.google.com/docs/migrate-to-cloud, https://googleapis.github.io/python-genai/). The Cloud route would therefore need: a new or modified adapter, a service-account credential path, a region choice with no Africa option, an explicit decision on caching and `store`, and a fresh G-33 record on the Cloud terms. **Unread:** the Vertex authentication page, the locations page and the abuse-monitoring page.
+
+### 0.3 Options for the user and the reviewer
+
+| # | Option | Consequence | Status |
+|---|---|---|---|
+| A | Ask Google in writing whether a student app whose users may include 16 and 17 year olds may use the Gemini API, and keep the answer | Authoritative; slow; may be no | Needed under any option that keeps Gemini |
+| B | Move to the Google Cloud route | Different terms, a DPA for paid use, training off by default; **but** a similar age rule may apply (unverified), no Africa region, a new adapter | Verify the Service Specific Terms in full first |
+| C | An 18+ gate for AI features, at registration | Satisfies the rule on its face; **excludes under-18 students from AI features and needs a verified date of birth**; changes the product and the S-02 flow | A product decision |
+| D | Another provider | Fireworks has its own unread terms (section in its record); none is approved | Restarts G-33 |
+| E | Accept the residual risk | Not recommended without A | Not available to the reviewer on this evidence |
+
+Options are not mutually exclusive: A is needed for any option that keeps Gemini.
 
 ## 1. Sources
 
@@ -99,7 +141,7 @@ Both tiers sit under an 18-or-older rule: users must be 18 or older, and clients
 
 1. **Approve or refuse Gemini Paid Services for student passages.** If approved, add `gemini` to `MODEL_PROVIDERS_APPROVED` only in an environment whose key is on a billing-enabled project.
 2. **Never use the free tier or the Contributor tier for student or institutional material.** Free-tier keys stay for development and tests with non-student text only. Confirm.
-3. **Under-18 students.** The terms bar clients likely to be accessed by under-18s. Decide: require 18+ at registration for AI features, get Google's written position, or accept the residual risk.
+3. **Under-18 students (blocker, section 0).** Choose among options A to E. Nothing here approves Gemini until Google's position is known in writing or the product excludes under-18 users.
 4. **Data location.** Accept processing in unspecified countries, or require a residency commitment before production.
 5. **Logging.** Choose the project-log retention (7, 14, 28 or 55 days; recommend the shortest the team can operate with) and forbid saving logs to datasets.
 6. **Caching.** Allow or forbid explicit caching of student passages until its TTL and deletion are documented.
