@@ -13,7 +13,7 @@
 **Backend:** FastAPI
 **Primary Database:** PostgreSQL
 **AI Platform:** BUILD AI Service
-**Online AI:** Gemini SDK, behind the Model Gateway. Free models for development and testing; Gemini 3.8 Flash as the production target, once its exact model identifier and availability are verified (§0.2). **Provider strategy: under reconciliation (Gemini plus Fireworks pending G-33 and reviewer approval), §0.9**
+**Online AI:** the Model Gateway, provider-agnostic. The Gemini SDK is the designated first R1 provider; it is not enabled for student or institutional passages until its G-33 is approved, and Fireworks is proposed and disabled (interim position, §0.2). Free models for development and testing, with non-student text only.
 **Offline AI:** A portfolio of small local models, benchmarked per task (§146.3)
 **Model Strategy:** Provider-agnostic Model Gateway
 
@@ -42,13 +42,13 @@ The student journey the release must complete:
 
 ## 0.2 Intelligence architecture
 
-> **Amended 2026-11-20 (§0.8).** Online intelligence: Gemini is the approved first provider, under the existing approval controls. A second provider, Fireworks, is proposed and disabled, under reconciliation (§0.9). Offline intelligence is Release 2 (§0.8).
+> **Interim provider position (2026-11-20).** The Model Gateway is provider-agnostic. Gemini, through the Gemini SDK, is the **designated first R1 provider**. It is **not enabled** for student or institutional passages until its G-33 requirements are satisfied and approved, and until then the production gateway **fails closed** for those requests. Once approved, R1 uses it under the configured budget. Fireworks is **proposed and disabled** until its own governance and evaluation are satisfied; its three candidate models are recorded in §0.9 as candidates, not as an adopted portfolio. Free models serve development and testing with non-student text only. **No production routing change follows from this document.** Where another section names Gemini, it means this position. Offline intelligence is Release 2 (§0.8).
 
 BUILD has three connected intelligence capabilities, behind one orchestration layer:
 
 | Capability | Role |
 |---|---|
-| **Online intelligence** | The Gemini SDK for inline AI: conversation, document and image understanding, OCR assistance, explanation, summarization, question generation and structured output. Free models for development and testing. **Gemini 3.8 Flash is the production target**, subject to verifying its exact model identifier and availability before implementation depends on it |
+| **Online intelligence** | Through the Model Gateway: conversation, document and image understanding, OCR assistance, explanation, summarization, question generation and structured output. Gemini (the Gemini SDK) is the designated first R1 provider under the interim position above; **Gemini 3.8 Flash is its intended model**, whose exact identifier and availability must be verified before implementation depends on it and whose use for student material waits for G-33 approval. Free models for development and testing |
 | **Grounded academic intelligence** | BUILD's own evidence layer: document processing, OCR, chunking, embeddings, retrieval, evidence validation, provenance and access control. **It is provider-independent and mandatory** |
 | **Offline intelligence** | A portfolio of small local models on the student's device (§146.3) |
 
@@ -71,7 +71,7 @@ BUILD has three connected intelligence capabilities, behind one orchestration la
 1. Complete the remaining M paths: contracts, migrations, security boundaries, callbacks and their gates.
 2. Stabilize the core backend: authentication, student identity, academic context, ownership, courses, content, assessments and student permissions.
 3. Subscription and entitlement infrastructure (§84 to §86).
-4. The AI foundation: the Gemini SDK in the Model Gateway, routing, grounded retrieval, OCR, ingestion, evaluation and observability.
+4. The AI foundation: the Model Gateway with its first provider adapter (Gemini, §0.2), routing, grounded retrieval, OCR, ingestion, evaluation and observability.
 5. Naive RAG, then bounded Agentic RAG, with evaluation.
 6. Offline AI: benchmark and integrate the local model portfolio, offline retrieval, local inference and synchronization. The benchmark runs from the start; managed offline packs, offline retrieval, sync and on-device generative inference ship in Release 2 (§0.8).
 7. Deployment, update delivery and monitoring (§105).
@@ -134,12 +134,12 @@ In Release 1 the tutor is bounded: naive RAG only. It does no autonomous multi-h
 
 The offline model benchmark continues during Release 1, so Release 2 starts from device evidence. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`; the milestone register stays the one tracker.
 
-## 0.9 Provider strategy: under reconciliation (2026-11-20)
+## 0.9 Provider governance (2026-11-20)
 
-**Under reconciliation: Gemini plus Fireworks pending G-33 and reviewer approval.** Nothing in this document adopts a provider. Sections that name Gemini (§0.2, §0.4, §38, §39, §146.17) record the 2026-11-04 direction and stay as written until reconciliation ends.
+**Provider governance status.** The interim provider position is in §0.2. This section records the governance work behind it, the report that proposed Fireworks, and the candidate registry. Nothing here adopts a provider, and no section depends on this one to be read consistently.
 
 - No provider receives student or institutional passages until its data-processing terms are recorded in a G-33 record and approved, and a paid-tier key exists where the free tier's terms disallow it.
-- The Model Gateway stays provider-agnostic. Gemini's adapter is under review (ai-service #65) with passages disabled; a Fireworks adapter is not started and waits for the governance steps: reconcile this document, record G-33 for both providers, verify terms and model identifiers, reviewer approval.
+- The Model Gateway stays provider-agnostic. The Gemini adapter is merged (ai-service #65) and enables nothing: `MODEL_PROVIDERS_APPROVED` is empty by default, so the gateway fails closed for student passages. A Fireworks adapter is not started and waits for the governance steps: G-33 for both providers, verified terms and model identifiers, and reviewer approval.
 - Model names and prices from outside this repository are unverified until a G-33 record checks them against the provider's own documentation.
 
 ### Provider reconciliation (Notion report, 2026-11-18)
@@ -151,7 +151,7 @@ The offline model benchmark continues during Release 1, so Release 2 starts from
 | BUILD owns the foundation (RAG, tools, OCR, deterministic scoring); APIs only assist | Consistent with §0.2; **approved direction** |
 | No API keys in the mobile app; all AI calls through ai-service behind the Model Gateway | Consistent with the architecture; **approved direction** |
 | No model chosen by users; routing by task | **Proposed** |
-| Exactly two v1 providers: Gemini and Fireworks | Gemini **approved first provider**; Fireworks **proposed and disabled** |
+| Exactly two v1 providers: Gemini and Fireworks | Gemini **designated first R1 provider, not enabled until its G-33 is approved**; Fireworks **proposed and disabled** |
 | Gemini "high-scale only"; Fireworks for all small and medium work, including grounded RAG answers | **Proposed**; conflicts with §0.2, §38, §39 |
 | Models and prices (`gemini-3.8-flash`; three Fireworks models) | **Unverified**; see the G-33 records |
 | Fallbacks (GLM, MiniMax, Qwen) | **Not adopted**; fallback only within approved portfolio entries |
@@ -188,15 +188,16 @@ The user confirmed this intended portfolio. **Nothing is assigned; benchmarks de
 
 Fireworks stays **disabled** until its governance approval. The API key is supplied separately by the user and is never committed, pasted into documents or logged (a secret manager, or an environment file outside the repository); a key enables the integration process only and approves no production use. Each model is evaluated against BUILD's agentic task suite, grounding, citation accuracy and abstention before any role is assigned.
 
-**Conflicts with this document, to be settled by the reviewer** (none is resolved by this amendment):
+**Open items** (the interim position in §0.2 settles what this document says; these remain for the reviewer):
 
-1. §0.2, §38, §39 and the production blueprint make Gemini the online provider and say it replaces the earlier plan. The report splits work between two providers. §0.2, §0.4, §38 to §41, §110, §146.9 and §146.10 need amending once the reviewer decides.
+1. The report splits work between two providers. This document's interim position keeps Gemini as the designated first R1 provider and Fireworks disabled, so the split is not adopted. §0.4, §41, §110 and §146.9 to §146.10 follow §0.2.
 2. G-33 is recorded for Gemini only. A second provider that receives student passages needs its own record.
 3. §146.3 and the report differ on offline models and on whether offline ships first.
 4. §78 to §88 define the entitlement model. The report's payer split is not it.
 5. The report's fallback list contains models outside its own default portfolio.
 6. The gateway already has a circuit breaker and retry policy; thresholds are to be measured, not copied.
 7. **Data protection, for both providers:** no student names, school IDs or unnecessary identifying information in prompts; pseudonymous or opaque identifiers, not "anonymous", since pseudonymous data can still be personal data. A student's own question text and course passages can contain personal data that can't be stripped. Each G-33 record states minimisation, identifier handling, retention, logging and contractual safeguards separately.
+8. **Age rule (blocker for Gemini).** The Gemini API Additional Terms bar services directed at or likely to be accessed by under-18s, and FUTA first-year students may be 16 or 17. No student material goes to Gemini until the user and reviewer have an authoritative answer. Options and evidence: `docs/g33-gemini-record-draft.md` (build-backend), section 0.
 
 ---
 
@@ -1447,7 +1448,7 @@ OCR output must feed downstream ingestion rather than remaining isolated.
 
 # 38. AI Model Gateway
 
-> **Amended 2026-11-20 (§0.8).** The gateway stays provider-agnostic. Gemini is the approved first provider; Fireworks is proposed and disabled (§0.9). No routing change follows from this document.
+> **Amended 2026-11-20.** The interim provider position in §0.2 applies to §38 to §41: Gemini is the designated first R1 provider and is not enabled for student or institutional passages until its G-33 is approved; Fireworks is proposed and disabled; no routing change follows from this document.
 
 BUILD shall implement a provider-agnostic Model Gateway.
 
@@ -1456,10 +1457,10 @@ BUILD shall implement a provider-agnostic Model Gateway.
 | Environment | Model |
 |---|---|
 | Development and testing | Free models and free-tier access, through the Gemini SDK where available |
-| Production | **Gemini 3.8 Flash**, the agreed target. Its exact model identifier and availability must be verified before implementation depends on it |
+| Production | **Gemini 3.8 Flash**, the designated model of the first R1 provider. Its exact identifier and availability must be verified before implementation depends on it, and its use for student material waits for G-33 approval (§0.2) |
 | Offline | The local model portfolio (§146.3), through the gateway's local provider |
 
-The Gemini SDK is the primary online integration. It replaces the earlier plan of Meta Muse Glimmer 30B through Together AI.
+The Gemini SDK is the designated first online integration (§0.2). It replaces the earlier plan of Meta Muse Glimmer 30B through Together AI.
 
 The AI service must not couple:
 
@@ -3964,7 +3965,7 @@ BUILD shall provide students with an integrated Learn/Study experience composed 
 
 BUILD shall treat documents, videos, questions, curriculum, concepts, learning objectives, and student performance as interconnected academic knowledge rather than isolated records.
 
-BUILD shall use a provider-agnostic Model Gateway, with the Gemini SDK as the online provider (Gemini 3.8 Flash as the production target, once verified) and a portfolio of small local models offline, while preserving the ability to integrate future models.
+BUILD shall use a provider-agnostic Model Gateway, with the Gemini SDK as the designated first R1 online provider (Gemini 3.8 Flash as its intended model, once verified; not enabled for student material until its G-33 is approved; Fireworks proposed and disabled) and a portfolio of small local models offline, while preserving the ability to integrate future models.
 
 BUILD shall maintain academic provenance, curriculum versioning, confidence-aware processing, human governance, duplicate prevention, academic integrity controls, and source-aware AI responses.
 
@@ -4311,7 +4312,7 @@ The goal is to ensure that:
 
 ## 146.9 Online AI Remains the Primary High-Capability Layer
 
-> **Amended 2026-11-20 (§0.8).** Provider references follow §0.9: Gemini first, Fireworks proposed and disabled.
+> **Amended 2026-11-20.** Provider references follow the interim position in §0.2: Gemini is the designated first R1 provider, not enabled for student material until its G-33 is approved; Fireworks is proposed and disabled.
 
 Offline AI shall **not replace BUILD's online AI infrastructure**.
 
