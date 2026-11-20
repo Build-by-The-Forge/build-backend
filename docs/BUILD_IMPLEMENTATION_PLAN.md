@@ -348,6 +348,23 @@ This replaces the earlier table and the report-derived mapping. Quotas, budgets,
 | 3 | **Cost.** A typical tutor answer (8,000 input and 500 output tokens) costs about $0.016 on Gemini at the 2027 price ($1.50 and $7.50 per 1M, verified on Google's page) against about $0.0005 on the small Fireworks tier at uncached prices, or about $0.0002 with the input cached (the page's prices, unverified): roughly 30 to 80 times, depending on caching. The relayed figure was about $0.0003, or about 45 times; the difference is the cache assumption | Free at scale on Gemini alone is expensive. Fireworks governance and evaluation should start now, in parallel, not only for R2 Pro |
 | 4 | Payments are paused in R1 | Plus and Pro are grantable states only |
 
+### 14.6 Subscription wording and the paid-call checklist
+
+**Subscription wording (user, 2026-11-20; this wording governs where the tables differ):**
+- **Free** = strictly budgeted online AI; the smallest local model in Release 2, after it passes evaluation.
+- **Plus** = the full local model portfolio in Release 2.
+- **Pro** = Plus entitlements and bounded agentic workflows using approved Gemini and Fireworks models.
+- **Campus** = undefined, pending a separate entitlement decision.
+- Offline reading remains free for everyone when it ships.
+
+**No paid Fireworks call is authorised.** There is no Fireworks key and the wallet is unfunded (user, 2026-11-20). The reviewer recommends $0 evaluation until governance and evaluation controls are ready, then a separate, explicit spending decision by the user. Before any paid call, all of these must hold:
+1. The governance documentation (the G-33 record) is reviewed.
+2. Model IDs are verified and current pricing is confirmed.
+3. A written evaluation plan exists, using **synthetic passages only** (the offline-bench lane is writing it in `ai-service`).
+4. A hard spend limit, with request and token limits and an automatic stop, is in place.
+5. Results and costs are recorded.
+6. The user has approved the cap in writing.
+
 ### 14.3 Provider data protection (both providers)
 
 - Prompts carry no student names, no school IDs and no unnecessary identifying information. Where an identifier is needed it is pseudonymous or opaque, not "anonymous": pseudonymous data can still be personal data.
