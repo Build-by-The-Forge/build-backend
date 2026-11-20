@@ -67,7 +67,7 @@ BUILD has three connected intelligence capabilities, behind one orchestration la
 3. Subscription and entitlement infrastructure (§84 to §86).
 4. The AI foundation: the Gemini SDK in the Model Gateway, routing, grounded retrieval, OCR, ingestion, evaluation and observability.
 5. Naive RAG, then bounded Agentic RAG, with evaluation.
-6. Offline AI: benchmark and integrate the local model portfolio, offline retrieval, local inference and synchronization.
+6. Offline AI: benchmark and integrate the local model portfolio, offline retrieval, local inference and synchronization. The benchmark runs from the start; on-device generative inference ships in Release 2 (§0.8).
 7. Deployment, update delivery and monitoring (§105).
 8. **Frontend Student Intelligence, last:** the complete student journey integrated against real, tested backend and AI contracts. Lightweight contract tests and integration fixtures run earlier, so interface mismatches aren't discovered at the end.
 
@@ -95,7 +95,7 @@ Green tests aren't enough. The AI service must demonstrate:
 4. **AI Tutor:** contextual help, citations, insufficient-evidence handling and safe conversation persistence.
 5. **Question intelligence:** structured generation, answer validation, source attribution, and generated questions kept separate from official ones.
 6. **Agent capabilities:** bounded tools, permission enforcement, budgets and auditability.
-7. **Offline AI:** a local generative model, local retrieval, offline CBT, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.**
+7. **Offline AI** (**Release 2**, §0.8): a local generative model, local retrieval, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.** Release 1 ships offline retrieval over downloaded course packs and offline practice only.
 8. **Operations:** cost, latency, errors, provider availability and model performance, measured.
 
 **Learning Memory stays disabled** until its production gate's conditions are implemented and verified. `GATE_OPEN` stays `False`.
@@ -108,6 +108,17 @@ Green tests aren't enough. The AI service must demonstrate:
 * **The Platform Operations Layer:** subscription and entitlement management, usage metering and AI cost accounting, app versions and mandatory-update policy, feature flags, model configuration and routing policy, service health, and release history with rollback. These are platform capabilities, not frontend responsibilities.
 
 The implementation reference for this section is the **BUILD Production Architecture & Operations Blueprint**, `docs/build-production-blueprint.md` in build-backend. It covers the topology, the Gemini adapter, the grounding gaps, RAG routing, the offline benchmark, the entitlement schema, the update contract and the release gates.
+
+## 0.8 Releases (2026-11-20)
+
+The production push ships in two releases. This section governs where §0.1, §0.4 and §0.6 would place the same work earlier.
+
+| Release | Scope |
+|---|---|
+| **Release 1** | The core journey on staging, then production: registration, academic onboarding, upload and ingestion, the grounded tutor, practice, CBT and results, progress, settings, backend-authoritative entitlements, and offline continuity limited to downloaded course packs, offline retrieval and offline practice |
+| **Release 2** | Offline generative AI inference on the device, flashcards, knowledge trees, study plans, and personalisation (Learning Memory only after its production gate is approved) |
+
+The offline model benchmark continues during Release 1, so Release 2 starts from device evidence. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`; the milestone register stays the one tracker.
 
 ---
 
