@@ -38,7 +38,7 @@ The student journey the release must complete:
 7. Learning: Read Mode, explanations of concepts, and relevant academic resources.
 8. CBT and assessment: practice, generated questions, submission, and authoritative results with explanations.
 9. Progress and remediation: performance, weak topics, and what to study next.
-10. Offline continuity: downloaded materials, offline retrieval and offline practice without internet, with controlled synchronization afterwards. Official CBT is online-only (§0.8); local AI assistance follows in Release 2.
+10. Offline continuity (**Release 2**, §0.8): managed offline packs, offline retrieval, local AI assistance and, only if separately approved, offline practice, with controlled synchronization afterwards. Release 1 has limited caching of already-opened documents only. Official CBT is online-only in every release.
 
 ## 0.2 Intelligence architecture
 
@@ -67,7 +67,7 @@ BUILD has three connected intelligence capabilities, behind one orchestration la
 3. Subscription and entitlement infrastructure (§84 to §86).
 4. The AI foundation: the Gemini SDK in the Model Gateway, routing, grounded retrieval, OCR, ingestion, evaluation and observability.
 5. Naive RAG, then bounded Agentic RAG, with evaluation.
-6. Offline AI: benchmark and integrate the local model portfolio, offline retrieval, local inference and synchronization. The benchmark runs from the start; on-device generative inference ships in Release 2 (§0.8).
+6. Offline AI: benchmark and integrate the local model portfolio, offline retrieval, local inference and synchronization. The benchmark runs from the start; managed offline packs, offline retrieval, sync and on-device generative inference ship in Release 2 (§0.8).
 7. Deployment, update delivery and monitoring (§105).
 8. **Frontend Student Intelligence, last:** the complete student journey integrated against real, tested backend and AI contracts. Lightweight contract tests and integration fixtures run earlier, so interface mismatches aren't discovered at the end.
 
@@ -95,7 +95,7 @@ Green tests aren't enough. The AI service must demonstrate:
 4. **AI Tutor:** contextual help, citations, insufficient-evidence handling and safe conversation persistence.
 5. **Question intelligence:** structured generation, answer validation, source attribution, and generated questions kept separate from official ones.
 6. **Agent capabilities:** bounded tools, permission enforcement, budgets and auditability.
-7. **Offline AI** (**Release 2**, §0.8): a local generative model, local retrieval, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.** Release 1 ships offline retrieval over downloaded course packs and offline practice only.
+7. **Offline AI** (**Release 2**, §0.8): a local generative model, local retrieval, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.** Release 1 ships limited caching of already-opened documents only (§0.8).
 8. **Operations:** cost, latency, errors, provider availability and model performance, measured.
 
 **Learning Memory stays disabled** until its production gate's conditions are implemented and verified. `GATE_OPEN` stays `False`.
@@ -115,10 +115,14 @@ The production push ships in two releases. This section governs where §0.1, §0
 
 | Release | Scope |
 |---|---|
-| **Release 1** | The core journey on staging, then production: registration, academic onboarding, upload and ingestion, the grounded tutor, practice, CBT and results, progress, settings, backend-authoritative entitlements, and offline continuity limited to downloaded course packs, offline retrieval and offline practice |
-| **Release 2** | Offline generative AI inference on the device, flashcards, knowledge trees, study plans, and personalisation (Learning Memory only after its production gate is approved) |
+| **Release 1** | The core journey on staging, then production: registration, academic onboarding, upload and ingestion, the grounded tutor (naive RAG, citations, abstention), practice, **online** CBT and results, progress, settings, backend-authoritative entitlements, and limited caching of already-opened documents within storage limits (not a supported offline system) |
+| **Release 2** | Managed offline academic packs with the authorisation lease and sync; offline retrieval; offline AI inference, after benchmarking; flashcards and knowledge trees; personalised study plans; multi-hop agentic study help, autonomous reading paths and agentic loops; the enhanced tutor; expanded document caching; offline practice only if separately approved; personalisation (Learning Memory only after its production gate is approved) |
 
-**Offline CBT is practice-only (decided 2026-11-20).** Official CBT attempts, submission, grading and results are online-only. Offline practice runs on downloaded course packs, and its scores are provisional until the server validates them on reconnect. An offline practice attempt never becomes an official attempt, never changes an official score, and never appears in official results (as with online practice, S-10).
+In Release 1 the tutor is bounded: naive RAG only. It does no autonomous multi-hop retrieval, no reading paths and no agentic loops (§0.3 describes the Release 2 behaviour).
+
+**CBT and official assessments are online-only (decided 2026-11-20).** Release 1 has no offline assessment of any kind. When offline practice exists, in Release 2 and only if separately approved, official CBT attempts, submission, grading and results stay online-only; offline practice scores are provisional until the server validates them on reconnect; and an offline practice attempt never becomes an official attempt, never changes an official score, and never appears in official results (as with online practice, S-10).
+
+**Cached documents in Release 1** are a proposal for the reviewer, not an approved rule: app-private storage; cleared on logout, on session end, and when the backend reports a revocation or deletion; a short time-to-live set by the reviewer; revalidated whenever the device is online. The reason is that M3-D promises immediate denial, and a cached copy would outlive it.
 
 The offline model benchmark continues during Release 1, so Release 2 starts from device evidence. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`; the milestone register stays the one tracker.
 
@@ -2574,7 +2578,7 @@ Future offline capability should prioritize:
 * course metadata;
 * Read Mode;
 * selected learning content;
-* selected practice questions (official CBT is online-only, §0.8);
+* selected practice questions (Release 2, if separately approved; official CBT is online-only, §0.8);
 * progress synchronization.
 
 AI features can initially require connectivity.
@@ -3351,7 +3355,7 @@ V1 should prioritize:
 
 * downloaded academic materials;
 * local AI assistance from the local model portfolio (§146.3);
-* offline practice on downloaded questions (official CBT is online-only, §0.8);
+* offline practice on downloaded questions (Release 2, if separately approved; official CBT is online-only, §0.8);
 * controlled synchronization.
 
 ### Analytics
@@ -4130,7 +4134,7 @@ This is particularly important for university-specific content where the expecte
 
 ## 146.6 Offline CBT Intelligence
 
-**Amended 2026-11-20 (§0.8): offline CBT is practice-only.** The list below describes what a device may hold and do for practice. Official attempts, submission, grading and results are online-only, and offline practice scores are provisional until server validation.
+**Amended 2026-11-20 (§0.8): official CBT is online-only in every release; offline practice is Release 2, only if separately approved.** The list below describes what a device may hold and do for practice then. Official attempts, submission, grading and results are online-only, and offline practice scores are provisional until server validation.
 
 BUILD shall provide access to locally available CBT resources for practice when the student is offline.
 
