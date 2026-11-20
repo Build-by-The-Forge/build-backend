@@ -30,6 +30,9 @@ class ContentAsset:
     tenant_id: str | None = None
     asset_version: int = 1
     parent_asset_id: str | None = None
+    # The shared blob holding the bytes (M3-D), or None for a document with
+    # its own object at tenants/{t}/assets/{id}/{sha256}.
+    blob_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

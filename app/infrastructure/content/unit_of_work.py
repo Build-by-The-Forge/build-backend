@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.content.asset_repositories import (
     SqlAlchemyContentAssetRepository,
 )
+from app.infrastructure.content.blob_repository import SqlAlchemyBlobRepository
 from app.infrastructure.content.job_repositories import (
     SqlAlchemyContentIngestionJobRepository,
     SqlAlchemyIngestionEventRepository,
@@ -27,6 +28,7 @@ class ContentUnitOfWork(UnitOfWork):
         self.ingestion_events = SqlAlchemyIngestionEventRepository(session)
         self.scans = SqlAlchemyScanRepository(session)
         self.scope_assignments = SqlAlchemyScopeAssignmentRepository(session)
+        self.blobs = SqlAlchemyBlobRepository(session)
 
 
 @asynccontextmanager

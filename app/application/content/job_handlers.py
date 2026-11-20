@@ -18,7 +18,7 @@ from app.application.content.job_commands import (
     ReprocessAssetCommand,
     RetryIngestionJobCommand,
 )
-from app.application.content.upload import managed_storage_key
+from app.application.content.upload import resolve_managed_key
 from app.application.identity.ports.security_events import (
     SecurityEvent,
     SecurityEventRecorder,
@@ -86,8 +86,8 @@ class UnmanagedAssetError(ClientMessage, ValueError):
     code = "ASSET_NOT_IN_MANAGED_STORAGE"
 
 
-def require_managed_storage(asset: ContentAsset, bucket: str) -> str:
-    key = managed_storage_key(asset, bucket)
+async def require_managed_storage(uow: ContentUnitOfWorkPort, asset: ContentAsset, bucket: str) -> str:
+    key = await resolve_managed_key(uow, asset, bucket)
     if key is None:
         raise UnmanagedAssetError("the asset is not in managed storage, so it cannot be processed; upload it instead")
     return key
@@ -164,7 +164,7 @@ class CreateIngestionJobHandler:
 
     async def handle(self, cmd: CreateIngestionJobCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
-        require_managed_storage(asset, self._bucket)
+        await require_managed_storage(self._uow, asset, self._bucket)
         await require_scanned(self._uow, asset)
 
         job = ContentIngestionJob.create(
@@ -225,7 +225,7 @@ class ReprocessAssetHandler:
 
     async def handle(self, cmd: ReprocessAssetCommand) -> ContentIngestionJob:
         asset = owned_asset(await self._uow.assets.get_asset_by_id(cmd.asset_id), cmd.tenant_id, cmd.asset_id)
-        require_managed_storage(asset, self._bucket)
+        await require_managed_storage(self._uow, asset, self._bucket)
         await require_scanned(self._uow, asset)
 
         latest_job = await self._uow.jobs.get_latest_job_for_asset(cmd.asset_id)
@@ -282,7 +282,7 @@ class DispatchIngestionJobHandler:
         scanned = await scan_refusal(self._uow, asset)
         if scanned is not None:
             return (scanned[0], scanned[1], False)
-        key = managed_storage_key(asset, self._bucket)
+        key = await resolve_managed_key(self._uow, asset, self._bucket)
         if key is None:
             return ("ASSET_NOT_IN_MANAGED_STORAGE", "the asset is not in managed storage", False)
         try:

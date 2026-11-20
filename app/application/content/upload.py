@@ -24,6 +24,7 @@ from app.application.content.access import ContentNotFoundError, ensure_tenant_m
 from app.core.metrics import content_upload_orphaned_objects_total
 from app.domain.client_safe import ClientMessage
 from app.domain.content.asset import ContentAsset
+from app.domain.content.blob import BLOB_GENERATION, ContentBlob, blob_object_key
 from app.domain.content.enums import AssetStatus, SourceStatus, VisibilityScope
 from app.domain.content.storage import (
     ObjectIntegrityError,
@@ -220,7 +221,7 @@ def storage_uri_for(bucket: str, key: str) -> str:
     return f"s3://{bucket}/{key}"
 
 
-def managed_storage_key(asset: ContentAsset, bucket: str) -> str | None:
+def managed_storage_key(asset: ContentAsset, bucket: str, blob: ContentBlob | None = None) -> str | None:
     """The object key of ``asset`` if its ``storage_uri`` is exactly the one
     the upload service writes for this row: the configured bucket and the
     row's own tenant, id and SHA-256. Otherwise None (design section 10).
@@ -229,13 +230,48 @@ def managed_storage_key(asset: ContentAsset, bucket: str) -> str | None:
     client-supplied URI is never trusted for being well formed: a foreign
     bucket, another tenant's or asset's prefix, another hash, a platform
     row, extra segments or any other spelling all return None.
+
+    A document whose bytes live in a shared blob (M3-D PR 7) is managed only
+    with that blob's row in hand: the row the document names, of its tenant
+    and SHA-256, ``active``, whose own key is the blob form for its
+    generation, and the document's URI is exactly that key. A blob document
+    never matches the per-document form, and a per-document row never
+    matches a blob.
     """
     if not asset.tenant_id or not bucket:
         return None
-    key = object_key(asset.tenant_id, asset.id, asset.content_sha256)
+    if asset.blob_id is None:
+        if blob is not None:
+            return None
+        key = object_key(asset.tenant_id, asset.id, asset.content_sha256)
+    else:
+        if (
+            blob is None
+            or blob.id != asset.blob_id
+            or blob.tenant_id != asset.tenant_id
+            or blob.content_sha256 != asset.content_sha256
+            or blob.state != "active"
+            or not BLOB_GENERATION.fullmatch(blob.generation)
+        ):
+            return None
+        key = blob_object_key(asset.tenant_id, asset.content_sha256, blob.generation)
+        if blob.object_key != key:
+            return None
     if asset.storage_uri != storage_uri_for(bucket, key):
         return None
     return key
+
+
+async def resolve_managed_key(uow: object, asset: ContentAsset, bucket: str) -> str | None:
+    """``managed_storage_key`` with the document's blob read from the unit of
+    work. Without a blob repository, a blob document isn't managed."""
+    blob = None
+    if asset.blob_id is not None and asset.tenant_id:
+        blobs = getattr(uow, "blobs", None)
+        if blobs is None:
+            return None
+        blob = await blobs.get(asset.tenant_id, asset.blob_id)
+    return managed_storage_key(asset, bucket, blob)
 
 
 class ContentAssetUploadService:
