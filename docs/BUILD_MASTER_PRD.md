@@ -38,7 +38,7 @@ The student journey the release must complete:
 7. Learning: Read Mode, explanations of concepts, and relevant academic resources.
 8. CBT and assessment: practice, generated questions, submission, and authoritative results with explanations.
 9. Progress and remediation: performance, weak topics, and what to study next.
-10. Offline continuity (**Release 2**, §0.8): managed offline packs, offline retrieval, local AI assistance and, only if separately approved, offline practice, with controlled synchronization afterwards. Release 1 has limited caching of already-opened documents only. Official CBT is online-only in every release.
+10. Offline continuity (**Release 2**, §0.8): managed offline packs, offline retrieval, local AI assistance and, only if separately approved, offline practice, with controlled synchronization afterwards. Release 1 has no document cache unless an approved cache policy exists (§0.8). Official CBT is online-only in every release.
 
 ## 0.2 Intelligence architecture
 
@@ -103,7 +103,7 @@ Green tests aren't enough. The AI service must demonstrate:
 4. **AI Tutor:** contextual help, citations, insufficient-evidence handling and safe conversation persistence.
 5. **Question intelligence:** structured generation, answer validation, source attribution, and generated questions kept separate from official ones.
 6. **Agent capabilities:** bounded tools, permission enforcement, budgets and auditability.
-7. **Offline AI** (**Release 2**, §0.8): a local generative model, local retrieval, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.** Release 1 ships limited caching of already-opened documents only (§0.8).
+7. **Offline AI** (**Release 2**, §0.8): a local generative model, local retrieval, deterministic tools, confidence handling and controlled synchronization. **Local storage and local embeddings alone don't satisfy this.** Release 1 ships without a document cache unless an approved cache policy exists (§0.8).
 8. **Operations:** cost, latency, errors, provider availability and model performance, measured.
 
 **Learning Memory stays disabled** until its production gate's conditions are implemented and verified. `GATE_OPEN` stays `False`.
@@ -123,14 +123,14 @@ The production push ships in two releases. This section governs where §0.1, §0
 
 | Release | Scope |
 |---|---|
-| **Release 1** | The core journey on staging, then production: registration, academic onboarding, upload and ingestion, the grounded tutor (naive RAG, citations, abstention), practice, **online** CBT and results, progress, settings, backend-authoritative entitlements, and limited caching of already-opened documents within storage limits (not a supported offline system) |
+| **Release 1** | The core journey on staging, then production: registration, academic onboarding, upload and ingestion, the grounded tutor (naive RAG, citations, abstention), practice, **online** CBT and results, progress, settings, backend-authoritative entitlements, and **no document cache** (§0.8) |
 | **Release 2** | Managed offline academic packs with the authorisation lease and sync; offline retrieval; offline AI inference, after benchmarking; flashcards and knowledge trees; personalised study plans; multi-hop agentic study help, autonomous reading paths and agentic loops; the enhanced tutor; expanded document caching; offline practice only if separately approved; personalisation (Learning Memory only after its production gate is approved) |
 
 In Release 1 the tutor is bounded: naive RAG only. It does no autonomous multi-hop retrieval, no reading paths and no agentic loops (§0.3 describes the Release 2 behaviour).
 
 **CBT and official assessments are online-only (decided 2026-11-20).** Release 1 has no offline assessment of any kind. When offline practice exists, in Release 2 and only if separately approved, official CBT attempts, submission, grading and results stay online-only; offline practice scores are provisional until the server validates them on reconnect; and an offline practice attempt never becomes an official attempt, never changes an official score, and never appears in official results (as with online practice, S-10).
 
-**Cached documents in Release 1** are a proposal for the reviewer, not an approved rule: app-private storage; cleared on logout, on session end, and when the backend reports a revocation or deletion; a short time-to-live set by the reviewer; revalidated whenever the device is online. The reason is that M3-D promises immediate denial, and a cached copy would outlive it.
+**Document caching in Release 1.** Release 1 ships **without** a document cache unless a cache policy with an approved time-to-live, revocation behaviour and implementation evidence exists. The following is a **proposal for later reviewer approval**, not an approved rule: app-private storage; cleared on logout, on session end, and when the backend reports a revocation or deletion; a short time-to-live set by the reviewer; revalidated whenever the device is online. The reason is that M3-D promises immediate denial, and a cached copy would outlive it.
 
 The offline model benchmark continues during Release 1, so Release 2 starts from device evidence. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`; the milestone register stays the one tracker.
 
@@ -2645,7 +2645,7 @@ BUILD should support accessibility across:
 
 # 93. Offline / Poor Connectivity Strategy
 
-> **Amended 2026-11-20 (§0.8).** Offline capability is Release 2. Release 1 has limited caching of already-opened documents, under the cache rule proposed in §0.8, and no offline assessment.
+> **Amended 2026-11-20 (§0.8).** Offline capability is Release 2. Release 1 has no document cache unless an approved cache policy exists (§0.8), and no offline assessment.
 
 Full offline AI is not an initial requirement.
 
@@ -4386,7 +4386,7 @@ Routing decisions shall be configurable and should evolve as benchmark and produ
 
 ## 146.11 Offline-to-Online Continuity
 
-> **Amended 2026-11-20 (§0.8).** Release 2. Release 1 has no offline continuity beyond limited caching (§0.8).
+> **Amended 2026-11-20 (§0.8).** Release 2. Release 1 has no offline continuity, and no document cache unless an approved cache policy exists (§0.8).
 
 BUILD shall support continuity between offline and online operation.
 
