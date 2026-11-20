@@ -103,6 +103,14 @@ Same as the Gemini record, and stated separately: no student names, school IDs o
 8. **Cost urgency.** At the 2027 Gemini price a typical tutor answer (8,000 input and 500 output tokens) costs about $0.016; on the small Fireworks tier, at the page's unverified prices, about $0.0005 uncached or $0.0002 with input cached, roughly 30 to 80 times less. Governance and evaluation should start now, not only for R2.
 9. **Spend:** set a monthly spend limit before any key is used. **Any account, key or paid call needs the user's explicit authorisation.** None exists.
 
+**No paid Fireworks call is authorised.** There is no Fireworks key and the wallet is unfunded (user, 2026-11-20). The reviewer recommends $0 evaluation until governance and evaluation controls are ready, then a separate, explicit spending decision by the user. Before any paid call, all of these must hold:
+1. The governance documentation (the G-33 record) is reviewed.
+2. Model IDs are verified and current pricing is confirmed.
+3. A written evaluation plan exists, using **synthetic passages only** (the offline-bench lane is writing it in `ai-service`).
+4. A hard spend limit, with request and token limits and an automatic stop, is in place.
+5. Results and costs are recorded.
+6. The user has approved the cap in writing.
+
 **Prerequisites, not satisfied:** the above approval, a Fireworks account and key (a spending decision), and the Fireworks adapter, which doesn't exist and waits for ai-service #65. Until then Fireworks is not in `MODEL_PROVIDERS_APPROVED`, and no routing changes.
 
 This document approves nothing, enables nothing, and authorises no spend.
