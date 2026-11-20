@@ -303,11 +303,43 @@ Nothing in this section approves a provider, enables a route or fixes a quota. I
 - Fallback happens only between approved portfolio entries. GLM, Qwen and MiniMax are not v1 defaults.
 - While Fireworks is unapproved, every request routes to Gemini. No routing change follows from documentation.
 
-### 14.2 Entitlements
+### 14.2 Plan-to-capability policy (user, 2026-11-20; provisional)
 
-- No per-token student billing in v1. The plans stay Free, Plus, Pro and Campus, with backend-authoritative entitlements and budgets.
-- The report's mapping (Free on a small-model tier with a conservative budget; Plus a medium-tier allowance; Pro a higher one subject to quality and cost controls; Campus institution-managed) is a **provisional policy**. It is not hardcoded anywhere. Exact limits, model capabilities, quotas and Campus allocation need explicit entitlement definitions and reviewer approval, and a plan name alone never grants a costlier model.
-- The mapping presupposes Fireworks tiers. In R1, "Free" means Gemini under a conservative backend budget.
+This replaces the earlier mapping from the research report. Exact quotas, model assignments, cost limits and Campus rules stay unspecified until separately reviewed. Nothing here is hardcoded, and no quota enforcement code follows from this document.
+
+| Capability | Free | Plus | Pro |
+|---|---|---|---|
+| Online AI tutor | Yes, restricted | Yes | Yes |
+| Small-model access | Limited usage and budget | Yes, subject to budget | Yes |
+| Offline AI inference | No | Yes | Yes |
+| Agentic study workflows | No | No | Full access |
+| Multi-hop study assistance | No | No | Yes |
+| Autonomous reading paths | No | No | Yes |
+
+**Campus** is a separate, institution-managed entitlement policy and is **left undefined**. It is not inferred from the student plans. The questions it needs answered are in `docs/entitlement-design.md`.
+
+**By release**
+- **R1:** online-first. Gemini is the only approved online provider until Fireworks passes governance. Free usage is tightly limited. Plus and Pro receive their approved online entitlements. No offline AI and no agentic workflows. Payments are paused (PRD §0.5), so Plus and Pro can only be **granted** (promotional, campus, admin); R1 needs the entitlement infrastructure and Free enforcement, with no purchase flow.
+- **R2:** Plus unlocks offline AI. Pro unlocks full agentic study capabilities, subject to evaluation and safety controls.
+- Official assessments stay online-only. Offline practice, if introduced, is a separate R2 capability and is never authoritative grading.
+
+**Rules**
+1. Free restrictions are enforced by the backend, never by hidden UI.
+2. Usage budgets are server-authoritative and count provider costs, retries and failed requests.
+3. Plus offline access does not grant Pro agentic permissions.
+4. Pro agentic access gives no authority over assessment scores, mastery, permissions or tenant isolation.
+5. Free's small-model entitlement does not depend on Fireworks. In R1 it is Gemini under a strict budget.
+6. Model-tier access and agentic capability permissions are **separate entitlements**.
+7. A plan name alone never grants a costlier model.
+
+**Open issues, with the reviewer's verdicts (proposals)**
+
+| # | Issue | Proposal |
+|---|---|---|
+| 1 | **Offline AI runs on the device.** The backend cannot technically stop a modified APK from running side-loaded open-weight models | State the honest boundary. The entitlement gates the **authorised model-pack download** (backend-issued and signed) and a periodic entitlement lease. That is distribution gating, not hard prevention. PRD §84.1 says the client never decides; this document records the limit rather than claiming more |
+| 2 | Offline inference costs BUILD nothing per use, and offline matters most to students with poor connectivity and data costs. PRD §78 to §80 say never charge for a student's own notes, basic CBT or essential learning | Offline **reading** of downloaded materials and content packs is **not paywalled**; only AI inference is entitled. **Decision open:** whether Free should get the smallest local model. Not decided here |
+| 3 | Pro agentic on Gemini alone is estimated at 8 to 16 times the Fireworks tier's cost per task (the report's own arithmetic, unverified) | R2 Pro agentic depends on either Fireworks approval or an explicit budget. Recorded as a dependency |
+| 4 | Payments are paused in R1 | Plus and Pro are grantable states only (see above) |
 
 ### 14.3 Provider data protection (both providers)
 
