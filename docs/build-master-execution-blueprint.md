@@ -1,6 +1,6 @@
 # BUILD Master Execution Blueprint
 
-**Status:** proposed, for the reviewer. **Baseline:** 2026-11-07, `build-backend` main `a8f4b4d` (after #108), `ai-service` main `2506dfd` (after #46), and `Build-UI` main `9c6937c`.
+**Status:** refreshed 2026-11-20 to `build-backend` main `e9067ed` and `ai-service` main `2c76c93`; sections 2, 3, 4 (S-02 and S-06 rows), 5 and 10 are updated, the rest is as at the original baseline. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`. **Original baseline:** 2026-11-07, `build-backend` main `a8f4b4d` (after #108), `ai-service` main `2506dfd` (after #46), and `Build-UI` main `9c6937c`.
 
 **Purpose:** the source of truth for the delivery programme. Every claim about existing code below was checked against the repository it names.
 
@@ -53,6 +53,21 @@
 | #110 | S-02 academic profile design | **In design review**; the composite tenant key fixed at `2264aac` |
 | #107 | This document | In final review |
 
+### Since 2026-11-10 (refresh, 2026-11-20)
+
+| Repo | PR | What | State |
+|---|---|---|---|
+| backend | #110, #111 | S-02 academic profile: design, then migration `0032` and routes; **closes G-28** | **Merged** (`6e216ca`, `89fdb3c`) |
+| backend | #112 | Student journey contracts design (S-03, S-07 to S-10, S-13, S-14) | **Design merged** (`4f64995`); no operations in the contract yet |
+| backend | #113 | opentelemetry 1.45.2 (CVE fix; main CI had been red) | **Merged** (`22c2110`) |
+| backend | #114, #115 | The two-worker dispatch test explains its failures; an encrypted PDF's failure tells the student what to do | **Merged** (`0a0e77a`, `e9067ed`) |
+| ai-service | #48 to #51, #55, #56 | AI-01: design, gateway safety, deterministic adapter, bounded provider cleanup, chat, explain and questions through the gateway | **Merged** (through `539cab9`) |
+| ai-service | #52, #57 to #60 | Safe logging (type and place only), structured tool failures, ingestion failure codes, sanitised agent results | **Merged** |
+| ai-service | #61, #62 | AI-10: the CBT generator through the gateway, then structured and grounded | **Merged** (`837c83e`, `1c738b5`); still no route |
+| ai-service | #63, #64 | The legacy model layer removed; httpx 0.28.1 | **Merged** (`9f43779`, `2c76c93`) |
+| ai-service | #65 | Gemini gateway adapter | **Open**, head `9d8c993`, hosted CI green, awaiting review |
+| backend | #116 to #118 | The implementation plan and baseline; the PRD amendment (draft); the G-33 records (draft) | **Open** |
+
 ### Carried forward from the reviewer
 
 - **#104, done by #108:** each applied decision rechecks the tenant authority and the operator's membership inside its own transaction, holding both rows `FOR SHARE` until it commits. A revocation or demotion during a run waits for the decision in flight, and stops every later decision.
@@ -70,7 +85,7 @@
 
 | # | Capability | Existing code (`ai-service`) | Status | What's missing |
 |---|---|---|---|---|
-| AI-01 | Model Gateway | `core/models/gateway.py`: retries, circuit breaker, token-bucket rate limit, budget, fallback. Providers in `core/models/providers/`: `openai`, `mock` | **Partial** | **Two abstractions:** chat, explain and question generation call `services/ai/llm.py` (`LLMProvider`, OpenAI or deterministic) directly, not the gateway. Only `services/agents/executor.py` uses the gateway. Consolidate onto one model execution boundary (design #48, merged), then add the Gemini adapter, with the model ID verified and G-33 enforced in code by the provider allowlist |
+| AI-01 | Model Gateway | `core/models/gateway.py`: retries, circuit breaker, token-bucket rate limit, budget, fallback. Providers in `core/models/providers/`: `openai`, `deterministic`, `mock`. Provider approval by `MODEL_PROVIDERS_APPROVED` (empty by default) | **Built; Gemini adapter in review (#65)** | **Refreshed 2026-11-20:** chat, explain, questions and the CBT generator all run through the gateway (#56, #61); the legacy layer (`LLMProvider`, OpenAI and deterministic LLMs, the openai SDK) was removed in #63. Left: the Gemini adapter (#65, open), G-33 for it, and a Fireworks adapter only after governance. *Original text:* **Two abstractions:** chat, explain and question generation call `services/ai/llm.py` (`LLMProvider`, OpenAI or deterministic) directly, not the gateway. Only `services/agents/executor.py` uses the gateway. Consolidate onto one model execution boundary (design #48, merged), then add the Gemini adapter, with the model ID verified and G-33 enforced in code by the provider allowlist |
 | AI-02 | Ingestion and OCR | `services/tasks/handlers.py` `ContentIngestionTaskHandler`: verified fetch, then text layer or OCR (`services/ocr`: PaddleOCR, OpenVINO), page-aware chunks, ONNX MiniLM embeddings, one-transaction durable index, signed stage callbacks | **Built** | Harden, don't rewrite: OCR edge cases, tables and equations, versioning and reprocess, index consistency after deletion and revocation, duplicate and retry behaviour, concurrency. `app/api/v1/ai/ocr.py` is an unmounted placeholder, never served (the contract test pins the served `/v1/ai` paths); removed in ai-service #47 (merged) |
 | AI-03 | Retrieval and RAG | `services/rag`: pgvector store, lexical full-text, hybrid `retrieval.py`, `evidence.py`, `recorder.py` (`sources_used`), `scopes.py`, index fence; `/v1/ai/retrieve` | **Built**, quality gap | Real FUTA material scored 62.5% recall@5 (tier-2). Separate the variables: extraction, chunking, metadata, hybrid weighting, reranking. Allow-list retrieval for personal documents (M4, G-05) |
 | AI-04 | AI Tutor | `services/ai/orchestrator.py` `chat`: grounded with `check_grounded`, abstains without evidence, signed `sources_used` | **Partial** | Conversations (M3-F, contract #90): multi-turn history, citations with excerpts, the redacted flag, `TURN_IN_PROGRESS`. Backend G-04, G-17, G-18 |
@@ -79,7 +94,7 @@
 | AI-07 | Knowledge Trees | `services/tree/generator.py`, `/v1/ai/tree/generate` | **Partial** | It builds a tree from a supplied title and topic list only. It must be generated from authorised course material, grounded, with provenance and persisted progress |
 | AI-08 | Read Mode | `services/tree/learning_path.py`, `/v1/ai/read/start` | **Partial** | A path from a supplied root only. Needs grounded summaries, checkpoints, and the backend byte route (PR 10) for the document itself |
 | AI-09 | Learning Memory | `services/memory/memory_service.py`, `reward.py`, `/v1/ai/memory/*` | **Built, gated** | Stays off until its gate (retention, enforcement, deletion, controls, idempotency, consent) is approved. L4 carries the remaining conditions |
-| AI-10 | Fusion Exam Intelligence | `generation/fusion_engine.py`, using `adaptive_engine` and `cbt_ai_generator` | **Not reachable** | Code exists; no route uses it. Needs a contract, inputs from assessment history (backend-authoritative), and an evaluation |
+| AI-10 | Fusion Exam Intelligence | `generation/fusion_engine.py`, using `adaptive_engine` and `cbt_ai_generator` | **Structured and grounded; unrouted** | Through the gateway (#61); the exam is structured and grounded (#62). No route in `app/api/v1/ai/` uses it. Left: a contract, inputs from assessment history (backend-authoritative), topic coverage (a lane is open) and an evaluation |
 | AI-11 | Adaptive difficulty | `generation/adaptive_engine.py` | **Not reachable** | As AI-10; it depends on evaluated evidence of difficulty |
 | AI-12 | Offline AI | None in this repository | **Not started** | On-device portfolio (Qwen3-1.7B, smaller fallbacks, Glimmer in the benchmark), benchmarked on target Android devices before any claim |
 | AI-13 | Evaluation and observability | Retrieval quality gate in CI, tier-2 evaluation tooling, Prometheus metrics, the worker's task metrics | **Partial** | Grounding, citation correctness, latency and cost dashboards per capability; a per-capability evaluation set with a baseline before any threshold |
@@ -88,8 +103,8 @@
 
 ### AI implementation order
 
-1. **AI-01 consolidation.** The orchestrator, explain and question generation move onto `ModelGateway`; `LLMProvider` is retired. Behaviour is unchanged, so existing tests and the deterministic provider still pass.
-2. **AI-01 Gemini adapter**, behind the gateway:
+1. **AI-01 consolidation: done** (#56, #61, #63).
+2. **AI-01 Gemini adapter**, behind the gateway (**open, #65**):
    - the model ID is verified at startup against the provider;
    - **disabled for passages** until G-33 is recorded;
    - free models for development and tests, as agreed.
@@ -112,7 +127,7 @@
 | # | Capability | Backend endpoints | Contract | Backend status | AI interaction | Mobile today | Next work |
 |---|---|---|---|---|---|---|---|
 | S-01 | Register, login, logout, sessions | `/identity/*` (12 routes) | In contract | **Implemented** (M3-B) | None | `(auth)/login`, `signup`, `preauth`: prototype; Sign In skips authentication | Mobile: API client, secure token storage, single-flight refresh ([refresh contract](mobile-api-conventions.md)) |
-| S-02 | Academic onboarding | `/tenants/{slug}/join`, `/identity/memberships`, `/catalogue/faculties`, `departments`, `programmes`, `courses` | In contract, except saving a student's programme and courses | Join and catalogue implemented; **no record of the student's programme, department or courses** (G-28) | None | `(onboarding)/step-one` to `five`: local context only | Backend: design and implement the academic profile (programme, level, enrolled courses). Mobile: wire onboarding to it |
+| S-02 | Academic onboarding | `/tenants/{slug}/join`, `/identity/memberships`, `/catalogue/faculties`, `departments`, `programmes`, `courses` | In contract, with `/academic/profile` | **Implemented** (#111, `app/api/academic.py`, `app/application/academic/profile_service.py`, migration `0032`); G-28 closed | None | `(onboarding)/step-one` to `five`: local context only | Mobile: wire onboarding to the profile routes |
 | S-03 | Dashboard | None | Not designed | **Missing** | Optional recommendations later | `dashboard/home`: fixture data | Contract: a dashboard summary built from courses, recent activity, attempts and documents |
 | S-04 | Study Shelf | `/content/my-documents` (list, get, patch, delete) | In contract | **Missing** (G-01, G-41, G-32) | None | `services/studyShelf.ts`: local only | Backend PR 8. Mobile: local shelf stays distinct from server documents |
 | S-05 | Upload | `POST /content/my-documents`, `.../retry` | In contract | **Missing** (G-01, G-02, G-38, G-11, G-12, G-25); scanning merged (#106), so every upload is quarantined until a clean verdict | Ingestion | Document picker exists, local only | Backend PR 7 and 8 (and 9 for retry); mobile upload with real statuses |
@@ -132,7 +147,7 @@
 
 | Boundary | Contract | State | Owner |
 |---|---|---|---|
-| Mobile and backend | `contracts/mobile/openapi.yaml`, with `gaps.yaml` enforced by the drift gate | 53 operations; 24 gaps open (G-40 closed by #109) | Backend, one contract PR per milestone |
+| Mobile and backend | `contracts/mobile/openapi.yaml`, with `gaps.yaml` enforced by the drift gate | 55 operations (`operationId` entries); 23 gaps open, 20 closed (G-28 closed by #111) | Backend, one contract PR per milestone |
 | Backend and AI, requests | Service Signature v1, user or system context, single-use nonce | Built, boundary-tested | Paired PRs; the boundary gate runs against `ai-service` main |
 | Backend and AI, responses | Signed response with `sources_used`, then the provenance check (#100) | Built | Paired |
 | Backend and AI, scope | `/v1/ingest/scope-assignments`, versioned, plus `denied_assets` | Built; the dispatcher merged (#104), with the per-decision authority recheck (#108) | Paired |
@@ -199,3 +214,21 @@ The reviewer agreed with all four on 2026-11-07, on #107.
 4. **The placeholder routes: agreed.**
    - `/v1/ai/ocr` and `/v1/ai/generate` are removed. They were never served: their modules hung off an unmounted router. ai-service #47 deleted them (merged).
    - The real ingestion OCR pipeline and the distinct question-generation capability stay.
+
+## 10. Parallel lanes (2026-11-20)
+
+The reviewer's direction of 2026-11-16: parallelise research, implementation, infrastructure, evaluation and documentation; serialise only dependent decisions and integrations. Lanes run as sessions on one machine, and one session owns each. State is taken from each lane's hand-over note and `git worktree list`, not from a claim about its branch.
+
+| Lane | Owner session | Work | State |
+|---|---|---|---|
+| M3-D uploads | `m3d-uploads` | PRs 7 to 16 of `docs/m3-d-design.md`; owns the next Alembic revision, `0033` | In progress; build-backend branch `claude/m3d-pr7-f68199`, nothing pushed |
+| M3-F tutor | `m3f-tutor` | The tutor-turn route (ai-service) and the paired backend plan | Design delivered; implementation in progress |
+| Mobile client | None yet | Typed client, auth and session (M5) | Not started |
+| GCP staging | `gcp-staging` | Terraform and deploy design; spending needs the user's authorisation | Nothing committed |
+| Retrieval quality | `retrieval-quality` | OCR corpus and a real baseline (`p3-5/ocr-corpus`, `p3-5/real-baseline`) | PR 1 unpushed; runs in Docker |
+| Offline benchmark | `offline-bench` | AI-12 harness, device procedure, report | Local WIP; the benchmark has not run |
+| AI-10 coverage | `ai10-coverage` | Topic-coverage check wired into the CBT generator | Uncommitted |
+| Gemini adapter | review lane | ai-service #65 | Open, awaiting review |
+| Plan and governance | this lane | The plan, baseline, PRD amendment, G-33 records, two designs | #116 to #118 open |
+
+Lanes that touch the same files serialise: the Alembic head, the contract, and the PRD each have one writer at a time.
