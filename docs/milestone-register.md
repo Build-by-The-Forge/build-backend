@@ -54,6 +54,25 @@ M3 is **not done**. The fixes merged so far closed security and lifecycle gaps e
 
 **L4 is the plan's final L-track PR.** The plan defines no L5, L6 or L7, so this register doesn't list any.
 
+## Phase to milestone mapping
+
+The delivery plan (`docs/BUILD_IMPLEMENTATION_PLAN.md`, approved 2026-11-20) has phases 0 to 11. This register stays the one tracker: the plan carries no status, and this table holds no second status column. A phase is done when the milestones it names are, plus the exit evidence the plan states.
+
+| Plan phase | Register milestones | Notes |
+|---|---|---|
+| 0. Audit | None | `docs/BUILD_IMPLEMENTATION_BASELINE.md`; runs alongside active lanes and gates nothing |
+| 1. Architecture and contracts | M0, M1, M2 (merged); the journey contracts design (#112) | Offline content-pack contract and study-planner design are design documents, not milestones |
+| 2. Backend foundation | M3-A to M3-F, M4, M5, M6, M7; the entitlements work (not yet a milestone); offline authorisation and sync (design in M3-D, #79) | Entitlements and offline sync get milestone rows when their designs are approved |
+| 3. AI foundation | AI-01 and the gateway (no register row; tracked in `docs/build-master-execution-blueprint.md`) | G-33 is an open implementation gap in `contracts/mobile/gaps.yaml` |
+| 4. Grounded intelligence | M4 for authorisation; retrieval quality has no milestone | Retrieval quality is measured in `ai-service` |
+| 5. Offline AI | None | R2 |
+| 6. Android app | M5, M6 | |
+| 7. Offline continuity | The offline authorisation row under "Product direction" | R1 is practice-only |
+| 8. Testing and benchmarking | M7; boundary-gate bar (met) | |
+| 9. Security and governance | L-track memory gate (L0-A, L0-B, L4, activation); G-32, G-33 | `GATE_OPEN` stays `False` |
+| 10. Deployment | None yet | Needs explicit authorisation to spend |
+| 11. End-to-end release | M7 | The plan's release acceptance checklist |
+
 ## M3 exit checklist
 
 Set by the reviewer on #76. M3 is done when all of these hold, each with evidence:
