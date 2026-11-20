@@ -13,7 +13,7 @@
 **Backend:** FastAPI
 **Primary Database:** PostgreSQL
 **AI Platform:** BUILD AI Service
-**Online AI:** Gemini SDK, behind the Model Gateway. Free models for development and testing; Gemini 3.8 Flash as the production target, once its exact model identifier and availability are verified (§0.2)
+**Online AI:** Gemini SDK, behind the Model Gateway. Free models for development and testing; Gemini 3.8 Flash as the production target, once its exact model identifier and availability are verified (§0.2). **Provider strategy: under reconciliation (Gemini plus Fireworks pending G-33 and reviewer approval), §0.9**
 **Offline AI:** A portfolio of small local models, benchmarked per task (§146.3)
 **Model Strategy:** Provider-agnostic Model Gateway
 
@@ -121,6 +121,14 @@ The production push ships in two releases. This section governs where §0.1, §0
 **Offline CBT is practice-only (decided 2026-11-20).** Official CBT attempts, submission, grading and results are online-only. Offline practice runs on downloaded course packs, and its scores are provisional until the server validates them on reconnect. An offline practice attempt never becomes an official attempt, never changes an official score, and never appears in official results (as with online practice, S-10).
 
 The offline model benchmark continues during Release 1, so Release 2 starts from device evidence. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`; the milestone register stays the one tracker.
+
+## 0.9 Provider strategy: under reconciliation (2026-11-20)
+
+**Under reconciliation: Gemini plus Fireworks pending G-33 and reviewer approval.** Nothing in this document adopts a provider. Sections that name Gemini (§0.2, §0.4, §38, §39, §146.17) record the 2026-11-04 direction and stay as written until reconciliation ends.
+
+- No provider receives student or institutional passages until its data-processing terms are recorded in a G-33 record and approved, and a paid-tier key exists where the free tier's terms disallow it.
+- The Model Gateway stays provider-agnostic. Gemini's adapter is under review (ai-service #65) with passages disabled; a Fireworks adapter is not started and waits for the governance steps: reconcile this document, record G-33 for both providers, verify terms and model identifiers, reviewer approval.
+- Model names and prices from outside this repository are unverified until a G-33 record checks them against the provider's own documentation.
 
 ---
 
