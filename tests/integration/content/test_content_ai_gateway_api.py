@@ -69,7 +69,7 @@ async def test_ai_gateway_api_dispatch_and_hmac_callbacks(client, monkeypatch) -
 
     actors = []
 
-    async def mock_dispatch(self, job, asset, source, actor):
+    async def mock_dispatch(self, job, asset, source, actor, *, scope):
         actors.append(actor)
         return AIServiceDispatchResult(
             external_task_id=f"aitask-mock-{job.id}",
@@ -124,7 +124,7 @@ async def test_failed_dispatch_is_persisted_and_reported(client, monkeypatch) ->
     asset_id = upload_asset(client, source_id, headers=admin_headers, name="f.pdf").json()["data"]["id"]
     job_id = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=admin_headers).json()["data"]["id"]
 
-    async def failing_dispatch(self, job, asset, source, actor):
+    async def failing_dispatch(self, job, asset, source, actor, *, scope):
         raise AIServiceGatewayError(
             "AI Service transient error (HTTP 503)",
             error_code="AI_SERVICE_UNAVAILABLE",

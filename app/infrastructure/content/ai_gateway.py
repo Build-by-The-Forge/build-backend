@@ -13,9 +13,11 @@ from app.core.config import settings
 from app.domain.client_safe import ClientMessage
 from app.domain.content.asset import ContentAsset
 from app.domain.content.gateway import (
+    DISPATCH_SCOPES,
     AIServiceDispatchResult,
     AIServiceIngestionGateway,
     AIServiceStatusResult,
+    DispatchScope,
     IngestionDispatchActor,
     JobTenantMissing,
     SystemDispatchActor,
@@ -40,6 +42,21 @@ def _correlation_id(job: ContentIngestionJob) -> str:
     if candidate and _CORRELATION_ID_RE.fullmatch(candidate):
         return candidate
     return job.id
+
+
+def _holds_stated_scope(receipt: object, stated: DispatchScope) -> bool:
+    """Whether the dispatch receipt reports a scope the AI service holds at
+    the stated version or a newer one. At the same version it must be the
+    same scope: the backend never decides two scopes under one version."""
+    if not isinstance(receipt, dict):
+        return False
+    scope = receipt.get("scope")
+    version = receipt.get("scope_version")
+    if scope not in DISPATCH_SCOPES or isinstance(version, bool) or not isinstance(version, int):
+        return False
+    if version < stated.version:
+        return False
+    return version > stated.version or scope == stated.scope
 
 
 class AIServiceGatewayError(ClientMessage, Exception):
@@ -93,6 +110,8 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         asset: ContentAsset,
         source: ContentSource,
         actor: IngestionDispatchActor | SystemDispatchActor,
+        *,
+        scope: DispatchScope,
     ) -> AIServiceDispatchResult:
         """Signed dispatch (BUILD Service Signature v1, design B.2).
 
@@ -100,6 +119,12 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
         AI-service only through the signed context: the authorized user's,
         or the worker's system context naming the job's own tenant (P3-6
         §9). The attempt identity is always the job's.
+
+        It states the document's scope and its version (M3-D PR 7), and an
+        acceptance must report the scope the AI service then holds, at that
+        version or a newer one. An AI service that doesn't know the field
+        refuses the body (422, nothing queued); one that accepts without
+        reporting it is treated as an uncertain outcome, never as success.
         """
         keys = self._keys()
         mime_val = asset.mime_type.value if hasattr(asset.mime_type, "value") else str(asset.mime_type)
@@ -119,6 +144,8 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
                 "file_size_bytes": asset.file_size_bytes,
                 "storage_uri": asset.storage_uri,
                 "correlation_id": correlation_id,
+                "scope": scope.scope,
+                "scope_version": scope.version,
             },
             separators=(",", ":"),
         ).encode("utf-8")
@@ -182,7 +209,12 @@ class HttpAIServiceIngestionGateway(AIServiceIngestionGateway):
                 ) from exc
             task_id = data.get("external_task_id") if isinstance(data, dict) else None
             dispatch_status = data.get("status") if isinstance(data, dict) else None
-            if not isinstance(task_id, str) or not task_id or dispatch_status not in ("ACCEPTED", "DUPLICATE"):
+            if (
+                not isinstance(task_id, str)
+                or not task_id
+                or dispatch_status not in ("ACCEPTED", "DUPLICATE")
+                or not _holds_stated_scope(data.get("data"), scope)
+            ):
                 raise AIServiceGatewayError(
                     message="AI Service returned an invalid dispatch response",
                     error_code="AI_SERVICE_BAD_RESPONSE",

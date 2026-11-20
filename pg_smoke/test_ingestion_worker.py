@@ -55,7 +55,7 @@ class FakeAIService:
     def __call__(self):
         return self
 
-    async def dispatch_ingestion_job(self, job, asset, source, actor) -> AIServiceDispatchResult:
+    async def dispatch_ingestion_job(self, job, asset, source, actor, *, scope) -> AIServiceDispatchResult:
         key = f"{job.id}-r{job.run_number}-a{job.attempt_count}"
         self.calls.append((job.id, key))
         self.entered.set()

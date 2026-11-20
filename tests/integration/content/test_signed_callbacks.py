@@ -131,7 +131,7 @@ async def processing_job(client, monkeypatch) -> tuple[dict, str, dict]:
     asset_id = upload_asset(client, source_id, headers=h, name="cb.pdf").json()["data"]["id"]
     job_id = client.post(f"/content/assets/{asset_id}/jobs", json={"max_attempts": 3}, headers=h).json()["data"]["id"]
 
-    async def accepted(self, job, asset, source, actor):
+    async def accepted(self, job, asset, source, actor, *, scope):
         return AIServiceDispatchResult(
             external_task_id=f"task_{job.id}_a{job.attempt_count}",  # fresh per dispatch
             accepted_at=datetime.now(timezone.utc),

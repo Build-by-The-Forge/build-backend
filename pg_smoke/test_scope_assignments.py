@@ -220,3 +220,34 @@ async def test_a_revocation_waits_for_an_in_flight_decision_and_stops_the_next(m
     await asyncio.wait_for(revoking, timeout=10)
     report = await asyncio.wait_for(run, timeout=10)
     assert [(o.result, o.reason) for o in report.outcomes] == [("classified", None), ("refused", "NO_TENANT_AUTHORITY")]
+
+
+async def test_a_dispatch_states_the_latest_decision_delivered_or_not(monkeypatch):
+    """M3-D PR 7: the scope an ingestion dispatch states is the outbox's
+    latest decision for that tenant's document, whether or not the
+    dispatcher has delivered it; nothing at all reads as no decision."""
+    w = await world()
+    await only_this_tenant(monkeypatch, w["tenant"])
+
+    async def latest(asset_id: str, tenant_id: str | None = None):
+        async with SessionLocal() as session:
+            return await SqlAlchemyScopeAssignmentRepository(session).latest_decision(tenant_id or w["tenant"], asset_id)
+
+    assert await latest(w["assets"][0]) is None
+    await classify(w, [decision(w["assets"][0])])
+    assert await latest(w["assets"][0]) == ("institutional", 1)  # pending, not yet delivered
+    gateway, _ = ai_service(holds())
+    monkeypatch.setattr(worker, "_scope_gateway", lambda: gateway)
+    await worker.run_scope_assignment_pass()
+    async with SessionLocal() as session:
+        async with ContentUnitOfWork(session) as uow:
+            await RevokeContentAssetHandler(uow).handle(
+                RevokeContentAssetCommand(
+                    asset_id=w["assets"][0], reason="withdrawn", revoked_by=w["operator"], tenant_id=w["tenant"]
+                )
+            )
+    # The lowering is the latest decision, though its delivery is pending.
+    assert await latest(w["assets"][0]) == ("unknown", 2)
+    # Another tenant asking about the same id learns nothing.
+    other = await world()
+    assert await latest(w["assets"][0], tenant_id=other["tenant"]) is None

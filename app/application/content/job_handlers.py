@@ -33,8 +33,10 @@ from app.domain.client_safe import ClientMessage, ClientSafeError
 from app.domain.content.asset import ContentAsset
 from app.domain.content.enums import IngestionStatus
 from app.domain.content.gateway import (
+    UNASSIGNED_SCOPE,
     AIServiceIngestionGateway,
     AIServiceStatusResult,
+    DispatchScope,
     IngestionDispatchActor,
     JobTenantMissing,
     SystemDispatchActor,
@@ -123,6 +125,23 @@ async def require_scanned(uow: ContentUnitOfWorkPort, asset: ContentAsset) -> No
     if refusal[0] == "DOCUMENT_REJECTED":
         raise DocumentRejectedError("the document was not accepted by the security check")
     raise DocumentNotScannedError("the document is waiting for its security check")
+
+
+async def dispatch_scope(uow: ContentUnitOfWorkPort, asset: ContentAsset) -> DispatchScope:
+    """The scope a dispatch states (M3-D PR 7): the latest decision in the
+    assignment outbox, delivered or not, or ``unknown`` at version 0 if none
+    was ever made. A decision is only ever written with the reasons behind
+    it (classification, review, lowering), so stating it early gives the AI
+    service nothing the dispatcher wouldn't deliver anyway; and the version
+    rule means a dispatch can't move scope out of order."""
+    outbox = getattr(uow, "scope_assignments", None)
+    if outbox is None:
+        # A wiring fault, never a reason to send a document without a scope.
+        raise RuntimeError("the content unit of work has no scope-assignment outbox")
+    if not asset.tenant_id:
+        return UNASSIGNED_SCOPE
+    decided = await outbox.latest_decision(asset.tenant_id, asset.id)
+    return UNASSIGNED_SCOPE if decided is None else DispatchScope(*decided)
 
 
 # Dispatch refusals about the asset itself; they are not AI-service errors.
@@ -332,12 +351,14 @@ class DispatchIngestionJobHandler:
             code, message, retryable = refusal
             return await self._record_dispatch_failure(job, asset, code, message, retryable)
 
+        scope = await dispatch_scope(self._uow, asset)
         try:
             dispatch_res = await self._gateway.dispatch_ingestion_job(
                 job=job,
                 asset=asset,
                 source=source,
                 actor=actor,
+                scope=scope,
             )
             job.record_dispatch(external_task_id=dispatch_res.external_task_id)
             asset.update_ingestion_status(IngestionStatus.PROCESSING)
