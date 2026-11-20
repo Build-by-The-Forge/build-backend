@@ -3951,20 +3951,29 @@ Therefore, BUILD shall select its offline model configuration through evidence-b
 
 BUILD shall investigate supporting a **pool of compact local language models** rather than assuming that a single model must perform every offline task.
 
-The agreed starting portfolio (2026-11-04) is one general-purpose language model plus specialized models, rather than one model for everything:
+**Updated 2026-11-20 (§0.8): the benchmark targets and comparisons below replace the 2026-11-04 candidate list. No model has a role until it has been benchmarked on real devices.**
+
+| | Models |
+|---|---|
+| **Targets** | Qwen3.5-0.8B, Qwen3-1.7B, SmolLM2-1.7B |
+| **Comparisons** | Qwen3.5 2B and 4B, Gemma 4 E2B, Gemma 3n E2B, Ministral 3 3B, Phi-4-mini |
+
+Model names are as given by the delivery plan and are unverified here. The benchmark checks each model's exact identifier, weights, licence and runtime compatibility before it is run, and licence compatibility stays a mandatory gate (§146.16). Offline generative inference ships in Release 2; the benchmark runs during Release 1.
+
+The starting portfolio of 2026-11-04 was one general-purpose language model plus specialized models, rather than one model for everything. The table keeps its shape; its model names are superseded by the targets above:
 
 | Local capability | First candidate | Notes |
 |---|---|---|
-| General conversation, explanation and simple reasoning | **Qwen3-1.7B** | The first choice to benchmark |
-| Low-memory fallback | **Qwen3-0.6B** | For devices that can't run the 1.7B model |
-| Alternative general model | Glimmer 2B | Benchmarked alongside Qwen if its weights, licence, inference compatibility and quality allow |
+| General conversation, explanation and simple reasoning | A target from the list above | Role assigned after benchmarking; Qwen3-1.7B was the 2026-11-04 first choice |
+| Low-memory fallback | A target from the list above | Role assigned after benchmarking; Qwen3.5-0.8B is the smallest target |
+| Alternative general model | A target or comparison from the lists above | "Glimmer 2B" is removed: no such model was found (only a 30B model), so it can't be benchmarked |
 | Local semantic retrieval | A small embedding model | Matches the online index's embedding space where feasible |
 | Retrieval relevance | A compact reranker | Optional, by device capability |
 | OCR | A PaddleOCR / OpenVINO-class model | Where the device supports it |
 | Classification | Document and academic-content classification | May share a model |
 | Speech | Speech-to-text | Optional |
 
-Gemma 3 1B and SmolLM2-1.7B-Instruct remain benchmark comparisons. **More models aren't automatically better:** each is chosen by task, memory requirement, latency, quality and device compatibility, and one model may serve several capabilities. The production configuration is decided by the benchmarks below and on real Android devices.
+**More models aren't automatically better:** each is chosen by task, memory requirement, latency, quality and device compatibility, and one model may serve several capabilities. The production configuration is decided by the benchmarks below and on real Android devices.
 
 The architecture shall permit:
 
@@ -4678,7 +4687,7 @@ The implementation shall proceed in the following order:
 
 **Production local model: Not yet selected**
 
-**Initial candidates: Qwen3-1.7B first, Qwen3-0.6B as the fallback, Glimmer 2B benchmarked alongside (2026-11-04)**
+**Initial candidates (updated 2026-11-20, §146.3): targets Qwen3.5-0.8B, Qwen3-1.7B and SmolLM2-1.7B; comparisons Qwen3.5 2B and 4B, Gemma 4 E2B, Gemma 3n E2B, Ministral 3 3B and Phi-4-mini. Roles are assigned only after benchmarking.**
 
 **Not sufficient on its own: local storage and local embeddings are not offline generative AI (§0.6)**
 
