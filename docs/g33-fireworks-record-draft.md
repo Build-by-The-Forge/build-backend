@@ -105,7 +105,8 @@ Read 2026-11-20.
 
 ## 10. Decisions the user and the reviewer must make
 
-1. **Whether to pursue Fireworks at all** for v1. Gemini is the approved first provider; this is a second provider for student passages and needs its own G-33 approval.
+0. **Paused (user, 2026-11-21):** all Gemini and Fireworks provider work is paused pending the age-eligibility question; this record is not being extended. Fireworks' own Terms are unread, so its age rule is unknown.
+1. **Whether to pursue Fireworks at all** for v1. Gemini is the designated first R1 provider, not enabled until its G-33 is approved; this is a second provider for student passages and needs its own G-33 approval.
 2. If yes, **ask Fireworks in writing** for: a DPA, the sub-processor list, whether prompts reach model vendors, the processing region for serverless, and the ZDR scope per model. Record the answers here.
 3. **US-only endpoint** or the default one, given the unknown default region.
 4. **Responses API:** forbid it for student material (use chat completions only, or `store=False`).
