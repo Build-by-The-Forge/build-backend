@@ -6,6 +6,14 @@
 
 **Accessed:** 2026-11-20. **How:** each page was read by a research subagent through a page reader, and this lane relied on its report. Where the report says it worked from a model-extracted summary rather than the page's own text, the row below says so. Google's `ai.google.dev` pages now redirect to `aistudio.google.com/docs/...`; the pages carry no "last updated" line unless stated.
 
+## PAUSED (user decision, 2026-11-21)
+
+**All Gemini and Fireworks provider work is paused by the user pending the age-eligibility question.** This record is frozen at the evidence below and is not being extended: no further research, no model verification and no evaluation follow from it.
+
+- The question is open. Google's Gemini API Additional Terms (effective 2026-03-23) say developers must be 18 or older and that the service must not be used in an application directed to, or likely to be accessed by, people under 18. No educational exception is stated.
+- An arrangement in which an adult owns the account and the API key does not by itself settle that clause. Whether BUILD's intended use and student population is permitted under the applicable terms needs a written answer or a different terms route, and remains open.
+- **Gemini student-data processing stays blocked under G-33.** Nothing here approves a provider, enables one, routes to one, makes a paid call or authorises a deployment.
+
 ## 0. BLOCKER: the age rule (read this first)
 
 **Gemini cannot be approved for student material until an authoritative answer exists to the age question below.** The reviewer will not approve it before then. This record is evidence, not an approval.
