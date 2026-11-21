@@ -113,6 +113,27 @@ For each protected request the backend resolves `effective(user, capability)`:
 
 Rules: **model tier and agentic capability resolve independently.** Free resolves `offline_ai = smallest`, Plus `portfolio`, and neither resolves `agentic_workflows` above `none`. Resolution is a pure function over rows, so it can be tested with no AI service.
 
+### 5.1 Precedence (deterministic, for the R1 Free, Plus and Pro cases)
+
+`effective(user, capability)` is a pure function of rows and the database clock at request time. **Campus and tenant sponsorship are deferred: they contribute nothing in R1.**
+
+1. Each capability has an ordered value domain, for example `offline_ai`: none < smallest < portfolio; `agentic_workflows`: none < full; `model_tier`: none < small < medium. Capabilities resolve **independently**.
+2. Start from the Free baseline.
+3. Take the **maximum** of the baseline, the active subscription's plan value, and every **active** grant's value. A source is active when the current database time is within its period and it isn't revoked. An expired or revoked source is ignored.
+4. Apply overrides last. An override **replaces** the value for that capability, whether it raises or lowers it. At most one override is active per user and capability; if rows conflict, the most recently created wins, ties broken by row id.
+5. A **deny** override (a suspension) beats every grant and plan.
+6. Tenant sponsorship rows, if any exist, are **ignored in R1** and reserved for the Campus design.
+7. A plan name never grants anything: only `plan_entitlements` rows count.
+8. Provider approval is separate (section 3.1) and applied after resolution.
+
+| Case | Result |
+|---|---|
+| A Free user with an active promotional Plus grant | `offline_ai = portfolio`, `agentic_workflows = none` |
+| A Pro subscriber with a deny override on agentic workflows | `agentic_workflows = none`, other Pro values stand |
+| A Plus grant that expired yesterday | Ignored: the user resolves as Free |
+| A grant and an override in conflict on `model_tier` | The override wins |
+| A tenant sponsorship row on a Free user | Ignored in R1 |
+
 ## 6. Enforcement
 
 1. **On every protected request** the backend resolves the entitlement. A denied capability returns a stable error code in the shared error shape.
