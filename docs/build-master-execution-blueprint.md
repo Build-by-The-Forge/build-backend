@@ -77,7 +77,7 @@ The lane statuses in section 10 are **dated, handover-based snapshots, not a liv
 | ai-service | #52, #57 to #60 | Safe logging (type and place only), structured tool failures, ingestion failure codes, sanitised agent results | **Merged** |
 | ai-service | #61, #62 | AI-10: the CBT generator through the gateway, then structured and grounded | **Merged** (`837c83e`, `1c738b5`); still no route |
 | ai-service | #63, #64 | The legacy model layer removed; httpx 0.28.1 | **Merged** (`9f43779`, `2c76c93`) |
-| ai-service | #65 | Gemini gateway adapter | **Open**, head `9d8c993`, hosted CI green, awaiting review |
+| ai-service | #65 | Gemini gateway adapter | **Merged** (`4150c5f`, 2026-11-20). **Code only: provider activation is not authorised.** `MODEL_PROVIDERS_APPROVED` is empty by default, and student passages stay blocked |
 | backend | #116 to #118 | The implementation plan and baseline; the PRD amendment (draft); the G-33 records (draft) | **Open** |
 
 ### Carried forward from the reviewer
@@ -97,7 +97,7 @@ The lane statuses in section 10 are **dated, handover-based snapshots, not a liv
 
 | # | Capability | Existing code (`ai-service`) | Status | What's missing |
 |---|---|---|---|---|
-| AI-01 | Model Gateway | `core/models/gateway.py`: retries, circuit breaker, token-bucket rate limit, budget, fallback. Providers in `core/models/providers/`: `openai`, `deterministic`, `mock`. Provider approval by `MODEL_PROVIDERS_APPROVED` (empty by default) | **Built; Gemini adapter in review (#65)** | **Refreshed 2026-11-20:** chat, explain, questions and the CBT generator all run through the gateway (#56, #61); the legacy layer (`LLMProvider`, OpenAI and deterministic LLMs, the openai SDK) was removed in #63. Left: the Gemini adapter (#65, open), G-33 for it, and a Fireworks adapter only after governance. *Original text:* **Two abstractions:** chat, explain and question generation call `services/ai/llm.py` (`LLMProvider`, OpenAI or deterministic) directly, not the gateway. Only `services/agents/executor.py` uses the gateway. Consolidate onto one model execution boundary (design #48, merged), then add the Gemini adapter, with the model ID verified and G-33 enforced in code by the provider allowlist |
+| AI-01 | Model Gateway | `core/models/gateway.py`: retries, circuit breaker, token-bucket rate limit, budget, fallback. Providers in `core/models/providers/`: `openai`, `deterministic`, `mock`. Provider approval by `MODEL_PROVIDERS_APPROVED` (empty by default) | **Built; Gemini adapter merged (#65, `4150c5f`), not enabled** | **Refreshed 2026-11-20:** chat, explain, questions and the CBT generator all run through the gateway (#56, #61); the legacy layer (`LLMProvider`, OpenAI and deterministic LLMs, the openai SDK) was removed in #63. Left: G-33 for any provider (provider work is paused by the user, 2026-11-21), and a Fireworks adapter only after governance. The merged Gemini adapter is code only: `MODEL_PROVIDERS_APPROVED` is empty by default, so student passages are blocked. *Original text:* **Two abstractions:** chat, explain and question generation call `services/ai/llm.py` (`LLMProvider`, OpenAI or deterministic) directly, not the gateway. Only `services/agents/executor.py` uses the gateway. Consolidate onto one model execution boundary (design #48, merged), then add the Gemini adapter, with the model ID verified and G-33 enforced in code by the provider allowlist |
 | AI-02 | Ingestion and OCR | `services/tasks/handlers.py` `ContentIngestionTaskHandler`: verified fetch, then text layer or OCR (`services/ocr`: PaddleOCR, OpenVINO), page-aware chunks, ONNX MiniLM embeddings, one-transaction durable index, signed stage callbacks | **Built** | Harden, don't rewrite: OCR edge cases, tables and equations, versioning and reprocess, index consistency after deletion and revocation, duplicate and retry behaviour, concurrency. `app/api/v1/ai/ocr.py` is an unmounted placeholder, never served (the contract test pins the served `/v1/ai` paths); removed in ai-service #47 (merged) |
 | AI-03 | Retrieval and RAG | `services/rag`: pgvector store, lexical full-text, hybrid `retrieval.py`, `evidence.py`, `recorder.py` (`sources_used`), `scopes.py`, index fence; `/v1/ai/retrieve` | **Built**, quality gap | Real FUTA material scored 62.5% recall@5 (tier-2). Separate the variables: extraction, chunking, metadata, hybrid weighting, reranking. Allow-list retrieval for personal documents (M4, G-05) |
 | AI-04 | AI Tutor | `services/ai/orchestrator.py` `chat`: grounded with `check_grounded`, abstains without evidence, signed `sources_used` | **Partial** | Conversations (M3-F, contract #90): multi-turn history, citations with excerpts, the redacted flag, `TURN_IN_PROGRESS`. Backend G-04, G-17, G-18 |
@@ -116,7 +116,7 @@ The lane statuses in section 10 are **dated, handover-based snapshots, not a liv
 ### AI implementation order
 
 1. **AI-01 consolidation: done** (#56, #61, #63).
-2. **AI-01 Gemini adapter**, behind the gateway (**open, #65**):
+2. **AI-01 Gemini adapter**, behind the gateway (**merged in #65, code only; activation not authorised and paused**):
    - the model ID is verified at startup against the provider;
    - **disabled for passages** until G-33 is recorded;
    - free models for development and tests, as agreed.
@@ -240,7 +240,7 @@ The reviewer's direction of 2026-11-16: parallelise research, implementation, in
 | Retrieval quality | `retrieval-quality` | OCR corpus and a real baseline (`p3-5/ocr-corpus`, `p3-5/real-baseline`) | PR 1 unpushed; runs in Docker |
 | Offline benchmark | `offline-bench` | AI-12 harness, device procedure, report | Local WIP; the benchmark has not run |
 | AI-10 coverage | `ai10-coverage` | Topic-coverage check wired into the CBT generator | Uncommitted |
-| Gemini adapter | review lane | ai-service #65 | Open, awaiting review |
+| Gemini adapter | review lane | ai-service #65 | **Merged** (`4150c5f`); code only; activation not authorised; provider work paused |
 | Plan and governance | this lane | The plan, baseline, PRD amendment, G-33 records, two designs | #116 to #118 open |
 
 Lanes that touch the same files serialise: the Alembic head, the contract, and the PRD each have one writer at a time.
