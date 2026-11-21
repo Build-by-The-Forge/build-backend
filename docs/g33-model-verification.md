@@ -2,30 +2,41 @@
 
 **Accessed:** 2026-11-20, from each provider's own pages (URLs below). **Status: draft; it enables no model.** "Verified" means the provider's own page states it. Anything resting on a model-extracted summary is marked. Prices are USD per 1M tokens.
 
+**Verification labels.** They describe the *evidence*, not the provider:
+- **Verified**: stated on a complete authoritative page, read in full.
+- **Partially verified**: stated on authoritative page content that was accessible, where the page was only partly read or its completeness isn't established.
+- **Reported by a secondary summary**: stated only in a model-extracted summary of a page, or by a source that is not the provider.
+- **Unverified**: not found, or contradicted.
+
+Nothing in the tables below carries the strongest label unless the full page was read. Pricing pages in particular were read in part, so their figures are **Partially verified**.
+
+
 ## Gemini
 
 Source: https://aistudio.google.com/docs/models/gemini-3.8-flash ("Latest update: September 2026"), https://aistudio.google.com/docs/pricing (price changes dated 2026-12-01 and 2027-01-01).
 
 | Field | `gemini-3.8-flash` | Verified? |
 |---|---|---|
-| Listed | Yes, with model code `gemini-3.8-flash` | **Verified** (the pricing page's own text; one summary of it said "not listed" and was wrong) |
-| Status | Stable | **Verified** |
-| Context | 1,048,576 input, 65,536 output | **Verified** |
-| Inputs | Text, image, video, audio, PDF; text output | **Verified** |
-| Structured output | Supported | **Verified** |
-| Function calling | Supported | **Verified** |
-| Price, Paid Standard | $0.75 in / $3.75 out (incl. thinking) / $0.075 cached, through 2026-12-31; $1.50 / $7.50 / $0.15 from 2027-01-01; cache storage $0.50 per 1M per hour, then $1.00 | **Verified**, but the pricing page was only partly read |
-| Price, Free tier | Free of charge; **used to improve products** | **Verified** |
-| Batch | $0.375 / $1.875 then $0.75 / $3.75 | **Verified** |
-| Search grounding | 5,000 free requests a month, then $14 per 1,000 | **Verified** |
-| Serving | Hosted API; availability in Nigeria listed | **Verified** (availability, not data location) |
+| Listed | Yes, with model code `gemini-3.8-flash` | **Partially verified** (the pricing page's own text, part read; one summary of it said "not listed" and was wrong) |
+| Status | Stable | **Partially verified** |
+| Context | 1,048,576 input, 65,536 output | **Partially verified** |
+| Inputs | Text, image, video, audio, PDF; text output | **Partially verified** |
+| Structured output | Supported | **Partially verified** |
+| Function calling | Supported | **Partially verified** |
+| Price, Paid Standard | $0.75 in / $3.75 out (incl. thinking) / $0.075 cached, through 2026-12-31; $1.50 / $7.50 / $0.15 from 2027-01-01; cache storage $0.50 per 1M per hour, then $1.00 | **Partially verified** (the pricing page was only partly read) |
+| Price, Free tier | Free of charge; **used to improve products** | **Partially verified** (pricing page, partly read) |
+| Batch | $0.375 / $1.875 then $0.75 / $3.75 | **Partially verified** (pricing page, partly read) |
+| Search grounding | 5,000 free requests a month, then $14 per 1,000 | **Partially verified** (pricing page, partly read) |
+| Serving | Hosted API; availability in Nigeria listed | **Partially verified** (availability, not data location) |
 | Licence | Not applicable (hosted) | n/a |
 
 Also listed: `gemini-3.6-flash` (Stable, same price through 2026-12-31), `gemini-3-flash-preview` (Preview; price from a summary, **unverified**). `gemini-3.7-flash` appears only in a docs index, **not found** on the models or pricing pages. Requests to `gemini-2.5-pro` route to `gemini-3.8-flash` on 2026-12-01.
 
-**Report claim** (Notion) "$0.75 / $3.75, then $1.50 / $7.50": **matches** the page.
+**Report claim** (Notion) "$0.75 / $3.75, then $1.50 / $7.50": **matches** the page (partially verified).
 
 ## Fireworks
+
+**Evidence quality:** every Fireworks field below is **Partially verified** (Fireworks page content was accessible; no page was shown to be read in full) unless marked **Unverified**, **conflicts** or **NOT FOUND**.
 
 Sources: https://fireworks.ai/pricing, https://docs.fireworks.ai/serverless/pricing.md, and each model page. Prices are input / cached input / output, Standard.
 
@@ -41,7 +52,7 @@ Sources: https://fireworks.ai/pricing, https://docs.fireworks.ai/serverless/pric
 | Licence | Not stated on the Fireworks page (Hugging Face repo `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16`). **Report said "OpenMDW 1.1": unverified** | Apache 2.0 (model page FAQ); matches the report | MIT (model page FAQ); matches the report |
 | Other | No image input; fine-tuning not supported. Created 7 Aug 2026 | Fine-tuning: FAQ says yes, spec table says no | Image input supported. Created 10 Sep 2026. Fine-tuning: spec says yes, a FAQ says no |
 
-**Base URL** https://api.fireworks.ai/inference/v1 with an OpenAI-compatible client: **verified** in Fireworks' SDK examples. US-only: https://us.api.fireworks.ai/inference/v1.
+**Base URL** https://api.fireworks.ai/inference/v1 with an OpenAI-compatible client: **partially verified**: shown in Fireworks' SDK examples (page content accessible; completeness not established). US-only: https://us.api.fireworks.ai/inference/v1.
 
 **Not checked:** the report's "backups" (GLM 5.3 Flash, MiniMax M3); the report's latency claims. Spot prices appear on the pricing page for select models only.
 
