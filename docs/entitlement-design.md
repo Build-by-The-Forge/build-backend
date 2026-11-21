@@ -46,6 +46,14 @@ Offline **reading** of downloaded materials is free for everyone; only AI infere
 5. Results and costs are recorded.
 6. The user has approved the cap in writing.
 
+### 3.1 An entitlement is not provider approval
+
+**Gemini cannot receive student material until its G-33 approval and paid-tier prerequisites are met.** Provider work is paused by the user pending the age-eligibility question (2026-11-21). The backend must therefore **not treat the designated R1 provider as operationally approved**.
+
+- Entitlement resolves a *right*. Whether a provider may be called at all is a separate, operational fact reported by the gateway (`MODEL_PROVIDERS_APPROVED`, empty by default).
+- A request that needs a model needs **both**: an entitlement and an approved provider. If either is missing it fails closed with a stable code, and no budget is reserved.
+- "Free online" in the table above is therefore a design target, not a promise that student passages can be sent anywhere today.
+
 ## 4. Data model (proposed)
 
 Extends the blueprint's sketch. Names are proposals.
