@@ -50,7 +50,7 @@ BUILD's chosen hosting is Google Cloud, and the Additional Terms say they "do no
 |---|---|---|---|
 | A | Ask Google in writing whether a student app whose users may include 16 and 17 year olds may use the Gemini API, and keep the answer | Authoritative; slow; may be no | Needed under any option that keeps Gemini |
 | B | Move to the Google Cloud route | Different terms, a DPA for paid use, training off by default; **but** a similar age rule may apply (unverified), no Africa region, a new adapter | Verify the Service Specific Terms in full first |
-| C | An 18+ gate for AI features, at registration | Satisfies the rule on its face; **excludes under-18 students from AI features and needs a verified date of birth**; changes the product and the S-02 flow | A product decision |
+| C | An 18+ gate for AI features, at registration | **An unverified mitigation requiring Google's written confirmation.** The clause also covers an application that is *likely to be accessed by* under-18s, which an individual-age gate does not by itself address. It would also exclude under-18 students from AI features, needs a verified date of birth, and changes the product and the S-02 flow | A product decision, after Google's answer |
 | D | Another provider | Fireworks has its own unread terms (section in its record); none is approved | Restarts G-33 |
 | E | Accept the residual risk | Not recommended without A | Not available to the reviewer on this evidence |
 
