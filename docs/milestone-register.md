@@ -33,9 +33,11 @@ M3 is **not done**. The fixes merged so far closed security and lifecycle gaps e
 
 | | Count | IDs |
 |---|---|---|
-| Closed | 20 | G-03, G-06, G-08, G-09, G-10, G-14, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-28, G-29, G-35, G-36, G-37, G-39, G-40 |
+| Closed | 20 (checked against `gaps.yaml` on `e9067ed`, 2026-11-20) | G-03, G-06, G-08, G-09, G-10, G-14, G-15, G-16, G-20, G-21, G-22, G-24, G-27, G-28, G-29, G-35, G-36, G-37, G-39, G-40 |
 | Open | 23 | 4 contract, 19 implementation, listed in `contracts/mobile/gaps.yaml` |
 | Open and blocking | 2 | G-01, G-02: students can't upload or start ingestion |
+
+**Merged since the last update of this register (2026-11-20):** S-02, the student's academic profile, is implemented (design #110, migration `0032` and routes #111), closing G-28, which this table already counts. The student journey contracts design is merged (#112); it adds no contract operation yet. Also merged: #113 (opentelemetry), #114 (dispatch-test evidence), #115 (an encrypted PDF's failure message). In `ai-service`, AI-01's gateway consolidation is complete (#56, #61, #63) and AI-10's exam is structured and grounded but unrouted (#62); the Gemini adapter is open (#65). The lanes running in parallel, and their owners, are in `docs/build-master-execution-blueprint.md` section 10.
 
 `contracts/mobile/gaps.yaml` stays the source of truth for individual gaps. This table is a snapshot of it. Don't reopen a closed gap without new evidence.
 
@@ -144,7 +146,7 @@ Given by the reviewer on #79 at `06b433a`. It changes what's built first, not an
 | AI knowledge eligibility | Separate from publication |
 | Provider eligibility | Separate from publication and from retrieval |
 | AI capabilities | BUILD implements the complete AI capability set, including Offline AI: chat and contextual help, document understanding and OCR, grounded retrieval, explanations, summaries and question generation, learning support, and offline execution with synchronization. Offline isn't reduced to a basic chatbot. Capabilities may use different models and reach different quality offline, so the goal is the capability, with local execution and fallbacks designed per capability |
-| Online AI | The Gemini SDK behind the provider-agnostic Model Gateway. Free models for development and testing; **Gemini 3.8 Flash as the production target, once its exact identifier and availability are verified**. Agreed 2026-11-04 (PRD §0.2, §38) |
+| Online AI | The Gemini SDK behind the provider-agnostic Model Gateway is the **strategic candidate** (agreed 2026-11-04, PRD §0.2, §38); Gemini 3.8 Flash was the intended production model, once its exact identifier and availability are verified. **Status, 2026-11-21: not approved.** G-33 isn't approved; the Gemini API Additional Terms (effective 2026-03-23: developers 18 or older, not for services likely to be accessed by under-18s) raise an **age-eligibility governance blocker**; provider work is **paused** by the user pending that question; and `MODEL_PROVIDERS_APPROVED` is empty, so student passages are blocked. Free models serve development and testing with non-student text |
 | Grounding | Mandatory and provider-independent: retrieval, provenance, evidence validation, abstention and access control stay BUILD's. Gemini's OCR and document understanding assist; they don't establish what an answer may claim |
 | RAG strategy | Naive RAG by default for well-scoped requests; bounded Agentic RAG for comparisons, contradictions, multi-source research and revision plans, within permissions, budgets, iteration limits and scope (PRD §26.1) |
 | Offline models | A small-model portfolio: Qwen3-1.7B first, Qwen3-0.6B as the low-memory fallback, Glimmer 2B benchmarked alongside, plus embedding, reranking and OCR models. Chosen by benchmark and real devices (PRD §146.3). Local storage and embeddings aren't offline generative AI |
