@@ -1448,7 +1448,7 @@ OCR output must feed downstream ingestion rather than remaining isolated.
 
 # 38. AI Model Gateway
 
-> **Amended 2026-11-20.** The interim provider position in §0.2 applies to §38 to §41: Gemini is the designated first R1 provider and is not enabled for student or institutional passages until its G-33 is approved; Fireworks is proposed and disabled; no routing change follows from this document.
+> **Amended 2026-11-21.** The tables and examples in §38 to §41 that name Gemini are **historical and superseded** by the interim position in §0.2: no provider is currently approved for student material, Gemini is a paused candidate, and Fireworks is proposed, disabled and unapproved. They are kept only as a record of the 2026-11-04 direction.
 
 BUILD shall implement a provider-agnostic Model Gateway.
 
@@ -1456,11 +1456,11 @@ BUILD shall implement a provider-agnostic Model Gateway.
 
 | Environment | Model |
 |---|---|
-| Development and testing | Free models and free-tier access, through the Gemini SDK where available |
-| Production | **Gemini 3.8 Flash**, the designated model of the first R1 provider. Its exact identifier and availability must be verified before implementation depends on it, and its use for student material waits for G-33 approval (§0.2) |
+| Development and testing | Free models and free-tier access, **with non-student text only** |
+| Production | **None approved.** *Historical:* Gemini 3.8 Flash was the intended model of the previously designated candidate, whose work is paused (§0.2) |
 | Offline | The local model portfolio (§146.3), through the gateway's local provider |
 
-The Gemini SDK is the designated first online integration (§0.2). It replaces the earlier plan of Meta Muse Glimmer 30B through Together AI.
+*Historical:* the Gemini SDK was the designated candidate first online integration (§0.2); it replaced the earlier plan of Meta Muse Glimmer 30B through Together AI.
 
 The AI service must not couple:
 
@@ -1485,8 +1485,8 @@ Other foundation models, and the local models, shall remain pluggable behind the
 Conceptually:
 
 ```text
-MODEL_PROVIDER=gemini
-MODEL_NAME=<verified production identifier for the Gemini 3.8 Flash target>
+MODEL_PROVIDER=<no production provider is currently approved>
+MODEL_PROVIDERS_APPROVED=<empty by default; the gateway fails closed for student passages>
 ```
 
 Development and test environments name a free model instead. The deterministic provider remains for offline tests and is refused in staging and production.
@@ -3965,7 +3965,7 @@ BUILD shall provide students with an integrated Learn/Study experience composed 
 
 BUILD shall treat documents, videos, questions, curriculum, concepts, learning objectives, and student performance as interconnected academic knowledge rather than isolated records.
 
-BUILD shall use a provider-agnostic Model Gateway, with the Gemini SDK as the designated first R1 online provider (Gemini 3.8 Flash as its intended model, once verified; not enabled for student material until its G-33 is approved; Fireworks proposed and disabled) and a portfolio of small local models offline, while preserving the ability to integrate future models.
+BUILD shall use a provider-agnostic Model Gateway and a portfolio of small local models offline, while preserving the ability to integrate future models. No online provider is currently approved for student material (§0.2).
 
 BUILD shall maintain academic provenance, curriculum versioning, confidence-aware processing, human governance, duplicate prevention, academic integrity controls, and source-aware AI responses.
 
@@ -4312,7 +4312,7 @@ The goal is to ensure that:
 
 ## 146.9 Online AI Remains the Primary High-Capability Layer
 
-> **Amended 2026-11-20.** Provider references follow the interim position in §0.2: Gemini is the designated first R1 provider, not enabled for student material until its G-33 is approved; Fireworks is proposed and disabled.
+> **Amended 2026-11-21.** Provider references follow the interim position in §0.2: no provider is currently approved for student material; Gemini is a paused candidate; Fireworks is proposed, disabled and unapproved.
 
 Offline AI shall **not replace BUILD's online AI infrastructure**.
 
@@ -4595,6 +4595,8 @@ These weights are provisional and shall be finalized during the benchmark design
 A model that cannot legally be distributed or deployed under BUILD's intended commercial model shall not be selected regardless of benchmark performance.
 
 ## 146.17 Model Gateway Abstraction
+
+> **Amended 2026-11-21.** The provider names in this section are generic placeholders. No provider is currently authorised to receive student material (§0.2).
 
 The BUILD Model Gateway shall remain independent of the selected local model.
 
