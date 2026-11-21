@@ -1,6 +1,6 @@
 # BUILD Master Execution Blueprint
 
-**Status:** refreshed 2026-11-20 to `build-backend` main `e9067ed` and `ai-service` main `2c76c93`; sections 2, 3, 4 (the S-02 row), 5 and 10 are updated, the rest is as at the original baseline. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`. **Original baseline:** 2026-11-07, `build-backend` main `a8f4b4d` (after #108), `ai-service` main `2506dfd` (after #46), and `Build-UI` main `9c6937c`.
+**Status:** refreshed 2026-11-20 to `build-backend` main `e9067ed` and `ai-service` main `4150c5f` (after #65, the same snapshot as `docs/BUILD_IMPLEMENTATION_BASELINE.md`; the AI-01, Gemini and lane rows reflect it, while other ai-service rows were read at `2c76c93`); sections 2, 3, 4 (the S-02 row), 5 and 10 are updated, the rest is as at the original baseline. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`. **Original baseline:** 2026-11-07, `build-backend` main `a8f4b4d` (after #108), `ai-service` main `2506dfd` (after #46), and `Build-UI` main `9c6937c`.
 
 **Purpose:** a **historical architecture and execution reference**, subordinate to `docs/BUILD_IMPLEMENTATION_PLAN.md`. It is no longer the source of truth for the delivery programme. Claims about existing code below were checked against the repository they name, at the date shown for each section; sections not marked as refreshed are as at 2026-11-07.
 
