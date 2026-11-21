@@ -136,7 +136,7 @@ The offline model benchmark continues during Release 1, so Release 2 starts from
 
 ## 0.9 Provider governance (2026-11-20)
 
-**Provider governance status.** The interim provider position is in §0.2. This section records the governance work behind it, the report that proposed Fireworks, and the candidate registry. Nothing here adopts a provider, and no section depends on this one to be read consistently.
+**Provider governance status.** The interim provider position is in §0.2. **Provider work is paused (user decision, 2026-11-21)** pending the age-eligibility question: Gemini integration and governance, Fireworks governance and evaluation. The pause is not a rejection of any provider and it can be lifted by the user. This section records the governance work behind the position, the report that proposed Fireworks, and the candidate registry. Nothing here adopts a provider, and no section depends on this one to be read consistently.
 
 - No provider receives student or institutional passages until its data-processing terms are recorded in a G-33 record and approved, and a paid-tier key exists where the free tier's terms disallow it.
 - The Model Gateway stays provider-agnostic. The Gemini adapter is merged (ai-service #65) and enables nothing: `MODEL_PROVIDERS_APPROVED` is empty by default, so the gateway fails closed for student passages. A Fireworks adapter is not started and waits for the governance steps: G-33 for both providers, verified terms and model identifiers, and reviewer approval.
