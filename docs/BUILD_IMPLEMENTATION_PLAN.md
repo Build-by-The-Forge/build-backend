@@ -283,7 +283,7 @@ The mapping is held in `docs/milestone-register.md`, section "Phase to milestone
 | B-005 | Baseline: running lanes and owners | 0 | In the baseline |
 | B-006 | PRD amendment: R1/R2 split, offline in R2, provider section under reconciliation | 1 | Draft PR, needs reviewer approval |
 | B-007 | G-33 records for Gemini and Fireworks | 3, 9 | Draft PR; approves nothing |
-| B-008 | Fireworks governance: reconcile docs, verify terms and model IDs | 3 | Not started |
+| B-008 | Fireworks governance: reconcile docs, verify terms and model IDs | 3 | **Paused** (user, 2026-11-21) |
 | B-009 | Offline content-pack contract (R2 preparation) | 1, 5, 7 | Design to write |
 | B-010 | Bounded agentic study planner design (R2 preparation) | 1, 4 | Design to write |
 | B-011 | M3-D PRs 7 to 16 | 2 | In progress (own lane) |
@@ -294,6 +294,8 @@ The mapping is held in `docs/milestone-register.md`, section "Phase to milestone
 | B-016 | GCP staging design and Terraform | 10 | In progress (own lane); spending needs authorisation |
 
 ## 14. Provider and entitlement positions (user, 2026-11-20; provisional)
+
+> **PAUSED (user decision, 2026-11-21).** All Gemini and Fireworks provider work is paused: integration, governance and evaluation, pending the age-eligibility question. Everything in this section about providers is **historical and provisional planning context**. **No lane may read this plan as authorisation to resume or start provider work.** Nothing here approves, enables, evaluates or routes to any provider, and no provider is currently authorised to receive student material. The local-model benchmark is unaffected.
 
 Nothing in this section approves a provider, enables a route or fixes a quota. It records the positions the plan works from, and what each still needs.
 
@@ -345,7 +347,7 @@ This replaces the earlier table and the report-derived mapping. Quotas, budgets,
 |---|---|---|
 | 1 | **Offline AI runs on the device.** The backend cannot stop a modified APK from running side-loaded open-weight models | State the honest boundary. The entitlement gates the **authorised model-pack download** (backend-issued and signed) and a periodic entitlement lease. That is distribution gating, not hard prevention. PRD §84.1 says the client never decides; this records the limit rather than claiming more |
 | 2 | Free gets the smallest local model | **Decided** (2026-11-20). The bar in "Gates" applies |
-| 3 | **Cost.** A typical tutor answer (8,000 input and 500 output tokens) costs about $0.016 on Gemini at the 2027 price ($1.50 and $7.50 per 1M, verified on Google's page) against about $0.0005 on the small Fireworks tier at uncached prices, or about $0.0002 with the input cached (the page's prices, unverified): roughly 30 to 80 times, depending on caching. The relayed figure was about $0.0003, or about 45 times; the difference is the cache assumption | Free at scale on Gemini alone is expensive. Fireworks governance and evaluation should start now, in parallel, not only for R2 Pro |
+| 3 | **Cost.** A typical tutor answer (8,000 input and 500 output tokens) costs about $0.016 on Gemini at the 2027 price ($1.50 and $7.50 per 1M, verified on Google's page) against about $0.0005 on the small Fireworks tier at uncached prices, or about $0.0002 with the input cached (the page's prices, unverified): roughly 30 to 80 times, depending on caching. The relayed figure was about $0.0003, or about 45 times; the difference is the cache assumption | The cost comparison is **historical planning evidence, not authorisation to resume**: provider governance and evaluation remain paused under the user's 2026-11-21 decision |
 | 4 | Payments are paused in R1 | Plus and Pro are grantable states only |
 
 ### 14.6 Subscription wording and the paid-call checklist
