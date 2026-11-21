@@ -14,6 +14,9 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+# Full service logs and AI queue state, kept under GATE_LOG_DIR when it is set
+# (the workflow uploads it as an artifact). Never changes the exit status.
+source scripts/gate_logs.sh
 # compose.p36-gate.yml: gate-only worker timings and the fault-injection AI
 # worker (P3-6 7b); the development topology never uses it.
 COMPOSE=(docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml -f deploy/compose.p36-gate.yml)
@@ -78,6 +81,8 @@ cleanup() {
       echo "::endgroup::"
     done
   fi
+  # Every exit, pass or fail, before the containers are removed.
+  capture_gate_logs final || true
   if [[ -z "${KEEP_STACK:-}" ]]; then
     "${COMPOSE[@]}" --profile gate --profile faults down -v --remove-orphans >/dev/null 2>&1 || true
   fi
@@ -113,6 +118,11 @@ scripts/check_backend_image.sh build-m3-backend || status=$?
 
 "${COMPOSE[@]}" run --rm boundary-tests "$@" -q \
   -m "not redis_down and not storage_down and not scanner_down and not fault_injection and not c23_prepare and not c23_verify" || status=$?
+
+# A snapshot straight after the main suite (which holds the two-worker
+# dispatch test): later steps stop and restart services, and a container that
+# is recreated loses its log.
+capture_gate_logs after-main-suite || true
 
 # M3-D PR 6: the scanner stopped. Uploads must stay quarantined and no job
 # may be created for them: the scan fails closed.
