@@ -71,6 +71,19 @@ Extends the blueprint's sketch. Names are proposals.
 
 All tenant-scoped tables carry the tenant key, following the composite tenant-key rule of the S-02 design (`docs/s-02-academic-profile-design.md`), if the reviewer keeps it.
 
+### 4.1 Grant authority (policy only; proposals for the reviewer; nothing implemented)
+
+| Action | Who may do it | Rules |
+|---|---|---|
+| Grant Plus or Pro (promotional or admin) | A platform operator with the grant permission | A reason is required; an **expiry is required** (the maximum period is an open decision); no open-ended grants |
+| Grant Plus or Pro on behalf of an institution | **Open.** Proposal: a tenant administrator grants **nothing** until Campus is defined, because Campus allocation is undefined | Whether a campus administrator may grant both Plus and Pro is a decision for the Campus design |
+| Revoke a grant | The granter, or a platform operator | Effective at the next resolution; recorded with a reason |
+| Override a capability (raise, lower or deny) | A platform operator; proposal: a second operator's approval to *raise* | A reason and an **expiry are required**; no permanent override |
+| A student granting or raising their own plan | Nobody | Refused |
+| Granting above one's own authority | Nobody | A grantor can't confer more than their role allows |
+
+**Audit:** every grant, revocation and override writes an append-only row: actor, actor's role, subject user, capability or plan, value, reason, period, request id and time. It holds ids and codes, never student text. The log is read by operators with a separate permission.
+
 ## 5. Resolution
 
 For each protected request the backend resolves `effective(user, capability)`:
