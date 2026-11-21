@@ -54,6 +54,25 @@ M3 is **not done**. The fixes merged so far closed security and lifecycle gaps e
 
 **L4 is the plan's final L-track PR.** The plan defines no L5, L6 or L7, so this register doesn't list any.
 
+## Phase to milestone mapping
+
+The delivery plan (`docs/BUILD_IMPLEMENTATION_PLAN.md`, approved 2026-11-20) has phases 0 to 11. This register stays the one tracker: the plan carries no status, and this table holds no second status column. A phase is done when the milestones it names are, plus the exit evidence the plan states.
+
+| Plan phase | Register milestones | Notes |
+|---|---|---|
+| 0. Audit | None | `docs/BUILD_IMPLEMENTATION_BASELINE.md`; runs alongside active lanes and gates nothing |
+| 1. Architecture and contracts | M0, M1, M2 (merged); the journey contracts design (#112) | Offline content-pack contract and study-planner design are design documents, not milestones |
+| 2. Backend foundation | M3-A to M3-F, M4, M5, M6, M7; the entitlements work (not yet a milestone) | Entitlements get a milestone row when their design is approved. Offline authorisation and sync are **R2** (row below) |
+| 3. AI foundation | AI-01 and the gateway (no register row; tracked in `docs/build-master-execution-blueprint.md`) | G-33 is an open implementation gap in `contracts/mobile/gaps.yaml` |
+| 4. Grounded intelligence | M4 for authorisation; retrieval quality has no milestone | Retrieval quality is measured in `ai-service` |
+| 5. Offline AI | None. **R2 rows, not yet in the tracker:** offline AI inference, offline retrieval, offline CBT and practice (practice only, if separately approved) | R2. The benchmark and the designs continue during R1 as preparation |
+| 6. Android app | M5, M6 | |
+| 7. Offline continuity | **R2 rows, not yet in the tracker:** offline authorisation and sync (lease design approved with M3-D, #79; see "Product direction"); managed packs | R2. R1 has no document cache unless an approved cache policy and its evidence exist, and no offline assessment |
+| 8. Testing and benchmarking | M7; boundary-gate bar (met) | |
+| 9. Security and governance | L-track memory gate (L0-A, L0-B, L4, activation); G-32, G-33 | `GATE_OPEN` stays `False` |
+| 10. Deployment | None yet | Needs explicit authorisation to spend |
+| 11. End-to-end release | M7 | The plan's release acceptance checklist |
+
 ## M3 exit checklist
 
 Set by the reviewer on #76. M3 is done when all of these hold, each with evidence:
