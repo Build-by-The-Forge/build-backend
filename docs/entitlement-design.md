@@ -84,6 +84,23 @@ All tenant-scoped tables carry the tenant key, following the composite tenant-ke
 
 **Audit:** every grant, revocation and override writes an append-only row: actor, actor's role, subject user, capability or plan, value, reason, period, request id and time. It holds ids and codes, never student text. The log is read by operators with a separate permission.
 
+### 4.2 Ledger accounting
+
+The usage ledger (`usage_ledger`, `usage_reservations`) is append-only and records, per model call:
+
+| Field | Meaning |
+|---|---|
+| `cost_estimated` | The cost computed before and at the call from the pricing table |
+| `cost_provider_reported` | The cost the provider reports, when it does; null until then. A report arrives as an **adjustment row**, never an edit |
+| `pricing_version` | The price table version used, so a later price change doesn't rewrite history |
+| `input_tokens_uncached`, `input_tokens_cached`, `output_tokens` | Cached and uncached input are priced differently and are recorded separately |
+| `provider`, `model` | Per-model usage, so budgets and reports can be read per model |
+| `request_id`, `original_request_id`, `attempt` | A retry carries its original request's id and an attempt number, so retries are visible and counted |
+| `settlement_key` | Unique on (`request_id`, `attempt`). A second settlement with the same key is **rejected**, which prevents duplicate settlement |
+| `outcome` | `ok`, `retry`, `failed`, `cancelled` |
+
+Budgets count settled cost; until the provider reports, the estimate counts, and a failed or cancelled call counts its estimate until reconciled. The AI service's usage in the signed response is the source for settlement; a missing report settles at the estimate and is flagged.
+
 ## 5. Resolution
 
 For each protected request the backend resolves `effective(user, capability)`:
