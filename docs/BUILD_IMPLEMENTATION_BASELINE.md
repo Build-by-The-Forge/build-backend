@@ -32,7 +32,7 @@ Alembic head on `build-backend` main: `0032_s02_academic_profiles` (`alembic/ver
 | Catalogue reads and pagination (M3-C) | Implemented on main | #77 |
 | Assessment lifecycle L1 to L3, M3-E gaps | Implemented on main; M3-E completion awaits the reviewer's check | Register |
 | M3-D foundation: scope filter, read policy, provenance, classification, scanning | Implemented on main | #95, #99, #100, #103, #104, #106, #108 |
-| M3-D student routes: upload, list, retry, bytes, delete, rights, shelf, publication (PRs 7 to 16 of `docs/m3-d-design.md`) | Not started on main; a worktree branch `claude/m3d-pr7-f68199` exists, unpushed | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-41 to G-43 still open |
+| M3-D student routes: upload, list, retry, bytes, delete, rights, shelf, publication (PRs 7 to 16 of `docs/m3-d-design.md`) | **Not implemented on main.** Implementation of PR 7 exists in open PRs: ai-service #69 (head `de4e5fc`) and backend #121 (head `801aa81`). PRs 8 to 16 are not started. (States used in this document: not merged into main; committed locally; pushed; opened as a PR.) | G-01, G-02, G-11, G-12, G-13, G-25, G-30, G-32, G-38, G-41 to G-43 still open |
 | M3-F conversations | Design only plus contract (#90, #81, #83); no implementation | G-04, G-17 open; `docs/m3-f-design.md` |
 | M4 retrieval eligibility and citation authorisation | Design only | `docs/mobile-m0-boundary.md`; G-05, G-31 open |
 | Student journey contracts for S-03, S-07 to S-10, S-13, S-14 | Design only (#112 merged) | `docs/student-journey-contracts-design.md`; no contract operations yet |
