@@ -2,7 +2,19 @@
 
 **Status:** refreshed 2026-11-20 to `build-backend` main `e9067ed` and `ai-service` main `2c76c93`; sections 2, 3, 4 (the S-02 row), 5 and 10 are updated, the rest is as at the original baseline. The delivery plan is `docs/BUILD_IMPLEMENTATION_PLAN.md`. **Original baseline:** 2026-11-07, `build-backend` main `a8f4b4d` (after #108), `ai-service` main `2506dfd` (after #46), and `Build-UI` main `9c6937c`.
 
-**Purpose:** the source of truth for the delivery programme. Every claim about existing code below was checked against the repository it names.
+**Purpose:** a **historical architecture and execution reference**, subordinate to `docs/BUILD_IMPLEMENTATION_PLAN.md`. It is no longer the source of truth for the delivery programme. Claims about existing code below were checked against the repository they name, at the date shown for each section; sections not marked as refreshed are as at 2026-11-07.
+
+**Which document governs what:**
+
+| Document | Authority |
+|---|---|
+| `docs/BUILD_MASTER_PRD.md` | Product and architecture requirements |
+| `docs/BUILD_IMPLEMENTATION_PLAN.md` | The delivery plan |
+| `docs/milestone-register.md` | The single milestone tracker |
+| `docs/BUILD_IMPLEMENTATION_BASELINE.md` | A dated snapshot of the repositories and lanes |
+| This blueprint | Historical architecture and execution reference; where it differs from the four above, they govern |
+
+The lane statuses in section 10 are **dated, handover-based snapshots, not a live dashboard**.
 
 **Scope:**
 - the complete AI Service;
