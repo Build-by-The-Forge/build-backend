@@ -159,3 +159,74 @@ Sources (read 2026-11-22): https://learningequality.org/kolibri/ , https://www.u
 - **Ubongo:** children's edutainment by TV, radio and mobile, including phone-call (IVR) services through operators in several African countries, including Nigeria, and a low-data WhatsApp service for ages 0 to 14. No per-call price found.
 - **Lessons:** offline-first design and low-data delivery are normal in this setting and are not extras; BUILD's offline packs should be judged against Kolibri's sharing model. Both products target different ages from FUTA students.
 - **Not read:** uLesson (a title only) and Eneza Education (the domain did not resolve). **No fourth African platform was verified.**
+
+## 3. The BUILD mapping
+
+### 3.1 What exists today (checked in code)
+
+`build-backend` at `e9067ed`; `ai-service` at `4150c5f`.
+
+| Component | What is there | Where |
+|---|---|---|
+| Source-grounded answers | Passages are retrieved, numbered and given to the model; an answer is grounded only if it cites a retrieved passage and cites nothing else, otherwise it is `NOT_COVERED`. Citations are built from stored chunk metadata | `ai-service` `app/services/rag/evidence.py` (`check_grounded`), `retrieval.py`, `recorder.py` |
+| Provenance and permissions | The backend checks every source an answer used against current read permissions and withholds the whole answer on a failure | `build-backend` provenance check (#100); `app/api/ai.py` |
+| Bounded tool registry and agent loop | Typed tools with schema, permission, timeout and budget; a loop with hard ceilings. **Built, not exposed on any route.** Three tools registered: `content.search`, `curriculum.lookup`, `draft.question` | `ai-service` `app/core/tools/`, `app/services/agents/executor.py`, `app/services/tools/builtins/` |
+| Deterministic scoring | Attempts, scoring and result release are backend-authoritative | `build-backend` `app/application/assessment/attempt_handlers.py` |
+| A deterministic mastery fold | `fold_mastery` folds a list of outcomes into a number with no model call. **Gated off:** Learning Memory is closed (`GATE_OPEN` is `False`) | `ai-service` `app/services/memory/memory_service.py`, `app/core/learning_memory_gate.py` |
+| OCR | PaddleOCR and OpenVINO, PDF and image parsers, used by the ingestion pipeline for documents. **No route accepts a photo of a problem** | `ai-service` `app/services/ocr/` |
+| CBT generation | A structured, grounded exam generator. **No route serves it** | `ai-service` `app/services/generation/cbt_exam.py` |
+| Reading path | A path from a supplied root only | `ai-service` `app/api/v1/ai/read.py`, `app/services/tree/learning_path.py` |
+| Catalogue and curriculum | Courses, topics, learning outcomes, reference materials, **course prerequisites**; CCMAS is a curriculum source | `build-backend` `app/domain/catalogue/{course,prerequisite,learning_outcome,reference_material}.py`, `app/domain/content/enums.py`, `docs/adr/008-curriculum-intelligence.md` |
+| Offline | **Design only** | `docs/offline-content-pack-contract.md` (#122) |
+| Agentic planner | **Design only** | `docs/study-planner-design.md` (#123) |
+| Symbolic maths | **None found.** No symbolic-maths library or tool in `ai-service` | `git grep` of `requirements.txt`, `pyproject.toml` and `app/` |
+| Spaced repetition and flashcards | **None found** in `ai-service` `app/` | `git grep` |
+| Socratic mode and exam-mode refusal | **No code found** in `ai-service` `app/`. The exam-mode rule (AI off during official attempts, backend-enforced) is an adopted decision, not an implementation | `git grep` |
+| Topic-level prerequisite graph | **Not verified.** Only course prerequisites were found | `app/domain/catalogue/prerequisite.py` |
+| Past-question awareness | **A decision stands against it:** the contract has no examination-paper document type | `docs/milestone-register.md`, M3-D rulings |
+
+### 3.2 Capability-to-component map
+
+Releases: **R1** the online core (unchanged); **R2** offline, agentic, flashcards, personalisation; **Later** needs a decision first. "Gate" is the evidence required before shipping.
+
+| # | Capability (inspired by) | BUILD component | Release | Exists today | Evidence gate |
+|---|---|---|---|---|---|
+| 1 | Answers from the student's own material, citations always (NotebookLM, Perplexity) | RAG and grounding | **R1** | Yes: `evidence.py`, backend provenance check | Grounded-answer rate, citation accuracy and abstention on **real FUTA material** (recall at 5 was 62.5% on real material per PRD §0.6), with confidence intervals |
+| 2 | Permission-respecting retrieval (Notion AI) | The one read policy and `denied_assets` | **R1** | Yes | Boundary-gate runs; revocation tests |
+| 3 | Course-code scope: "my MEE 201 notes" | Catalogue plus retrieval filter | **R1** | Catalogue yes; filter by course in retrieval unverified | Retrieval respects the course scope in tests |
+| 4 | Study guides and summaries from sources (NotebookLM) | Grounded generation (naive RAG) | **R1** if the user wants it in the tutor; else R2 | An explain route exists (`app/api/v1/ai/explain.py`); a summary route was not found | Same bars as row 1; generated content labelled |
+| 5 | Socratic mode: hint first, ask before telling (Khanmigo) | Tutor policy in the naive tutor; **exam-mode refusal enforced by the backend** | **R1 only if the user chooses; otherwise R2** | No code | A tutoring evaluation: hints don't leak answers on graded items; refusal tests during official attempts |
+| 6 | Step-by-step symbolic maths as a registered tool (Photomath, Wolfram|Alpha) | Bounded tool registry plus a deterministic engine, provider-independent, runnable offline | **R2** | None | Step correctness against a test suite of FUTA course problems; the engine, not a model, decides correctness |
+| 7 | Photo of a problem (Photomath) | OCR plus a maths-expression recogniser, feeding tool 6 | **R2** | Document OCR only | Recognition accuracy on handwritten and printed maths; camera-image privacy rules |
+| 8 | Spaced repetition over flashcards made from the student's sources (Anki, Duolingo, Quizlet) | A deterministic scheduler plus grounded card generation | **R2** | None | Scheduler unit tests; retention evaluation; cards cite their source passage |
+| 9 | Adaptive mastery over a prerequisite graph (Knewton Alta) | A deterministic mastery model over the catalogue, **the model only narrates** | **R2**, after the Learning Memory gate | `fold_mastery` (gated); course prerequisites | Calibration on real attempt data; the gate's conditions; AI never assigns mastery |
+| 10 | Revision plans and multi-source research (Khanmigo teacher tools, Perplexity) | The bounded agentic planner | **R2, Pro** | Design only | The planner's evaluation bars |
+| 11 | Offline-first delivery and sharing (Kolibri) | Offline content packs, lease and sync | **R2** | Design only | The contract's acceptance tests, on named real devices |
+| 12 | Interactive practice with instant checking (Brilliant) | Practice generation plus a deterministic checker | **R2 or Later** | Generator unrouted | Checker correctness; labelled generated |
+| 13 | Instructor review of clustered answers (Gradescope) | Lecturer workflows | **Later** (paused, PRD §0.5) | None | A separate decision |
+| 14 | Low-data and voice delivery (Ubongo) | A messaging or voice channel | **Later** | None | A separate decision |
+| 15 | Past-question awareness | Catalogue plus a document type | **Later** | **Blocked by an existing ruling** (no examination-paper document type) | The user and reviewer revisit the ruling, with the rights question for past papers |
+
+### 3.3 Assessing the proposed FUTA STEM differentiators
+
+These are assessed, not assumed.
+
+- **A deterministic symbolic-maths engine as a registered tool (row 6).** Strong fit: Wolfram's own writing describes the pattern (a model calls an engine, the engine computes), and Photomath shows demand and also its limits (documented unsupported areas, accuracy only claimed). Provider-independent and offline-capable, so it survives the provider pause and serves poor connectivity. **Risks:** step-by-step *explanations* are harder than final answers; the engine must be tested against FUTA's real course problems; scope must be stated (what is unsupported). The correctness decision belongs to the engine, never to a model.
+- **Photo-of-a-problem input (row 7).** The existing OCR is for documents, not handwritten maths. Treat as a separate recognition problem with its own accuracy measure. **Privacy risk:** Photomath's own policy shows how camera images can be reused; BUILD's rule should be that photos are not used to train anything and are deleted after use unless the student keeps them.
+- **Socratic mode (row 5).** The pattern is well documented (Khanmigo), but its own authors say the first version did not change learning as much as hoped and that AI makes maths errors. It is cheap to build and needs a real evaluation. It must **refuse during official attempts**, enforced by the backend.
+- **Source-grounded notebooks and study guides (rows 1 and 4).** BUILD's strongest foundation. NotebookLM shows the product shape; BUILD's checks are stricter (the citation rule and the backend provenance check).
+- **Adaptive mastery over a prerequisite graph (row 9).** High value, but it depends on data BUILD doesn't yet have (attempt history at scale) and on a topic-level graph that isn't verified. Alta's pages don't describe their model, so there is nothing to copy; BUILD designs its own. **The mastery number is computed deterministically; the model only narrates it.**
+- **Spaced repetition (row 8).** Anki documents two schedulers and FSRS's model of memory; Duolingo published half-life regression. A deterministic scheduler is low cost and works offline. Cards must be generated from the student's own sources, with the source cited.
+- **Course-code and past-question awareness (rows 3 and 15).** Course scope is cheap and valuable. Past-question awareness collides with an existing ruling and a rights question, so it is a decision, not a build item.
+
+## 4. Guard rails
+
+1. **R1 does not change.** R1 stays the online core journey with a naive-RAG grounded tutor, online-only official CBT, and no document cache. Nothing in this map moves an item into R1 except where row 5 or 4 is marked as the user's choice.
+2. **Anything agentic is R2 and Pro** (`docs/study-planner-design.md`).
+3. **AI never assigns final grades or mastery.** Grades come from backend scoring; mastery comes from a deterministic model; the model may explain a number, never set it. Gradescope's design (AI groups, a human grades) points the same way.
+4. **Academic integrity and exam mode.** No AI help during an official attempt, enforced by the backend, not the app. Socratic hinting must not leak graded answers. The risk that a tool becomes an answer service is real: Photomath's own FAQ cites that most students use it to check answers.
+5. **Minors.** FUTA first-year students may be 16 or 17, and the age-eligibility question for Gemini is open. Khanmigo's model (a parent or guardian adds a minor, adults see chats) and Photomath's consent-under-16 rule are references, not decisions. Nothing here settles BUILD's policy.
+6. **Copyright and rights of uploaded material.** Uploaded notes and past papers may belong to others. NotebookLM tells users not to upload what they have no rights to; BUILD's rights declarations are the student's assertions, not legal clearance, and nothing is shared beyond the student without publication consent.
+7. **Privacy.** Camera images, chat logs and mastery data are personal data. Pseudonymous identifiers are still personal data.
+8. **No copying.** BUILD borrows capabilities and design ideas stated in public documentation. It does not reproduce any product's text, screens, branding or content.
+9. **No provider work resumes** because of this document. Gemini and Fireworks work stays paused (user, 2026-11-21); everything above is written to work with the paused state or without a provider (rows 6, 8 and 9 need none).
