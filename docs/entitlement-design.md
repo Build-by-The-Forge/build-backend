@@ -140,7 +140,7 @@ Rules: **model tier and agentic capability resolve independently.** Free resolve
 
 1. **On every protected request** the backend resolves the entitlement. A denied capability returns a stable error code in the shared error shape.
 2. **Before an AI call** it reserves budget: `usage_reservations` row inside the transaction that records the request. If the reservation would exceed the period limit, no call is made.
-3. **Signed budget in the AI call.** The signed request body carries `{budget: {max_calls, max_tokens, max_cost_usd, model_tier_ceiling, deadline}}`. The AI service enforces the tighter of this and its own `AI_BUDGET_*` and never raises either. It never reads a plan name, and never trusts a client-supplied value. *This is a contract change in both repositories and needs its own paired PR.*
+3. **Signed budget in the AI call** (a proposal, **not authorised by this design**: it is a shared backend and ai-service contract change that needs its own paired PR and the reviewer's approval first). The signed request body carries `{budget: {max_calls, max_tokens, max_cost_usd, model_tier_ceiling, deadline}}`. The AI service enforces the tighter of this and its own `AI_BUDGET_*` and never raises either. It never reads a plan name, and never trusts a client-supplied value. *This is a contract change in both repositories and needs its own paired PR.*
 4. **Settle after the call** from the signed response's usage, counting retries and failures. Unsettled reservations expire and are swept.
 5. **Free restrictions live here**, in resolution and reservation, not in the UI.
 6. **Offline AI** is entitled by the signed **model-pack download** and a periodic entitlement lease (R2; see the content-pack contract). That is distribution gating. The backend can't stop a modified APK from running side-loaded open-weight models, and this design doesn't claim it can.
@@ -187,7 +187,7 @@ Campus is a separate, institution-managed policy. It is **not** inferred from th
 1. This design approved.
 2. Migration and the pure resolution function with unit tests (no routes).
 3. Usage ledger and reservations, with the PostgreSQL race tests.
-4. The signed-budget contract change, paired in `ai-service` and build-backend, with the boundary gate.
+4. *Not authorised by this design:* the signed-budget contract change, which would need its own paired `ai-service` and build-backend PR, the boundary gate and separate approval.
 5. Enforcement on the existing AI routes (`app/api/ai.py`) for Free.
 6. Grants and overrides (admin) with audit.
 7. Tamper tests green, then the contract PR for any client-visible operation.
@@ -195,7 +195,7 @@ Campus is a separate, institution-managed policy. It is **not** inferred from th
 ## 10. Decisions the reviewer must make
 
 1. Approve the data model and the two-entitlement split.
-2. Approve the signed-budget field as a shared contract (both repositories).
+2. Decide whether to propose the signed-budget field as a shared contract; that would be its own paired PR in both repositories.
 3. Choose how R1 grants Plus and Pro, and who may.
 4. Set the evaluation bars (grounded answers, citations, abstention) for the Free online default and the smallest local model.
 5. Start the Campus questions.
