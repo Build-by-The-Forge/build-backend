@@ -282,3 +282,28 @@ Just outside the top five: **offline packs** (high impact for connectivity, but 
 4. Decide the minors policy before building anything that sends student data to a provider or stores camera images.
 5. Get a real read of the platforms that blocked access (Quizlet, Socratic, parts of Khan Academy and Gradescope) through another route before relying on this map for them.
 6. Talk to FUTA students before locking the ranking. A short study of how they actually revise would replace the judgement in section 6 with evidence.
+
+## 9. The CCMAS requirement
+
+**Requirement (the user's wording, 2026-11-22).** BUILD's Nigerian university academic catalogue and curriculum intelligence must use NUC CCMAS as its national academic benchmark, reconciled with institution-approved academic structures and session-specific departmental curricula. The system must preserve source provenance, curriculum versions and historical applicability. It must never assume that the national CCMAS document alone represents every university's complete approved curriculum.
+
+**Acceptance criterion, stated first.** *A student's academic session must resolve to the correct historical curriculum version, not simply the latest curriculum for their department.* Every gap below is graded by whether it breaks this criterion.
+
+### 9.1 Four reconciled layers
+
+| Layer | What it holds | Authority |
+|---|---|---|
+| (a) NUC CCMAS | National programme benchmarks: core courses and learning outcomes. NUC treats it as a minimum framework (see 9.4 for what could be verified) | The national regulator |
+| (b) University-approved academic records | Faculties or schools, departments, programme structures | The institution |
+| (c) Departmental curriculum | Courses by level and semester, including institution-specific courses | The department, approved by the institution |
+| (d) Academic session | The curriculum version actually applicable to a student's session | The institution's record for that session |
+
+CCMAS is the benchmark, never the whole curriculum: layers (b) to (d) are the institution's, and BUILD must reconcile them rather than let the national document stand in for them.
+
+### 9.2 Fields and behaviours that must be preserved
+
+Institution and programme ids; department and faculty relationships; course code, title and credit units; level and semester; academic session; curriculum version and effective dates; whether a course is CCMAS core or institution-specific; source document, publication date and verification status. A curriculum change **never overwrites history**, and a student in one session must not silently inherit a newer curriculum. CBT question-bank classification, course selection, tutoring context and prerequisite mastery must resolve against the student's actual programme and curriculum **version**.
+
+### 9.3 What was read
+
+Design: `docs/architecture/academic-catalogue-specification.md`, `academic-knowledge-model.md`, `curriculum-intelligence.md` (read for headings and the version rules), `docs/adr/008-curriculum-intelligence.md` (read in the parts quoted below), PRD §9 to §12. Code: `app/domain/catalogue/`, `app/domain/curriculum/`, `app/domain/academic/profile.py`, `app/domain/tenant/academic_session.py`, `app/application/curriculum/`, `alembic/versions/` 0005, 0011 to 0014, 0019 and 0032. **This gap analysis does not implement or migrate anything.**
