@@ -29,7 +29,7 @@
 | Pro | Everything in Plus | Everything in Plus | Full bounded agentic study workflows: multi-step research and synthesis, personalised study planning, reading paths; routed across Gemini and the three Fireworks models by capability, quality, cost, latency and availability |
 | Campus | Institution-sponsored access; **undefined** | | |
 
-Offline **reading** of downloaded materials is free for everyone; only AI inference is entitled. In R1: online-first, Gemini the only approved online provider until Fireworks passes governance, no offline AI, no agentic workflows, and Plus and Pro only as **granted** states (payments are paused, PRD §0.5). Gates before defaults: the Free online model must clear a minimum grounded-answer, citation and abstention bar in evaluation, and the smallest local model a minimum abstention bar, before either ships to Free.
+Offline **reading** of downloaded materials is free for everyone; only AI inference is entitled. In R1: online-first, Gemini a **designated first R1 provider candidate, currently not approved or enabled** (provider work is paused, user decision 2026-11-21), no offline AI, no agentic workflows, and Plus and Pro only as **granted** states (payments are paused, PRD §0.5). Gates before defaults: the Free online model must clear a minimum grounded-answer, citation and abstention bar in evaluation, and the smallest local model a minimum abstention bar, before either ships to Free.
 
 **Subscription wording (user, 2026-11-20; this wording governs where the tables differ):**
 - **Free** = strictly budgeted online AI; the smallest local model in Release 2, after it passes evaluation.
