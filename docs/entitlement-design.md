@@ -165,7 +165,7 @@ Rules: **model tier and agentic capability resolve independently.** Free resolve
 
 **Open decisions:**
 1. *Decided 2026-11-20:* Free gets the smallest local model; offline *reading* is not paywalled (PRD §78 to §80). Open: the abstention bar it must clear.
-2. Cost. A typical tutor answer (8,000 input, 500 output tokens) is about $0.016 on Gemini at the 2027 price against about $0.0005 on the small Fireworks tier at uncached prices (page's unverified prices), roughly 30 to 80 times with caching. Free at scale on Gemini alone is expensive, and Pro agentic on Gemini alone more so, so Fireworks governance should start now. Gemini stays complementary for Pro agentic, not the only provider.
+2. Cost. A typical tutor answer (8,000 input, 500 output tokens) is about $0.016 on Gemini at the 2027 price against about $0.0005 on the small Fireworks tier at uncached prices (page's unverified prices), roughly 30 to 80 times with caching. This is an **unverified planning estimate**, not a recommendation to act. Provider governance and evaluation remain paused under the user's 2026-11-21 decision, and nothing here authorises resuming them.
 3. Budget periods (daily, monthly) and what a student sees when a limit is reached.
 4. Who may grant Plus and Pro in R1, and how grants are audited.
 
