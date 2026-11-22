@@ -333,3 +333,22 @@ Design: `docs/architecture/academic-catalogue-specification.md`, `academic-knowl
 **Reading the table.** Rows 1 to 4 are built. Rows 5, 6, 7, 10, 14 and 15 are partly built in the curriculum-intelligence code, which is strong. Rows 8, 9, 11, 12 and 13 are the break: the machinery that can resolve a historical version exists, but **nothing ties a student to it**, so today a student would resolve to whatever the catalogue serves, which is the latest. That is exactly the failure the acceptance criterion forbids.
 
 **Minimum to meet the criterion** (a proposal, not a design): the S-02 profile records the academic session and the adoption (or version) it resolves against; every student-facing read of courses, topics, question banks and tutoring context takes that reference; a test shows a student in an earlier session keeps the earlier curriculum after a newer one is activated.
+
+### 9.5 Cross-check against official sources (accessed 2026-11-22)
+
+**FUTA's own website could not be read, so no discrepancy with PRD §9 can be reported.** `https://futa.edu.ng` answered HTTP 403, and the reader did not try variants or subdomains. Every statement in PRD §9.1 (the schools SOC, SAAT, SIMME and SET and their programmes, and the note that Architecture is not a SET programme) therefore remains **unverified against FUTA's published structure**, and this document **does not overwrite the PRD's lists**. A person with browser access to futa.edu.ng should compare the school, department and programme names and the course-code format, and report differences.
+
+**NUC.** What was read:
+
+| Page | Read | What it showed |
+|---|---|---|
+| https://nuc.edu.ng (home) | Yes | NUC lists among its functions laying down minimum academic standards and accrediting degrees, a general function and not a CCMAS definition |
+| https://www.nuc.edu.ng/ccmas/ | Yes, no page date | A download list of 17 discipline documents (administration and management; allied health sciences; architecture; arts; basic medical sciences; computing; communication and media studies; education; environmental sciences; law; medicine and dentistry; pharmacy; sciences; social sciences; veterinary medicine; engineering and technology; agriculture). Uploads are dated March 2026 in their addresses; file names suggest 2022 and 2023 issue years, which are **hints, not verified issue dates** |
+| https://nuc-ccmas.ng | **Not read** | NUC's page calls it the "new CCMAS"; it is on another host and is the likeliest place for the purpose text |
+| The discipline documents | **Not downloaded or read** | They would hold the core and institution-specific split and implementation rules |
+
+- **The 70 percent core and 30 percent institutional split is UNVERIFIED.** No figure appeared on any page read.
+- **Whether CCMAS is described as a minimum framework**, its stated purpose and its implementation deadlines are likewise unverified on the pages read.
+- **Programmes that matter here:** the `/ccmas/` page has "Computing", "Engineering/Technology", "Agriculture", "Environmental Sciences" and "Sciences" entries, which line up with the kinds of FUTA programmes in PRD §9.1. Whether each FUTA programme maps to a document, and which, is not checked.
+
+**Next steps (proposals):** read https://nuc-ccmas.ng and the discipline documents that cover FUTA's programmes, record the core and institutional split and the issue year of each, and compare FUTA's own list in a browser. Nothing in the catalogue should be loaded from CCMAS until its source, version and verification status are recorded (row 7).
