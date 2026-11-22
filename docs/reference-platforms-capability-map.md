@@ -230,3 +230,55 @@ These are assessed, not assumed.
 7. **Privacy.** Camera images, chat logs and mastery data are personal data. Pseudonymous identifiers are still personal data.
 8. **No copying.** BUILD borrows capabilities and design ideas stated in public documentation. It does not reproduce any product's text, screens, branding or content.
 9. **No provider work resumes** because of this document. Gemini and Fireworks work stays paused (user, 2026-11-21); everything above is written to work with the paused state or without a provider (rows 6, 8 and 9 need none).
+
+## 5. Roadmap (proposed; none of it is authorised)
+
+**Now (documentation only, no provider work):** settle the decisions in section 7. Nothing is built from this document.
+
+**R1 (unchanged scope):** the online core journey. The only items from this map that touch R1 are evidence work already planned: measure the grounded tutor on real FUTA material (rows 1 to 3) and decide whether Socratic hinting (row 5) and study guides (row 4) are R1 or R2.
+
+**R2, in the order that costs least and needs no provider:**
+1. **Deterministic maths tool (row 6).** Start with a design and a test suite built from real FUTA course problems, before any engine is chosen. It needs no provider and can be exercised offline. Gate: step correctness on that suite.
+2. **Spaced repetition and flashcards (row 8).** A deterministic scheduler and cards generated from the student's sources, each citing its passage. Gate: scheduler tests and a retention evaluation.
+3. **Offline packs (row 11)** per `docs/offline-content-pack-contract.md`, with device benchmarks.
+4. **Socratic mode (row 5)** if not already in R1, with exam-mode refusal enforced by the backend.
+5. **Adaptive mastery (row 9)**, after the Learning Memory gate is decided and enough attempt data exists to calibrate.
+6. **The bounded agentic planner (row 10)**, Pro only, after the entitlement design is approved.
+7. **Photo-of-a-problem input (row 7)**, after the maths tool exists to receive it, and after a recognition accuracy study.
+
+**Later (each needs its own decision):** instructor tools (row 13), voice and low-data channels (row 14), past-question awareness (row 15, which first needs the existing ruling revisited), interactive practice (row 12).
+
+## 6. Ranked recommendation: the top five capabilities
+
+Ranked by impact on FUTA students against cost and risk. "Impact" is a judgement from the evidence above, not a measurement.
+
+| Rank | Capability | Impact | Cost | Risk | Release | Why |
+|---|---|---|---|---|---|---|
+| 1 | **Answers from the student's own material, citations always** (rows 1 to 3) | Highest: it is the core of the product and is where BUILD is already strongest | Low: the grounding code and provenance check exist | Medium: retrieval quality on real material (62.5% recall at 5) is the open problem | R1 | Without it nothing else is trustworthy. The work left is quality, not construction |
+| 2 | **Deterministic step-by-step maths tool** (row 6) | High for a STEM-heavy campus; the strongest differentiator and the clearest lesson from Wolfram and Photomath | Medium: an engine plus a tested step generator | Medium: step explanations are hard; scope must be honest | R2 | Provider-independent and offline-capable, so it survives the provider pause and poor connectivity |
+| 3 | **Spaced repetition over source-cited flashcards** (row 8) | High for exam revision at low cost | Low: a scheduler is deterministic | Low | R2 | Fully deterministic, offline-friendly, and the evidence base (Anki, Duolingo's published method) is public |
+| 4 | **Course-code and prerequisite-aware guidance** (rows 3 and 9, the non-gated part) | Medium to high: it makes answers and plans fit the student's courses | Low to medium: the catalogue and course prerequisites exist | Low, as long as mastery is not set by a model | R1 for scope, R2 for guidance | Uses data BUILD already owns |
+| 5 | **Socratic tutoring with exam-mode refusal** (row 5) | Medium to high pedagogically | Low to build, medium to evaluate | Medium: leaking answers, and integrity | R1 only by the user's choice, else R2 | Khanmigo's own admissions show it needs evidence, not just a prompt |
+
+Just outside the top five: **offline packs** (high impact for connectivity, but a larger build and heavily gated) and **photo-of-a-problem input** (high wow-factor, depends on the maths tool and a recognition study). **Adaptive mastery** matters but is gated by the memory gate and by data BUILD doesn't have yet.
+
+## 7. Decisions the user must make
+
+1. **Socratic mode and study guides: R1 or R2?** (This is the only place this map touches R1's scope; the default here is R2.)
+2. **Is the symbolic-maths tool the first R2 build**, and which course problems form its test suite?
+3. **Photo input:** accept the recognition study first, and decide the rule for storing or deleting camera images.
+4. **Minors policy.** FUTA first-years may be 16 or 17. Decide the product policy (a guardian model, an 18+ gate for AI features, or something else); the Gemini age-eligibility question is open independently.
+5. **Past questions.** Revisit the ruling that there is no examination-paper document type, and decide the rights position for past papers.
+6. **Mastery data.** Decide when the Learning Memory gate is reviewed, because adaptive mastery waits on it.
+7. **Quizlet and Socratic.** Decide whether to have them studied further through another route, since no official page could be read.
+8. **Further platforms** from section 1.3's list worth studying, especially African exam-preparation apps to be named with students.
+9. **Whether student interviews or a usage survey** should precede ranking, since "impact" here is a judgement and not data.
+
+## 8. Recommendations
+
+1. Treat row 1 as the real product work for R1: raise retrieval quality on real FUTA material before adding any new feature.
+2. Start the maths-tool test suite now. It needs no provider, and a suite built from real FUTA problems is the main thing that makes the tool trustworthy.
+3. Keep every number a student sees (a grade, a mastery score, a due date for review) deterministic and explainable, and let the model only narrate it.
+4. Decide the minors policy before building anything that sends student data to a provider or stores camera images.
+5. Get a real read of the platforms that blocked access (Quizlet, Socratic, parts of Khan Academy and Gradescope) through another route before relying on this map for them.
+6. Talk to FUTA students before locking the ranking. A short study of how they actually revise would replace the judgement in section 6 with evidence.
