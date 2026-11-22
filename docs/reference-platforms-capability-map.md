@@ -306,7 +306,7 @@ Institution and programme ids; department and faculty relationships; course code
 
 ### 9.3 What was read
 
-Design: `docs/architecture/academic-catalogue-specification.md`, `academic-knowledge-model.md`, `curriculum-intelligence.md` (read for headings and the version rules), `docs/adr/008-curriculum-intelligence.md` (read in the parts quoted below), PRD §9 to §12. Code: `app/domain/catalogue/`, `app/domain/curriculum/`, `app/domain/academic/profile.py`, `app/domain/tenant/academic_session.py`, `app/application/curriculum/`, `alembic/versions/` 0005, 0011 to 0014, 0019 and 0032. **This gap analysis does not implement or migrate anything.**
+Design: `docs/adr/008-curriculum-intelligence.md` was read in the parts cited below, and the PRD §9.1 school list was read. `docs/architecture/academic-catalogue-specification.md`, `academic-knowledge-model.md`, `curriculum-intelligence.md` and PRD §10 to §12 were located but **not read in full in this pass**, so a row below can understate what they specify. Code: `app/domain/catalogue/`, `app/domain/curriculum/`, `app/domain/academic/profile.py`, `app/domain/tenant/academic_session.py`, `app/application/curriculum/` and the migrations named in each row. **This gap analysis does not implement or migrate anything.**
 
 ### 9.4 Gap table
 
