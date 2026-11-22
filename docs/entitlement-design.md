@@ -71,7 +71,9 @@ Extends the blueprint's sketch. Names are proposals.
 
 All tenant-scoped tables carry the tenant key, following the composite tenant-key rule of the S-02 design (`docs/s-02-academic-profile-design.md`), if the reviewer keeps it.
 
-### 4.1 Grant authority (policy only; proposals for the reviewer; nothing implemented)
+### 4.1 Grant authority (policy only; PROVISIONAL and OPEN; nothing implemented)
+
+> **Not an approved authorisation model.** Everything in this section is a proposal: who may grant and revoke, whether a campus administrator may grant Plus and Pro, the maximum grant duration, second-operator approval for entitlement-raising overrides, the platform-operator role boundaries, and every Campus rule. Each is **provisional and open** for the reviewer and the user. Nothing here authorises a role, a permission or an operator capability.
 
 | Action | Who may do it | Rules |
 |---|---|---|
