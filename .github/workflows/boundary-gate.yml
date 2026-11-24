@@ -84,6 +84,9 @@ jobs:
           # The same read-only token fetches the OCR model mirror release
           # assets during the ai-service build (BuildKit secret).
           OCR_MODELS_TOKEN: ${{ secrets.AI_SERVICE_READ_TOKEN }}
+          # Where the script keeps the services' full logs and the AI queue
+          # state, for the artifact below.
+          GATE_LOG_DIR: ${{ github.workspace }}/gate-logs
         run: scripts/m3_boundary_gate.sh
       # Only when the gate itself failed: before it, there is no checkout or
       # compose stack to collect logs from.
@@ -92,3 +95,18 @@ jobs:
         working-directory: build-backend
         run: |
           docker compose --env-file deploy/m3.env -f deploy/compose.m3.yml logs --no-color --tail 300 || true
+      # Always, pass or fail: the complete logs of every service for the whole
+      # run, so a failure can be explained once the stack is gone. The
+      # revisions under test are in the run summary. A problem uploading must
+      # not change the gate's result, so this step can't fail the job; it
+      # can't turn a failed gate green either (the gate step has already
+      # decided the job's outcome).
+      - name: Keep the gate's service logs
+        if: always() && steps.gate.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: boundary-gate-logs-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          path: gate-logs
+          if-no-files-found: warn
+          retention-days: 14
