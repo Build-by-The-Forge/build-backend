@@ -35,3 +35,9 @@ For a job that reports `AI_TASK_LOST`, take the stream entry ID from the failing
 ## What it does not hold
 
 Nothing beyond what the services print themselves, filtered as above. The artifact is as sensitive as the run's own log: it is private to the repository's readers, and expires after 14 days.
+
+## Synthetic data only
+
+**The gate must only ever run against synthetic test data.** The stack it starts holds documents, accounts and conversations made by the boundary tests, from empty volumes. It must never be pointed at, restored from, or fed with production student conversations, uploaded documents or real student records, whether by a changed compose file, a restored volume or a replayed request.
+
+The artifact's redaction (secrets, credentials, e-mail addresses, query strings) is not a substitute for this. It removes what it recognises; it cannot make real student content safe to keep in a workflow artifact, and personal or academic content in a log is not something a pattern filter finds. If real data were ever in a gate run, treat the run's artifact as an incident: delete it and the run's logs, and tell the repository's owner.
