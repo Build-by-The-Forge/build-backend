@@ -2,6 +2,7 @@ import app.infrastructure.db.models.academic  # noqa: F401
 import app.infrastructure.db.models.assessment  # noqa: F401
 import app.infrastructure.db.models.catalogue  # noqa: F401
 import app.infrastructure.db.models.content  # noqa: F401
+import app.infrastructure.db.models.conversation  # noqa: F401
 import app.infrastructure.db.models.institutional_curriculum  # noqa: F401
 import app.infrastructure.identity.models  # noqa: F401
 from app.db.base import Base
