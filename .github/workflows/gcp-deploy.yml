@@ -37,15 +37,20 @@ jobs:
       - name: Check the image refuses Learning Memory when asked
         run: |
           # In staging, requesting memory must fail at startup (config validator).
-          if docker run --rm --entrypoint python \
+          # Throwaway values generated here; nothing is stored or reused.
+          # Only the memory refusal counts as a pass: any other startup error would
+          # also exit non-zero and prove nothing.
+          out=$(docker run --rm --entrypoint python \
             -e APP_ENVIRONMENT=staging -e LEARNING_MEMORY_ENABLED=true \
-            -e AUTH_JWT_SECRET=0123456789abcdef0123456789abcdef0123456789 \
+            -e AUTH_JWT_SECRET="$(openssl rand -hex 32)" \
             -e AI_SERVICE_URL=https://ai.invalid \
-            -e BACKEND_TO_AI_SECRET=ci-only-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
-            -e AI_TO_BACKEND_SECRET=ci-only-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+            -e BACKEND_TO_AI_SECRET="$(openssl rand -hex 32)" \
+            -e AI_TO_BACKEND_SECRET="$(openssl rand -hex 32)" \
             -e CLAMAV_HOST=clamav.invalid \
-            build-backend:candidate -c "from app.core.config import settings"; then
-            echo "Learning Memory was accepted while the gate is closed" >&2
+            build-backend:candidate -c "from app.core.config import settings" 2>&1) && rc=0 || rc=$?
+          if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q "LEARNING_MEMORY_ENABLED is refused"; then
+            echo "Learning Memory was not refused for the right reason (exit $rc)" >&2
+            echo "$out" | tail -5 >&2
             exit 1
           fi
           echo "refused, as required"
