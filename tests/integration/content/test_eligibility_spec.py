@@ -134,9 +134,7 @@ async def test_a_document_whose_source_was_revoked_is_not_readable_for_a_provena
     world = await build_world()
     asset = world.assets["institutional, reviewed for the tenant"]
     async with SessionLocal() as session:
-        source_id = (
-            await session.execute(select(ContentAssetModel.source_id).where(ContentAssetModel.id == asset))
-        ).scalar_one()
+        source_id = (await session.execute(select(ContentAssetModel.source_id).where(ContentAssetModel.id == asset))).scalar_one()
         await session.execute(update(ContentSourceModel).where(ContentSourceModel.id == source_id).values(status="revoked"))
         await session.commit()
 
