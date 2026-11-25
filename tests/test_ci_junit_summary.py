@@ -41,15 +41,17 @@ def test_a_green_run_reports_its_count_and_lists_nothing(tmp_path):
 def test_failures_and_errors_are_listed_with_their_error_lines(tmp_path):
     text = summary.summarise([write(tmp_path, "a.xml", FAILING)])
     assert "### Tests: 3 run, 2 failing or erroring" in text
-    assert "`tests.b::test_bad`" in text
+    assert "`tests.b::test_bad` (`a.xml`)" in text
     assert "`E       assert 1 == 2`" in text and "`E        +  where 1 = f()`" in text
     # An error with no E lines falls back to its message, and a backtick can't break the Markdown.
-    assert "`tests.c::test_err`" in text and "`boom 'tick'`" in text
+    assert "`tests.c::test_err` (`a.xml`)" in text and "`boom 'tick'`" in text
 
 
 def test_reports_from_several_steps_are_combined(tmp_path):
     text = summary.summarise([write(tmp_path, "a.xml", PASSING), write(tmp_path, "b.xml", FAILING)])
     assert "### Tests: 4 run, 2 failing or erroring" in text
+    # Each failure names the report it came from, so which pytest invocation.
+    assert "`tests.b::test_bad` (`b.xml`)" in text and "(`a.xml`)" not in text
 
 
 def test_an_unreadable_report_is_said_so_and_the_rest_still_count(tmp_path):

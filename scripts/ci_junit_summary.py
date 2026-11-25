@@ -52,8 +52,9 @@ def summarise(paths: list[str]) -> str:
         total += count
         failing.extend((os.path.basename(path), case, found) for case, found in bad)
     out.insert(0, f"### Tests: {total} run, {len(failing)} failing or erroring")
-    for _, case, found in failing[:MAX_FAILURES]:
-        out.append(f"- `{case.get('classname')}::{case.get('name')}`")
+    for report, case, found in failing[:MAX_FAILURES]:
+        # Which report, so which pytest invocation: postgres-gate runs four.
+        out.append(f"- `{case.get('classname')}::{case.get('name')}` (`{report}`)")
         lines = [ln for ln in (found.text or "").splitlines() if ln.startswith("E ")][:MAX_ERROR_LINES]
         for line in lines or [found.get("message") or ""]:
             out.append(f"  - `{_clean(line)}`")
