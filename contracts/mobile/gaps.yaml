@@ -9,11 +9,6 @@ contract_gaps:
   summary: Clients can set max_attempts and correlation_id when creating a job
   closes_in: M3-D
   evidence: Read from job_schemas.py.
-- id: G-18
-  severity: Medium
-  summary: Chat returns raw context passages, including uncited ones
-  closes_in: M3-F
-  evidence: 'Read from app/api/ai.py. Not probed: the mobile contract has no such route.'
 - id: G-19
   severity: Low
   summary: No way to limit a question to one document. Deferred by the reviewer
@@ -199,3 +194,6 @@ closed:
 - id: G-28
   summary: No record of a student's programme, level or courses
   proof: tests/integration/academic/test_academic_profile.py::test_a_save_reads_back_with_department_and_faculty_from_the_programme
+- id: G-18
+  summary: Chat returned raw context passages, including uncited ones
+  proof: tests/integration/ai/test_ai_api.py::test_chat_is_forwarded_for_the_verified_member

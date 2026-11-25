@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app.core.config import settings
-from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
+from app.domain.ai.assistant import AIActor, AIAssistantError, ChatAnswer, MemoryItem, MemoryObservation
 from app.infrastructure.ai.assistant_gateway import RESPONSE_NONCE_RECEIVER, HttpAIAssistantGateway, no_source_is_readable
 from app.infrastructure.security.replay_store import ReplayStoreUnavailable
 from app.infrastructure.security.service_context import ServiceContext
@@ -137,7 +137,9 @@ async def test_chat_is_signed_with_only_the_checked_permission():
 
     answer = await gateway(handler).chat(ACTOR, "What is osmosis?")
 
-    assert (answer.answer, answer.context) == ("A", ["c1"])
+    assert answer == ChatAnswer(answer="A")
+    # The passages and the memory the AI service reported are never kept (G-18).
+    assert not hasattr(answer, "context") and "c1" not in repr(answer)
     [request] = seen
     assert request.url.path == "/v1/ai/chat"
     body = json.loads(request.content)

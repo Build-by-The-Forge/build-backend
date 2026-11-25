@@ -43,7 +43,7 @@ class RecordingGateway(AIAssistantGateway):
 
     async def chat(self, actor, message):
         self._record("chat", actor, message)
-        return ChatAnswer(answer=f"answer to {message}", context=["ctx"])
+        return ChatAnswer(answer=f"answer to {message}")
 
     async def explain(self, actor, subject):
         self._record("explain", actor, subject)
@@ -84,7 +84,8 @@ async def test_chat_is_forwarded_for_the_verified_member(client, gateway):
     response = client.post("/ai/chat", json={"message": "What is osmosis?"}, headers=h)
 
     assert response.status_code == 200, response.text
-    assert response.json()["data"] == {"answer": "answer to What is osmosis?", "context": ["ctx"]}
+    # The answer only: no retrieved passage is part of the response (G-18).
+    assert response.json()["data"] == {"answer": "answer to What is osmosis?"}
     [(name, actor, args)] = gateway.calls
     assert (name, args) == ("chat", ("What is osmosis?",))
     assert (actor.tenant_id, actor.user_id, actor.role) == (tenant_id, user_id, "student")
