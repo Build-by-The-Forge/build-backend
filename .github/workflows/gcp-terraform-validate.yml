@@ -35,7 +35,8 @@ jobs:
             echo "A secret value or version is defined in Terraform" >&2; exit 1
           fi
           # Learning Memory stays off in every service, pool and job.
-          if grep -rEn 'LEARNING_MEMORY_ENABLED' --include='*.tf' . | grep -v '"false"'; then
+          grep -rEq 'LEARNING_MEMORY_ENABLED *= *"false"' --include='*.tf' . || { echo "the Learning Memory setting is missing" >&2; exit 1; }
+          if grep -rEn 'LEARNING_MEMORY_ENABLED *=' --include='*.tf' . | grep -v '"false"'; then
             echo "LEARNING_MEMORY_ENABLED must be \"false\"" >&2; exit 1
           fi
           # No state, plan or variable file is committed.
