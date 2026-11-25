@@ -63,7 +63,7 @@ A document version is **eligible for this caller at this moment** when all of th
 | E1 | The asset is in the caller's tenant (`tenant_id` equals the verified context's) | `content_assets` |
 | E2 | The caller may read it: `may_read` (the one policy) | `read_policy_sql.readable` |
 | E3 | The asset is `active` (not `revoked`, not `deleted`) and its **source** is not `revoked` (decision D1) | `content_assets.status`, `content_sources.status` |
-| E4 | **AI use is permitted for this caller**: the document is the caller's own personal document, or it is `institutional` and its latest effective rights review is accepted for an audience that includes the caller. Publication alone never qualifies (`m3-d-design.md`, "Three kinds of permission") | `ownership_class`, `owner_user_id`, rights assertions |
+| E4 | **AI use is permitted for this caller**: the document is the caller's own personal document, or it is `institutional` and its latest staff rights review is accepted, has `ai_use = permitted`, and is for an audience that includes the caller. Publication alone never qualifies (`m3-d-design.md`, "Three kinds of permission"). Today `ai_use` is checked only when the classification is made, where it decides whether a scope assignment is queued (`classification.py:220`, `classification_store.py:150`), and `may_read` ignores it: a later review that withdraws AI use reaches the AI service only through a new assignment | `ownership_class`, `owner_user_id`, rights assertions (`ai_use`) |
 | E5 | The scan verdict is `accepted` (not `quarantined`, not `rejected`) | scan record / `ingestion_status` |
 | E6 | The asset's **latest job** (highest `run_number`) is `ready`; no newer run exists in any other state | `content_ingestion_jobs` |
 | E7 | The entry's `(run_number, attempt)` is that latest ready job's `(run_number, attempt_count)` | same row |
@@ -254,4 +254,76 @@ Each phase is its own PR or PRs, one concern per commit; `gaps.yaml` is updated 
 
 ## 8. Tests as specification
 
-(The next commit lists them: where they live, how to run them, and which property each pins.)
+Each test below is a **strict xfail** that fails today for the reason in its marker. When M4-B makes it pass, the strict marker turns the pass into a failure, so the marker is removed in the same commit as the behaviour. No existing test is changed or weakened. Tests that need a populated index run on real PostgreSQL, through the production query, never against an empty store or a stub.
+
+The tests name the seams the design introduces. They are part of the specification: M4-B may rename a seam only by changing the test and this table in the same commit.
+
+| Seam | Meaning |
+|---|---|
+| `app.application.content.eligibility.EligibilityFacts`, `may_use(facts, reader, run_number, attempt)` | The pure rule E1-E7 (§3.1). Phase 1 adds the SQL form and an agreement test over the same rows |
+| `HttpAIAssistantGateway(eligible_allow_list=..., eligible_sources=...)` | The backend's two eligibility calls (§3.1, §3.6) |
+| `assistant_gateway.MAX_ALLOWED` | The shared limit (§3.5) |
+| `ChatAnswer.grounded`, `ChatAnswer.citations` | Validated citations returned by the gateway (§3.7) |
+| ai-service `RetrievalFilter(allowed=frozenset[(asset_id, run, attempt)])`, required | The AI side's filter (§3.4) |
+
+### Backend (`build-backend`)
+
+`tests/infrastructure/ai/test_eligibility_spec.py` (gateway, no database):
+
+| Test | Property |
+|---|---|
+| `test_the_call_carries_the_eligible_triples_sorted` | 2, 3, 4, 5 |
+| `test_an_empty_allow_list_makes_no_call_and_is_the_not_covered_reply` | 3, boundary "empty set" |
+| `test_an_allow_list_that_cannot_be_read_makes_no_call` | fail closed |
+| `test_the_shared_allow_list_limit_is_never_exceeded_or_truncated` (5000, 5001) | large lists |
+| `test_a_source_from_a_superseded_run_withholds_the_answer_though_the_asset_is_readable` | 5, 8 |
+| `test_a_source_the_request_did_not_allow_withholds_the_answer_even_if_eligible_now` | 4, 8, confused deputy |
+| `test_eligibility_is_evaluated_again_after_the_response_not_reused` | 6, 8, TOCTOU |
+| `test_the_check_is_asked_about_exactly_the_triples_that_were_used` | 4, 8 |
+| `test_an_eligibility_check_that_cannot_run_withholds_the_answer` | 8, fail closed |
+| `test_a_citation_naming_a_version_that_was_not_retrieved_withholds_the_answer` | 7 (C1) |
+| `test_a_marker_with_no_citation_is_a_broken_response` | 7 (C2) |
+| `test_a_citation_the_text_never_uses_is_a_broken_response` | 7 (C2) |
+| `test_a_not_grounded_answer_with_citations_is_a_broken_response` | 7 (C3) |
+| `test_a_grounded_answer_with_no_citation_is_a_broken_response` | 7 (C3) |
+| `test_the_answer_carries_validated_citations_and_never_an_internal_id` | 7 (C4, C6) |
+
+`tests/integration/content/test_eligibility_spec.py`:
+
+| Test | Property |
+|---|---|
+| `test_the_eligibility_rule_over_every_state_combination` (24 rows: current, older run, older attempt, retry, reprocess queued/processing, failed with chunks, no job, quarantined, rejected, no verdict, revoked, deleted, source revoked or unknown, another tenant, not reviewed, AI use not permitted, unclassified, unknown class, the owner's personal, quarantined personal, another student's personal unpublished and **published**) | 1-6 |
+| `test_a_fact_the_rule_does_not_know_is_not_eligible` | fail closed |
+| `test_a_document_whose_source_was_revoked_is_not_readable_for_a_provenance_check` | 6, **D1, runs the production `readable_sources` on a populated world** |
+
+### ai-service (`tests/integration/test_eligibility_spec.py`, real PostgreSQL, a populated index)
+
+| Test | Property |
+|---|---|
+| `test_an_allow_list_is_required_never_defaulted` | missing never means unfiltered |
+| `test_an_empty_allow_list_returns_nothing_even_for_an_institutional_document` | 3 |
+| `test_only_the_listed_document_is_returned` | 2, 3 |
+| `test_a_listing_for_another_run_or_attempt_matches_no_chunk` (2 cases) | 4, 5 |
+| `test_a_personal_document_is_returned_only_when_listed` | G-05 allow-list for personal documents |
+| `test_a_listed_document_without_a_retrievable_scope_is_never_returned` (unknown, no row) | D2 |
+| `test_a_listed_asset_of_another_tenant_matches_nothing` | 1 |
+| `test_a_denied_document_stays_out_even_when_listed` | 6, migration period |
+| `test_a_dispatch_for_an_asset_another_tenant_holds_is_refused` | 1, hardening (§2.4) |
+| `test_every_retrieving_request_requires_a_bounded_allow_list` | contract K1, K6 |
+
+### Not yet specified as tests, and why
+
+- **Latency and recall at 100 / 1,000 / 5,000 / 10,000 entries** are measurements, not assertions (phase 0).
+- **The SQL form agrees with `may_use`** needs the SQL, which does not exist; it is the first test of phase 1.
+- **Persistence under `FOR SHARE`** needs the M3-F message store (D7); the race test is written with that store.
+- **End-to-end boundary tests 6, 9, 10, 11, 12** (`mobile-m0-boundary.md`) need the real stack and arrive with phase 6.
+
+### Running them
+
+Backend, in the CI image (`pytest` on the two files plus the drift gate, which must stay green):
+
+```text
+pytest tests/infrastructure/ai/test_eligibility_spec.py tests/integration/content/test_eligibility_spec.py tests/integration/test_mobile_contract_drift.py -rx
+```
+
+ai-service, with `DATABASE_URL` pointing at pgvector PostgreSQL as in its CI: `pytest tests/integration/test_eligibility_spec.py -rx`.
