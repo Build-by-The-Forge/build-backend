@@ -21,7 +21,6 @@ from app.application.content.read_policy import Reader
 from app.db.session import SessionLocal
 from app.domain.ai.assistant import AIActor
 from app.infrastructure.db.models.content import ContentAssetModel, ContentSourceModel
-
 from tests.integration.content.read_policy_world import build_world
 
 M4B = "M4-B phase 1 (design section 7)"
