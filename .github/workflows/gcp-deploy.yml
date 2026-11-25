@@ -1,0 +1,74 @@
+name: GCP build and record (dry)
+# Builds the images defined in this repository and records what was built. It
+# has NO credentials, pushes nothing, deploys nothing and applies nothing: the
+# push, migrate and deploy steps are added when the owner approves the project
+# and the federation (docs/gcp-staging-runbook.md, "First deploy").
+#
+# What it proves before any cloud exists: the production image builds, carries
+# the Learning Memory marker and has the gate closed (GATE_OPEN False), and the
+# db-init image builds. It records each image's ID so a later registry push can be
+# tied to this build.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build backend production image
+        run: |
+          docker build --target production \
+            --label org.opencontainers.image.revision="${GITHUB_SHA}" \
+            -t build-backend:candidate .
+
+      - name: Check the Learning Memory gate is closed in the image
+        run: |
+          docker run --rm --entrypoint python build-backend:candidate -c \
+            "from app.core.learning_memory_gate import GATE_OPEN, PRODUCTION_IMAGE_MARKER; \
+             assert GATE_OPEN is False, 'GATE_OPEN is open'; \
+             assert PRODUCTION_IMAGE_MARKER.exists(), 'production marker missing'; \
+             print('gate closed, marker present')"
+
+      - name: Check the image refuses Learning Memory when asked
+        run: |
+          # In staging, requesting memory must fail at startup (config validator).
+          # Throwaway values generated here; nothing is stored or reused.
+          # Only the memory refusal counts as a pass: any other startup error would
+          # also exit non-zero and prove nothing.
+          out=$(docker run --rm --entrypoint python \
+            -e APP_ENVIRONMENT=staging -e LEARNING_MEMORY_ENABLED=true \
+            -e AUTH_JWT_SECRET="$(openssl rand -hex 32)" \
+            -e AI_SERVICE_URL=https://ai.invalid \
+            -e BACKEND_TO_AI_SECRET="$(openssl rand -hex 32)" \
+            -e AI_TO_BACKEND_SECRET="$(openssl rand -hex 32)" \
+            -e CLAMAV_HOST=clamav.invalid \
+            build-backend:candidate -c "from app.core.config import settings" 2>&1) && rc=0 || rc=$?
+          if [ "$rc" -eq 0 ] || ! echo "$out" | grep -q "LEARNING_MEMORY_ENABLED is refused"; then
+            echo "Learning Memory was not refused for the right reason (exit $rc)" >&2
+            echo "$out" | tail -5 >&2
+            exit 1
+          fi
+          echo "refused, as required"
+
+      - name: Build db-init image
+        run: docker build -f deploy/gcp/db-init/Dockerfile -t db-init:candidate .
+
+      - name: Record image IDs
+        run: |
+          {
+            echo "revision: ${GITHUB_SHA}"
+            echo "backend (local image id): $(docker image inspect --format '{{.Id}}' build-backend:candidate)"
+            echo "db-init (local image id): $(docker image inspect --format '{{.Id}}' db-init:candidate)"
+            echo "ai-service: not built here (needs a cross-repository read token; see runbook)"
+            echo "registry digests: none, nothing was pushed"
+          } | tee image-record.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-record
+          path: image-record.txt

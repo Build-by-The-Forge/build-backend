@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (git-ignored). Names and sizes only: never a secret.
+project_id = "build-staging-REPLACE"
+region     = "REPLACE"   # decided by the latency benchmark
+zone       = "REPLACE-a" # a zone in that region
+# alert_email         = "ops@example.invalid"
+# apk_domain          = "apk.staging.example.invalid"
+# github_repositories = ["Build-by-The-Forge/build-backend", "Build-by-The-Forge/ai-service"]
