@@ -17,6 +17,11 @@ resource "google_service_account" "migrate" {
   display_name = "migrations and db-init jobs (${var.environment})"
 }
 
+resource "google_service_account" "migrate_ai" {
+  account_id   = "${local.name}-migrate-ai"
+  display_name = "ai-service migration job (${var.environment})"
+}
+
 resource "google_service_account" "deployer" {
   account_id   = "${local.name}-deployer"
   display_name = "deploy workflow (${var.environment})"
@@ -27,6 +32,7 @@ locals {
     backend = google_service_account.backend.email
     ai      = google_service_account.ai.email
     migrate = google_service_account.migrate.email
+    migrate_ai = google_service_account.migrate_ai.email
     redis   = google_service_account.redis_vm.email
     clamav  = google_service_account.clamav_vm.email
   }
@@ -68,6 +74,7 @@ resource "google_service_account_iam_member" "deployer_acts_as" {
     backend = google_service_account.backend.name
     ai      = google_service_account.ai.name
     migrate = google_service_account.migrate.name
+    migrate_ai = google_service_account.migrate_ai.name
   }
   service_account_id = each.value
   role               = "roles/iam.serviceAccountUser"
