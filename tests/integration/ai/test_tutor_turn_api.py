@@ -188,8 +188,7 @@ async def test_the_turn_is_rate_limited_per_user(client, gateway):  # noqa: F811
 async def row_counts() -> dict[str, int]:
     async with SessionLocal() as session:
         return {
-            table.name: await session.scalar(select(func.count()).select_from(table))
-            for table in Base.metadata.sorted_tables
+            table.name: await session.scalar(select(func.count()).select_from(table)) for table in Base.metadata.sorted_tables
         }
 
 
