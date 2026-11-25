@@ -55,3 +55,6 @@ Thumbs.db
 .python-version
 # Combined topology secrets (deploy/m3.env.example)
 deploy/m3.env
+
+# Per-run pytest JUnit reports (CI uploads them as artifacts)
+pytest-junit*.xml

@@ -27,7 +27,23 @@ jobs:
           ruff check app tests scripts pg_smoke
           ruff format --check app tests scripts pg_smoke
       - name: Test
-        run: pytest -q
+        run: pytest -q -ra --tb=short --junitxml=pytest-junit.xml
+      # A red run explains itself: the failing tests and their error lines go to the job
+      # summary, and the JUnit report is an artifact. Reporting only: these steps run
+      # after the tests, never change their result, and can't fail the job themselves.
+      - name: Summarise test failures (test)
+        if: always()
+        continue-on-error: true
+        run: python scripts/ci_junit_summary.py pytest-junit.xml >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload JUnit report (test)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: pytest-junit
+          path: pytest-junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
   postgres-gate:
     # The suite above builds its SQLite schema from the ORM models, so it
     # cannot see migrations that disagree with the models. This job checks
@@ -80,13 +96,29 @@ jobs:
       - name: Models match the migrated schema
         run: python scripts/check_schema_drift.py
       - name: Smoke tests against the migrated schema
-        run: pytest pg_smoke -q
+        run: pytest pg_smoke -q -ra --tb=short --junitxml=pytest-junit-pg-smoke.xml
       - name: Rate-limit store against real Redis
-        run: pytest tests/infrastructure/test_redis_counter_store.py -q
+        run: pytest tests/infrastructure/test_redis_counter_store.py -q -ra --tb=short --junitxml=pytest-junit-redis-counter.xml
       - name: Service authentication against real Redis
-        run: pytest tests/infrastructure/test_service_auth_middleware.py -q
+        run: pytest tests/infrastructure/test_service_auth_middleware.py -q -ra --tb=short --junitxml=pytest-junit-service-auth.xml
       - name: Signed AI-service callbacks against real Redis
-        run: pytest tests/integration/content/test_signed_callbacks.py -q
+        run: pytest tests/integration/content/test_signed_callbacks.py -q -ra --tb=short --junitxml=pytest-junit-callbacks.xml
+      # A red run explains itself: the failing tests and their error lines go to the job
+      # summary, and the JUnit report is an artifact. Reporting only: these steps run
+      # after the tests, never change their result, and can't fail the job themselves.
+      - name: Summarise test failures (postgres-gate)
+        if: always()
+        continue-on-error: true
+        run: python scripts/ci_junit_summary.py pytest-junit-*.xml >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload JUnit report (postgres-gate)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: pytest-junit-postgres-gate
+          path: pytest-junit-*.xml
+          if-no-files-found: ignore
+          retention-days: 14
   storage-gate:
     # The object-storage adapter against a real S3-compatible service:
     # SeaweedFS pinned by digest, with identities generated for this run
@@ -113,11 +145,27 @@ jobs:
         env:
           OBJECT_STORAGE_TESTS_REQUIRED: '1'
         run: |
-          pytest tests/infrastructure/content/test_s3_object_storage_real.py             tests/integration/content/test_content_upload_real_storage.py             -q -rA -p no:cacheprovider | tee storage-tests.log
+          pytest tests/infrastructure/content/test_s3_object_storage_real.py             tests/integration/content/test_content_upload_real_storage.py             -q -rA --tb=short --junitxml=pytest-junit-storage.xml -p no:cacheprovider | tee storage-tests.log
           if grep -qE '(^SKIPPED|[0-9]+ skipped)' storage-tests.log; then
             echo "::error::object-storage tests were skipped; they are required in this job"
             exit 1
           fi
+      # A red run explains itself: the failing tests and their error lines go to the job
+      # summary, and the JUnit report is an artifact. Reporting only: these steps run
+      # after the tests, never change their result, and can't fail the job themselves.
+      - name: Summarise test failures (storage-gate)
+        if: always()
+        continue-on-error: true
+        run: python scripts/ci_junit_summary.py pytest-junit-storage.xml >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload JUnit report (storage-gate)
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: pytest-junit-storage-gate
+          path: pytest-junit-storage.xml
+          if-no-files-found: ignore
+          retention-days: 14
       - name: SeaweedFS logs on failure
         if: failure()
         run: docker logs build-test-seaweedfs 2>&1 | tail -100 || true
