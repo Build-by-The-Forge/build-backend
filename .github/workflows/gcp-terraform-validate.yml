@@ -1,0 +1,44 @@
+name: GCP Terraform validate
+# Static checks only: no credentials, no Google Cloud access, no plan, no apply.
+on:
+  pull_request:
+    paths:
+      - 'deploy/gcp/**'
+      - '.github/workflows/gcp-terraform-validate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/gcp
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - name: Format
+        run: terraform fmt -check -recursive -diff
+      - name: Init (no backend, no credentials)
+        run: terraform init -backend=false -input=false
+      - name: Validate
+        run: terraform validate
+      - name: Invariants
+        run: |
+          set -eu
+          # Names only: nothing may create a secret value or version.
+          if grep -rEn 'google_secret_manager_secret_version|secret_data' --include='*.tf' .; then
+            echo "A secret value or version is defined in Terraform" >&2; exit 1
+          fi
+          # Learning Memory stays off in every service, pool and job.
+          if grep -rEn 'LEARNING_MEMORY_ENABLED' --include='*.tf' . | grep -v '"false"'; then
+            echo "LEARNING_MEMORY_ENABLED must be \"false\"" >&2; exit 1
+          fi
+          # No state, plan or variable file is committed.
+          if git ls-files . | grep -E '\.(tfstate|tfplan|tfvars)(\.|$)' | grep -v 'tfvars.example'; then
+            echo "A state, plan or tfvars file is tracked" >&2; exit 1
+          fi
