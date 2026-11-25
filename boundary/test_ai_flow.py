@@ -54,6 +54,20 @@ def assert_retrieved_from(context: list[str], own: str, other: str) -> None:
     assert not any(other in passage for passage in context), context
 
 
+def retrieved_by_ai_service(ai, tenant, message: str) -> list[str]:
+    """What the AI service retrieves for the tenant's student, asked directly with
+    a signed call. The backend's /ai/chat no longer returns retrieved passages
+    (G-18), so retrieval scoping is observed here instead."""
+    from boundary.conftest import jbytes, to_ai, user_context
+
+    student = tenant.members["student"]
+    raw = jbytes(retrieving({"query": message}))
+    context = user_context(tenant.tenant_id, student.user_id, ["ai.use"], membership_id=student.membership_id, role="student")
+    response = ai.post("/v1/ai/retrieve", content=raw, headers=to_ai("POST", "/v1/ai/retrieve", raw, context))
+    assert response.status_code == 200, response.text
+    return [item["text"] for item in response.json()["data"]]
+
+
 async def _seed_memory(rows: list[tuple[str, str, str]]) -> None:
     connection = await asyncpg.connect(AI_APP_DSN)
     try:
@@ -82,16 +96,17 @@ def memories(tenant_a, tenant_b):
     return own, marker
 
 
-def test_c27_chat_flows_through_both_services(backend, tenant_a, tenant_b, documents):
+def test_c27_chat_flows_through_both_services(ai, backend, tenant_a, tenant_b, documents):
     own, other = documents[tenant_a.tenant_id], documents[tenant_b.tenant_id]
-    response = backend.post(
-        "/ai/chat", json={"message": f"What does reference {own} say about charge?"}, headers=tenant_a.h("student")
-    )
+    question = f"What does reference {own} say about charge?"
+    response = backend.post("/ai/chat", json={"message": question}, headers=tenant_a.h("student"))
     assert response.status_code == 200, response.text
     data = response.json()["data"]
     assert data["answer"].startswith("[deterministic model]")
-    # AI-service retrieved the member's own uploaded document (C15).
-    assert_retrieved_from(data["context"], own, other)
+    # The answer is all the client gets: no retrieved passage, cited or not (G-18).
+    assert set(data) == {"answer"}
+    # AI-service retrieves the member's own uploaded document for that question (C15).
+    assert_retrieved_from(retrieved_by_ai_service(ai, tenant_a, question), own, other)
 
 
 def test_c27_explain_and_question_generation_flow(backend, tenant_a):
@@ -109,7 +124,7 @@ def test_c27_a_student_cannot_generate_questions(backend, tenant_a):
     assert response.status_code == 403
 
 
-def test_c15_headers_cannot_choose_another_tenant(backend, tenant_a, tenant_b, documents):
+def test_c15_headers_cannot_choose_another_tenant(ai, backend, tenant_a, tenant_b, documents):
     own, other = documents[tenant_a.tenant_id], documents[tenant_b.tenant_id]
     spoofed = {
         **tenant_a.h("student"),
@@ -120,7 +135,10 @@ def test_c15_headers_cannot_choose_another_tenant(backend, tenant_a, tenant_b, d
     # The question names both tenants' documents: only the member's own may come back.
     response = backend.post("/ai/chat", json={"message": f"reference {other} reference {own}"}, headers=spoofed)
     assert response.status_code == 200, response.text
-    assert_retrieved_from(response.json()["data"]["context"], own, other)
+    assert set(response.json()["data"]) == {"answer"}
+    # The question names both tenants' documents: the AI service, asked as the
+    # member the backend resolved, returns only the member's own.
+    assert_retrieved_from(retrieved_by_ai_service(ai, tenant_a, f"reference {other} reference {own}"), own, other)
 
 
 def test_c15_a_tenant_slug_without_membership_is_refused(backend, tenant_a, tenant_b):
@@ -136,16 +154,14 @@ def test_c29_a_body_naming_an_identity_is_422_at_the_backend(backend, tenant_a, 
     assert response.status_code == 422
 
 
-def test_c29_ai_service_reads_memory_only_for_the_signed_user_and_tenant(ai, tenant_a, memories):
-    from boundary.conftest import jbytes, to_ai, user_context
-
+def test_c29_a_students_memory_never_reaches_the_client(backend, tenant_a, memories):
+    """G-18: the AI service may use the signed user's memory in its prompt, but
+    the backend returns the answer alone. Which memory it reads is proven at the
+    AI service, where the signed context is the only source of user and tenant
+    (tests/unit/test_signed_ai_routes.py in ai-service)."""
     own, marker = memories
-    student = tenant_a.members["student"]
-    raw = jbytes(retrieving({"message": "What do I know?"}))
-    context = user_context(tenant_a.tenant_id, student.user_id, ["ai.use"], membership_id=student.membership_id, role="student")
-    response = ai.post("/v1/ai/chat", content=raw, headers=to_ai("POST", "/v1/ai/chat", raw, context))
+    response = backend.post("/ai/chat", json={"message": "What do I know?"}, headers=tenant_a.h("student"))
     assert response.status_code == 200, response.text
-    memory_used = response.json()["data"]["memory_used"]
-    assert f"{own}: mastery=0.5" in memory_used
-    assert f"other-tenant-{marker}" not in memory_used
-    assert f"other-user-{marker}" not in memory_used
+    assert set(response.json()["data"]) == {"answer"}
+    for leaked in (own, f"other-tenant-{marker}", f"other-user-{marker}", "mastery="):
+        assert leaked not in response.text
