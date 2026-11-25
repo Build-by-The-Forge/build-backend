@@ -268,7 +268,7 @@ The tests name the seams the design introduces. They are part of the specificati
 
 ### Backend (`build-backend`)
 
-`tests/infrastructure/ai/test_eligibility_spec.py` (gateway, no database):
+`tests/infrastructure/ai/test_gateway_eligibility_spec.py` (gateway, no database):
 
 | Test | Property |
 |---|---|
@@ -288,7 +288,7 @@ The tests name the seams the design introduces. They are part of the specificati
 | `test_a_grounded_answer_with_no_citation_is_a_broken_response` | 7 (C3) |
 | `test_the_answer_carries_validated_citations_and_never_an_internal_id` | 7 (C4, C6) |
 
-`tests/integration/content/test_eligibility_spec.py`:
+`tests/integration/content/test_may_use_eligibility_spec.py`:
 
 | Test | Property |
 |---|---|
@@ -323,7 +323,7 @@ The tests name the seams the design introduces. They are part of the specificati
 Backend, in the CI image (`pytest` on the two files plus the drift gate, which must stay green):
 
 ```text
-pytest tests/infrastructure/ai/test_eligibility_spec.py tests/integration/content/test_eligibility_spec.py tests/integration/test_mobile_contract_drift.py -rx
+pytest tests/infrastructure/ai/test_gateway_eligibility_spec.py tests/integration/content/test_may_use_eligibility_spec.py tests/integration/test_mobile_contract_drift.py -rx
 ```
 
 ai-service, with `DATABASE_URL` pointing at pgvector PostgreSQL as in its CI: `pytest tests/integration/test_eligibility_spec.py -rx`.
