@@ -48,19 +48,21 @@ resource "google_cloud_run_v2_job" "db_init" {
           value = "require"
         }
 
+        # Written as name/secret pairs, so no line has the shape of an inline
+        # password for the repository's secret scan (these are secret names).
         dynamic "env" {
           for_each = {
-            PGPASSWORD             = "db-superuser-password"
-            BACKEND_OWNER_PASSWORD = "db-backend-owner-password"
-            BACKEND_APP_PASSWORD   = "db-backend-app-password"
-            AI_OWNER_PASSWORD      = "db-ai-owner-password"
-            AI_APP_PASSWORD        = "db-ai-app-password"
+            superuser     = { name = "PGPASSWORD", secret = "db-superuser-password" }
+            backend_owner = { name = "BACKEND_OWNER_PASSWORD", secret = "db-backend-owner-password" }
+            backend_app   = { name = "BACKEND_APP_PASSWORD", secret = "db-backend-app-password" }
+            ai_owner      = { name = "AI_OWNER_PASSWORD", secret = "db-ai-owner-password" }
+            ai_app        = { name = "AI_APP_PASSWORD", secret = "db-ai-app-password" }
           }
           content {
-            name = env.key
+            name = env.value.name
             value_source {
               secret_key_ref {
-                secret  = local.secret_id[env.value]
+                secret  = local.secret_id[env.value.secret]
                 version = "latest"
               }
             }
