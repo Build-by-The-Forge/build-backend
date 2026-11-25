@@ -132,7 +132,7 @@ async def chat(
         result = await gateway.chat(_actor(request, context, Permission.AI_USE), body.message)
     except AIAssistantError as exc:
         raise _failed(exc) from exc
-    return _envelope(request, {"answer": result.answer, "context": result.context})
+    return _envelope(request, {"answer": result.answer})
 
 
 @router.post("/explain")

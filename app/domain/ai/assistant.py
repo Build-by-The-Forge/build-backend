@@ -9,7 +9,7 @@ in the signed context, never in a request body.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from app.domain.client_safe import ClientSafeError
@@ -27,8 +27,10 @@ class AIActor:
 
 @dataclass(frozen=True, slots=True)
 class ChatAnswer:
+    """The answer text only. The AI service may still report the passages it
+    retrieved; they are never read here, so they can never be returned (G-18)."""
+
     answer: str
-    context: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)

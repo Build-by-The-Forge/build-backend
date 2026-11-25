@@ -130,11 +130,11 @@ class HttpAIAssistantGateway(AIAssistantGateway):
     async def chat(self, actor: AIActor, message: str) -> ChatAnswer:
         data = await self._post_retrieving("/v1/ai/chat", {"message": message}, actor)
         answer = data.get("answer")
-        context = data.get("context_used", [])
-        if not isinstance(answer, str) or not isinstance(context, list):
+        if not isinstance(answer, str):
             raise _bad_response("chat")
-        texts = [item["text"] for item in context if isinstance(item, dict) and isinstance(item.get("text"), str)]
-        return ChatAnswer(answer=answer, context=texts)
+        # Only the answer is taken: retrieved passages and memory in the
+        # response are dropped here, uncited and unread (G-18).
+        return ChatAnswer(answer=answer)
 
     async def explain(self, actor: AIActor, subject: str) -> Explanation:
         data = await self._post_retrieving("/v1/ai/explain", {"subject": subject}, actor)
