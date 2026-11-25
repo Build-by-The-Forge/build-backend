@@ -286,19 +286,17 @@ class HttpAIAssistantGateway(AIAssistantGateway):
         try:
             response = await client.post(url, content=body, headers=headers, follow_redirects=False)
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
-            logger.warning("AI-service %s unreachable: %s", path, exc)
+            logger.warning("AI-service %s unreachable: %s", path, type(exc).__name__)
             raise AIAssistantError("AI-service unreachable", error_code="AI_SERVICE_UNAVAILABLE", unavailable=True) from exc
         finally:
             if self._client is None:
                 await client.aclose()
 
         if response.status_code != 200:
-            logger.warning(
-                "AI-service %s answered HTTP %s: %s",
-                path,
-                response.status_code,
-                response.text[:500],
-            )
+            # The status only. The body can echo what was sent (a validation
+            # error repeats its input), and a question or an answer is never
+            # logged: the logs must not become a history of what students ask.
+            logger.warning("AI-service %s answered HTTP %s", path, response.status_code)
             if response.status_code in (401, 403):
                 code = "AI_SERVICE_AUTH_ERROR"
             elif response.status_code >= 500:

@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from dataclasses import replace
 
@@ -581,3 +582,34 @@ async def test_every_retrieving_operation_is_checked(operation):
         else:
             await client.generate_questions(ACTOR, "cells", 2, "medium", "mcq")
     assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+ECHOED = "what-did-i-ask-4f2a9c"
+
+
+@pytest.mark.parametrize("status", [400, 422, 500, 503])
+async def test_an_ai_service_error_body_is_never_logged(caplog, status):
+    """A validation error repeats its input, so a body can hold the question.
+    Only the status is logged: the logs must not become a history of questions."""
+
+    async def handler(request):
+        return httpx.Response(status, json={"detail": [{"input": {"message": ECHOED}}], "message": ECHOED})
+
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(AIAssistantError):
+            await gateway(handler).chat(ACTOR, ECHOED)
+
+    assert ECHOED not in caplog.text
+    assert f"answered HTTP {status}" in caplog.text
+
+
+async def test_an_unreachable_ai_service_logs_the_failure_kind_not_its_text(caplog):
+    async def handler(request):
+        raise httpx.ConnectError(f"cannot reach with {ECHOED}")
+
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(AIAssistantError):
+            await gateway(handler).chat(ACTOR, "hello")
+
+    assert ECHOED not in caplog.text
+    assert "ConnectError" in caplog.text
