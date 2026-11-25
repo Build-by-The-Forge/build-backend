@@ -8,8 +8,9 @@ set -eu
 : "${PGHOST:?}" "${PGPASSWORD:?}" "${BACKEND_OWNER_PASSWORD:?}" "${BACKEND_APP_PASSWORD:?}" \
   "${AI_OWNER_PASSWORD:?}" "${AI_APP_PASSWORD:?}"
 
-# Passwords are passed to psql as variables (read by the SQL as :'name'), so they
-# are never interpolated into a shell command line that could be logged.
+# Passwords go to psql as variables (the SQL reads them as :'name'), as in
+# deploy/compose.m3.yml. They are visible only inside this container's process
+# list, and the script prints nothing.
 exec psql --set=ON_ERROR_STOP=1 \
   -v db="${PGDATABASE:-build}" \
   -v backend_owner_password="${BACKEND_OWNER_PASSWORD}" \
