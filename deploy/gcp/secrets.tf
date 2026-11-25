@@ -24,14 +24,14 @@ locals {
     "ai-owner-database-url"      = [google_service_account.migrate_ai.email]
 
     # db-init inputs: the postgres user and the four role passwords.
-    "db-superuser-password"   = [google_service_account.migrate.email]
+    "db-superuser-password"     = [google_service_account.migrate.email]
     "db-backend-owner-password" = [google_service_account.migrate.email]
     "db-backend-app-password"   = [google_service_account.migrate.email]
     "db-ai-owner-password"      = [google_service_account.migrate.email]
     "db-ai-app-password"        = [google_service_account.migrate.email]
 
     # Redis: the password for the VM, the two URLs (backend db 0, ai-service db 1).
-    "redis-password"  = [google_service_account.redis_vm.email]
+    "redis-password"    = [google_service_account.redis_vm.email]
     "backend-redis-url" = [google_service_account.backend.email]
     "ai-redis-url"      = [google_service_account.ai.email, google_service_account.migrate_ai.email]
 

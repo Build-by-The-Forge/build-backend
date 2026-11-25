@@ -29,12 +29,12 @@ resource "google_service_account" "deployer" {
 
 locals {
   runtime_accounts = {
-    backend = google_service_account.backend.email
-    ai      = google_service_account.ai.email
-    migrate = google_service_account.migrate.email
+    backend    = google_service_account.backend.email
+    ai         = google_service_account.ai.email
+    migrate    = google_service_account.migrate.email
     migrate_ai = google_service_account.migrate_ai.email
-    redis   = google_service_account.redis_vm.email
-    clamav  = google_service_account.clamav_vm.email
+    redis      = google_service_account.redis_vm.email
+    clamav     = google_service_account.clamav_vm.email
   }
 }
 
@@ -71,9 +71,9 @@ resource "google_artifact_registry_repository_iam_member" "deployer_push" {
 
 resource "google_service_account_iam_member" "deployer_acts_as" {
   for_each = {
-    backend = google_service_account.backend.name
-    ai      = google_service_account.ai.name
-    migrate = google_service_account.migrate.name
+    backend    = google_service_account.backend.name
+    ai         = google_service_account.ai.name
+    migrate    = google_service_account.migrate.name
     migrate_ai = google_service_account.migrate_ai.name
   }
   service_account_id = each.value

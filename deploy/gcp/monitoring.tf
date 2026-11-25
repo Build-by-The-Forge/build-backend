@@ -25,8 +25,8 @@ resource "google_monitoring_notification_channel" "email" {
 }
 
 locals {
-  channels      = [for c in google_monitoring_notification_channel.email : c.id]
-  backend_host  = trimprefix(local.backend_url, "https://")
+  channels     = [for c in google_monitoring_notification_channel.email : c.id]
+  backend_host = trimprefix(local.backend_url, "https://")
 }
 
 # ---- Uptime ------------------------------------------------------------------------

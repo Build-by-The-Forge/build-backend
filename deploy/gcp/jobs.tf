@@ -50,11 +50,11 @@ resource "google_cloud_run_v2_job" "db_init" {
 
         dynamic "env" {
           for_each = {
-            PGPASSWORD                 = "db-superuser-password"
-            BACKEND_OWNER_PASSWORD     = "db-backend-owner-password"
-            BACKEND_APP_PASSWORD       = "db-backend-app-password"
-            AI_OWNER_PASSWORD          = "db-ai-owner-password"
-            AI_APP_PASSWORD            = "db-ai-app-password"
+            PGPASSWORD             = "db-superuser-password"
+            BACKEND_OWNER_PASSWORD = "db-backend-owner-password"
+            BACKEND_APP_PASSWORD   = "db-backend-app-password"
+            AI_OWNER_PASSWORD      = "db-ai-owner-password"
+            AI_APP_PASSWORD        = "db-ai-app-password"
           }
           content {
             name = env.key
