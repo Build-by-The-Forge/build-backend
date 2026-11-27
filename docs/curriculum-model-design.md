@@ -152,7 +152,7 @@ Unique `(revision, course)`. A course may not appear twice in a revision at diff
 
 ### 3.6 Entry rules and graduation
 
-**`curriculum_entry_rule`**: one row per `(curriculum_version, entry_mode)`:
+**`curriculum_entry_rule`**: one row per `(curriculum_version, entry_mode, variant)` (variant is null unless a mode has several forms, e.g. Direct Entry at 200 or at 300 level):
 
 | Column | Notes |
 |---|---|
@@ -172,6 +172,25 @@ Institution-wide rules (registration window, load minimum and maximum, probation
 
 * **`curriculum_group`**: `revision_id`, `name`, `min_courses`, `min_units`, `max_units`; `curriculum_course.group_id` places elective rows in a choice set. The handbook gives no choice rules, so a group may have `min_units = null` (unknown). The resolver returns the group and its members, never picks for the student.
 * **SIWES / industrial training / projects** are ordinary `curriculum_course` rows with `category` in (`siwes`, `project`) and large practical hours. Two things differ: they may span several semesters (a project taken in two semesters is two rows with two course identities, as printed) and they are *not* offered as normal taught courses to CBT/tutoring (flag `non_taught=true` in `flags`, surfaced in the read contract).
+
+### 3.8 Source, extraction and correction layers (added after reviewer requirements)
+
+Raw evidence, machine reading and human edits are **four separate record types**, never one mutable row:
+
+| Layer | Table | Mutable? | Holds |
+|---|---|---|---|
+| Source record | `source_document` (§3.2) | no | Original file reference (private store), SHA-256, URL, access date, rights status |
+| Extraction record | `curriculum_extraction_row` (new) | no | One candidate row per source row: parsed fields, `confidence`, `flags`, page and row pointer, tool and version |
+| Correction record | `curriculum_correction` (new) | append-only | `extraction_row_id`, field, old value, new value, who, role, when, reason, evidence reference |
+| Published row | `curriculum_course` (§3.5) | per revision | Built from extraction plus corrections; records which extraction row and which corrections produced each value |
+
+A correction can never overwrite what the source or the extraction contained: it is a new record, and the published row points at both. Re-running an extraction creates new extraction rows; earlier corrections are re-proposed against the new rows, not silently carried over.
+
+### 3.9 Coverage state and partial curricula
+
+Not every programme will have every level. Coverage is data, per programme and per level:
+
+`programme_level_coverage(programme_id, level_code, state, evidence_ref, updated_at)` with `state` in: `course_level_verified`, `course_level_unverified`, `framework_only`, `unknown`. Framework-only means a national framework names the programme but **no course-level curriculum exists** for the FUTA student; it can supply context, never a course list. A coverage row is derived from published revisions plus the registry, and drives the contract's `curriculum.coverage` field: the app can say "your department's list for 300 level is not known yet" and keep manual course selection available. A revision may legitimately contain only some levels; the resolver returns the levels it has and an explicit `coverage: unknown` for the others, never an empty list that looks like "no courses". The framework assignment (§3.2) is likewise per programme **and** level band, with its own verification status, and is never copied from a university-wide claim.
 
 ## 4. Student side
 
@@ -364,6 +383,18 @@ Dimensions: entry mode (UTME, DE) × level (100 to 500) × semester (1, 2) × st
 8. *Missing requisites read as "no requisites"*: explicit unknown.
 9. *Zero-unit rows summed into totals*: `totals` excludes `is_audit`.
 10. *A verified revision later found wrong*: new revision; old stays; stored `revision_id` records which one a student saw.
+
+### 12.1 Does it generalise? Three structurally different programmes
+
+Checked against the **public NUC framework documents** (framework evidence only; no FUTA course data, and no FUTA department other than Data Science could be read): 
+
+| Programme shape | Evidence from the framework documents | What the model needs | Result |
+|---|---|---|---|
+| **Conventional four-year science** (Computing, Sciences: eight semesters, 120 units UTME, 90 for Direct Entry at 200 level, SIWES as 3-unit rows, a project) | The Data Science handbook and the NUC Computing and Sciences documents | Entry rules per mode; zero-unit audit rows; project and SIWES rows with practical hours | Covered by §3.5 to §3.7 |
+| **Engineering: five-year, workshop and industrial attachment** (a minimum of 150 units UTME in the NUC engineering document; a separate attachment duration; four-year Direct Entry clause) | NUC Engineering and Technology document | `normal_semesters` 10 and a Direct Entry row with another `start_level` and unit minimum; practical hours stored in the NUC convention; attachment as a `siwes` row; **units can exceed any fixed per-semester assumption** | Covered; requires that nothing in the resolver assumes ten semesters or 120 units |
+| **Architecture / studio, or B.Agric: ten semesters, studio or field practicals, possibly a six-year track in some programmes** (architecture document describes ten semesters UTME with six or eight for Direct Entry, and studio hours) | NUC Architecture and Agriculture documents | Studio and field practical rows with large practical hours and few lecture hours; Direct Entry with more than one allowed start level; duration per programme, not per school | Covered if `curriculum_entry_rule` allows several Direct Entry variants (rows keyed by `(entry_mode, variant)`) and if `start_level` can be 200 or 300 |
+
+**Changes made to the model because of this check:** (1) entry rules are keyed by `(entry_mode, variant)`; (2) no code path may assume 5 levels, 2 semesters at a fixed length, or one SIWES row; (3) duration, units and start level always come from the entry rule; (4) hours are stored in whichever convention the source used. **What is not tested:** none of this has been run against a FUTA document for these shapes. The matrix is evidence from national frameworks, and each FUTA programme still needs its own verified source.
 
 ## 13. Migration plan (after approval only)
 
