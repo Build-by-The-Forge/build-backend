@@ -7,6 +7,7 @@ persisted. The body cannot name a tenant or user: identity comes only from
 the verified session and membership.
 """
 
+import logging
 import re
 import uuid
 from typing import Literal
@@ -29,6 +30,7 @@ from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
 from app.infrastructure.content.cited_documents import cited_documents as tenant_documents
 from app.infrastructure.content.scope_assignments import SqlAlchemyScopeAssignmentRepository
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
 throttle = build_container().get(AuthThrottle)
 read_service = build_container().get(ContentReadService)
@@ -169,6 +171,13 @@ async def tutor_turn(
         result = await gateway.tutor_turn(_actor(request, context, Permission.AI_USE), body.message)
     except AIAssistantError as exc:
         raise _failed(exc) from exc
+    except Exception as exc:
+        # An exception's text and traceback can carry what was asked (a library
+        # error repeats its input), and the request and unit-of-work logs print
+        # both. So an unexpected failure is reported by its type alone, and the
+        # student gets the same answer as any other AI failure.
+        logger.error("tutor turn failed unexpectedly: %s", type(exc).__name__)
+        raise ClientError("ai service error", status_code=502, code="AI_UPSTREAM_ERROR") from None
     return _envelope(
         request,
         {

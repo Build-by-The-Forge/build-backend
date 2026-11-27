@@ -237,7 +237,11 @@ async def test_no_question_or_answer_reaches_a_log_a_metric_or_the_error_counter
 async def test_an_unexpected_failure_reveals_and_logs_nothing_of_the_question(client, caplog):
     class Broken(RecordingGateway):
         async def tutor_turn(self, actor, message):
-            raise RuntimeError(f"cannot answer {message}")
+            # The question in the message, and again in a chained cause.
+            try:
+                raise ValueError(f"bad input {message}")
+            except ValueError as cause:
+                raise RuntimeError(f"cannot answer {message}") from cause
 
     app.dependency_overrides[get_ai_assistant_gateway] = lambda: Broken()
     try:
@@ -247,9 +251,11 @@ async def test_an_unexpected_failure_reveals_and_logs_nothing_of_the_question(cl
     finally:
         app.dependency_overrides.pop(get_ai_assistant_gateway, None)
 
-    assert response.status_code == 500
+    # The same answer as any AI failure, and the log names the exception's type only.
+    assert response.status_code == 502 and response.json()["error"]["code"] == "AI_UPSTREAM_ERROR"
     assert "stored-question-marker-7c1e" not in response.text
     assert "stored-question-marker-7c1e" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 # --- Off by default -----------------------------------------------------------------------
