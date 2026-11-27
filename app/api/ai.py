@@ -7,6 +7,7 @@ persisted. The body cannot name a tenant or user: identity comes only from
 the verified session and membership.
 """
 
+import logging
 import re
 import uuid
 from typing import Literal
@@ -19,14 +20,17 @@ from app.application.content.read_policy import ContentReadService, Reader
 from app.application.identity.throttle import AuthThrottle
 from app.bootstrap.container import build_container
 from app.core.authorization import ROLE_PERMISSIONS, Permission
+from app.core.config import settings
 from app.core.dependencies import require_permission
-from app.core.exceptions import AnswerWithheldError, ClientError
+from app.core.exceptions import AnswerWithheldError, ClientError, NotFoundError
 from app.core.tenant_context import TenantContext
 from app.db.session import SessionLocal
 from app.domain.ai.assistant import AIActor, AIAssistantError, AIAssistantGateway
 from app.infrastructure.ai.assistant_gateway import HttpAIAssistantGateway
+from app.infrastructure.content.cited_documents import cited_documents as tenant_documents
 from app.infrastructure.content.scope_assignments import SqlAlchemyScopeAssignmentRepository
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
 throttle = build_container().get(AuthThrottle)
 read_service = build_container().get(ContentReadService)
@@ -41,6 +45,12 @@ class AIRequest(BaseModel):
 
 
 class ChatRequest(AIRequest):
+    message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
+
+
+class TutorTurnRequest(AIRequest):
+    # One question, answered on its own (R1): there is no conversation, turn
+    # number or earlier question to send, so none is accepted.
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
@@ -61,6 +71,7 @@ def get_ai_assistant_gateway(request: Request) -> AIAssistantGateway:
         nonce_store=getattr(request.app.state, "service_replay_store", None),
         readable_sources=readable_sources,
         denied_assets=pending_lowerings,
+        cited_documents=cited_documents,
     )
 
 
@@ -82,6 +93,12 @@ async def readable_sources(actor: AIActor, asset_ids: set[str]) -> set[str]:
         manages_shared=Permission.CONTENT_SOURCE_MANAGE in ROLE_PERMISSIONS.get(actor.role, frozenset()),
     )
     return await read_service.readable_asset_ids(reader, asset_ids)
+
+
+async def cited_documents(actor: AIActor, asset_ids: set[str]) -> dict[str, tuple[str, str]]:
+    """The source and title of the caller's tenant's documents a tutor answer
+    cites, from the backend's own records (never the model's)."""
+    return await tenant_documents(actor.tenant_id, asset_ids)
 
 
 def correlation_id_for(request: Request) -> str:
@@ -133,6 +150,53 @@ async def chat(
     except AIAssistantError as exc:
         raise _failed(exc) from exc
     return _envelope(request, {"answer": result.answer, "context": result.context})
+
+
+@router.post("/tutor/turn")
+async def tutor_turn(
+    body: TutorTurnRequest,
+    request: Request,
+    context: TenantContext = Depends(require_permission(Permission.AI_USE)),
+    gateway: AIAssistantGateway = Depends(get_ai_assistant_gateway),
+) -> JSONResponse:
+    """One question to the AI tutor (R1). Nothing is stored: no question, no
+    answer, no citation. The answer is returned with citations the backend has
+    checked, or the fixed not-covered reply."""
+    if not settings.ai_tutor_enabled:
+        # Off by default: nothing is asked, throttled or counted, and the
+        # route is indistinguishable from one that doesn't exist.
+        raise NotFoundError()
+    await throttle.ai_request(context.user_id)
+    try:
+        result = await gateway.tutor_turn(_actor(request, context, Permission.AI_USE), body.message)
+    except AIAssistantError as exc:
+        raise _failed(exc) from exc
+    except Exception as exc:
+        # An exception's text and traceback can carry what was asked (a library
+        # error repeats its input), and the request and unit-of-work logs print
+        # both. So an unexpected failure is reported by its type alone, and the
+        # student gets the same answer as any other AI failure.
+        logger.error("tutor turn failed unexpectedly: %s", type(exc).__name__)
+        raise ClientError("ai service error", status_code=502, code="AI_UPSTREAM_ERROR") from None
+    return _envelope(
+        request,
+        {
+            "answer": result.answer,
+            "grounded": result.grounded,
+            "citations": [
+                {
+                    "number": c.number,
+                    "source_id": c.source_id,
+                    "asset_id": c.asset_id,
+                    "title": c.title,
+                    "page_start": c.page_start,
+                    "page_end": c.page_end,
+                    "excerpt": c.excerpt,
+                }
+                for c in result.citations
+            ],
+        },
+    )
 
 
 @router.post("/explain")

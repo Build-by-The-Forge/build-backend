@@ -1,4 +1,6 @@
+import inspect
 import json
+import logging
 import time
 from dataclasses import replace
 
@@ -6,8 +8,20 @@ import httpx
 import pytest
 
 from app.core.config import settings
-from app.domain.ai.assistant import AIActor, AIAssistantError, MemoryItem, MemoryObservation
-from app.infrastructure.ai.assistant_gateway import RESPONSE_NONCE_RECEIVER, HttpAIAssistantGateway, no_source_is_readable
+from app.domain.ai.assistant import (
+    NOT_COVERED_ANSWER,
+    AIActor,
+    AIAssistantError,
+    MemoryItem,
+    MemoryObservation,
+    TutorCitation,
+)
+from app.infrastructure.ai.assistant_gateway import (
+    RESPONSE_NONCE_RECEIVER,
+    HttpAIAssistantGateway,
+    excerpt_of,
+    no_source_is_readable,
+)
 from app.infrastructure.security.replay_store import ReplayStoreUnavailable
 from app.infrastructure.security.service_context import ServiceContext
 from app.infrastructure.security.service_signature import (
@@ -94,12 +108,20 @@ async def every_source_readable(actor, asset_ids):
 
 
 def gateway(
-    handler, *, nonces: Nonces | None = None, denied_assets=None, signed: bool = True, readable_sources=every_source_readable
+    handler,
+    *,
+    nonces: Nonces | None = None,
+    denied_assets=None,
+    signed: bool = True,
+    readable_sources=every_source_readable,
+    cited_documents=None,
 ) -> HttpAIAssistantGateway:
     # Tests of signing and nonces read every source as readable; the
     # provenance tests below pass their own policy.
     extra = {} if denied_assets is None else {"denied_assets": denied_assets}
     extra["readable_sources"] = readable_sources
+    if cited_documents is not None:
+        extra["cited_documents"] = cited_documents
     return HttpAIAssistantGateway(
         base_url="http://ai-service.internal",
         client=httpx.AsyncClient(transport=httpx.MockTransport(signing(handler) if signed else handler)),
@@ -581,3 +603,308 @@ async def test_every_retrieving_operation_is_checked(operation):
         else:
             await client.generate_questions(ACTOR, "cells", 2, "medium", "mcq")
     assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+ECHOED = "what-did-i-ask-4f2a9c"
+
+
+@pytest.mark.parametrize("status", [400, 422, 500, 503])
+async def test_an_ai_service_error_body_is_never_logged(caplog, status):
+    """A validation error repeats its input, so a body can hold the question.
+    Only the status is logged: the logs must not become a history of questions."""
+
+    async def handler(request):
+        return httpx.Response(status, json={"detail": [{"input": {"message": ECHOED}}], "message": ECHOED})
+
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(AIAssistantError):
+            await gateway(handler).chat(ACTOR, ECHOED)
+
+    assert ECHOED not in caplog.text
+    assert f"answered HTTP {status}" in caplog.text
+
+
+async def test_an_unreachable_ai_service_logs_the_failure_kind_not_its_text(caplog):
+    async def handler(request):
+        raise httpx.ConnectError(f"cannot reach with {ECHOED}")
+
+    with caplog.at_level(logging.DEBUG):
+        with pytest.raises(AIAssistantError):
+            await gateway(handler).chat(ACTOR, "hello")
+
+    assert ECHOED not in caplog.text
+    assert "ConnectError" in caplog.text
+
+
+# --- M3-F, R1: one tutor turn, nothing kept -----------------------------------------------
+
+CITATION = {
+    "number": 1,
+    "chunk_id": "chunk-1",
+    "document_id": "asset-1",
+    "page_start": 3,
+    "page_end": 4,
+    "excerpt": "Osmosis is the diffusion of water across a membrane.",
+    "run_number": 1,
+    "attempt": 1,
+}
+ANSWER = "Water moves toward the solute [1]."
+RECORDS = {"asset-1": ("source-1", "Biology notes.pdf"), "asset-2": ("source-2", "Plants.pdf")}
+
+
+async def known_documents(actor, asset_ids):
+    return {asset: RECORDS[asset] for asset in asset_ids if asset in RECORDS}
+
+
+def turn(answer=ANSWER, grounded=True, citations=None, sources=None) -> httpx.Response:
+    return ok(
+        {"answer": answer, "grounded": grounded, "citations": [CITATION] if citations is None else citations},
+        sources,
+    )
+
+
+async def asked(response: httpx.Response, **kwargs):
+    async def handler(request):
+        return response
+
+    return await gateway(handler, cited_documents=kwargs.pop("cited_documents", known_documents), **kwargs).tutor_turn(
+        ACTOR, "What is osmosis?"
+    )
+
+
+async def test_a_tutor_turn_sends_no_earlier_questions_on_every_call():
+    """R1 keeps no history, so none is ever sent: the field is empty on every
+    turn, and the method has no parameter that could fill it."""
+    bodies = []
+
+    async def handler(request):
+        bodies.append(json.loads(request.content))
+        return turn()
+
+    gw = gateway(handler, cited_documents=known_documents)
+    for message in ("What is osmosis?", "And in plants?", "Explain it again"):
+        await gw.tutor_turn(ACTOR, message)
+
+    assert [b["message"] for b in bodies] == ["What is osmosis?", "And in plants?", "Explain it again"]
+    assert all(b["earlier_questions"] == [] for b in bodies)
+    assert all(set(b) == {"message", "earlier_questions", "denied_assets", "response_nonce"} for b in bodies)
+    assert list(inspect.signature(HttpAIAssistantGateway.tutor_turn).parameters) == ["self", "actor", "message"]
+
+
+async def test_a_tutor_turn_is_signed_for_the_route_with_only_the_checked_permission():
+    seen = []
+
+    async def handler(request):
+        seen.append(request)
+        return turn()
+
+    await gateway(handler, cited_documents=known_documents).tutor_turn(ACTOR, "What is osmosis?")
+
+    [request] = seen
+    assert request.url.path == "/v1/ai/tutor/turn"
+    assert verified_context(request).permissions == ("ai.use",)
+
+
+async def test_a_grounded_answer_keeps_its_citations_with_the_backends_own_source_and_title():
+    # The model's own source_id, title or chunk_id on a citation is ignored.
+    citation = {**CITATION, "source_id": "model-source", "title": "model title", "asset_id": "model-asset"}
+    answer = await asked(turn(citations=[citation]))
+
+    assert answer.grounded is True and answer.answer == ANSWER
+    assert answer.citations == (
+        TutorCitation(
+            number=1,
+            source_id="source-1",
+            asset_id="asset-1",
+            title="Biology notes.pdf",
+            page_start=3,
+            page_end=4,
+            excerpt="Osmosis is the diffusion of water across a membrane.",
+        ),
+    )
+
+
+async def test_citations_come_back_in_number_order_and_pages_may_be_unknown():
+    first = {**CITATION, "number": 1, "document_id": "asset-1"}
+    second = {**CITATION, "number": 2, "document_id": "asset-2", "page_start": None, "page_end": None}
+    sources = [SOURCE, {"asset_id": "asset-2", "run_number": 1, "attempt": 1}]
+
+    answer = await asked(turn("A [2] and B [1].", citations=[second, first], sources=sources))
+
+    assert [c.number for c in answer.citations] == [1, 2]
+    assert [(c.asset_id, c.page_start, c.page_end) for c in answer.citations] == [
+        ("asset-1", 3, 4),
+        ("asset-2", None, None),
+    ]
+
+
+async def test_the_excerpt_is_the_cited_passage_cut_to_500_characters():
+    passage = ("osmosis " * 100).strip()
+    answer = await asked(turn(citations=[{**CITATION, "excerpt": passage}]))
+
+    [citation] = answer.citations
+    assert 0 < len(citation.excerpt) <= 500 and passage.startswith(citation.excerpt)
+    assert citation.excerpt.split(" ")[-1] == "osmosis"  # a word is never split
+
+
+@pytest.mark.parametrize(
+    "passage,expected",
+    [
+        ("short passage", "short passage"),
+        ("  padded  ", "padded"),
+        ("a" * 500, "a" * 500),
+        ("word " * 120, ("word " * 100).strip()),
+        ("x" * 700, "x" * 500),  # one long token: cut at the limit
+        ("line one\n" + "y" * 495 + " tail words", "line one"),  # the last whitespace before the limit
+    ],
+)
+def test_excerpts_are_cut_at_a_word_boundary_without_adding_text(passage, expected):
+    cut = excerpt_of(passage)
+    assert cut == expected
+    assert len(cut) <= 500 and "..." not in cut[len(passage.strip()) :]
+
+
+@pytest.mark.parametrize("field,value", [("document_id", "asset-9"), ("run_number", 2), ("attempt", 2)])
+async def test_a_citation_outside_sources_used_replaces_the_whole_answer(caplog, field, value):
+    with caplog.at_level(logging.ERROR):
+        answer = await asked(turn(citations=[{**CITATION, field: value}]))
+
+    assert (answer.answer, answer.grounded, answer.citations) == (NOT_COVERED_ANSWER, False, ())
+    assert "citation_outside_sources_used" in caplog.text
+    assert ANSWER not in caplog.text and CITATION["excerpt"] not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "citations,answer",
+    [
+        ([], ANSWER),  # grounded, with nothing cited
+        ([{**CITATION, "number": 0}], "Water [0]."),
+        ([{**CITATION, "number": True}], "Water [1]."),
+        ([{**CITATION, "number": "1"}], ANSWER),
+        ([{**CITATION, "run_number": 0}], ANSWER),
+        ([{**CITATION, "attempt": None}], ANSWER),
+        ([{**CITATION, "document_id": ""}], ANSWER),
+        ([{**CITATION, "document_id": 5}], ANSWER),
+        ([{**CITATION, "excerpt": ""}], ANSWER),
+        ([{**CITATION, "excerpt": "   "}], ANSWER),
+        ([{**CITATION, "excerpt": None}], ANSWER),
+        ([{**CITATION, "page_start": -1}], ANSWER),
+        ([{**CITATION, "page_start": 5, "page_end": 4}], ANSWER),
+        ([{**CITATION, "page_start": "3"}], ANSWER),
+        (["not an object"], ANSWER),
+        ([{**CITATION}, {**CITATION}], "Water [1] again [1]."),  # one number twice
+        ([CITATION], "Water moves toward the solute."),  # the answer shows no [1]
+        ([CITATION], "Water [1] and [2]."),  # a marker with no citation
+    ],
+)
+async def test_a_malformed_or_unmatched_citation_replaces_the_whole_answer(citations, answer):
+    result = await asked(turn(answer, citations=citations))
+
+    assert (result.answer, result.grounded, result.citations) == (NOT_COVERED_ANSWER, False, ())
+
+
+async def test_an_ungrounded_answer_is_the_fixed_reply_whatever_the_model_wrote(caplog):
+    with caplog.at_level(logging.ERROR):
+        silent = await asked(turn("Free text the model wrote.", grounded=False, citations=[]))
+        odd = await asked(turn("Free text [1].", grounded=False, citations=[CITATION]))
+
+    for result in (silent, odd):
+        assert (result.answer, result.grounded, result.citations) == (NOT_COVERED_ANSWER, False, ())
+    assert "Free text" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"answer": 5, "grounded": True, "citations": [CITATION]},
+        {"answer": ANSWER, "grounded": "yes", "citations": [CITATION]},
+        {"answer": ANSWER, "grounded": True, "citations": "x"},
+        {"answer": ANSWER, "grounded": True},
+        {"grounded": True, "citations": [CITATION]},
+    ],
+)
+async def test_an_unreadable_tutor_response_is_a_bad_response(data):
+    with pytest.raises(AIAssistantError) as raised:
+        await asked(ok(data))
+    assert raised.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, json={"success": True, "data": {"answer": ANSWER, "grounded": True, "citations": [CITATION]}}),
+        ok({"answer": ANSWER, "grounded": True, "citations": [CITATION]}, sources="asset-1"),
+        ok({"answer": ANSWER, "grounded": True, "citations": [CITATION]}, sources=[{"asset_id": "asset-1"}]),
+    ],
+    ids=["no-sources-used", "sources-not-a-list", "source-without-a-version"],
+)
+async def test_a_tutor_response_without_valid_sources_used_is_a_bad_response(response):
+    async def handler(request):
+        return response
+
+    with pytest.raises(AIAssistantError) as raised:
+        await gateway(handler, cited_documents=known_documents).tutor_turn(ACTOR, "q")
+    assert raised.value.error_code == "AI_SERVICE_BAD_RESPONSE"
+
+
+async def test_a_source_revoked_while_the_answer_was_generated_withholds_it_whole(caplog):
+    """Read authorisation is checked again after generation: a cited document
+    the caller can no longer read withholds the answer, and so does an uncited
+    one the model only used."""
+
+    async def only_asset_2(actor, asset_ids):
+        return {a for a in asset_ids if a == "asset-2"}
+
+    sources = [SOURCE, {"asset_id": "asset-2", "run_number": 1, "attempt": 1}]
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(AIAssistantError) as cited:
+            await asked(turn(sources=sources), readable_sources=only_asset_2)  # the cited one is revoked
+        with pytest.raises(AIAssistantError) as uncited:
+            await asked(turn(sources=sources), readable_sources=every_source_readable_but("asset-2"))  # an uncited one is
+
+    assert cited.value.error_code == uncited.value.error_code == "ANSWER_WITHHELD"
+    assert ANSWER not in caplog.text and CITATION["excerpt"] not in caplog.text
+
+
+def every_source_readable_but(revoked: str):
+    async def policy(actor, asset_ids):
+        return {a for a in asset_ids if a != revoked}
+
+    return policy
+
+
+async def test_a_document_denied_while_the_answer_was_generated_withholds_it():
+    calls = []
+
+    async def denial_list(tenant_id):
+        calls.append(tenant_id)
+        return frozenset() if len(calls) == 1 else frozenset({"asset-1"})  # lowered during the call
+
+    with pytest.raises(AIAssistantError) as raised:
+        await asked(turn(), denied_assets=denial_list)
+    assert raised.value.error_code == "ANSWER_WITHHELD" and len(calls) == 2
+
+
+async def test_a_cited_document_the_backend_has_no_record_of_replaces_the_answer():
+    async def no_records(actor, asset_ids):
+        return {}
+
+    result = await asked(turn(), cited_documents=no_records)
+    assert (result.answer, result.grounded, result.citations) == (NOT_COVERED_ANSWER, False, ())
+
+
+async def test_a_citation_check_that_cannot_run_withholds_the_answer():
+    async def broken(actor, asset_ids):
+        raise RuntimeError("database down: the student's question text")
+
+    with pytest.raises(AIAssistantError) as raised:
+        await asked(turn(), cited_documents=broken)
+    assert raised.value.error_code == "ANSWER_WITHHELD"
+
+
+async def test_without_the_document_records_wired_in_no_citation_is_kept():
+    async def handler(request):
+        return turn()
+
+    result = await gateway(handler).tutor_turn(ACTOR, "What is osmosis?")
+    assert (result.grounded, result.citations) == (False, ())

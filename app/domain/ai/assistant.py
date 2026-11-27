@@ -31,6 +31,40 @@ class ChatAnswer:
     context: list[str] = field(default_factory=list)
 
 
+# The reply when the course material doesn't cover a question, or when a
+# tutor answer can't be trusted to cite its sources. Fixed, never generated.
+# It is the same text the AI service gives, so a student sees one message.
+NOT_COVERED_ANSWER = (
+    "Your course materials don't cover this yet, so I can't answer it from them. "
+    "Try rephrasing, or ask your lecturer to upload material on this topic."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class TutorCitation:
+    """A passage a tutor answer cites as [number]. The source and title are the
+    backend's own records of the document, the pages and the excerpt are the
+    cited passage's own: nothing here is the model's."""
+
+    number: int
+    source_id: str
+    asset_id: str
+    title: str
+    page_start: int | None
+    page_end: int | None
+    excerpt: str
+
+
+@dataclass(frozen=True, slots=True)
+class TutorAnswer:
+    """One tutor turn. ``grounded`` False means NOT_COVERED_ANSWER with no
+    citations. Nothing of it is kept by the backend."""
+
+    answer: str
+    grounded: bool
+    citations: tuple[TutorCitation, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class Explanation:
     explanation: str
@@ -149,6 +183,11 @@ class AIAssistantError(Exception):
 class AIAssistantGateway(ABC):
     @abstractmethod
     async def chat(self, actor: AIActor, message: str) -> ChatAnswer: ...
+
+    @abstractmethod
+    async def tutor_turn(self, actor: AIActor, message: str) -> TutorAnswer:
+        """One question, answered on its own: no earlier turn is sent and
+        nothing is stored (R1)."""
 
     @abstractmethod
     async def explain(self, actor: AIActor, subject: str) -> Explanation: ...

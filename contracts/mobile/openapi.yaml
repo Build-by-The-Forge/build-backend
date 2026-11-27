@@ -1351,6 +1351,58 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
 
+  /ai/tutor/turn:
+    post:
+      tags: [ai]
+      operationId: tutorTurn
+      summary: Ask the tutor one question
+      description: >
+        The question is answered on its own: nothing of it is stored by the server, no earlier
+        question is sent to the AI service, and there is no conversation to return to. Answers come
+        only from this student's personal knowledge and institutional knowledge they're eligible for,
+        and only from documents whose latest ingestion is ready. Every citation was checked by the
+        backend: it names a document the AI service reported using, the answer shows it as [number],
+        and its source and title are the backend's own records. If any citation fails the check, the
+        whole answer is replaced by the fixed not-covered reply (grounded false, no citations).
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TutorTurnRequest' }
+      responses:
+        '200':
+          description: The answer
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - properties:
+                      data: { $ref: '#/components/schemas/TutorAnswer' }
+        '400': { $ref: '#/components/responses/TenantRequired' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: AI_UPSTREAM_ERROR
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: >
+            AI_UNAVAILABLE, or ANSWER_WITHHELD: a document the answer used stopped being readable
+            by this student while it was generated, so the whole answer is withheld, cited or not.
+            Retryable: a retry retrieves afresh and leaves that document out
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+
   /ai/conversations:
     get:
       tags: [ai]
@@ -2409,6 +2461,25 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Citation' }
         created_at: { type: string, format: date-time }
+    TutorTurnRequest:
+      type: object
+      required: [message]
+      additionalProperties: false
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+    TutorAnswer:
+      type: object
+      required: [answer, grounded, citations]
+      properties:
+        answer:
+          type: string
+          description: Carries a [number] marker for each citation and nothing else of them.
+        grounded:
+          type: boolean
+          description: False means the fixed "not covered" reply, with no citations.
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/Citation' }
     ChatAnswer:
       type: object
       required: [answer, grounded, citations, conversation_id, request_id]

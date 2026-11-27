@@ -21,6 +21,8 @@ from app.domain.ai.assistant import (
     GeneratedQuestion,
     GeneratedQuestions,
     MemoryItem,
+    TutorAnswer,
+    TutorCitation,
 )
 from app.main import app
 from tests.integration.accounts import register_and_get_id
@@ -35,6 +37,10 @@ class RecordingGateway(AIAssistantGateway):
     def __init__(self, error: AIAssistantError | None = None) -> None:
         self.calls: list[tuple[str, AIActor, tuple]] = []
         self.error = error
+        # What the next tutor turn answers; a test sets it.
+        self.tutor_answer = TutorAnswer(
+            "answer [1]", True, (TutorCitation(1, "source-1", "asset-1", "Notes.pdf", 3, 4, "A passage."),)
+        )
 
     def _record(self, name: str, actor: AIActor, *args) -> None:
         self.calls.append((name, actor, args))
@@ -44,6 +50,10 @@ class RecordingGateway(AIAssistantGateway):
     async def chat(self, actor, message):
         self._record("chat", actor, message)
         return ChatAnswer(answer=f"answer to {message}", context=["ctx"])
+
+    async def tutor_turn(self, actor, message):
+        self._record("tutor_turn", actor, message)
+        return self.tutor_answer
 
     async def explain(self, actor, subject):
         self._record("explain", actor, subject)

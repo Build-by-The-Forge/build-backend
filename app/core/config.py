@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     service_replay_timeout_seconds: float = Field(default=0.5, ge=0.05, le=5.0)
     ai_service_timeout_seconds: int = Field(default=60)
     ai_service_max_retries: int = Field(default=3)
+    # The stateless AI Tutor route (M3-F, R1). Off by default: it is enabled
+    # per environment (AI_TUTOR_ENABLED) once the provider, the budgets and the
+    # entitlement for the audience are approved. While off, the route answers
+    # as if it did not exist, after the caller's authentication.
+    ai_tutor_enabled: bool = Field(default=False)
 
     # P3-6 worker loops. Dispatch is bounded to ten seconds by the gateway;
     # these limits guard the database row lock and process shutdown as well.
